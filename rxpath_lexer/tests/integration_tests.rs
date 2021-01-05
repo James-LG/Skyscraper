@@ -9,7 +9,6 @@ fn lex_should_work_with_html() {
         <head>
             <title>Rust Programming Language</title>
             <meta name="viewport" content="width=device-width,initial-scale=1.0">
-            <meta name="description" content="A language empowering everyone to build reliable and efficient software.">
     
             <!-- Twitter card -->
             <meta name="twitter:card" content="summary">
@@ -22,7 +21,6 @@ fn lex_should_work_with_html() {
                             <h2>
                             Why Rust?
                             </h2>
-                            <div class="highlight"></div>
                         </header>
                         <div class="flex-none flex-l">
                             <section class="w-100 pv2 pv0-l mt4">
@@ -33,28 +31,11 @@ fn lex_should_work_with_html() {
                                 embedded devices, and easily integrate with other languages.
                                 </p>
                             </section>
-                            <section class="w-100 pv2 pv0-l mt4 mh5-l">
-                                <h3 class="f2 f1-l">Reliability</h3>
-                                <p class="f3 lh-copy">
-                                  Rust’s rich type system and ownership model guarantee memory-safety
-                                and thread-safety — enabling you to eliminate many classes of
-                                bugs at compile-time.
-                                </p>
-                            </section>
-                            <section class="w-100 pv2 pv0-l mt4">
-                                <h3 class="f2 f1-l">Productivity</h3>
-                                <p class="f3 lh-copy">
-                                  Rust has great documentation, a friendly compiler with useful error
-                                messages, and top-notch tooling — an integrated package manager
-                                and build tool, smart multi-editor support with auto-completion and
-                                type inspections, an auto-formatter, and more.
-                                </p>
-                            </section>
                         </div>
                     </div>
                 </section>
             </main>
-            <script src="./Rust Programming Language_files/languages.js.download"></script>
+            <script src="./Rust Programming Language_files/languages.js.download"/>
         </body>
     </html>"###;
 
@@ -70,26 +51,117 @@ fn lex_should_work_with_html() {
         Symbol::StartTag(String::from("html")),
         Symbol::Identifier(String::from("lang")),
         Symbol::AssignmentSign,
-        Symbol::Text(String::from("en-US")),
+        Symbol::Literal(String::from("en-US")),
         Symbol::TagClose,
         Symbol::StartTag(String::from("head")),
         Symbol::TagClose,
         Symbol::StartTag(String::from("title")),
         Symbol::TagClose,
-        Symbol::Identifier(String::from("Rust")),
-        Symbol::Identifier(String::from("Programming")),
-        Symbol::Identifier(String::from("Language")),
+        Symbol::Text(String::from("Rust Programming Language")),
         Symbol::EndTag(String::from("title")),
         Symbol::TagClose,
         Symbol::StartTag(String::from("meta")),
         Symbol::Identifier(String::from("name")),
         Symbol::AssignmentSign,
-        Symbol::Text(String::from("viewport")),
+        Symbol::Literal(String::from("viewport")),
         Symbol::Identifier(String::from("content")),
         Symbol::AssignmentSign,
-        Symbol::Text(String::from("width=device-width,initial-scale=1.0")),
+        Symbol::Literal(String::from("width=device-width,initial-scale=1.0")),
+        Symbol::TagClose,
+        Symbol::Comment(String::from(" Twitter card ")),
+        Symbol::StartTag(String::from("meta")),
+        Symbol::Identifier(String::from("name")),
+        Symbol::AssignmentSign,
+        Symbol::Literal(String::from("twitter:card")),
+        Symbol::Identifier(String::from("content")),
+        Symbol::AssignmentSign,
+        Symbol::Literal(String::from("summary")),
+        Symbol::TagClose,
+        Symbol::EndTag(String::from("head")),
+        Symbol::TagClose,
+        Symbol::StartTag(String::from("body")),
+        Symbol::TagClose,
+        Symbol::StartTag(String::from("main")),
+        Symbol::TagClose,
+        Symbol::StartTag(String::from("section")),
+        Symbol::Identifier(String::from("id")),
+        Symbol::AssignmentSign,
+        Symbol::Literal(String::from("language-values")),
+        Symbol::Identifier(String::from("class")),
+        Symbol::AssignmentSign,
+        Symbol::Literal(String::from("green")),
+        Symbol::TagClose,
+        Symbol::StartTag(String::from("div")),
+        Symbol::Identifier(String::from("class")),
+        Symbol::AssignmentSign,
+        Symbol::Literal(String::from("w-100 mw-none ph3 mw8-m mw9-l center f3")),
+        Symbol::TagClose,
+        Symbol::StartTag(String::from("header")),
+        Symbol::Identifier(String::from("class")),
+        Symbol::AssignmentSign,
+        Symbol::Literal(String::from("pb0")),
+        Symbol::TagClose,
+        Symbol::StartTag(String::from("h2")),
+        Symbol::TagClose,
+        Symbol::Text(String::from(r#"
+                            Why Rust?
+                            "#)),
+        Symbol::EndTag(String::from("h2")),
+        Symbol::TagClose,
+        Symbol::EndTag(String::from("header")),
+        Symbol::TagClose,
+        Symbol::StartTag(String::from("div")),
+        Symbol::Identifier(String::from("class")),
+        Symbol::AssignmentSign,
+        Symbol::Literal(String::from("flex-none flex-l")),
+        Symbol::TagClose,
+        Symbol::StartTag(String::from("section")),
+        Symbol::Identifier(String::from("class")),
+        Symbol::AssignmentSign,
+        Symbol::Literal(String::from("w-100 pv2 pv0-l mt4")),
+        Symbol::TagClose,
+        Symbol::StartTag(String::from("h3")),
+        Symbol::Identifier(String::from("class")),
+        Symbol::AssignmentSign,
+        Symbol::Literal(String::from("f2 f1-l")),
+        Symbol::TagClose,
+        Symbol::Text(String::from("Performance")),
+        Symbol::EndTag(String::from("h3")),
+        Symbol::TagClose,
+        Symbol::StartTag(String::from("p")),
+        Symbol::Identifier(String::from("class")),
+        Symbol::AssignmentSign,
+        Symbol::Literal(String::from("f3 lh-copy")),
+        Symbol::TagClose,
+        Symbol::Text(String::from(r#"
+                                  Rust is blazingly fast and memory-efficient: with no runtime or
+                                garbage collector, it can power performance-critical services, run on
+                                embedded devices, and easily integrate with other languages.
+                                "#)),
+        Symbol::EndTag(String::from("p")),
+        Symbol::TagClose,
+        Symbol::EndTag(String::from("section")),
+        Symbol::TagClose,
+        Symbol::EndTag(String::from("div")),
+        Symbol::TagClose,
+        Symbol::EndTag(String::from("div")),
+        Symbol::TagClose,
+        Symbol::EndTag(String::from("section")),
+        Symbol::TagClose,
+        Symbol::EndTag(String::from("main")),
+        Symbol::TagClose,
+        Symbol::StartTag(String::from("script")),
+        Symbol::Identifier(String::from("src")),
+        Symbol::AssignmentSign,
+        Symbol::Literal(String::from("./Rust Programming Language_files/languages.js.download")),
+        Symbol::TagCloseAndEnd,
+        Symbol::EndTag(String::from("body")),
+        Symbol::TagClose,
+        Symbol::EndTag(String::from("html")),
+        Symbol::TagClose,
     ];
     
+    // looping makes debugging much easier than just asserting the entire vectors are equal
     for (e, r) in expected.into_iter().zip(result) {
         assert_eq!(e, r);
     }

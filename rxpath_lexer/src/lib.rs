@@ -4,7 +4,7 @@ extern crate lazy_static;
 mod reader {
     pub struct TextPointer {
         text: Vec<char>,
-        index: usize,
+        pub index: usize,
     }
     
     impl TextPointer {
@@ -38,10 +38,6 @@ mod reader {
             self.get_char(self.index + i)
         }
 
-        pub fn get_index(&self) -> usize {
-            self.index
-        }
-
         fn get_char(&self, index: usize) -> Option<char> {
             if index >= self.text.len() {
                 return None;
@@ -58,8 +54,10 @@ use reader::TextPointer;
 pub enum Symbol {
     StartTag(String),
     EndTag(String),
+    TagCloseAndEnd,
     TagClose,
     AssignmentSign,
+    Literal(String),
     Text(String),
     Identifier(String),
     Comment(String),
@@ -70,33 +68,41 @@ pub fn lex(text: &str) -> Result<Vec<Symbol>, &'static str> {
 
     let mut pointer = TextPointer::new(text);
 
+    let mut has_open_tag = false;
+
     loop {
         match pointer.current() {
-            Some(c) if !c.is_whitespace() => {
-                println!("Pointing at {} [i={}]", c, pointer.get_index());
+            Some(c) => {
+                println!("Pointing at {} [i={}]", c, pointer.index);
                 if let Some(s) = is_comment(&mut pointer) {
                     symbols.push(s);
                 } else if let Some(s) = is_start_tag(&mut pointer) {
+                    has_open_tag = true;
                     symbols.push(s);
                 } else if let Some(s) = is_end_tag(&mut pointer) {
+                    has_open_tag = true;
+                    symbols.push(s);
+                } else if let Some(s) = is_tag_close_and_end(&mut pointer) {
+                    has_open_tag = false;
                     symbols.push(s);
                 } else if let Some(s) = is_tag_close(&mut pointer) {
+                    has_open_tag = false;
                     symbols.push(s);
                 } else if let Some(s) = is_assignment_sign(&mut pointer) {
                     symbols.push(s);
-                } else if let Some(s) = is_text(&mut pointer) {
+                } else if let Some(s) = is_literal(&mut pointer) {
                     symbols.push(s);
-                } else if let Some(s) = is_identifier(&mut pointer) {
+                } else if let Some(s) = is_identifier(&mut pointer, has_open_tag) {
+                    symbols.push(s);
+                } else if let Some(s) = is_text(&mut pointer, has_open_tag) {
                     symbols.push(s);
                 } else {
-                    // Unknown symbol, move on ¯\_(ツ)_/¯
-                    eprintln!("Unknown symbol {}", c);
+                    if !c.is_whitespace(){
+                        // Unknown symbol, move on ¯\_(ツ)_/¯
+                        eprintln!("Unknown symbol {}", c);
+                    }
                     pointer.next();
                 }
-            },
-            Some(_) => {
-                pointer.next();
-                continue
             },
             None => break,
         };
@@ -110,7 +116,7 @@ fn is_start_tag(pointer: &mut TextPointer) -> Option<Symbol> {
             let mut name: Vec<char> = Vec::new();
             loop {
                 match pointer.next() {
-                    Some(' ') | Some('>') => break,
+                    Some(' ') | Some('>') | Some('/') => break,
                     Some(c) => {
                         name.push(c);
                     },
@@ -198,6 +204,17 @@ fn is_tag_close(pointer: &mut TextPointer) -> Option<Symbol> {
     None
 }
 
+fn is_tag_close_and_end(pointer: &mut TextPointer) -> Option<Symbol> {
+    if let (Some(c1), Some(c2)) = (pointer.current(), pointer.peek()) {
+        if c1 == '/' && c2 == '>' {
+            pointer.next_add(2); // move up for later
+            return Some(Symbol::TagCloseAndEnd);
+        }
+        return None;
+    }
+    None
+}
+
 fn is_assignment_sign(pointer: &mut TextPointer) -> Option<Symbol> {
     if let Some(c) = pointer.current() {
         if c == '=' {
@@ -209,7 +226,7 @@ fn is_assignment_sign(pointer: &mut TextPointer) -> Option<Symbol> {
     None
 }
 
-fn is_text(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_literal(pointer: &mut TextPointer) -> Option<Symbol> {
     if let Some(c) = pointer.current() {
         if c == '"' {            
             let mut text: Vec<char> = Vec::new();
@@ -226,7 +243,7 @@ fn is_text(pointer: &mut TextPointer) -> Option<Symbol> {
 
             pointer.next(); // skip over closing `"`
     
-            return Some(Symbol::Text(name));
+            return Some(Symbol::Literal(name));
         }
         return None;
     }
@@ -237,7 +254,11 @@ lazy_static! {
     static ref INAVLID_ID_CHARS: Vec<char> = vec![' ', '<', '>', '/', '=', '"'];
 }
 
-fn is_identifier(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_identifier(pointer: &mut TextPointer, has_open_tag: bool) -> Option<Symbol> {
+    if !has_open_tag {
+        return None;
+    }
+
     if let Some(c) = pointer.current() {
         if !INAVLID_ID_CHARS.contains(&c) {
             let mut text: Vec<char> = Vec::new();
@@ -260,6 +281,50 @@ fn is_identifier(pointer: &mut TextPointer) -> Option<Symbol> {
     None
 }
 
+lazy_static! {
+    static ref INAVLID_TEXT_CHARS: Vec<char> = vec!['<', '>'];
+}
+
+fn is_text(pointer: &mut TextPointer, has_open_tag: bool) -> Option<Symbol> {
+    if has_open_tag {
+        return None;
+    }
+
+    if let Some(c) = pointer.current() {
+        if !INAVLID_TEXT_CHARS.contains(&c) {
+            let start_index = pointer.index;
+            let mut has_non_whitespace = false;
+
+            let mut text: Vec<char> = Vec::new();
+            text.push(c);
+            loop {
+                match pointer.next() {
+                    Some(c) if INAVLID_TEXT_CHARS.contains(&c) => break,
+                    Some(c) => {
+                        if !c.is_whitespace() {
+                            has_non_whitespace = true;
+                        }
+
+                        text.push(c);
+                    },
+                    None => break,
+                };
+            }
+            let name: String = text.into_iter().collect();
+    
+            if has_non_whitespace {
+                return Some(Symbol::Text(name));
+            } else {
+                // roll back pointer
+                pointer.index = start_index;
+                return None;
+            }
+        }
+        return None;
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -274,7 +339,7 @@ mod tests {
 
         // assert
         assert_eq!(Symbol::StartTag(String::from("a")), result);
-        assert_eq!(2, pointer.get_index());
+        assert_eq!(2, pointer.index);
     }
 
     #[test]
@@ -287,7 +352,7 @@ mod tests {
 
         // assert
         assert!(matches!(result, None));
-        assert_eq!(0, pointer.get_index());
+        assert_eq!(0, pointer.index);
     }
 
     #[test]
@@ -300,7 +365,7 @@ mod tests {
 
         // assert
         assert_eq!(Symbol::EndTag(String::from("c")), result);
-        assert_eq!(3, pointer.get_index());
+        assert_eq!(3, pointer.index);
     }
 
     #[test]
@@ -313,7 +378,7 @@ mod tests {
 
         // assert
         assert!(matches!(result, None));
-        assert_eq!(0, pointer.get_index());
+        assert_eq!(0, pointer.index);
     }
 
     #[test]
@@ -326,7 +391,7 @@ mod tests {
 
         // assert
         assert_eq!(Symbol::Comment(String::from("bean is-nice ")), result);
-        assert_eq!(20, pointer.get_index());
+        assert_eq!(20, pointer.index);
     }
 
     #[test]
@@ -339,7 +404,7 @@ mod tests {
 
         // assert
         assert_eq!(None, result);
-        assert_eq!(0, pointer.get_index());
+        assert_eq!(0, pointer.index);
     }
 
     #[test]
@@ -352,7 +417,7 @@ mod tests {
 
         // assert
         assert_eq!(true, result);
-        assert_eq!(3, pointer.get_index());
+        assert_eq!(3, pointer.index);
     }
 
     #[test]
@@ -365,7 +430,7 @@ mod tests {
 
         // assert
         assert_eq!(false, result);
-        assert_eq!(0, pointer.get_index());
+        assert_eq!(0, pointer.index);
     }
 
     #[test]
@@ -378,7 +443,7 @@ mod tests {
 
         // assert
         assert_eq!(Symbol::TagClose, result);
-        assert_eq!(1, pointer.get_index());
+        assert_eq!(1, pointer.index);
     }
 
     #[test]
@@ -391,7 +456,33 @@ mod tests {
 
         // assert
         assert_eq!(None, result);
-        assert_eq!(0, pointer.get_index());
+        assert_eq!(0, pointer.index);
+    }
+
+    #[test]
+    fn is_tag_close_and_end_works() {
+        // arrange
+        let mut pointer = TextPointer::new("/>");
+
+        // act
+        let result = is_tag_close_and_end(&mut pointer).unwrap();
+
+        // assert
+        assert_eq!(Symbol::TagCloseAndEnd, result);
+        assert_eq!(2, pointer.index);
+    }
+
+    #[test]
+    fn is_tag_close_and_end_does_not_move_pointer_if_not_found() {
+        // arrange
+        let mut pointer = TextPointer::new("abcd");
+
+        // act
+        let result = is_tag_close_and_end(&mut pointer);
+
+        // assert
+        assert_eq!(None, result);
+        assert_eq!(0, pointer.index);
     }
 
     #[test]
@@ -404,7 +495,7 @@ mod tests {
 
         // assert
         assert_eq!(Symbol::AssignmentSign, result);
-        assert_eq!(1, pointer.get_index());
+        assert_eq!(1, pointer.index);
     }
 
     #[test]
@@ -417,46 +508,46 @@ mod tests {
 
         // assert
         assert_eq!(None, result);
-        assert_eq!(0, pointer.get_index());
+        assert_eq!(0, pointer.index);
     }
 
     #[test]
-    fn is_text_works() {
+    fn is_literal_works() {
         // arrange
         let mut pointer = TextPointer::new("\"yo\"");
 
         // act
-        let result = is_text(&mut pointer).unwrap();
+        let result = is_literal(&mut pointer).unwrap();
 
         // assert
-        assert_eq!(Symbol::Text(String::from("yo")), result);
-        assert_eq!(4, pointer.get_index());
+        assert_eq!(Symbol::Literal(String::from("yo")), result);
+        assert_eq!(4, pointer.index);
     }
 
     #[test]
-    fn is_text_does_not_move_pointer_if_not_found() {
+    fn is_literal_does_not_move_pointer_if_not_found() {
         // arrange
         let mut pointer = TextPointer::new("abcd");
 
         // act
-        let result = is_text(&mut pointer);
+        let result = is_literal(&mut pointer);
 
         // assert
         assert!(matches!(result, None));
-        assert_eq!(0, pointer.get_index());
+        assert_eq!(0, pointer.index);
     }
 
     #[test]
     fn is_identifier_works() {
         // arrange
-        let mut pointer = TextPointer::new("yo");
+        let mut pointer = TextPointer::new("foo bar");
 
         // act
-        let result = is_identifier(&mut pointer).unwrap();
+        let result = is_identifier(&mut pointer, true).unwrap();
 
         // assert
-        assert_eq!(Symbol::Identifier(String::from("yo")), result);
-        assert_eq!(2, pointer.get_index());
+        assert_eq!(Symbol::Identifier(String::from("foo")), result);
+        assert_eq!(3, pointer.index);
     }
 
     #[test]
@@ -465,17 +556,43 @@ mod tests {
         let mut pointer = TextPointer::new(" ");
 
         // act
-        let result = is_identifier(&mut pointer);
+        let result = is_identifier(&mut pointer, true);
 
         // assert
         assert!(matches!(result, None));
-        assert_eq!(0, pointer.get_index());
+        assert_eq!(0, pointer.index);
+    }
+
+    #[test]
+    fn is_text_works() {
+        // arrange
+        let mut pointer = TextPointer::new("foo bar");
+
+        // act
+        let result = is_text(&mut pointer, false).unwrap();
+
+        // assert
+        assert_eq!(Symbol::Text(String::from("foo bar")), result);
+        assert_eq!(7, pointer.index);
+    }
+
+    #[test]
+    fn is_text_not_move_pointer_if_not_found() {
+        // arrange
+        let mut pointer = TextPointer::new("<");
+
+        // act
+        let result = is_text(&mut pointer, false);
+
+        // assert
+        assert!(matches!(result, None));
+        assert_eq!(0, pointer.index);
     }
 
     #[test]
     fn lex_works() {
         // arrange
-        let text = "<start-tag id=\"bean\"><!--comment--><inner>\"<fake>\"</inner>hello</end-tag>";
+        let text = "<start-tag id=\"bean\"><!--comment--><inner/>hello</end-tag>";
 
         // act
         let result = lex(text).unwrap();
@@ -485,15 +602,12 @@ mod tests {
             Symbol::StartTag(String::from("start-tag")),
             Symbol::Identifier(String::from("id")),
             Symbol::AssignmentSign,
-            Symbol::Text(String::from("bean")),
+            Symbol::Literal(String::from("bean")),
             Symbol::TagClose,
             Symbol::Comment(String::from("comment")),
             Symbol::StartTag(String::from("inner")),
-            Symbol::TagClose,
-            Symbol::Text(String::from("<fake>")),
-            Symbol::EndTag(String::from("inner")),
-            Symbol::TagClose,
-            Symbol::Identifier(String::from("hello")),
+            Symbol::TagCloseAndEnd,
+            Symbol::Text(String::from("hello")),
             Symbol::EndTag(String::from("end-tag")),
             Symbol::TagClose];
 
