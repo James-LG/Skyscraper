@@ -49,17 +49,35 @@ mod reader {
 
 use reader::TextPointer;
 
+/// Enum representing all possible symbols output by the lexer.
 #[derive(Debug)]
 #[derive(PartialEq)]
 pub enum Symbol {
+    /// The start of a new tag. Example: `<{{string}}`.
     StartTag(String),
+
+    /// The start of an end tag. Example: `</{{string}}`.
     EndTag(String),
+
+    /// End *and* close a tag. Example: `/>`.
     TagCloseAndEnd,
+
+    /// End a tag. Example: `>`.
     TagClose,
+
+    /// Assignment sign. Example: `=`.
     AssignmentSign,
+
+    /// A quoted string literal. Contained string does not include quotes. Example: `"{{string}}"`.
     Literal(String),
+
+    /// Text contained in tags.
     Text(String),
+
+    /// An identifier written in a tag declaration.
     Identifier(String),
+
+    /// Xml comments. Example: `<!--{{string}}-->`.
     Comment(String),
 }
 
@@ -90,7 +108,7 @@ pub fn lex(text: &str) -> Result<Vec<Symbol>, &'static str> {
                     symbols.push(s);
                 } else if let Some(s) = is_assignment_sign(&mut pointer) {
                     symbols.push(s);
-                } else if let Some(s) = is_literal(&mut pointer) {
+                } else if let Some(s) = is_literal(&mut pointer, has_open_tag) {
                     symbols.push(s);
                 } else if let Some(s) = is_identifier(&mut pointer, has_open_tag) {
                     symbols.push(s);
@@ -110,6 +128,12 @@ pub fn lex(text: &str) -> Result<Vec<Symbol>, &'static str> {
     Ok(symbols)
 }
 
+/// Checks if the [TextPointer](TextPointer) is currently pointing to a StartTag [Symbol](Symbol).
+/// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
+/// 
+/// StartTag is defined as `<{{String}}`
+/// 
+/// Has additional checks to make sure it is not an end tag.
 fn is_start_tag(pointer: &mut TextPointer) -> Option<Symbol> {
     if let (Some(c1), Some(c2)) = (pointer.current(), pointer.peek()) {
         if c1 == '<' && c2 != '/' {
@@ -133,6 +157,10 @@ fn is_start_tag(pointer: &mut TextPointer) -> Option<Symbol> {
     None
 }
 
+/// Checks if the [TextPointer](TextPointer) is currently pointing to an EndTag [Symbol](Symbol).
+/// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
+/// 
+/// EndTag is defined as `</{{String}}`
 fn is_end_tag(pointer: &mut TextPointer) -> Option<Symbol> {
     if let (Some(c1), Some(c2)) = (pointer.current(), pointer.peek()) {
         if c1 == '<' && c2 == '/' {
@@ -157,6 +185,10 @@ fn is_end_tag(pointer: &mut TextPointer) -> Option<Symbol> {
     None
 }
 
+/// Checks if the [TextPointer](TextPointer) is currently pointing to a Comment [Symbol](Symbol).
+/// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
+/// 
+/// Comment is defined as `<!--{{String}}-->`
 fn is_comment(pointer: &mut TextPointer) -> Option<Symbol> {
     if let (Some(c1), Some(c2), Some(c3), Some(c4)) = (pointer.current(), pointer.peek(), pointer.peek_add(2), pointer.peek_add(3)) {
         if c1 == '<' && c2 == '!' && c3 == '-' && c4 == '-' {
@@ -181,6 +213,12 @@ fn is_comment(pointer: &mut TextPointer) -> Option<Symbol> {
     None
 }
 
+/// Checks if the [TextPointer](TextPointer) is currently pointing to the end of a Comment [Symbol](Symbol).
+/// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
+/// 
+/// This is a helper method not used directly in the lexer.
+/// 
+/// The end of a comment is defined as `-->`
 fn is_end_comment(pointer: &mut TextPointer) -> bool {
     if let (Some(c1), Some(c2), Some(c3)) = (pointer.current(), pointer.peek(), pointer.peek_add(2)) {
         if c1 == '-' && c2 == '-' && c3 == '>' {
@@ -193,6 +231,10 @@ fn is_end_comment(pointer: &mut TextPointer) -> bool {
     false
 }
 
+/// Checks if the [TextPointer](TextPointer) is currently pointing to a TagClose [Symbol](Symbol).
+/// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
+/// 
+/// TagClose is defined as `>`
 fn is_tag_close(pointer: &mut TextPointer) -> Option<Symbol> {
     if let Some(c) = pointer.current() {
         if c == '>' {
@@ -204,6 +246,10 @@ fn is_tag_close(pointer: &mut TextPointer) -> Option<Symbol> {
     None
 }
 
+/// Checks if the [TextPointer](TextPointer) is currently pointing to a TagCloseAndEnd [Symbol](Symbol).
+/// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
+/// 
+/// TagCloseAndEnd is defined as `/>`
 fn is_tag_close_and_end(pointer: &mut TextPointer) -> Option<Symbol> {
     if let (Some(c1), Some(c2)) = (pointer.current(), pointer.peek()) {
         if c1 == '/' && c2 == '>' {
@@ -215,6 +261,10 @@ fn is_tag_close_and_end(pointer: &mut TextPointer) -> Option<Symbol> {
     None
 }
 
+/// Checks if the [TextPointer](TextPointer) is currently pointing to a AssignmentSign [Symbol](Symbol).
+/// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
+/// 
+/// AssignmentSign is defined as `=`
 fn is_assignment_sign(pointer: &mut TextPointer) -> Option<Symbol> {
     if let Some(c) = pointer.current() {
         if c == '=' {
@@ -226,7 +276,15 @@ fn is_assignment_sign(pointer: &mut TextPointer) -> Option<Symbol> {
     None
 }
 
-fn is_literal(pointer: &mut TextPointer) -> Option<Symbol> {
+/// Checks if the [TextPointer](TextPointer) is currently pointing to a Literal [Symbol](Symbol).
+/// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
+/// 
+/// Literal is defined as `"{{String}}"` inside a tag definition.
+fn is_literal(pointer: &mut TextPointer, has_open_tag: bool) -> Option<Symbol> {
+    if !has_open_tag {
+        return None;
+    }
+
     if let Some(c) = pointer.current() {
         if c == '"' {            
             let mut text: Vec<char> = Vec::new();
@@ -251,9 +309,14 @@ fn is_literal(pointer: &mut TextPointer) -> Option<Symbol> {
 }
 
 lazy_static! {
+    /// List of characters that end an Identifier [Symbol](Symbol).
     static ref INAVLID_ID_CHARS: Vec<char> = vec![' ', '<', '>', '/', '=', '"'];
 }
 
+/// Checks if the [TextPointer](TextPointer) is currently pointing to a Identifier [Symbol](Symbol).
+/// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
+/// 
+/// Identifier is defined as any text inside a tag definition.
 fn is_identifier(pointer: &mut TextPointer, has_open_tag: bool) -> Option<Symbol> {
     if !has_open_tag {
         return None;
@@ -282,9 +345,14 @@ fn is_identifier(pointer: &mut TextPointer, has_open_tag: bool) -> Option<Symbol
 }
 
 lazy_static! {
+    /// List of characters that end a Text [Symbol](Symbol).
     static ref INAVLID_TEXT_CHARS: Vec<char> = vec!['<', '>'];
 }
 
+/// Checks if the [TextPointer](TextPointer) is currently pointing to a Text [Symbol](Symbol).
+/// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
+/// 
+/// Text is defined as any text outside a tag definition.
 fn is_text(pointer: &mut TextPointer, has_open_tag: bool) -> Option<Symbol> {
     if has_open_tag {
         return None;
@@ -517,7 +585,7 @@ mod tests {
         let mut pointer = TextPointer::new("\"yo\"");
 
         // act
-        let result = is_literal(&mut pointer).unwrap();
+        let result = is_literal(&mut pointer, true).unwrap();
 
         // assert
         assert_eq!(Symbol::Literal(String::from("yo")), result);
@@ -530,7 +598,7 @@ mod tests {
         let mut pointer = TextPointer::new("abcd");
 
         // act
-        let result = is_literal(&mut pointer);
+        let result = is_literal(&mut pointer, true);
 
         // assert
         assert!(matches!(result, None));
