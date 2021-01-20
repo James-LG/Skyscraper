@@ -1,6 +1,6 @@
 [workspace]
 
 members = [
-    "rxpath_lexer",
-    "rxpath_parser",
+    "rxpath-html",
+    "rxpath",
 ]
