@@ -1,123 +1,170 @@
 #[macro_use]
 extern crate lazy_static;
 
-use slotmap::{SlotMap, DefaultKey};
+use std::collections::HashMap;
+use indextree::{Arena, Node, NodeId};
 
 mod tokenizer;
 
 use tokenizer::Symbol;
-use rxpath::{Element, Document, Node, Text};
 
-pub type HtmlNode = Node<HtmlElement, HtmlText>;
-
-#[derive(Clone)]
-pub struct HtmlText {
-    parent_key: DefaultKey,
-    value: String,
-}
-
-impl Text for HtmlText {
-    fn get_value(&self) -> &String {
-        &self.value
-    }
-}
-
-#[derive(Clone)]
-pub struct HtmlElement {
-    parent_key: Option<DefaultKey>,
+pub struct HtmlTag {
     name: String,
-    attributes: Vec<String>,
-    child_keys: Vec<DefaultKey>,
+    attributes: HashMap<String, String>,
 }
 
-impl HtmlElement {
-    fn new(parent_key: Option<DefaultKey>, name: String) -> HtmlElement {
-        HtmlElement {
-            parent_key,
+impl HtmlTag {
+    fn new(name: String) -> HtmlTag {
+        HtmlTag {
             name,
-            attributes: Vec::new(),
-            child_keys: Vec::new(),
+            attributes: HashMap::new(),
         }
     }
 }
 
-impl Element for HtmlElement {
-    fn get_name(&self) -> &String {
-        &self.name
-    }
-    fn get_attributes(&self) -> &Vec<String> {
-        &self.attributes
-    }
+pub struct HtmlText {
+    text: String,
+}
+
+pub enum HtmlNode {
+    Tag(HtmlTag),
+    Text(HtmlText),
 }
 
 pub struct HtmlDocument {
-    slotmap: SlotMap<DefaultKey, HtmlNode>,
-    root_node_key: DefaultKey,
-}
-
-impl Document for HtmlDocument {
-    type TElem = HtmlElement;
-    type TText = HtmlText;
-
-    fn get_root(&self) -> &HtmlNode {
-        &self.slotmap[self.root_node_key]
-    }
-
-    fn get_children_of(&self, element: &HtmlElement) -> Vec<&HtmlNode> {
-        element.child_keys.iter().map(|child_key| {
-            self.slotmap.get(*child_key).expect("Slotmap key no longer pointing to value")
-        }).collect()
-    }
-
-    fn get_parent_of(&self, node: &HtmlNode) -> Option<&HtmlNode> {
-        match node {
-            Node::Element(el) => {
-                match el.parent_key {
-                    Some(parent_key) => self.slotmap.get(parent_key),
-                    None => None,
-                }
-            },
-            Node::Text(txt) => self.slotmap.get(txt.parent_key),
-        }
-    }
+    arena: Arena<HtmlNode>,
+    root_key: NodeId,
 }
 
 pub fn parse(text: &str) -> Result<HtmlDocument, &'static str> {
     let tokens = tokenizer::lex(text)?;
 
-    let mut root: Option<DefaultKey> = None;
-    let mut cur_node: Option<DefaultKey> = None;
+    let mut arena: Arena<HtmlNode> = Arena::new();
+    let mut root_key_o: Option<NodeId> = None;
+    let mut cur_key_o: Option<NodeId> = None;
+    let mut has_tag_open = false;
 
-    let mut slotmap: SlotMap<DefaultKey, HtmlNode> = SlotMap::new();
+    let mut tokens = tokens.into_iter();
 
-    for token in tokens {
+    while let Some(token) = tokens.next() {
         match token {
-            Symbol::StartTag(name) => {
-                let parent_key = match cur_node {
-                    Some(ref cur_pair) => Some(cur_pair.clone()),
-                    None => None,
-                };
-                let cur_node_val = HtmlNode::Element(HtmlElement::new(parent_key, name));
-                let cur_node_key = slotmap.insert(cur_node_val);
-                cur_node = Some(cur_node_key);
+            Symbol::StartTag(tag_name) => {
+                if has_tag_open {
+                    return Err("Start tag encountered before previous tag was closed.");
+                }
 
-                if let None = root {
-                    root = cur_node;
+                has_tag_open = true;
+
+                let node = HtmlNode::Tag(HtmlTag::new(tag_name));
+                let node_key = arena.new_node(node);
+
+                if let Some(cur_key) = cur_key_o {
+                    cur_key.append(node_key, &mut arena);
+                }
+
+                cur_key_o = Some(node_key);
+                if let None = root_key_o {
+                    root_key_o = cur_key_o;
                 }
             },
-            _ => continue,
+            Symbol::TagClose => {
+                if !has_tag_open {
+                    return Err("Tag close encountered before a tag was opened.");
+                }
+                
+                has_tag_open = false;
+            },
+            Symbol::EndTag(tag_name) => {
+                if has_tag_open {
+                    return Err("End tag encountered before previous tag was closed.");
+                }
+
+                has_tag_open = true;
+
+                let cur_tree_node = try_get_tree_node(cur_key_o, &arena)?;
+                match cur_tree_node.get() {
+                    HtmlNode::Tag(cur_tag) => {
+                        if cur_tag.name != tag_name {
+                            return Err("End tag name mismatched open tag name.");
+                        }
+                    },
+                    HtmlNode::Text(_) => return Err("End tag attempted to close a text node."),
+                }
+
+                // Set current key to the parent of this tag.
+                cur_key_o = cur_tree_node.parent();
+            },
+            Symbol::Identifier(iden) => {
+                if !has_tag_open {
+                    return Err("Identifier encountered outside of tag.");
+                }
+
+                match tokens.next() {
+                    Some(token) => {
+                        match token {
+                            Symbol::AssignmentSign => {
+                                match tokens.next() {
+                                    Some(token) => {
+                                        match token {
+                                            Symbol::Literal(lit) => {
+                                                let cur_tree_node = try_get_mut_tree_node(cur_key_o, &mut arena)?;
+                                                match cur_tree_node.get_mut() {
+                                                    HtmlNode::Tag(tag) => {
+                                                        tag.attributes.insert(iden, lit);
+                                                    },
+                                                    HtmlNode::Text(_) => return Err("Attempted to add attribute to text node."),
+                                                }
+                                            },
+                                            _ => return Err("Expected literal after assignment sign."),
+                                        }
+                                    },
+                                    None => return Err("Unexpected end of tokens."),
+                                }
+                            },
+                            _ => return Err("Expected assignment sign after identifier."),
+                        }
+                    },
+                    None => return Err("Unexpected end of tokens."),
+                }
+            }
+            _ => (),
         }
     }
 
-    match root {
-        Some(node) => {
-            Ok(HtmlDocument {
-                slotmap,
-                root_node_key: node,
-            })
-        },
-        None => Err("No root node found")
+    if let Some(root_key) = root_key_o {
+        return Ok(HtmlDocument {
+            arena,
+            root_key,
+        });
     }
+
+    Err("No root node found.")
+}
+
+fn try_get_tree_node(key: Option<NodeId>, arena: &Arena<HtmlNode>) -> Result<&Node<HtmlNode>, &'static str> {
+    match key {
+        Some(key) => {
+            match arena.get(key) {
+                Some(node) => Ok(node),
+                None => Err("Could not get tree node from arena."),
+            }
+        },
+        None => Err("Unexpected None key."),
+    }
+    
+}
+
+fn try_get_mut_tree_node(key: Option<NodeId>, arena: &mut Arena<HtmlNode>) -> Result<&mut Node<HtmlNode>, &'static str> {
+    match key {
+        Some(key) => {
+            match arena.get_mut(key) {
+                Some(node) => Ok(node),
+                None => Err("Could not get tree node from arena."),
+            }
+        },
+        None => Err("Unexpected None key."),
+    }
+    
 }
 
 #[cfg(test)]
@@ -127,19 +174,54 @@ mod tests {
     #[test]
     fn parse_works() {
         // arrange
-        let text = "<html><a></a></html>";
+        let text = "<html><a class=\"beans\"></a><b><ba></ba></b></html>";
 
         // act
         let result = parse(text).unwrap();
+        let root_tree_node = result.arena.get(result.root_key).unwrap();
+        let root_html_node = root_tree_node.get();
 
         // assert
-        match result.get_root() {
-            HtmlNode::Element(element) => {
-                if element.name != "html" {
-                    panic!();
+        match root_html_node {
+            // Root node should be a Tag.
+            HtmlNode::Tag(tag) => {
+                assert_eq!(String::from("html"), tag.name);
+
+                let mut children = result.root_key.children(&result.arena);
+
+                // First child node should also be a Tag.
+                let child1_key = children.next().unwrap();
+                let child1_node = result.arena.get(child1_key).unwrap().get();
+                match child1_node {
+                    HtmlNode::Tag(tag) => {
+                        assert_eq!(String::from("a"), tag.name);
+
+                        assert_eq!("beans", tag.attributes.get("class").unwrap());
+                    },
+                    _ => assert!(matches!(child1_node, HtmlNode::Tag(_))),
                 }
-            }
-            _ => panic!(),
+
+                // Second child node should also be a Tag.
+                let child2_key = children.next().unwrap();
+                let child2_node = result.arena.get(child2_key).unwrap().get();
+                match child2_node {
+                    HtmlNode::Tag(tag) => {
+                        assert_eq!(String::from("b"), tag.name);
+
+                        let mut children = child2_key.children(&result.arena);
+
+                        // First child of `b` node should also be a Tag.
+                        let child1_key = children.next().unwrap();
+                        let child1_node = result.arena.get(child1_key).unwrap().get();
+                        match child1_node {
+                            HtmlNode::Tag(tag) => assert_eq!(String::from("ba"), tag.name),
+                            _ => assert!(matches!(child1_node, HtmlNode::Tag(_))),
+                        }
+                    },
+                    _ => assert!(matches!(child2_node, HtmlNode::Tag(_))),
+                }
+            },
+            _ => assert!(matches!(root_html_node, HtmlNode::Tag(_))),
         }
     }
 }
