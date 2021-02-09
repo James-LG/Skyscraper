@@ -88,7 +88,6 @@ pub fn lex(text: &str) -> Result<Vec<Symbol>, &'static str> {
     loop {
         match pointer.current() {
             Some(c) => {
-                println!("Pointing at {} [i={}]", c, pointer.index);
                 if let Some(s) = is_comment(&mut pointer) {
                     symbols.push(s);
                 } else if let Some(s) = is_start_tag(&mut pointer) {
