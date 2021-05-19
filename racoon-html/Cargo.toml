@@ -1,5 +1,5 @@
 [package]
-name = "rxpath"
+name = "racoon-html"
 version = "0.1.0"
 authors = ["James La Novara-Gsell <james.lanovara.gsell@gmail.com>"]
 edition = "2018"
@@ -8,3 +8,5 @@ edition = "2018"
 
 [dependencies]
 indextree = "4.3.1"
+lazy_static = "1.4.0"
+racoon = { path = "../racoon" }

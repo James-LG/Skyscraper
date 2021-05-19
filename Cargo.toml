@@ -1,6 +1,6 @@
 [workspace]
 
 members = [
-    "rxpath-html",
-    "rxpath",
+    "racoon-html",
+    "racoon",
 ]

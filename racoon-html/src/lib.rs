@@ -6,13 +6,13 @@ use std::{error::Error};
 mod tokenizer;
 
 use indextree::{Arena, Node, NodeId};
-use rxpath::{RXDocument, RXNode, RXTag};
+use racoon::{RDocument, RNode, RTag};
 use tokenizer::Symbol;
 
-pub fn parse(text: &str) -> Result<RXDocument, Box<dyn Error>> {
+pub fn parse(text: &str) -> Result<RDocument, Box<dyn Error>> {
     let tokens = tokenizer::lex(text)?;
 
-    let mut arena: Arena<RXNode> = Arena::new();
+    let mut arena: Arena<RNode> = Arena::new();
     let mut root_key_o: Option<NodeId> = None;
     let mut cur_key_o: Option<NodeId> = None;
     let mut has_tag_open = false;
@@ -57,7 +57,7 @@ pub fn parse(text: &str) -> Result<RXDocument, Box<dyn Error>> {
 
                 has_tag_open = true;
 
-                let node = RXNode::Tag(RXTag::new(tag_name));
+                let node = RNode::Tag(RTag::new(tag_name));
                 let node_key = arena.new_node(node);
 
                 if let Some(cur_key) = cur_key_o {
@@ -79,13 +79,13 @@ pub fn parse(text: &str) -> Result<RXDocument, Box<dyn Error>> {
                 if let Some(_) = cur_key_o {
                     let cur_tree_node = try_get_tree_node(cur_key_o, &arena)?;
                     match cur_tree_node.get() {
-                        RXNode::Tag(cur_tag) => {
+                        RNode::Tag(cur_tag) => {
                             if cur_tag.name == String::from("meta") {
                                 // Set current key to the parent of this tag.
                                 cur_key_o = cur_tree_node.parent();
                             }
                         },
-                        RXNode::Text(_) => return Err("End tag attempted to close a text node.".into()),
+                        RNode::Text(_) => return Err("End tag attempted to close a text node.".into()),
                     }
                 }
                 
@@ -100,12 +100,12 @@ pub fn parse(text: &str) -> Result<RXDocument, Box<dyn Error>> {
 
                 let cur_tree_node = try_get_tree_node(cur_key_o, &arena)?;
                 match cur_tree_node.get() {
-                    RXNode::Tag(cur_tag) => {
+                    RNode::Tag(cur_tag) => {
                         if cur_tag.name != tag_name {
                             return Err(format!("End tag name `{}` mismatched open tag name `{}`.", tag_name, cur_tag.name).into());
                         }
                     },
-                    RXNode::Text(_) => return Err("End tag attempted to close a text node.".into()),
+                    RNode::Text(_) => return Err("End tag attempted to close a text node.".into()),
                 }
 
                 // Set current key to the parent of this tag.
@@ -119,7 +119,7 @@ pub fn parse(text: &str) -> Result<RXDocument, Box<dyn Error>> {
                 has_tag_open = false;
 
                 let cur_tree_node = try_get_tree_node(cur_key_o, &arena)?;
-                if let RXNode::Text(_) = cur_tree_node.get() {
+                if let RNode::Text(_) = cur_tree_node.get() {
                     return Err("End tag attempted to close a text node.".into());
                 }
 
@@ -141,10 +141,10 @@ pub fn parse(text: &str) -> Result<RXDocument, Box<dyn Error>> {
                                             Symbol::Literal(lit) => {
                                                 let cur_tree_node = try_get_mut_tree_node(cur_key_o, &mut arena)?;
                                                 match cur_tree_node.get_mut() {
-                                                    RXNode::Tag(tag) => {
+                                                    RNode::Tag(tag) => {
                                                         tag.attributes.insert(iden, lit);
                                                     },
-                                                    RXNode::Text(_) => return Err("Attempted to add attribute to text node.".into()),
+                                                    RNode::Text(_) => return Err("Attempted to add attribute to text node.".into()),
                                                 }
                                             },
                                             _ => return Err("Expected literal after assignment sign.".into()),
@@ -164,7 +164,7 @@ pub fn parse(text: &str) -> Result<RXDocument, Box<dyn Error>> {
                     return Err("Text encountered before previous tag was closed.".into());
                 }
 
-                let node = RXNode::Text(text);
+                let node = RNode::Text(text);
                 let node_key = arena.new_node(node);
 
                 if let Some(cur_key) = cur_key_o {
@@ -176,7 +176,7 @@ pub fn parse(text: &str) -> Result<RXDocument, Box<dyn Error>> {
     }
 
     if let Some(root_key) = root_key_o {
-        return Ok(RXDocument {
+        return Ok(RDocument {
             arena,
             root_key,
         });
@@ -185,7 +185,7 @@ pub fn parse(text: &str) -> Result<RXDocument, Box<dyn Error>> {
     Err("No root node found.".into())
 }
 
-fn try_get_tree_node(key: Option<NodeId>, arena: &Arena<RXNode>) -> Result<&Node<RXNode>, &'static str> {
+fn try_get_tree_node(key: Option<NodeId>, arena: &Arena<RNode>) -> Result<&Node<RNode>, &'static str> {
     match key {
         Some(key) => {
             match arena.get(key) {
@@ -197,7 +197,7 @@ fn try_get_tree_node(key: Option<NodeId>, arena: &Arena<RXNode>) -> Result<&Node
     }
 }
 
-fn try_get_mut_tree_node(key: Option<NodeId>, arena: &mut Arena<RXNode>) -> Result<&mut Node<RXNode>, &'static str> {
+fn try_get_mut_tree_node(key: Option<NodeId>, arena: &mut Arena<RNode>) -> Result<&mut Node<RNode>, &'static str> {
     match key {
         Some(key) => {
             match arena.get_mut(key) {
@@ -216,12 +216,12 @@ mod tests {
 
     use super::*;
 
-    fn assert_tag(arena: &Arena<RXNode>, key: NodeId, tag_name: &str, attributes: Option<HashMap<&str, &str>>) -> Vec<NodeId> {
+    fn assert_tag(arena: &Arena<RNode>, key: NodeId, tag_name: &str, attributes: Option<HashMap<&str, &str>>) -> Vec<NodeId> {
         let tree_node = arena.get(key).unwrap();
         let html_node = tree_node.get();
 
         match html_node {
-            RXNode::Tag(tag) => {
+            RNode::Tag(tag) => {
                 assert_eq!(String::from(tag_name), tag.name);
 
                 if let Some(attributes) = attributes {
@@ -236,12 +236,12 @@ mod tests {
         }
     }
 
-    fn assert_text(arena: &Arena<RXNode>, key: NodeId, text: &str) {
+    fn assert_text(arena: &Arena<RNode>, key: NodeId, text: &str) {
         let tree_node = arena.get(key).unwrap();
         let html_node = tree_node.get();
 
         match html_node {
-            RXNode::Text(node_text) => {
+            RNode::Text(node_text) => {
                 assert_eq!(String::from(text), node_text.trim());
             },
             _ => panic!("Expected Text, got different variant instead."),
