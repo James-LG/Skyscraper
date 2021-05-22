@@ -28,7 +28,7 @@ pub fn parse(text: &str) -> Result<RDocument, Box<dyn Error>> {
                         Some(token) => {
                             match token {
                                 Symbol::Identifier(iden) => {
-                                    if iden != String::from("html") {
+                                    if iden != "html" {
                                         return Err("Expected identifier `html` after !DOCSTRING.".into());
                                     }
                                     match tokens.next() {
@@ -65,7 +65,7 @@ pub fn parse(text: &str) -> Result<RDocument, Box<dyn Error>> {
                 }
 
                 cur_key_o = Some(node_key);
-                if let None = root_key_o {
+                if root_key_o.is_none() {
                     root_key_o = cur_key_o;
                 }
             },
@@ -76,11 +76,11 @@ pub fn parse(text: &str) -> Result<RDocument, Box<dyn Error>> {
 
                 // If `meta` tag, it ends with this token.
                 // This will be none if the root node was just closed.
-                if let Some(_) = cur_key_o {
+                if cur_key_o.is_some() {
                     let cur_tree_node = try_get_tree_node(cur_key_o, &arena)?;
                     match cur_tree_node.get() {
                         RNode::Tag(cur_tag) => {
-                            if cur_tag.name == String::from("meta") {
+                            if cur_tag.name == "meta" {
                                 // Set current key to the parent of this tag.
                                 cur_key_o = cur_tree_node.parent();
                             }

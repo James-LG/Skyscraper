@@ -1,50 +1,4 @@
-mod reader {
-    pub struct TextPointer {
-        text: Vec<char>,
-        pub index: usize,
-    }
-    
-    impl TextPointer {
-        pub fn new(text: &str) -> TextPointer {
-            let text: Vec<char> = text.chars().collect();
-            TextPointer {
-                text,
-                index: 0,
-            }
-        }
-
-        pub fn current(&self) -> Option<char> {
-            self.get_char(self.index)
-        }
-
-        pub fn next(&mut self) -> Option<char> {
-            self.index += 1;
-            self.current()
-        }
-
-        pub fn next_add(&mut self, i: usize) -> Option<char> {
-            self.index += i;
-            self.current()
-        }
-
-        pub fn peek(&self) -> Option<char> {
-            self.get_char(self.index + 1)
-        }
-
-        pub fn peek_add(&self, i: usize) -> Option<char> {
-            self.get_char(self.index + i)
-        }
-
-        fn get_char(&self, index: usize) -> Option<char> {
-            if index >= self.text.len() {
-                return None;
-            }
-            Some(self.text[index])
-        }
-    }
-}
-
-use reader::TextPointer;
+use racoon_common::TextPointer;
 
 /// Enum representing all possible symbols output by the lexer.
 #[derive(Debug)]
@@ -85,41 +39,36 @@ pub fn lex(text: &str) -> Result<Vec<Symbol>, &'static str> {
 
     let mut has_open_tag = false;
 
-    loop {
-        match pointer.current() {
-            Some(c) => {
-                if let Some(s) = is_comment(&mut pointer) {
-                    symbols.push(s);
-                } else if let Some(s) = is_start_tag(&mut pointer) {
-                    has_open_tag = true;
-                    symbols.push(s);
-                } else if let Some(s) = is_end_tag(&mut pointer) {
-                    has_open_tag = true;
-                    symbols.push(s);
-                } else if let Some(s) = is_tag_close_and_end(&mut pointer) {
-                    has_open_tag = false;
-                    symbols.push(s);
-                } else if let Some(s) = is_tag_close(&mut pointer) {
-                    has_open_tag = false;
-                    symbols.push(s);
-                } else if let Some(s) = is_assignment_sign(&mut pointer) {
-                    symbols.push(s);
-                } else if let Some(s) = is_literal(&mut pointer, has_open_tag) {
-                    symbols.push(s);
-                } else if let Some(s) = is_identifier(&mut pointer, has_open_tag) {
-                    symbols.push(s);
-                } else if let Some(s) = is_text(&mut pointer, has_open_tag) {
-                    symbols.push(s);
-                } else {
-                    if !c.is_whitespace(){
-                        // Unknown symbol, move on ¯\_(ツ)_/¯
-                        eprintln!("Unknown symbol {}", c);
-                    }
-                    pointer.next();
-                }
-            },
-            None => break,
-        };
+    while let Some(c) = pointer.current() {
+        if let Some(s) = is_comment(&mut pointer) {
+            symbols.push(s);
+        } else if let Some(s) = is_start_tag(&mut pointer) {
+            has_open_tag = true;
+            symbols.push(s);
+        } else if let Some(s) = is_end_tag(&mut pointer) {
+            has_open_tag = true;
+            symbols.push(s);
+        } else if let Some(s) = is_tag_close_and_end(&mut pointer) {
+            has_open_tag = false;
+            symbols.push(s);
+        } else if let Some(s) = is_tag_close(&mut pointer) {
+            has_open_tag = false;
+            symbols.push(s);
+        } else if let Some(s) = is_assignment_sign(&mut pointer) {
+            symbols.push(s);
+        } else if let Some(s) = is_literal(&mut pointer, has_open_tag) {
+            symbols.push(s);
+        } else if let Some(s) = is_identifier(&mut pointer, has_open_tag) {
+            symbols.push(s);
+        } else if let Some(s) = is_text(&mut pointer, has_open_tag) {
+            symbols.push(s);
+        } else {
+            if !c.is_whitespace(){
+                // Unknown symbol, move on ¯\_(ツ)_/¯
+                eprintln!("Unknown symbol {}", c);
+            }
+            pointer.next_char();
+        }
     }
     Ok(symbols)
 }
@@ -135,7 +84,7 @@ fn is_start_tag(pointer: &mut TextPointer) -> Option<Symbol> {
         if c1 == '<' && c2 != '/' {
             let mut name: Vec<char> = Vec::new();
             loop {
-                match pointer.next() {
+                match pointer.next_char() {
                     Some(' ') | Some('>') | Some('/') => break,
                     Some(c) => {
                         name.push(c);
@@ -160,11 +109,11 @@ fn is_start_tag(pointer: &mut TextPointer) -> Option<Symbol> {
 fn is_end_tag(pointer: &mut TextPointer) -> Option<Symbol> {
     if let (Some(c1), Some(c2)) = (pointer.current(), pointer.peek()) {
         if c1 == '<' && c2 == '/' {
-            pointer.next(); // peeked before, move up now
+            pointer.next_char(); // peeked before, move up now
             
             let mut name: Vec<char> = Vec::new();
             loop {
-                match pointer.next() {
+                match pointer.next_char() {
                     Some(' ') | Some('>') => break,
                     Some(c) => {
                         name.push(c);
@@ -188,20 +137,15 @@ fn is_end_tag(pointer: &mut TextPointer) -> Option<Symbol> {
 fn is_comment(pointer: &mut TextPointer) -> Option<Symbol> {
     if let (Some(c1), Some(c2), Some(c3), Some(c4)) = (pointer.current(), pointer.peek(), pointer.peek_add(2), pointer.peek_add(3)) {
         if c1 == '<' && c2 == '!' && c3 == '-' && c4 == '-' {
-            pointer.next_add(3); // peeked before, move up now
+            pointer.next_char_add(3); // peeked before, move up now
 
             let mut text: Vec<char> = Vec::new();
-            loop {
-                match pointer.next() {
-                    Some(c) => {
-                        if is_end_comment(pointer) {
-                            let name: String = text.into_iter().collect();
-                            return Some(Symbol::Comment(name));
-                        }
-                        text.push(c);
-                    },
-                    None => break,
-                };
+            while let Some(c) = pointer.next_char() {
+                if is_end_comment(pointer) {
+                    let name: String = text.into_iter().collect();
+                    return Some(Symbol::Comment(name));
+                }
+                text.push(c);
             }
         }
         return None;
@@ -218,7 +162,7 @@ fn is_comment(pointer: &mut TextPointer) -> Option<Symbol> {
 fn is_end_comment(pointer: &mut TextPointer) -> bool {
     if let (Some(c1), Some(c2), Some(c3)) = (pointer.current(), pointer.peek(), pointer.peek_add(2)) {
         if c1 == '-' && c2 == '-' && c3 == '>' {
-            pointer.next_add(3); // peeked before, move up now; 2+1 to end after comment
+            pointer.next_char_add(3); // peeked before, move up now; 2+1 to end after comment
     
             return true;
         }
@@ -234,7 +178,7 @@ fn is_end_comment(pointer: &mut TextPointer) -> bool {
 fn is_tag_close(pointer: &mut TextPointer) -> Option<Symbol> {
     if let Some(c) = pointer.current() {
         if c == '>' {
-            pointer.next(); // move up for later
+            pointer.next_char(); // move up for later
             return Some(Symbol::TagClose);
         }
         return None;
@@ -249,7 +193,7 @@ fn is_tag_close(pointer: &mut TextPointer) -> Option<Symbol> {
 fn is_tag_close_and_end(pointer: &mut TextPointer) -> Option<Symbol> {
     if let (Some(c1), Some(c2)) = (pointer.current(), pointer.peek()) {
         if c1 == '/' && c2 == '>' {
-            pointer.next_add(2); // move up for later
+            pointer.next_char_add(2); // move up for later
             return Some(Symbol::TagCloseAndEnd);
         }
         return None;
@@ -264,7 +208,7 @@ fn is_tag_close_and_end(pointer: &mut TextPointer) -> Option<Symbol> {
 fn is_assignment_sign(pointer: &mut TextPointer) -> Option<Symbol> {
     if let Some(c) = pointer.current() {
         if c == '=' {
-            pointer.next(); // move up for later
+            pointer.next_char(); // move up for later
             return Some(Symbol::AssignmentSign);
         }
         return None;
@@ -285,7 +229,7 @@ fn is_literal(pointer: &mut TextPointer, has_open_tag: bool) -> Option<Symbol> {
         if c == '"' {            
             let mut text: Vec<char> = Vec::new();
             loop {
-                match pointer.next() {
+                match pointer.next_char() {
                     Some('"') => break,
                     Some(c) => {
                         text.push(c);
@@ -295,7 +239,7 @@ fn is_literal(pointer: &mut TextPointer, has_open_tag: bool) -> Option<Symbol> {
             }
             let name: String = text.into_iter().collect();
 
-            pointer.next(); // skip over closing `"`
+            pointer.next_char(); // skip over closing `"`
     
             return Some(Symbol::Literal(name));
         }
@@ -320,10 +264,9 @@ fn is_identifier(pointer: &mut TextPointer, has_open_tag: bool) -> Option<Symbol
 
     if let Some(c) = pointer.current() {
         if !INAVLID_ID_CHARS.contains(&c) {
-            let mut text: Vec<char> = Vec::new();
-            text.push(c);
+            let mut text: Vec<char> = vec![c];
             loop {
-                match pointer.next() {
+                match pointer.next_char() {
                     Some(c) if INAVLID_ID_CHARS.contains(&c) => break,
                     Some(c) => {
                         text.push(c);
@@ -359,10 +302,9 @@ fn is_text(pointer: &mut TextPointer, has_open_tag: bool) -> Option<Symbol> {
             let start_index = pointer.index;
             let mut has_non_whitespace = false;
 
-            let mut text: Vec<char> = Vec::new();
-            text.push(c);
+            let mut text: Vec<char> = vec![c];
             loop {
-                match pointer.next() {
+                match pointer.next_char() {
                     Some(c) if INAVLID_TEXT_CHARS.contains(&c) => break,
                     Some(c) => {
                         if !c.is_whitespace() {

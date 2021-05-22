@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use indextree::{Arena, NodeId};
 
+//mod xpath;
+
 pub struct RTag {
     pub name: String,
     pub attributes: HashMap<String, String>,

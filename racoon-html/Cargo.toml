@@ -10,3 +10,4 @@ edition = "2018"
 indextree = "4.3.1"
 lazy_static = "1.4.0"
 racoon = { path = "../racoon" }
+racoon-common = { path = "../racoon-common" }
