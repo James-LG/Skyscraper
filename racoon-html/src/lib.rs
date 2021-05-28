@@ -24,29 +24,26 @@ pub fn parse(text: &str) -> Result<RDocument, Box<dyn Error>> {
             Symbol::StartTag(tag_name) => {
                 // Skip the special doctype tag so a proper root is selected.
                 if tag_name == "!DOCTYPE" {
-                    match tokens.next() {
-                        Some(token) => {
-                            match token {
-                                Symbol::Identifier(iden) => {
-                                    if iden != "html" {
-                                        return Err("Expected identifier `html` after !DOCSTRING.".into());
-                                    }
-                                    match tokens.next() {
-                                        Some(token) => {
-                                            match token {
-                                                Symbol::TagClose => {
-                                                    // we good
-                                                },
-                                                _ => return Err("Expected tag close after !DOCSTRING html".into()),
-                                            }
-                                        },
-                                        None => return Err("Unexpected end of tokens.".into()),
-                                    }
-                                },
-                                _ => return Err("Expected identifier `html` after !DOCSTRING.".into()),
+                    if let Some(token) = tokens.next() {
+                        if let Symbol::Identifier(iden) = token {
+                            if iden != "html" {
+                                return Err("Expected identifier `html` after !DOCSTRING.".into());
                             }
-                        },
-                        None => return Err("Unexpected end of tokens.".into()),
+                            if let Some(token) = tokens.next() {
+                                match token {
+                                    Symbol::TagClose => {
+                                        // we good
+                                    },
+                                    _ => return Err("Expected tag close after !DOCSTRING html".into()),
+                                }
+                            } else {
+                                return Err("Unexpected end of tokens.".into());
+                            }
+                        } else {
+                            return Err("Expected identifier `html` after !DOCSTRING.".into());
+                        }
+                    } else {
+                        return Err("Unexpected end of tokens.".into());
                     }
                     continue;
                 }
@@ -131,32 +128,28 @@ pub fn parse(text: &str) -> Result<RDocument, Box<dyn Error>> {
                     return Err(format!("Identifier `{}` encountered outside of tag.", iden).into());
                 }
 
-                match tokens.next() {
-                    Some(token) => {
-                        match token {
-                            Symbol::AssignmentSign => {
-                                match tokens.next() {
-                                    Some(token) => {
-                                        match token {
-                                            Symbol::Literal(lit) => {
-                                                let cur_tree_node = try_get_mut_tree_node(cur_key_o, &mut arena)?;
-                                                match cur_tree_node.get_mut() {
-                                                    RNode::Tag(tag) => {
-                                                        tag.attributes.insert(iden, lit);
-                                                    },
-                                                    RNode::Text(_) => return Err("Attempted to add attribute to text node.".into()),
-                                                }
-                                            },
-                                            _ => return Err("Expected literal after assignment sign.".into()),
-                                        }
+                if let Some(token) = tokens.next() {
+                    if let Symbol::AssignmentSign = token {
+                        if let Some(token) = tokens.next() {
+                            if let Symbol::Literal(lit) = token {
+                                let cur_tree_node = try_get_mut_tree_node(cur_key_o, &mut arena)?;
+                                match cur_tree_node.get_mut() {
+                                    RNode::Tag(tag) => {
+                                        tag.attributes.insert(iden, lit);
                                     },
-                                    None => return Err("Unexpected end of tokens.".into()),
+                                    RNode::Text(_) => return Err("Attempted to add attribute to text node.".into()),
                                 }
-                            },
-                            _ => return Err("Expected assignment sign after identifier.".into()),
+                            } else {
+                                return Err("Expected literal after assignment sign.".into());
+                            }
+                        } else {
+                            return Err("Unexpected end of tokens.".into());
                         }
-                    },
-                    None => return Err("Unexpected end of tokens.".into()),
+                    } else {
+                        return Err("Expected assignment sign after identifier.".into());
+                    }
+                } else {
+                    return Err("Unexpected end of tokens.".into());
                 }
             },
             Symbol::Text(text) => {
