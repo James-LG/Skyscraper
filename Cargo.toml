@@ -1,7 +1,11 @@
-[workspace]
+[package]
+name = "racoon"
+version = "0.1.0"
+authors = ["James La Novara-Gsell <james.lanovara.gsell@gmail.com>"]
+edition = "2018"
 
-members = [
-    "racoon-html",
-    "racoon",
-    "racoon-common",
-]
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+indextree = "4.3.1"
+lazy_static = "1.4.0"

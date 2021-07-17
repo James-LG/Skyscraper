@@ -1,8 +1,13 @@
+#[macro_use]
+extern crate lazy_static;
+
 use std::collections::HashMap;
 
 use indextree::{Arena, NodeId};
 
-//mod xpath;
+pub mod xpath;
+pub mod html;
+mod textpointer;
 
 pub struct RTag {
     pub name: String,

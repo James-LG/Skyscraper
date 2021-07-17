@@ -1,13 +1,10 @@
-#[macro_use]
-extern crate lazy_static;
-
-use std::{error::Error};
-
 mod tokenizer;
 
+use std::error::Error;
+
 use indextree::{Arena, Node, NodeId};
-use racoon::{RDocument, RNode, RTag};
 use tokenizer::Symbol;
+use crate::{RDocument, RNode, RTag};
 
 pub fn parse(text: &str) -> Result<RDocument, Box<dyn Error>> {
     let tokens = tokenizer::lex(text)?;

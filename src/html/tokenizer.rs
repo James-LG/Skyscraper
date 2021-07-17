@@ -1,4 +1,4 @@
-use racoon_common::TextPointer;
+use crate::textpointer::TextPointer;
 
 /// Enum representing all possible symbols output by the lexer.
 #[derive(Debug)]
