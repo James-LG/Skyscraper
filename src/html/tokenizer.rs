@@ -80,8 +80,8 @@ pub fn lex(text: &str) -> Result<Vec<Symbol>, &'static str> {
 /// 
 /// Has additional checks to make sure it is not an end tag.
 fn is_start_tag(pointer: &mut TextPointer) -> Option<Symbol> {
-    if let (Some(c1), Some(c2)) = (pointer.current(), pointer.peek()) {
-        if c1 == '<' && c2 != '/' {
+    if let (Some('<'), Some(c2)) = (pointer.current(), pointer.peek()) {
+        if c2 != '/' {
             let mut name: Vec<char> = Vec::new();
             loop {
                 match pointer.next_char() {
@@ -107,25 +107,22 @@ fn is_start_tag(pointer: &mut TextPointer) -> Option<Symbol> {
 /// 
 /// EndTag is defined as `</{{String}}`
 fn is_end_tag(pointer: &mut TextPointer) -> Option<Symbol> {
-    if let (Some(c1), Some(c2)) = (pointer.current(), pointer.peek()) {
-        if c1 == '<' && c2 == '/' {
-            pointer.next_char(); // peeked before, move up now
-            
-            let mut name: Vec<char> = Vec::new();
-            loop {
-                match pointer.next_char() {
-                    Some(' ') | Some('>') => break,
-                    Some(c) => {
-                        name.push(c);
-                    },
-                    None => break,
-                };
-            }
-            let name: String = name.into_iter().collect();
-    
-            return Some(Symbol::EndTag(name));
+    if let (Some('<'), Some('/')) = (pointer.current(), pointer.peek()) {
+        pointer.next_char(); // peeked before, move up now
+        
+        let mut name: Vec<char> = Vec::new();
+        loop {
+            match pointer.next_char() {
+                Some(' ') | Some('>') => break,
+                Some(c) => {
+                    name.push(c);
+                },
+                None => break,
+            };
         }
-        return None;
+        let name: String = name.into_iter().collect();
+
+        return Some(Symbol::EndTag(name));
     }
     None
 }
@@ -135,20 +132,17 @@ fn is_end_tag(pointer: &mut TextPointer) -> Option<Symbol> {
 /// 
 /// Comment is defined as `<!--{{String}}-->`
 fn is_comment(pointer: &mut TextPointer) -> Option<Symbol> {
-    if let (Some(c1), Some(c2), Some(c3), Some(c4)) = (pointer.current(), pointer.peek(), pointer.peek_add(2), pointer.peek_add(3)) {
-        if c1 == '<' && c2 == '!' && c3 == '-' && c4 == '-' {
-            pointer.next_char_add(3); // peeked before, move up now
+    if let (Some('<'), Some('!'), Some('-'), Some('-')) = (pointer.current(), pointer.peek(), pointer.peek_add(2), pointer.peek_add(3)) {
+        pointer.next_char_add(3); // peeked before, move up now
 
-            let mut text: Vec<char> = Vec::new();
-            while let Some(c) = pointer.next_char() {
-                if is_end_comment(pointer) {
-                    let name: String = text.into_iter().collect();
-                    return Some(Symbol::Comment(name));
-                }
-                text.push(c);
+        let mut text: Vec<char> = Vec::new();
+        while let Some(c) = pointer.next_char() {
+            if is_end_comment(pointer) {
+                let name: String = text.into_iter().collect();
+                return Some(Symbol::Comment(name));
             }
+            text.push(c);
         }
-        return None;
     }
     None
 }
@@ -160,13 +154,10 @@ fn is_comment(pointer: &mut TextPointer) -> Option<Symbol> {
 /// 
 /// The end of a comment is defined as `-->`
 fn is_end_comment(pointer: &mut TextPointer) -> bool {
-    if let (Some(c1), Some(c2), Some(c3)) = (pointer.current(), pointer.peek(), pointer.peek_add(2)) {
-        if c1 == '-' && c2 == '-' && c3 == '>' {
-            pointer.next_char_add(3); // peeked before, move up now; 2+1 to end after comment
-    
-            return true;
-        }
-        return false;
+    if let (Some('-'), Some('-'), Some('>')) = (pointer.current(), pointer.peek(), pointer.peek_add(2)) {
+        pointer.next_char_add(3); // peeked before, move up now; 2+1 to end after comment
+
+        return true;
     }
     false
 }
@@ -176,12 +167,9 @@ fn is_end_comment(pointer: &mut TextPointer) -> bool {
 /// 
 /// TagClose is defined as `>`
 fn is_tag_close(pointer: &mut TextPointer) -> Option<Symbol> {
-    if let Some(c) = pointer.current() {
-        if c == '>' {
-            pointer.next_char(); // move up for later
-            return Some(Symbol::TagClose);
-        }
-        return None;
+    if let Some('>') = pointer.current() {
+        pointer.next_char(); // move up for later
+        return Some(Symbol::TagClose);
     }
     None
 }
@@ -191,12 +179,9 @@ fn is_tag_close(pointer: &mut TextPointer) -> Option<Symbol> {
 /// 
 /// TagCloseAndEnd is defined as `/>`
 fn is_tag_close_and_end(pointer: &mut TextPointer) -> Option<Symbol> {
-    if let (Some(c1), Some(c2)) = (pointer.current(), pointer.peek()) {
-        if c1 == '/' && c2 == '>' {
-            pointer.next_char_add(2); // move up for later
-            return Some(Symbol::TagCloseAndEnd);
-        }
-        return None;
+    if let (Some('/'), Some('>')) = (pointer.current(), pointer.peek()) {
+        pointer.next_char_add(2); // move up for later
+        return Some(Symbol::TagCloseAndEnd);
     }
     None
 }
@@ -206,12 +191,9 @@ fn is_tag_close_and_end(pointer: &mut TextPointer) -> Option<Symbol> {
 /// 
 /// AssignmentSign is defined as `=`
 fn is_assignment_sign(pointer: &mut TextPointer) -> Option<Symbol> {
-    if let Some(c) = pointer.current() {
-        if c == '=' {
-            pointer.next_char(); // move up for later
-            return Some(Symbol::AssignmentSign);
-        }
-        return None;
+    if let Some('=') = pointer.current() {
+        pointer.next_char(); // move up for later
+        return Some(Symbol::AssignmentSign);
     }
     None
 }
@@ -225,25 +207,22 @@ fn is_literal(pointer: &mut TextPointer, has_open_tag: bool) -> Option<Symbol> {
         return None;
     }
 
-    if let Some(c) = pointer.current() {
-        if c == '"' {            
-            let mut text: Vec<char> = Vec::new();
-            loop {
-                match pointer.next_char() {
-                    Some('"') => break,
-                    Some(c) => {
-                        text.push(c);
-                    },
-                    None => break,
-                };
-            }
-            let name: String = text.into_iter().collect();
-
-            pointer.next_char(); // skip over closing `"`
-    
-            return Some(Symbol::Literal(name));
+    if let Some('"') = pointer.current() {         
+        let mut text: Vec<char> = Vec::new();
+        loop {
+            match pointer.next_char() {
+                Some('"') => break,
+                Some(c) => {
+                    text.push(c);
+                },
+                None => break,
+            };
         }
-        return None;
+        let name: String = text.into_iter().collect();
+
+        pointer.next_char(); // skip over closing `"`
+
+        return Some(Symbol::Literal(name));
     }
     None
 }
