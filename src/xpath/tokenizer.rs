@@ -378,7 +378,7 @@ mod tests {
     }
 
     #[test]
-    fn lex_works() {
+    fn lex_works1() {
         // arrange
         let text = "//bookstore/book[1]/page[last()-1]";
 
@@ -403,6 +403,32 @@ mod tests {
             Symbol::MinusSign,
             Symbol::Number(1.0),
             Symbol::CloseSquareBracket,
+        ];
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn lex_works2() {
+        // arrange
+        let text = "/bookstore/book[price>35]/price";
+
+        // act
+        let result = lex(text).unwrap();
+
+        // assert
+        let expected = vec![
+            Symbol::Slash,
+            Symbol::Identifier(String::from("bookstore")),
+            Symbol::Slash,
+            Symbol::Identifier(String::from("book")),
+            Symbol::OpenSquareBracket,
+            Symbol::Identifier(String::from("price")),
+            Symbol::GreaterThanSign,
+            Symbol::Number(35.0),
+            Symbol::CloseSquareBracket,
+            Symbol::Slash,
+            Symbol::Identifier(String::from("price"))
         ];
 
         assert_eq!(expected, result);
