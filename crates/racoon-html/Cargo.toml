@@ -8,6 +8,5 @@ edition = "2018"
 
 [dependencies]
 racoon-core = { path = "../racoon-core" }
-racoon-xpath = { path = '../racoon-xpath' }
 indextree = "4.3.1"
 lazy_static = "1.4.0"

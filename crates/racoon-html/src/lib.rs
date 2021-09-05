@@ -7,7 +7,7 @@ use std::error::Error;
 
 use indextree::{Arena, Node, NodeId};
 use tokenizer::Symbol;
-use racoon_xpath::{RDocument, RNode, RTag};
+use racoon_core::{RDocument, RNode, RTag};
 
 pub fn parse(text: &str) -> Result<RDocument, Box<dyn Error>> {
     let tokens = tokenizer::lex(text)?;
