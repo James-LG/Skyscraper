@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use indextree::{Arena, NodeId};
 
-pub mod textpointer;
+pub mod vecpointer;
 
 pub struct RTag {
     pub name: String,

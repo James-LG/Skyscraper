@@ -1,4 +1,4 @@
-use racoon_core::textpointer::TextPointer;
+use racoon_core::vecpointer::VecPointer;
 
 /// Enum representing all possible symbols output by the lexer.
 #[derive(Debug)]
@@ -62,7 +62,8 @@ pub enum Symbol {
 pub fn lex(text: &str) -> Result<Vec<Symbol>, &'static str> {
     let mut symbols: Vec<Symbol> = Vec::new();
 
-    let mut pointer = TextPointer::new(text);
+    let chars = text.chars().collect();
+    let mut pointer = VecPointer::new(chars);
 
     while let Some(c) = pointer.current() {
         if let Some(s) = is_double_slash(&mut pointer) {
@@ -106,7 +107,7 @@ pub fn lex(text: &str) -> Result<Vec<Symbol>, &'static str> {
                 // Unknown symbol, move on ¯\_(ツ)_/¯
                 eprintln!("Unknown symbol {}", c);
             }
-            pointer.next_char();
+            pointer.next();
         }
     }
     Ok(symbols)
@@ -114,7 +115,7 @@ pub fn lex(text: &str) -> Result<Vec<Symbol>, &'static str> {
 
 /// Checks if the [TextPointer](TextPointer) is currently pointing to a DoubleSlash [Symbol](Symbol).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
-fn is_double_slash(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_double_slash(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let (Some('/'), Some('/')) = (pointer.current(), pointer.peek()) {
         // Peeked before, move up now.
         pointer.next_char_add(2);
@@ -125,9 +126,9 @@ fn is_double_slash(pointer: &mut TextPointer) -> Option<Symbol> {
 
 /// Checks if the [TextPointer](TextPointer) is currently pointing to a Slash [Symbol](Symbol).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
-fn is_slash(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_slash(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let Some('/') = pointer.current() {
-        pointer.next_char();
+        pointer.next();
         return Some(Symbol::Slash);
     }
     None
@@ -135,9 +136,9 @@ fn is_slash(pointer: &mut TextPointer) -> Option<Symbol> {
 
 /// Checks if the [TextPointer](TextPointer) is currently pointing to a OpenSquareBracket [Symbol](Symbol).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
-fn is_open_square_bracket(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_open_square_bracket(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let Some('[') = pointer.current() {
-        pointer.next_char();
+        pointer.next();
         return Some(Symbol::OpenSquareBracket);
     }
     None
@@ -145,9 +146,9 @@ fn is_open_square_bracket(pointer: &mut TextPointer) -> Option<Symbol> {
 
 /// Checks if the [TextPointer](TextPointer) is currently pointing to a CloseSquareBracket [Symbol](Symbol).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
-fn is_close_square_bracket(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_close_square_bracket(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let Some(']') = pointer.current() {
-        pointer.next_char();
+        pointer.next();
         return Some(Symbol::CloseSquareBracket);
     }
     None
@@ -155,9 +156,9 @@ fn is_close_square_bracket(pointer: &mut TextPointer) -> Option<Symbol> {
 
 /// Checks if the [TextPointer](TextPointer) is currently pointing to a OpenBracket [Symbol](Symbol).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
-fn is_open_bracket(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_open_bracket(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let Some('(') = pointer.current() {
-        pointer.next_char();
+        pointer.next();
         return Some(Symbol::OpenBracket);
     }
     None
@@ -165,9 +166,9 @@ fn is_open_bracket(pointer: &mut TextPointer) -> Option<Symbol> {
 
 /// Checks if the [TextPointer](TextPointer) is currently pointing to a CloseBracket [Symbol](Symbol).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
-fn is_close_bracket(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_close_bracket(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let Some(')') = pointer.current() {
-        pointer.next_char();
+        pointer.next();
         return Some(Symbol::CloseBracket);
     }
     None
@@ -175,9 +176,9 @@ fn is_close_bracket(pointer: &mut TextPointer) -> Option<Symbol> {
 
 /// Checks if the [TextPointer](TextPointer) is currently pointing to a Wildcard [Symbol](Symbol).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
-fn is_wildcard(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_wildcard(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let Some('*') = pointer.current() {
-        pointer.next_char();
+        pointer.next();
         return Some(Symbol::Wildcard);
     }
     None
@@ -185,7 +186,7 @@ fn is_wildcard(pointer: &mut TextPointer) -> Option<Symbol> {
 
 /// Checks if the [TextPointer](TextPointer) is currently pointing to a DoubleDot [Symbol](Symbol).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
-fn is_double_dot(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_double_dot(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let (Some('.'), Some('.')) = (pointer.current(), pointer.peek()) {
         // Peeked before, move up now.
         pointer.next_char_add(2);
@@ -196,9 +197,9 @@ fn is_double_dot(pointer: &mut TextPointer) -> Option<Symbol> {
 
 /// Checks if the [TextPointer](TextPointer) is currently pointing to a DoubleDot [Symbol](Symbol).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
-fn is_dot(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_dot(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let Some('.') = pointer.current() {
-        pointer.next_char();
+        pointer.next();
         return Some(Symbol::Dot);
     }
     None
@@ -206,9 +207,9 @@ fn is_dot(pointer: &mut TextPointer) -> Option<Symbol> {
 
 /// Checks if the [TextPointer](TextPointer) is currently pointing to a AssignmentSign [Symbol](Symbol).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
-fn is_assignment_sign(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_assignment_sign(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let Some('=') = pointer.current() {
-        pointer.next_char();
+        pointer.next();
         return Some(Symbol::AssignmentSign);
     }
     None
@@ -216,9 +217,9 @@ fn is_assignment_sign(pointer: &mut TextPointer) -> Option<Symbol> {
 
 /// Checks if the [TextPointer](TextPointer) is currently pointing to a AtSign [Symbol](Symbol).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
-fn is_at_sign(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_at_sign(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let Some('@') = pointer.current() {
-        pointer.next_char();
+        pointer.next();
         return Some(Symbol::AtSign);
     }
     None
@@ -226,9 +227,9 @@ fn is_at_sign(pointer: &mut TextPointer) -> Option<Symbol> {
 
 /// Checks if the [TextPointer](TextPointer) is currently pointing to a AddSign [Symbol](Symbol).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
-fn is_add_sign(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_add_sign(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let Some('+') = pointer.current() {
-        pointer.next_char();
+        pointer.next();
         return Some(Symbol::AddSign);
     }
     None
@@ -236,9 +237,9 @@ fn is_add_sign(pointer: &mut TextPointer) -> Option<Symbol> {
 
 /// Checks if the [TextPointer](TextPointer) is currently pointing to a MinusSign [Symbol](Symbol).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
-fn is_minus_sign(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_minus_sign(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let Some('-') = pointer.current() {
-        pointer.next_char();
+        pointer.next();
         return Some(Symbol::MinusSign);
     }
     None
@@ -246,9 +247,9 @@ fn is_minus_sign(pointer: &mut TextPointer) -> Option<Symbol> {
 
 /// Checks if the [TextPointer](TextPointer) is currently pointing to a GreaterThanSign [Symbol](Symbol).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
-fn is_greater_than_sign(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_greater_than_sign(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let Some('>') = pointer.current() {
-        pointer.next_char();
+        pointer.next();
         return Some(Symbol::GreaterThanSign);
     }
     None
@@ -256,9 +257,9 @@ fn is_greater_than_sign(pointer: &mut TextPointer) -> Option<Symbol> {
 
 /// Checks if the [TextPointer](TextPointer) is currently pointing to a LessThanSign [Symbol](Symbol).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
-fn is_less_than_sign(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_less_than_sign(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let Some('<') = pointer.current() {
-        pointer.next_char();
+        pointer.next();
         return Some(Symbol::LessThanSign);
     }
     None
@@ -266,11 +267,11 @@ fn is_less_than_sign(pointer: &mut TextPointer) -> Option<Symbol> {
 
 /// Checks if the [TextPointer](TextPointer) is currently pointing to a Number [Symbol](Symbol).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
-fn is_number(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_number(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let Some(c) = pointer.current() {
         if c.is_digit(10) {
             let mut num = c.to_string();
-            while let Some(c) = pointer.next_char() {
+            while let Some(c) = pointer.next() {
                 if c.is_digit(10) {
                     num.push(c);
                 } else {
@@ -281,7 +282,7 @@ fn is_number(pointer: &mut TextPointer) -> Option<Symbol> {
             // Check for decimal values
             if let Some('.') = pointer.current() {
                 num.push('.');
-                while let Some(c) = pointer.next_char() {
+                while let Some(c) = pointer.next() {
                     if c.is_digit(10) {
                         num.push(c);
                     } else {
@@ -298,12 +299,12 @@ fn is_number(pointer: &mut TextPointer) -> Option<Symbol> {
 
 /// Checks if the [TextPointer](TextPointer) is currently pointing to an Identifier [Symbol](Symbol).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
-fn is_identifier(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_identifier(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let Some(c) = pointer.current() {
         if c.is_alphabetic() {
             let mut id = c.to_string();
 
-            while let Some(c) = pointer.next_char() {
+            while let Some(c) = pointer.next() {
                 if c.is_alphabetic() {
                     id.push(c);
                 } else {
@@ -319,16 +320,16 @@ fn is_identifier(pointer: &mut TextPointer) -> Option<Symbol> {
 
 /// Checks if the [TextPointer](TextPointer) is currently pointing to a Text [Symbol](Symbol).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
-fn is_text(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_text(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let Some(c) = pointer.current() {
         if c == '"' {
-            let mut text = c.to_string();
+            let mut text = String::from("");
 
-            while let Some(c) = pointer.next_char() {
+            while let Some(c) = pointer.next() {
                 if c == '"' {
-                    text.push(c);
-                } else {
                     break;
+                } else {
+                    text.push(c);
                 }
             }
 
@@ -344,9 +345,8 @@ mod tests {
 
     #[test]
     fn is_number_should_be_some_with_trailing_text() {
-        let text = "1234abc";
-
-        let symbol = is_number(&mut TextPointer::new(text)).unwrap();
+        let chars = "1234abc".chars().collect();
+        let symbol = is_number(&mut VecPointer::new(chars)).unwrap();
 
         if let Symbol::Number(f) = symbol {
             assert_eq!(1234f32, f);
@@ -357,9 +357,8 @@ mod tests {
 
     #[test]
     fn is_number_should_capture_decimal() {
-        let text = "1234.5678";
-
-        let symbol = is_number(&mut TextPointer::new(text)).unwrap();
+        let chars = "1234.5678".chars().collect();
+        let symbol = is_number(&mut VecPointer::new(chars)).unwrap();
 
         if let Symbol::Number(f) = symbol {
             assert_eq!(1234.5678f32, f);
@@ -370,11 +369,24 @@ mod tests {
 
     #[test]
     fn is_number_should_be_none_with_leading_text() {
-        let text = "abc1234";
-
-        let symbol = is_number(&mut TextPointer::new(text));
+        let chars = "abc1234".chars().collect();
+        let symbol = is_number(&mut VecPointer::new(chars));
 
         assert!(symbol.is_none());
+    }
+
+    #[test]
+    fn is_text_should_capture_quoted_text() {
+        let chars = r###""world""###.chars().collect();
+        let pointer = &mut VecPointer::new(chars);
+        let symbol = is_text(pointer);
+
+        if let Some(Symbol::Text(text)) = symbol {
+            assert_eq!("world", text);
+            matches!(pointer.next(), None);
+        } else {
+            panic!("Expected text symbol")
+        }
     }
 
     #[test]
@@ -429,6 +441,29 @@ mod tests {
             Symbol::CloseSquareBracket,
             Symbol::Slash,
             Symbol::Identifier(String::from("price"))
+        ];
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn lex_works3() {
+        // arrange
+        let text = r###"//a[@hello="world"]"###;
+
+        // act
+        let result = lex(text).unwrap();
+
+        // assert
+        let expected = vec![
+            Symbol::DoubleSlash,
+            Symbol::Identifier(String::from("a")),
+            Symbol::OpenSquareBracket,
+            Symbol::AtSign,
+            Symbol::Identifier(String::from("hello")),
+            Symbol::AssignmentSign,
+            Symbol::Text(String::from("world")),
+            Symbol::CloseSquareBracket,
         ];
 
         assert_eq!(expected, result);

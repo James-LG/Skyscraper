@@ -1,4 +1,4 @@
-use racoon_core::textpointer::TextPointer;
+use racoon_core::vecpointer::VecPointer;
 
 /// Enum representing all possible symbols output by the lexer.
 #[derive(Debug)]
@@ -35,7 +35,8 @@ pub enum Symbol {
 pub fn lex(text: &str) -> Result<Vec<Symbol>, &'static str> {
     let mut symbols: Vec<Symbol> = Vec::new();
 
-    let mut pointer = TextPointer::new(text);
+    let chars = text.chars().collect();
+    let mut pointer = VecPointer::new(chars);
 
     let mut has_open_tag = false;
 
@@ -67,7 +68,7 @@ pub fn lex(text: &str) -> Result<Vec<Symbol>, &'static str> {
                 // Unknown symbol, move on ¯\_(ツ)_/¯
                 eprintln!("Unknown symbol {}", c);
             }
-            pointer.next_char();
+            pointer.next();
         }
     }
     Ok(symbols)
@@ -79,12 +80,12 @@ pub fn lex(text: &str) -> Result<Vec<Symbol>, &'static str> {
 /// StartTag is defined as `<{{String}}`
 /// 
 /// Has additional checks to make sure it is not an end tag.
-fn is_start_tag(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_start_tag(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let (Some('<'), Some(c2)) = (pointer.current(), pointer.peek()) {
         if c2 != '/' {
             let mut name: Vec<char> = Vec::new();
             loop {
-                match pointer.next_char() {
+                match pointer.next() {
                     Some(' ') | Some('>') | Some('/') => break,
                     Some(c) => {
                         name.push(c);
@@ -106,13 +107,13 @@ fn is_start_tag(pointer: &mut TextPointer) -> Option<Symbol> {
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 /// 
 /// EndTag is defined as `</{{String}}`
-fn is_end_tag(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_end_tag(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let (Some('<'), Some('/')) = (pointer.current(), pointer.peek()) {
-        pointer.next_char(); // peeked before, move up now
+        pointer.next(); // peeked before, move up now
         
         let mut name: Vec<char> = Vec::new();
         loop {
-            match pointer.next_char() {
+            match pointer.next() {
                 Some(' ') | Some('>') => break,
                 Some(c) => {
                     name.push(c);
@@ -131,12 +132,12 @@ fn is_end_tag(pointer: &mut TextPointer) -> Option<Symbol> {
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 /// 
 /// Comment is defined as `<!--{{String}}-->`
-fn is_comment(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_comment(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let (Some('<'), Some('!'), Some('-'), Some('-')) = (pointer.current(), pointer.peek(), pointer.peek_add(2), pointer.peek_add(3)) {
         pointer.next_char_add(3); // peeked before, move up now
 
         let mut text: Vec<char> = Vec::new();
-        while let Some(c) = pointer.next_char() {
+        while let Some(c) = pointer.next() {
             if is_end_comment(pointer) {
                 let name: String = text.into_iter().collect();
                 return Some(Symbol::Comment(name));
@@ -153,7 +154,7 @@ fn is_comment(pointer: &mut TextPointer) -> Option<Symbol> {
 /// This is a helper method not used directly in the lexer.
 /// 
 /// The end of a comment is defined as `-->`
-fn is_end_comment(pointer: &mut TextPointer) -> bool {
+fn is_end_comment(pointer: &mut VecPointer<char>) -> bool {
     if let (Some('-'), Some('-'), Some('>')) = (pointer.current(), pointer.peek(), pointer.peek_add(2)) {
         pointer.next_char_add(3); // peeked before, move up now; 2+1 to end after comment
 
@@ -166,9 +167,9 @@ fn is_end_comment(pointer: &mut TextPointer) -> bool {
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 /// 
 /// TagClose is defined as `>`
-fn is_tag_close(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_tag_close(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let Some('>') = pointer.current() {
-        pointer.next_char(); // move up for later
+        pointer.next(); // move up for later
         return Some(Symbol::TagClose);
     }
     None
@@ -178,7 +179,7 @@ fn is_tag_close(pointer: &mut TextPointer) -> Option<Symbol> {
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 /// 
 /// TagCloseAndEnd is defined as `/>`
-fn is_tag_close_and_end(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_tag_close_and_end(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let (Some('/'), Some('>')) = (pointer.current(), pointer.peek()) {
         pointer.next_char_add(2); // move up for later
         return Some(Symbol::TagCloseAndEnd);
@@ -190,9 +191,9 @@ fn is_tag_close_and_end(pointer: &mut TextPointer) -> Option<Symbol> {
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 /// 
 /// AssignmentSign is defined as `=`
-fn is_assignment_sign(pointer: &mut TextPointer) -> Option<Symbol> {
+fn is_assignment_sign(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let Some('=') = pointer.current() {
-        pointer.next_char(); // move up for later
+        pointer.next(); // move up for later
         return Some(Symbol::AssignmentSign);
     }
     None
@@ -202,7 +203,7 @@ fn is_assignment_sign(pointer: &mut TextPointer) -> Option<Symbol> {
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 /// 
 /// Literal is defined as `"{{String}}"` inside a tag definition.
-fn is_literal(pointer: &mut TextPointer, has_open_tag: bool) -> Option<Symbol> {
+fn is_literal(pointer: &mut VecPointer<char>, has_open_tag: bool) -> Option<Symbol> {
     if !has_open_tag {
         return None;
     }
@@ -210,7 +211,7 @@ fn is_literal(pointer: &mut TextPointer, has_open_tag: bool) -> Option<Symbol> {
     if let Some('"') = pointer.current() {         
         let mut text: Vec<char> = Vec::new();
         loop {
-            match pointer.next_char() {
+            match pointer.next() {
                 Some('"') => break,
                 Some(c) => {
                     text.push(c);
@@ -220,7 +221,7 @@ fn is_literal(pointer: &mut TextPointer, has_open_tag: bool) -> Option<Symbol> {
         }
         let name: String = text.into_iter().collect();
 
-        pointer.next_char(); // skip over closing `"`
+        pointer.next(); // skip over closing `"`
 
         return Some(Symbol::Literal(name));
     }
@@ -236,7 +237,7 @@ lazy_static! {
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 /// 
 /// Identifier is defined as any text inside a tag definition.
-fn is_identifier(pointer: &mut TextPointer, has_open_tag: bool) -> Option<Symbol> {
+fn is_identifier(pointer: &mut VecPointer<char>, has_open_tag: bool) -> Option<Symbol> {
     if !has_open_tag {
         return None;
     }
@@ -245,7 +246,7 @@ fn is_identifier(pointer: &mut TextPointer, has_open_tag: bool) -> Option<Symbol
         if !INAVLID_ID_CHARS.contains(&c) {
             let mut text: Vec<char> = vec![c];
             loop {
-                match pointer.next_char() {
+                match pointer.next() {
                     Some(c) if INAVLID_ID_CHARS.contains(&c) => break,
                     Some(c) => {
                         text.push(c);
@@ -271,7 +272,7 @@ lazy_static! {
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 /// 
 /// Text is defined as any text outside a tag definition.
-fn is_text(pointer: &mut TextPointer, has_open_tag: bool) -> Option<Symbol> {
+fn is_text(pointer: &mut VecPointer<char>, has_open_tag: bool) -> Option<Symbol> {
     if has_open_tag {
         return None;
     }
@@ -283,7 +284,7 @@ fn is_text(pointer: &mut TextPointer, has_open_tag: bool) -> Option<Symbol> {
 
             let mut text: Vec<char> = vec![c];
             loop {
-                match pointer.next_char() {
+                match pointer.next() {
                     Some(c) if INAVLID_TEXT_CHARS.contains(&c) => break,
                     Some(c) => {
                         if !c.is_whitespace() {
@@ -317,7 +318,8 @@ mod tests {
     #[test]
     fn is_start_tag_finds_and_moves_pointer() {
         // arrange
-        let mut pointer = TextPointer::new("<a>");
+        let chars = "<a>".chars().collect();
+        let mut pointer = VecPointer::new(chars);
 
         // act
         let result = is_start_tag(&mut pointer).unwrap();
@@ -330,7 +332,8 @@ mod tests {
     #[test]
     fn is_start_tag_does_not_move_pointer_if_not_found() {
         // arrange
-        let mut pointer = TextPointer::new("abcd");
+        let chars = "abcd".chars().collect();
+        let mut pointer = VecPointer::new(chars);
 
         // act
         let result = is_start_tag(&mut pointer);
@@ -343,7 +346,8 @@ mod tests {
     #[test]
     fn is_end_tag_works() {
         // arrange
-        let mut pointer = TextPointer::new("</c>");
+        let chars = "</c>".chars().collect();
+        let mut pointer = VecPointer::new(chars);
 
         // act
         let result = is_end_tag(&mut pointer).unwrap();
@@ -356,7 +360,8 @@ mod tests {
     #[test]
     fn is_end_tag_does_not_move_pointer_if_not_found() {
         // arrange
-        let mut pointer = TextPointer::new("abcd");
+        let chars = "abcd".chars().collect();
+        let mut pointer = VecPointer::new(chars);
 
         // act
         let result = is_end_tag(&mut pointer);
@@ -369,7 +374,8 @@ mod tests {
     #[test]
     fn is_comment_works() {
         // arrange
-        let mut pointer = TextPointer::new("<!--bean is-nice -->");
+        let chars = "<!--bean is-nice -->".chars().collect();
+        let mut pointer = VecPointer::new(chars);
 
         // act
         let result = is_comment(&mut pointer).unwrap();
@@ -382,7 +388,8 @@ mod tests {
     #[test]
     fn is_comment_does_not_move_pointer_if_not_found() {
         // arrange
-        let mut pointer = TextPointer::new("abcd");
+        let chars = "abcd".chars().collect();
+        let mut pointer = VecPointer::new(chars);
 
         // act
         let result = is_comment(&mut pointer);
@@ -395,7 +402,8 @@ mod tests {
     #[test]
     fn is_end_comment_works() {
         // arrange
-        let mut pointer = TextPointer::new("-->");
+        let chars = "-->".chars().collect();
+        let mut pointer = VecPointer::new(chars);
 
         // act
         let result = is_end_comment(&mut pointer);
@@ -408,7 +416,8 @@ mod tests {
     #[test]
     fn is_end_comment_does_not_move_pointer_if_not_found() {
         // arrange
-        let mut pointer = TextPointer::new("abcd");
+        let chars = "abcd".chars().collect();
+        let mut pointer = VecPointer::new(chars);
 
         // act
         let result = is_end_comment(&mut pointer);
@@ -421,7 +430,8 @@ mod tests {
     #[test]
     fn is_tag_close_works() {
         // arrange
-        let mut pointer = TextPointer::new(">");
+        let chars = ">".chars().collect();
+        let mut pointer = VecPointer::new(chars);
 
         // act
         let result = is_tag_close(&mut pointer).unwrap();
@@ -434,7 +444,8 @@ mod tests {
     #[test]
     fn is_tag_close_does_not_move_pointer_if_not_found() {
         // arrange
-        let mut pointer = TextPointer::new("abcd");
+        let chars = "abcd".chars().collect();
+        let mut pointer = VecPointer::new(chars);
 
         // act
         let result = is_tag_close(&mut pointer);
@@ -447,7 +458,8 @@ mod tests {
     #[test]
     fn is_tag_close_and_end_works() {
         // arrange
-        let mut pointer = TextPointer::new("/>");
+        let chars = "/>".chars().collect();
+        let mut pointer = VecPointer::new(chars);
 
         // act
         let result = is_tag_close_and_end(&mut pointer).unwrap();
@@ -460,7 +472,8 @@ mod tests {
     #[test]
     fn is_tag_close_and_end_does_not_move_pointer_if_not_found() {
         // arrange
-        let mut pointer = TextPointer::new("abcd");
+        let chars = "abcd".chars().collect();
+        let mut pointer = VecPointer::new(chars);
 
         // act
         let result = is_tag_close_and_end(&mut pointer);
@@ -473,7 +486,8 @@ mod tests {
     #[test]
     fn is_assignment_sign_works() {
         // arrange
-        let mut pointer = TextPointer::new("=");
+        let chars = "=".chars().collect();
+        let mut pointer = VecPointer::new(chars);
 
         // act
         let result = is_assignment_sign(&mut pointer).unwrap();
@@ -486,7 +500,8 @@ mod tests {
     #[test]
     fn is_assignment_sign_does_not_move_pointer_if_not_found() {
         // arrange
-        let mut pointer = TextPointer::new("abcd");
+        let chars = "abcd".chars().collect();
+        let mut pointer = VecPointer::new(chars);
 
         // act
         let result = is_assignment_sign(&mut pointer);
@@ -499,7 +514,8 @@ mod tests {
     #[test]
     fn is_literal_works() {
         // arrange
-        let mut pointer = TextPointer::new("\"yo\"");
+        let chars = r###""yo""###.chars().collect();
+        let mut pointer = VecPointer::new(chars);
 
         // act
         let result = is_literal(&mut pointer, true).unwrap();
@@ -512,7 +528,8 @@ mod tests {
     #[test]
     fn is_literal_does_not_move_pointer_if_not_found() {
         // arrange
-        let mut pointer = TextPointer::new("abcd");
+        let chars = "abcd".chars().collect();
+        let mut pointer = VecPointer::new(chars);
 
         // act
         let result = is_literal(&mut pointer, true);
@@ -525,7 +542,8 @@ mod tests {
     #[test]
     fn is_identifier_works() {
         // arrange
-        let mut pointer = TextPointer::new("foo bar");
+        let chars = "foo bar".chars().collect();
+        let mut pointer = VecPointer::new(chars);
 
         // act
         let result = is_identifier(&mut pointer, true).unwrap();
@@ -538,7 +556,8 @@ mod tests {
     #[test]
     fn is_identifier_not_move_pointer_if_not_found() {
         // arrange
-        let mut pointer = TextPointer::new(" ");
+        let chars = " ".chars().collect();
+        let mut pointer = VecPointer::new(chars);
 
         // act
         let result = is_identifier(&mut pointer, true);
@@ -551,7 +570,8 @@ mod tests {
     #[test]
     fn is_text_works() {
         // arrange
-        let mut pointer = TextPointer::new("foo bar");
+        let chars = "foo bar".chars().collect();
+        let mut pointer = VecPointer::new(chars);
 
         // act
         let result = is_text(&mut pointer, false).unwrap();
@@ -564,7 +584,8 @@ mod tests {
     #[test]
     fn is_text_not_move_pointer_if_not_found() {
         // arrange
-        let mut pointer = TextPointer::new("<");
+        let chars = "<".chars().collect();
+        let mut pointer = VecPointer::new(chars);
 
         // act
         let result = is_text(&mut pointer, false);

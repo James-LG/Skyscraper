@@ -1,33 +1,38 @@
 pub mod parse;
 mod tokenizer;
 
-use std::{collections::HashMap, error::Error};
+use std::error::Error;
 
 use indextree::NodeId;
-use racoon_core::RDocument;
+use racoon_core::{RDocument, RTag};
 
-#[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct XpathQuery {
-    identifier: String,
-    attributes: HashMap<String, String>
+    pub identifier: String,
+    pub predicates: Vec<XpathPredicate>
+}
+
+#[derive(Debug, PartialEq)]
+pub enum XpathPredicate {
+    GreaterThan { attribute: String, value: u64 },
+    LessThan { attribute: String, value: u64 },
+    Equals { attribute: String, value: String }
 }
 
 impl XpathQuery {
     pub fn new(identifier: String) -> XpathQuery {
         XpathQuery {
             identifier,
-            attributes: HashMap::new(),
+            predicates: Vec::new(),
         }
     }
 }
 
-#[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum XpathElement {
     SearchRoot,
     SearchAll,
-    Element(XpathQuery)
+    Query(XpathQuery)
 }
 
 pub struct Xpath {
@@ -40,7 +45,7 @@ impl Xpath {
             match element {
                 XpathElement::SearchRoot => todo!(),
                 XpathElement::SearchAll => todo!(),
-                XpathElement::Element(_) => todo!(),
+                XpathElement::Query(_) => todo!(),
             }
         }
         Ok(Vec::new())
@@ -62,7 +67,7 @@ fn search_internal(recursive: bool, query: &XpathQuery, document: &RDocument, cu
         if let Some(node) = document.arena.get(node_id) {
             match node.get() {
                 racoon_core::RNode::Tag(rtag) => {
-                    if rtag.name == query.identifier {
+                    if rtag.name == query.identifier && is_matching_predicates(query, rtag) {
                         matches.push(node_id);
                     }
 
@@ -77,6 +82,22 @@ fn search_internal(recursive: bool, query: &XpathQuery, document: &RDocument, cu
     }
     
     return matches;
+}
+
+fn is_matching_predicates(query: &XpathQuery, rtag: &RTag) -> bool {
+    for p in &query.predicates {
+        match p {
+            XpathPredicate::GreaterThan { attribute, value } => todo!(),
+            XpathPredicate::LessThan { attribute, value } => todo!(),
+            XpathPredicate::Equals { attribute, value } => {
+                if !rtag.attributes.contains_key(attribute) || &rtag.attributes[attribute] != value {
+                    return false;
+                }
+            },
+        }
+    }
+
+    return true;
 }
 
 #[cfg(test)]
@@ -138,7 +159,34 @@ mod test {
                 RNode::Text(_) => panic!("Expected tag"),
             }
         }
-        
+    }
+
+    #[test]
+    fn search_all_should_only_select_with_matching_attribute_predicate() {
+        let text =r###"<!DOCTYPE html>
+        <root>
+            <a/>
+            <b><a/></b>
+            <c><b><a hello="world"/></b></c>
+        </root>
+        "###;
+
+        let document = racoon_html::parse(text).unwrap();
+
+        let query = XpathQuery::new(String::from(r###"a[@hello="world"]"###));
+        let result = search_all(&query, &document, document.root_key);
+
+        assert!(result.len() == 1);
+
+        let node = document.arena.get(result[0]).unwrap();
+
+        match node.get() {
+            RNode::Tag(tag) => {
+                assert_eq!("a", tag.name.as_str());
+                assert!(tag.attributes["hello"] == String::from("world"));
+            },
+            RNode::Text(_) => panic!("Expected tag"),
+        }
     }
 
     #[test]
