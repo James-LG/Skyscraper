@@ -60,7 +60,7 @@ fn parse_equals_predicate(symbols: &mut Peekable<std::vec::IntoIter<Symbol>>) ->
 
     println!("{:?}", symbols.peek());
     if let Some(Symbol::Identifier(attribute)) = symbols.next_if(|expected| matches!(expected, &Symbol::Identifier(_))) {
-        attr = Some(attribute.to_string());
+        attr = Some(attribute);
     }
 
     if let Some(Symbol::AssignmentSign) = symbols.next_if(|expected| matches!(expected, &Symbol::AssignmentSign)) {
@@ -70,7 +70,7 @@ fn parse_equals_predicate(symbols: &mut Peekable<std::vec::IntoIter<Symbol>>) ->
     }
 
     if let Some(Symbol::Text(value)) = symbols.next_if(|expected| matches!(expected, &Symbol::Text(_))) {
-        val = Some(value.to_string());
+        val = Some(value);
     }
     
     if let Some(attribute) = attr {

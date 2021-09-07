@@ -17,11 +17,20 @@ where T : Copy {
         self.get(self.index)
     }
 
-    pub fn next(&mut self) -> Option<T> {
-        self.next_char_add(1)
+    pub fn back(&mut self) -> Option<T> {
+        self.back_add(1)
     }
 
-    pub fn next_char_add(&mut self, i: usize) -> Option<T> {
+    pub fn back_add(&mut self, i: usize) -> Option<T> {
+        self.index -= i;
+        self.current()
+    }
+
+    pub fn next(&mut self) -> Option<T> {
+        self.next_add(1)
+    }
+
+    pub fn next_add(&mut self, i: usize) -> Option<T> {
         self.index += i;
         self.current()
     }

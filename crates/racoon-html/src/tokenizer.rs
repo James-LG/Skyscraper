@@ -134,7 +134,7 @@ fn is_end_tag(pointer: &mut VecPointer<char>) -> Option<Symbol> {
 /// Comment is defined as `<!--{{String}}-->`
 fn is_comment(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let (Some('<'), Some('!'), Some('-'), Some('-')) = (pointer.current(), pointer.peek(), pointer.peek_add(2), pointer.peek_add(3)) {
-        pointer.next_char_add(3); // peeked before, move up now
+        pointer.next_add(3); // peeked before, move up now
 
         let mut text: Vec<char> = Vec::new();
         while let Some(c) = pointer.next() {
@@ -156,7 +156,7 @@ fn is_comment(pointer: &mut VecPointer<char>) -> Option<Symbol> {
 /// The end of a comment is defined as `-->`
 fn is_end_comment(pointer: &mut VecPointer<char>) -> bool {
     if let (Some('-'), Some('-'), Some('>')) = (pointer.current(), pointer.peek(), pointer.peek_add(2)) {
-        pointer.next_char_add(3); // peeked before, move up now; 2+1 to end after comment
+        pointer.next_add(3); // peeked before, move up now; 2+1 to end after comment
 
         return true;
     }
@@ -181,7 +181,7 @@ fn is_tag_close(pointer: &mut VecPointer<char>) -> Option<Symbol> {
 /// TagCloseAndEnd is defined as `/>`
 fn is_tag_close_and_end(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let (Some('/'), Some('>')) = (pointer.current(), pointer.peek()) {
-        pointer.next_char_add(2); // move up for later
+        pointer.next_add(2); // move up for later
         return Some(Symbol::TagCloseAndEnd);
     }
     None

@@ -16,7 +16,9 @@ pub struct XpathQuery {
 pub enum XpathPredicate {
     GreaterThan { attribute: String, value: u64 },
     LessThan { attribute: String, value: u64 },
-    Equals { attribute: String, value: String }
+    Equals { attribute: String, value: String },
+    And(Box<XpathPredicate>, Box<XpathPredicate>),
+    Or(Box<XpathPredicate>, Box<XpathPredicate>),
 }
 
 impl XpathQuery {
@@ -94,6 +96,8 @@ fn is_matching_predicates(query: &XpathQuery, rtag: &RTag) -> bool {
                     return false;
                 }
             },
+            XpathPredicate::And(_, _) => todo!(),
+            XpathPredicate::Or(_, _) => todo!(),
         }
     }
 
@@ -102,7 +106,7 @@ fn is_matching_predicates(query: &XpathQuery, rtag: &RTag) -> bool {
 
 #[cfg(test)]
 mod test {
-    use racoon_core::{RNode, RTag};
+    use racoon_core::RNode;
 
     use super::*;
 
@@ -121,7 +125,7 @@ mod test {
         let query = XpathQuery::new(String::from("a"));
         let result = search_root(&query, &document, document.root_key);
 
-        assert!(result.len() == 1);
+        assert_eq!(1, result.len());
         let node = document.arena.get(result[0]).unwrap();
 
         match node.get() {
@@ -147,7 +151,7 @@ mod test {
         let query = XpathQuery::new(String::from("a"));
         let result = search_all(&query, &document, document.root_key);
 
-        assert!(result.len() == 3);
+        assert_eq!(3, result.len());
 
         for r in result {
             let node = document.arena.get(r).unwrap();
@@ -173,10 +177,51 @@ mod test {
 
         let document = racoon_html::parse(text).unwrap();
 
-        let query = XpathQuery::new(String::from(r###"a[@hello="world"]"###));
+        let query = XpathQuery {
+            identifier: String::from("a"),
+            predicates: vec![
+                XpathPredicate::Equals { attribute: String::from("hello"), value: String::from("world") },
+            ]
+        };
+
         let result = search_all(&query, &document, document.root_key);
 
-        assert!(result.len() == 1);
+        assert_eq!(1, result.len());
+
+        let node = document.arena.get(result[0]).unwrap();
+
+        match node.get() {
+            RNode::Tag(tag) => {
+                assert_eq!("a", tag.name.as_str());
+                assert!(tag.attributes["hello"] == String::from("world"));
+            },
+            RNode::Text(_) => panic!("Expected tag"),
+        }
+    }
+
+    #[test]
+    fn search_all_should_only_select_with_multiple_matching_attribute_predicate() {
+        let text =r###"<!DOCTYPE html>
+        <root>
+            <a/>
+            <b><a hello="world"/></b>
+            <c><b><a hello="world" foo="bar"/></b></c>
+        </root>
+        "###;
+
+        let document = racoon_html::parse(text).unwrap();
+
+        let query = XpathQuery {
+            identifier: String::from("a"),
+            predicates: vec![
+                XpathPredicate::Equals { attribute: String::from("hello"), value: String::from("world") },
+                XpathPredicate::Equals { attribute: String::from("foo"), value: String::from("bar") },
+            ]
+        };
+        
+        let result = search_all(&query, &document, document.root_key);
+
+        assert_eq!(1, result.len());
 
         let node = document.arena.get(result[0]).unwrap();
 

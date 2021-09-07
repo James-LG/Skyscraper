@@ -118,7 +118,7 @@ pub fn lex(text: &str) -> Result<Vec<Symbol>, &'static str> {
 fn is_double_slash(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let (Some('/'), Some('/')) = (pointer.current(), pointer.peek()) {
         // Peeked before, move up now.
-        pointer.next_char_add(2);
+        pointer.next_add(2);
         return Some(Symbol::DoubleSlash);
     }
     None
@@ -189,7 +189,7 @@ fn is_wildcard(pointer: &mut VecPointer<char>) -> Option<Symbol> {
 fn is_double_dot(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let (Some('.'), Some('.')) = (pointer.current(), pointer.peek()) {
         // Peeked before, move up now.
-        pointer.next_char_add(2);
+        pointer.next_add(2);
         return Some(Symbol::DoubleDot);
     }
     None
@@ -322,18 +322,21 @@ fn is_identifier(pointer: &mut VecPointer<char>) -> Option<Symbol> {
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 fn is_text(pointer: &mut VecPointer<char>) -> Option<Symbol> {
     if let Some(c) = pointer.current() {
-        if c == '"' {
+        if c == '"' || c == '\'' {
+            let delimiter = c;
             let mut text = String::from("");
 
             while let Some(c) = pointer.next() {
-                if c == '"' {
-                    break;
+                if c == delimiter {
+                    // Move to next character before exiting.
+                    pointer.next();
+                    return Some(Symbol::Text(text));
                 } else {
                     text.push(c);
                 }
             }
 
-            return Some(Symbol::Text(text));
+            pointer.back_add(text.len() + 1);
         }
     }
     None
@@ -387,6 +390,30 @@ mod tests {
         } else {
             panic!("Expected text symbol")
         }
+    }
+
+    #[test]
+    fn is_text_should_capture_single_quoted_text() {
+        let chars = r###"'world'"###.chars().collect();
+        let pointer = &mut VecPointer::new(chars);
+        let symbol = is_text(pointer);
+
+        if let Some(Symbol::Text(text)) = symbol {
+            assert_eq!("world", text);
+            matches!(pointer.next(), None);
+        } else {
+            panic!("Expected text symbol")
+        }
+    }
+
+    #[test]
+    fn is_text_should_not_capture_mismatched_quoted_text() {
+        let chars = r###""world'"###.chars().collect();
+        let pointer = &mut VecPointer::new(chars);
+        let symbol = is_text(pointer);
+
+        matches!(symbol, None);
+        matches!(pointer.current(), Some('"')); // Assert cursor was not moved.
     }
 
     #[test]
