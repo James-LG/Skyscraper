@@ -43,38 +43,64 @@ pub struct Xpath {
 
 impl Xpath {
     pub fn apply(&self, document: &RDocument) -> Result<Vec<NodeId>, Box<dyn Error>> {
-        for element in &self.elements {
+        let elements = &mut self.elements.iter();
+        let mut matched_nodes: Vec<NodeId> = Vec::new();
+        let mut found_nodes: Vec<NodeId> = vec![document.root_key];
+
+        while let Some(element) = elements.next() {
             match element {
-                XpathElement::SearchRoot => todo!(),
-                XpathElement::SearchAll => todo!(),
+                XpathElement::SearchRoot => {
+                    if let Some(XpathElement::Query(query)) = elements.next() {
+                        matched_nodes = search_root(query, document, &found_nodes);
+
+                        found_nodes = Vec::new();
+                        for node_id in &matched_nodes {
+                            let mut children = node_id.children(&document.arena).collect();
+                            found_nodes.append(&mut children);
+                        }
+                    }
+                },
+                XpathElement::SearchAll => {
+                    if let Some(XpathElement::Query(query)) = elements.next() {
+                        matched_nodes = search_all(query, document, &found_nodes);
+
+                        found_nodes = Vec::new();
+                        for node_id in &matched_nodes {
+                            let mut children = node_id.children(&document.arena).collect();
+                            found_nodes.append(&mut children);
+                        }
+                    }
+                },
                 XpathElement::Query(_) => todo!(),
             }
         }
-        Ok(Vec::new())
+
+        Ok(matched_nodes)
     }
 }
 
-pub fn search_root(query: &XpathQuery, document: &RDocument, cur_node: NodeId) -> Vec<NodeId> {
-    search_internal(false, query, document, cur_node)
+pub fn search_root(query: &XpathQuery, document: &RDocument, nodes: &Vec<NodeId>) -> Vec<NodeId> {
+    search_internal(false, query, document, nodes)
 }
 
-pub fn search_all(query: &XpathQuery, document: &RDocument, cur_node: NodeId) -> Vec<NodeId> {
-    search_internal(true, query, document, cur_node)
+pub fn search_all(query: &XpathQuery, document: &RDocument, nodes: &Vec<NodeId>) -> Vec<NodeId> {
+    search_internal(true, query, document, nodes)
 }
 
-fn search_internal(recursive: bool, query: &XpathQuery, document: &RDocument, cur_node: NodeId) -> Vec<NodeId> {
+fn search_internal(recursive: bool, query: &XpathQuery, document: &RDocument, nodes: &Vec<NodeId>) -> Vec<NodeId> {
     let mut matches = Vec::new();
     
-    for node_id in cur_node.children(&document.arena) {
-        if let Some(node) = document.arena.get(node_id) {
+    for node_id in nodes.iter() {
+        if let Some(node) = document.arena.get(*node_id) {
             match node.get() {
                 racoon_core::RNode::Tag(rtag) => {
                     if rtag.name == query.identifier && is_matching_predicates(query, rtag) {
-                        matches.push(node_id);
+                        matches.push(*node_id);
                     }
 
                     if recursive {
-                        let mut sub_matches = search_all(query, document, node_id);
+                        let children = node_id.children(&document.arena).collect();
+                        let mut sub_matches = search_all(query, document, &children);
                         matches.append(&mut sub_matches);
                     }
                 },
@@ -122,15 +148,15 @@ mod test {
 
         let document = racoon_html::parse(text).unwrap();
 
-        let query = XpathQuery::new(String::from("a"));
-        let result = search_root(&query, &document, document.root_key);
+        let query = XpathQuery::new(String::from("root"));
+        let result = search_root(&query, &document, &vec![document.root_key]);
 
         assert_eq!(1, result.len());
         let node = document.arena.get(result[0]).unwrap();
 
         match node.get() {
             RNode::Tag(tag) => {
-                assert_eq!("a", tag.name.as_str());
+                assert_eq!("root", tag.name.as_str());
             },
             RNode::Text(_) => panic!("Expected tag"),
         }
@@ -149,7 +175,7 @@ mod test {
         let document = racoon_html::parse(text).unwrap();
 
         let query = XpathQuery::new(String::from("a"));
-        let result = search_all(&query, &document, document.root_key);
+        let result = search_all(&query, &document, &vec![document.root_key]);
 
         assert_eq!(3, result.len());
 
@@ -184,7 +210,7 @@ mod test {
             ]
         };
 
-        let result = search_all(&query, &document, document.root_key);
+        let result = search_all(&query, &document, &vec![document.root_key]);
 
         assert_eq!(1, result.len());
 
@@ -219,7 +245,7 @@ mod test {
             ]
         };
         
-        let result = search_all(&query, &document, document.root_key);
+        let result = search_all(&query, &document, &vec![document.root_key]);
 
         assert_eq!(1, result.len());
 
