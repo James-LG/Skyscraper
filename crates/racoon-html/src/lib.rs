@@ -9,6 +9,17 @@ use indextree::{Arena, Node, NodeId};
 use tokenizer::Symbol;
 use racoon_core::{RDocument, RNode, RTag};
 
+lazy_static! {
+    /// List of HTML tags that do not have end tags.
+    static ref UNPAIRED_TAGS: Vec<&'static str> = vec![
+        "meta",
+        "link",
+        "img",
+        "input",
+        "br",
+    ];
+}
+
 pub fn parse(text: &str) -> Result<RDocument, Box<dyn Error>> {
     let tokens = tokenizer::lex(text)?;
 
@@ -23,28 +34,7 @@ pub fn parse(text: &str) -> Result<RDocument, Box<dyn Error>> {
         match token {
             Symbol::StartTag(tag_name) => {
                 // Skip the special doctype tag so a proper root is selected.
-                if tag_name == "!DOCTYPE" {
-                    if let Some(token) = tokens.next() {
-                        if let Symbol::Identifier(iden) = token {
-                            if iden != "html" {
-                                return Err("Expected identifier `html` after !DOCSTRING.".into());
-                            }
-                            if let Some(token) = tokens.next() {
-                                match token {
-                                    Symbol::TagClose => {
-                                        // we good
-                                    },
-                                    _ => return Err("Expected tag close after !DOCSTRING html".into()),
-                                }
-                            } else {
-                                return Err("Unexpected end of tokens.".into());
-                            }
-                        } else {
-                            return Err("Expected identifier `html` after !DOCSTRING.".into());
-                        }
-                    } else {
-                        return Err("Unexpected end of tokens.".into());
-                    }
+                if is_doctype(&tag_name, &mut tokens)? {
                     continue;
                 }
 
@@ -71,13 +61,13 @@ pub fn parse(text: &str) -> Result<RDocument, Box<dyn Error>> {
                     return Err("Tag close encountered before a tag was opened.".into());
                 }
 
-                // If `meta` tag, it ends with this token.
                 // This will be none if the root node was just closed.
                 if cur_key_o.is_some() {
                     let cur_tree_node = try_get_tree_node(cur_key_o, &arena)?;
                     match cur_tree_node.get() {
                         RNode::Tag(cur_tag) => {
-                            if cur_tag.name == "meta" {
+                            // If this is an unpaired tag, the tag begins and ends with this token.
+                            if UNPAIRED_TAGS.contains(&cur_tag.name.as_str()) {
                                 // Set current key to the parent of this tag.
                                 cur_key_o = cur_tree_node.parent();
                             }
@@ -176,6 +166,36 @@ pub fn parse(text: &str) -> Result<RDocument, Box<dyn Error>> {
     }
 
     Err("No root node found.".into())
+}
+
+fn is_doctype(tag_name: &String, tokens: &mut std::vec::IntoIter<Symbol>) -> Result<bool, Box<dyn Error>> {
+    if tag_name == "!DOCTYPE" {
+        if let Some(token) = tokens.next() {
+            if let Symbol::Identifier(iden) = token {
+                if iden != "html" {
+                    return Err("Expected identifier `html` after !DOCSTRING.".into());
+                }
+                if let Some(token) = tokens.next() {
+                    match token {
+                        Symbol::TagClose => {
+                            // we good
+                        },
+                        _ => return Err("Expected tag close after !DOCSTRING html".into()),
+                    }
+                } else {
+                    return Err("Unexpected end of tokens.".into());
+                }
+            } else {
+                return Err("Expected identifier `html` after !DOCSTRING.".into());
+            }
+        } else {
+            return Err("Unexpected end of tokens.".into());
+        }
+        
+        return Ok(true);
+    }
+
+    return Ok(false);
 }
 
 fn try_get_tree_node(key: Option<NodeId>, arena: &Arena<RNode>) -> Result<&Node<RNode>, &'static str> {
