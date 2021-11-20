@@ -208,22 +208,35 @@ fn is_literal(pointer: &mut VecPointer<char>, has_open_tag: bool) -> Option<Symb
         return None;
     }
 
-    if let Some('"') = pointer.current() {         
-        let mut text: Vec<char> = Vec::new();
-        loop {
-            match pointer.next() {
-                Some('"') => break,
-                Some(c) => {
-                    text.push(c);
-                },
-                None => break,
-            };
+    if let Some(c) = pointer.current() {
+        if c == '"' || c == '\'' {
+            let start_quote = c;
+            let mut text: Vec<char> = Vec::new();
+            let mut escape = false;
+            loop {
+                match pointer.next() {
+                    Some('\\') => escape = true,
+                    Some(c) => {
+                        // If this quote matches the starting quote, break the loop
+                        if !escape && (c == '"' || c == '\'') && start_quote == c {
+                            break;
+                        }
+                        // Otherwise push the different quote to the text
+                        else {
+                            text.push(c);
+                        }
+                        escape = false;
+                    },
+                    None => break,
+                };
+            }
+            
+            let name: String = text.into_iter().collect();
+
+            pointer.next(); // skip over closing `"`
+
+            return Some(Symbol::Literal(name));
         }
-        let name: String = text.into_iter().collect();
-
-        pointer.next(); // skip over closing `"`
-
-        return Some(Symbol::Literal(name));
     }
     None
 }
@@ -512,9 +525,37 @@ mod tests {
     }
 
     #[test]
-    fn is_literal_works() {
+    fn is_literal_works_double_quote() {
         // arrange
         let chars = r###""yo""###.chars().collect();
+        let mut pointer = VecPointer::new(chars);
+
+        // act
+        let result = is_literal(&mut pointer, true).unwrap();
+
+        // assert
+        assert_eq!(Symbol::Literal(String::from("yo")), result);
+        assert_eq!(4, pointer.index);
+    }
+
+    #[test]
+    fn is_literal_works_escaped_quote() {
+        // arrange
+        let chars = r###""the cow says \"moo\".""###.chars().collect();
+        let mut pointer = VecPointer::new(chars);
+
+        // act
+        let result = is_literal(&mut pointer, true).unwrap();
+
+        // assert
+        assert_eq!(Symbol::Literal(String::from(r#"the cow says "moo"."#)), result);
+        assert_eq!(23, pointer.index);
+    }
+
+    #[test]
+    fn is_literal_works_single_quote() {
+        // arrange
+        let chars = r###"'yo'"###.chars().collect();
         let mut pointer = VecPointer::new(chars);
 
         // act
@@ -593,6 +634,48 @@ mod tests {
         // assert
         assert!(matches!(result, None));
         assert_eq!(0, pointer.index);
+    }
+
+    #[test]
+    fn lex_should_handle_attribute_without_value() {
+        // arrange
+        let text = "<script defer></script>";
+
+        // act
+        let result = lex(text).unwrap();
+
+        // assert
+        let expected = vec![
+            Symbol::StartTag(String::from("script")),
+            Symbol::Identifier(String::from("defer")),
+            Symbol::TagClose,
+            Symbol::EndTag(String::from("script")),
+            Symbol::TagClose
+        ];
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn lex_should_handle_encoded_json() {
+        // arrange
+        let text = r###"<script json='{"hello":"world"}'></script>"###;
+
+        // act
+        let result = lex(text).unwrap();
+
+        // assert
+        let expected = vec![
+            Symbol::StartTag(String::from("script")),
+            Symbol::Identifier(String::from("json")),
+            Symbol::AssignmentSign,
+            Symbol::Literal(String::from(r#"{"hello":"world"}"#)),
+            Symbol::TagClose,
+            Symbol::EndTag(String::from("script")),
+            Symbol::TagClose
+        ];
+
+        assert_eq!(expected, result);
     }
 
     #[test]

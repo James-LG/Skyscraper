@@ -1,6 +1,6 @@
 mod tokenizer;
 
-use std::{collections::HashMap, error::Error};
+use std::{collections::HashMap, error::Error, iter::Peekable};
 
 use indextree::{Arena, Node, NodeId};
 use tokenizer::Symbol;
@@ -37,6 +37,7 @@ lazy_static! {
         "img",
         "input",
         "br",
+        "hr"
     ];
 }
 
@@ -48,7 +49,7 @@ pub fn parse(text: &str) -> Result<HtmlDocument, Box<dyn Error>> {
     let mut cur_key_o: Option<NodeId> = None;
     let mut has_tag_open = false;
 
-    let mut tokens = tokens.into_iter();
+    let mut tokens = tokens.into_iter().peekable();
 
     while let Some(token) = tokens.next() {
         match token {
@@ -138,8 +139,9 @@ pub fn parse(text: &str) -> Result<HtmlDocument, Box<dyn Error>> {
                     return Err(format!("Identifier `{}` encountered outside of tag.", iden).into());
                 }
 
-                if let Some(token) = tokens.next() {
+                if let Some(token) = tokens.peek() {
                     if let Symbol::AssignmentSign = token {
+                        tokens.next();
                         if let Some(token) = tokens.next() {
                             if let Symbol::Literal(lit) = token {
                                 let cur_tree_node = try_get_mut_tree_node(cur_key_o, &mut arena)?;
@@ -150,13 +152,24 @@ pub fn parse(text: &str) -> Result<HtmlDocument, Box<dyn Error>> {
                                     HtmlNode::Text(_) => return Err("Attempted to add attribute to text node.".into()),
                                 }
                             } else {
-                                return Err("Expected literal after assignment sign.".into());
+                                let cur_tree_node = try_get_mut_tree_node(cur_key_o, &mut arena)?;
+                                match cur_tree_node.get_mut() {
+                                    HtmlNode::Tag(tag) => return Err(format!("Expected literal after assignment sign {}", tag.name).into()),
+                                    HtmlNode::Text(_) => return Err("Attempted to add attribute to text node.".into()),
+                                }
                             }
                         } else {
                             return Err("Unexpected end of tokens.".into());
                         }
                     } else {
-                        return Err("Expected assignment sign after identifier.".into());
+                        // Attribute has no value; e.g., <script defer></script>
+                        let cur_tree_node = try_get_mut_tree_node(cur_key_o, &mut arena)?;
+                        match cur_tree_node.get_mut() {
+                            HtmlNode::Tag(tag) => {
+                                tag.attributes.insert(iden, String::from(""));
+                            },
+                            HtmlNode::Text(_) => return Err("Attempted to add attribute to text node.".into()),
+                        }
                     }
                 } else {
                     return Err("Unexpected end of tokens.".into());
@@ -188,7 +201,7 @@ pub fn parse(text: &str) -> Result<HtmlDocument, Box<dyn Error>> {
     Err("No root node found.".into())
 }
 
-fn is_doctype(tag_name: &String, tokens: &mut std::vec::IntoIter<Symbol>) -> Result<bool, Box<dyn Error>> {
+fn is_doctype(tag_name: &String, tokens: &mut Peekable<std::vec::IntoIter<Symbol>>) -> Result<bool, Box<dyn Error>> {
     if tag_name == "!DOCTYPE" {
         if let Some(token) = tokens.next() {
             if let Symbol::Identifier(iden) = token {
@@ -319,6 +332,109 @@ mod tests {
                 let key = children[1];
                 assert_text(arena, key, "yo");
             }
+        }
+    }
+
+    #[test]
+    fn parse_should_handle_attributes_without_value() {
+        // arrange
+        let html = r###"<script defer></script>"###;
+
+        // act
+        let result = parse(html).unwrap();
+
+        // assert
+        let arena = &result.arena;
+
+        // <script>
+        let key = result.root_key;
+        let mut attributes = HashMap::new();
+        attributes.insert("defer", "");
+        assert_tag(arena, key, "script", Some(attributes));
+    }
+
+    #[test]
+    fn parse_should_handle_attributes_without_value_other_attributes() {
+        // arrange
+        let html = r###"<script defer src="hi"></script>"###;
+
+        // act
+        let result = parse(html).unwrap();
+
+        // assert
+        let arena = &result.arena;
+
+        // <script>
+        let key = result.root_key;
+        let mut attributes = HashMap::new();
+        attributes.insert("defer", "");
+        attributes.insert("src", "hi");
+        assert_tag(arena, key, "script", Some(attributes));
+    }
+
+    #[test]
+    fn parse_should_handle_single_tags() {
+        // arrange
+        let html = r###"
+        <div>
+            <br><hr>
+            <meta charset="UTF-8">
+            <link rel="stylesheet">
+            <img width="500">
+            <input type="submit">
+        </div>"###;
+
+        // act
+        let result = parse(html).unwrap();
+
+        // assert
+        let arena = &result.arena;
+
+        // <div>
+        let children = assert_tag(arena, result.root_key, "div", None);
+
+        // <div> -> <br>
+        {
+            let key = children[0];
+            assert_tag(arena, key, "br", None);
+        }
+
+        // <div> -> <hr>
+        {
+            let key = children[1];
+            assert_tag(arena, key, "hr", None);
+        }
+        
+        // <div> -> <meta>
+        {
+            let key = children[2];
+            let mut attributes = HashMap::new();
+            attributes.insert("charset", "UTF-8");
+            assert_tag(arena, key, "meta", Some(attributes));
+        }
+
+        // <div> -> <link>
+        {
+            let key = children[3];
+            let mut attributes = HashMap::new();
+            attributes.insert("rel", "stylesheet");
+            assert_tag(arena, key, "link", Some(attributes));
+        }
+
+        // <div> -> <img>
+        {
+            let key = children[4];
+            let mut attributes = HashMap::new();
+            attributes.insert("width", "500");
+            assert_tag(arena, key, "img", Some(attributes));
+        }
+
+        // <div> -> <input>
+        {
+            let key = children[5];
+            let mut attributes = HashMap::new();
+            attributes.insert("type", "submit");
+            assert_tag(arena, key, "input", Some(attributes));
         }
     }
 
