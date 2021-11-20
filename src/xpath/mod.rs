@@ -4,7 +4,9 @@ mod tokenizer;
 use std::error::Error;
 
 use indextree::NodeId;
-use skyscraper::{RDocument, RTag};
+use crate::html::{HtmlDocument, HtmlNode, HtmlTag};
+
+pub use crate::xpath::parse::parse;
 
 #[derive(Debug, PartialEq)]
 pub struct XpathQuery {
@@ -42,7 +44,7 @@ pub struct Xpath {
 }
 
 impl Xpath {
-    pub fn apply(&self, document: &RDocument) -> Result<Vec<NodeId>, Box<dyn Error>> {
+    pub fn apply(&self, document: &HtmlDocument) -> Result<Vec<NodeId>, Box<dyn Error>> {
         let elements = &mut self.elements.iter();
         let mut matched_nodes: Vec<NodeId> = Vec::new();
         let mut found_nodes: Vec<NodeId> = vec![document.root_key];
@@ -79,21 +81,21 @@ impl Xpath {
     }
 }
 
-pub fn search_root(query: &XpathQuery, document: &RDocument, nodes: &Vec<NodeId>) -> Vec<NodeId> {
+pub fn search_root(query: &XpathQuery, document: &HtmlDocument, nodes: &Vec<NodeId>) -> Vec<NodeId> {
     search_internal(false, query, document, nodes)
 }
 
-pub fn search_all(query: &XpathQuery, document: &RDocument, nodes: &Vec<NodeId>) -> Vec<NodeId> {
+pub fn search_all(query: &XpathQuery, document: &HtmlDocument, nodes: &Vec<NodeId>) -> Vec<NodeId> {
     search_internal(true, query, document, nodes)
 }
 
-fn search_internal(recursive: bool, query: &XpathQuery, document: &RDocument, nodes: &Vec<NodeId>) -> Vec<NodeId> {
+fn search_internal(recursive: bool, query: &XpathQuery, document: &HtmlDocument, nodes: &Vec<NodeId>) -> Vec<NodeId> {
     let mut matches = Vec::new();
     
     for node_id in nodes.iter() {
         if let Some(node) = document.arena.get(*node_id) {
             match node.get() {
-                skyscraper::RNode::Tag(rtag) => {
+                HtmlNode::Tag(rtag) => {
                     if rtag.name == query.identifier && is_matching_predicates(query, rtag) {
                         matches.push(*node_id);
                     }
@@ -104,7 +106,7 @@ fn search_internal(recursive: bool, query: &XpathQuery, document: &RDocument, no
                         matches.append(&mut sub_matches);
                     }
                 },
-                skyscraper::RNode::Text(_) => continue,
+                HtmlNode::Text(_) => continue,
             }
         }
     }
@@ -112,7 +114,7 @@ fn search_internal(recursive: bool, query: &XpathQuery, document: &RDocument, no
     return matches;
 }
 
-fn is_matching_predicates(query: &XpathQuery, rtag: &RTag) -> bool {
+fn is_matching_predicates(query: &XpathQuery, rtag: &HtmlTag) -> bool {
     for p in &query.predicates {
         match p {
             XpathPredicate::GreaterThan { .. } => todo!(),
@@ -132,7 +134,7 @@ fn is_matching_predicates(query: &XpathQuery, rtag: &RTag) -> bool {
 
 #[cfg(test)]
 mod test {
-    use skyscraper::RNode;
+    use crate::{xpath, html};
 
     use super::*;
 
@@ -146,7 +148,7 @@ mod test {
         </root>
         "###;
 
-        let document = skyscraper_html::parse(text).unwrap();
+        let document = html::parse(text).unwrap();
 
         let query = XpathQuery::new(String::from("root"));
         let result = search_root(&query, &document, &vec![document.root_key]);
@@ -155,10 +157,10 @@ mod test {
         let node = document.arena.get(result[0]).unwrap();
 
         match node.get() {
-            RNode::Tag(tag) => {
+            HtmlNode::Tag(tag) => {
                 assert_eq!("root", tag.name.as_str());
             },
-            RNode::Text(_) => panic!("Expected tag"),
+            HtmlNode::Text(_) => panic!("Expected tag"),
         }
     }
 
@@ -172,7 +174,7 @@ mod test {
         </root>
         "###;
 
-        let document = skyscraper_html::parse(text).unwrap();
+        let document = html::parse(text).unwrap();
 
         let query = XpathQuery::new(String::from("a"));
         let result = search_all(&query, &document, &vec![document.root_key]);
@@ -183,10 +185,10 @@ mod test {
             let node = document.arena.get(r).unwrap();
 
             match node.get() {
-                RNode::Tag(tag) => {
+                HtmlNode::Tag(tag) => {
                     assert_eq!("a", tag.name.as_str());
                 },
-                RNode::Text(_) => panic!("Expected tag"),
+                HtmlNode::Text(_) => panic!("Expected tag"),
             }
         }
     }
@@ -201,7 +203,7 @@ mod test {
         </root>
         "###;
 
-        let document = skyscraper_html::parse(text).unwrap();
+        let document = html::parse(text).unwrap();
 
         let query = XpathQuery {
             identifier: String::from("a"),
@@ -217,11 +219,11 @@ mod test {
         let node = document.arena.get(result[0]).unwrap();
 
         match node.get() {
-            RNode::Tag(tag) => {
+            HtmlNode::Tag(tag) => {
                 assert_eq!("a", tag.name.as_str());
                 assert!(tag.attributes["hello"] == String::from("world"));
             },
-            RNode::Text(_) => panic!("Expected tag"),
+            HtmlNode::Text(_) => panic!("Expected tag"),
         }
     }
 
@@ -235,7 +237,7 @@ mod test {
         </root>
         "###;
 
-        let document = skyscraper_html::parse(text).unwrap();
+        let document = html::parse(text).unwrap();
 
         let query = XpathQuery {
             identifier: String::from("a"),
@@ -252,11 +254,11 @@ mod test {
         let node = document.arena.get(result[0]).unwrap();
 
         match node.get() {
-            RNode::Tag(tag) => {
+            HtmlNode::Tag(tag) => {
                 assert_eq!("a", tag.name.as_str());
                 assert!(tag.attributes["hello"] == String::from("world"));
             },
-            RNode::Text(_) => panic!("Expected tag"),
+            HtmlNode::Text(_) => panic!("Expected tag"),
         }
     }
 
@@ -268,17 +270,17 @@ mod test {
         </root>
         "###;
 
-        let document = skyscraper_html::parse(text).unwrap();
+        let document = html::parse(text).unwrap();
 
-        let xpath = crate::parse::parse("/root/node").unwrap();
+        let xpath = xpath::parse::parse("/root/node").unwrap();
 
         let nodes = xpath.apply(&document).unwrap();
 
         let node = document.arena.get(nodes[0]).unwrap().get();
 
         match node {
-            RNode::Tag(t) => assert_eq!("node", t.name),
-            RNode::Text(_) => panic!("expected tag, got text instead"),
+            HtmlNode::Tag(t) => assert_eq!("node", t.name),
+            HtmlNode::Text(_) => panic!("expected tag, got text instead"),
         }
     }
 }

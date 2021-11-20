@@ -17,10 +17,6 @@ where T : Copy {
         self.get(self.index)
     }
 
-    pub fn back(&mut self) -> Option<T> {
-        self.back_add(1)
-    }
-
     pub fn back_add(&mut self, i: usize) -> Option<T> {
         self.index -= i;
         self.current()

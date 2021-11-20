@@ -1,4 +1,4 @@
-use skyscraper::vecpointer::VecPointer;
+use crate::vecpointer::VecPointer;
 
 /// Enum representing all possible symbols output by the lexer.
 #[derive(Debug)]

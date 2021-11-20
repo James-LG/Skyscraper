@@ -1,6 +1,6 @@
 use std::{error::Error, iter::Peekable};
 
-use crate::{Xpath, XpathElement, XpathPredicate, XpathQuery, tokenizer::{self, Symbol}};
+use crate::xpath::{Xpath, XpathElement, XpathPredicate, XpathQuery, tokenizer::{self, Symbol}};
 
 pub fn parse(text: &str) -> Result<Xpath, Box<dyn Error>> {
     let mut symbols = tokenizer::lex(text)?.into_iter().peekable();
@@ -86,7 +86,7 @@ fn parse_equals_predicate(symbols: &mut Peekable<std::vec::IntoIter<Symbol>>) ->
 
 #[cfg(test)]
 mod tests {
-    use crate::XpathPredicate;
+    use crate::xpath::XpathPredicate;
 
     use super::*;
 
