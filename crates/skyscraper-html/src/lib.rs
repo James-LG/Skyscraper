@@ -7,7 +7,7 @@ use std::error::Error;
 
 use indextree::{Arena, Node, NodeId};
 use tokenizer::Symbol;
-use racoon_core::{RDocument, RNode, RTag};
+use skyscraper::{RDocument, RNode, RTag};
 
 lazy_static! {
     /// List of HTML tags that do not have end tags.

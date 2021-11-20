@@ -1,14 +1,14 @@
 [package]
-name = "racoon-xpath"
+name = "skyscraper-xpath"
 version = "0.1.0"
 authors = ["James La Novara-Gsell <james.lanovara.gsell@gmail.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
-racoon-html = { path = "../racoon-html" }
+skyscraper-html = { path = "../skyscraper-html" }
 
 [dependencies]
-racoon-core = { path = "../racoon-core" }
+skyscraper = { path = "../skyscraper" }
 indextree = "4.3.1"
 lazy_static = "1.4.0"

@@ -1,3 +1,3 @@
-# Racoon - Document Rummaging
+# Skyscraper - Web document scraping
 
-Rust library to navigate HTML & XML documents with xpath.
+Rust library to scrape HTML & XML documents with xpath.

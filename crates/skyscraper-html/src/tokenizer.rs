@@ -1,4 +1,4 @@
-use racoon_core::vecpointer::VecPointer;
+use skyscraper::vecpointer::VecPointer;
 
 /// Enum representing all possible symbols output by the lexer.
 #[derive(Debug)]

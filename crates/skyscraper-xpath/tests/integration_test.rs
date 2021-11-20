@@ -1,17 +1,17 @@
 use std::error::Error;
 
 use indextree::NodeId;
-use racoon_core::RNode;
+use skyscraper::RNode;
 
-static HTML: &'static str = include_str!("samples/James-LG_Racoon.html");
+static HTML: &'static str = include_str!("samples/James-LG_Skyscraper.html");
 
 #[test]
 fn xpath_github_sample1() -> Result<(), Box<dyn Error>> {
     // arrange
     let text: String = HTML.parse()?;
 
-    let document = racoon_html::parse(&text).unwrap();
-    let xpath = racoon_xpath::parse::parse("//main").unwrap();
+    let document = skyscraper_html::parse(&text).unwrap();
+    let xpath = skyscraper_xpath::parse::parse("//main").unwrap();
 
     // act
     let nodes = xpath.apply(&document).unwrap();
@@ -33,8 +33,8 @@ fn xpath_github_sample2() -> Result<(), Box<dyn Error>> {
     // arrange
     let text: String = HTML.parse()?;
 
-    let document = racoon_html::parse(&text).unwrap();
-    let xpath = racoon_xpath::parse::parse("//a[@class='Link--secondary']").unwrap();
+    let document = skyscraper_html::parse(&text).unwrap();
+    let xpath = skyscraper_xpath::parse::parse("//a[@class='Link--secondary']").unwrap();
 
     // act
     let nodes = xpath.apply(&document).unwrap();
@@ -66,8 +66,8 @@ fn xpath_github_sample3() -> Result<(), Box<dyn Error>> {
     // arrange
     let text: String = HTML.parse()?;
 
-    let document = racoon_html::parse(&text).unwrap();
-    let xpath = racoon_xpath::parse::parse("//div[@class='BorderGrid-cell']/div[@class=' text-small']/a").unwrap();
+    let document = skyscraper_html::parse(&text).unwrap();
+    let xpath = skyscraper_xpath::parse::parse("//div[@class='BorderGrid-cell']/div[@class=' text-small']/a").unwrap();
 
     // act
     let nodes = xpath.apply(&document).unwrap();

@@ -4,7 +4,7 @@ mod tokenizer;
 use std::error::Error;
 
 use indextree::NodeId;
-use racoon_core::{RDocument, RTag};
+use skyscraper::{RDocument, RTag};
 
 #[derive(Debug, PartialEq)]
 pub struct XpathQuery {
@@ -93,7 +93,7 @@ fn search_internal(recursive: bool, query: &XpathQuery, document: &RDocument, no
     for node_id in nodes.iter() {
         if let Some(node) = document.arena.get(*node_id) {
             match node.get() {
-                racoon_core::RNode::Tag(rtag) => {
+                skyscraper::RNode::Tag(rtag) => {
                     if rtag.name == query.identifier && is_matching_predicates(query, rtag) {
                         matches.push(*node_id);
                     }
@@ -104,7 +104,7 @@ fn search_internal(recursive: bool, query: &XpathQuery, document: &RDocument, no
                         matches.append(&mut sub_matches);
                     }
                 },
-                racoon_core::RNode::Text(_) => continue,
+                skyscraper::RNode::Text(_) => continue,
             }
         }
     }
@@ -132,7 +132,7 @@ fn is_matching_predicates(query: &XpathQuery, rtag: &RTag) -> bool {
 
 #[cfg(test)]
 mod test {
-    use racoon_core::RNode;
+    use skyscraper::RNode;
 
     use super::*;
 
@@ -146,7 +146,7 @@ mod test {
         </root>
         "###;
 
-        let document = racoon_html::parse(text).unwrap();
+        let document = skyscraper_html::parse(text).unwrap();
 
         let query = XpathQuery::new(String::from("root"));
         let result = search_root(&query, &document, &vec![document.root_key]);
@@ -172,7 +172,7 @@ mod test {
         </root>
         "###;
 
-        let document = racoon_html::parse(text).unwrap();
+        let document = skyscraper_html::parse(text).unwrap();
 
         let query = XpathQuery::new(String::from("a"));
         let result = search_all(&query, &document, &vec![document.root_key]);
@@ -201,7 +201,7 @@ mod test {
         </root>
         "###;
 
-        let document = racoon_html::parse(text).unwrap();
+        let document = skyscraper_html::parse(text).unwrap();
 
         let query = XpathQuery {
             identifier: String::from("a"),
@@ -235,7 +235,7 @@ mod test {
         </root>
         "###;
 
-        let document = racoon_html::parse(text).unwrap();
+        let document = skyscraper_html::parse(text).unwrap();
 
         let query = XpathQuery {
             identifier: String::from("a"),
@@ -268,7 +268,7 @@ mod test {
         </root>
         "###;
 
-        let document = racoon_html::parse(text).unwrap();
+        let document = skyscraper_html::parse(text).unwrap();
 
         let xpath = crate::parse::parse("/root/node").unwrap();
 
