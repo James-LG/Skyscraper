@@ -115,8 +115,8 @@ fn search_internal(recursive: bool, query: &XpathQuery, document: &RDocument, no
 fn is_matching_predicates(query: &XpathQuery, rtag: &RTag) -> bool {
     for p in &query.predicates {
         match p {
-            XpathPredicate::GreaterThan { attribute, value } => todo!(),
-            XpathPredicate::LessThan { attribute, value } => todo!(),
+            XpathPredicate::GreaterThan { .. } => todo!(),
+            XpathPredicate::LessThan { .. } => todo!(),
             XpathPredicate::Equals { attribute, value } => {
                 if !rtag.attributes.contains_key(attribute) || &rtag.attributes[attribute] != value {
                     return false;

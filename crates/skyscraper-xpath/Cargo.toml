@@ -3,6 +3,9 @@ name = "skyscraper-xpath"
 version = "0.1.0"
 authors = ["James La Novara-Gsell <james.lanovara.gsell@gmail.com>"]
 edition = "2018"
+description = "XPath parser and search logic for Skyscraper: XPath for HTML web scraping"
+license-file = "../../LICENSE"
+categories = ["parsing"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
