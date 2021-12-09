@@ -3,8 +3,13 @@ mod helpers;
 
 use crate::vecpointer::VecPointer;
 pub use symbols::Symbol;
+use thiserror::Error;
 
-pub fn lex(text: &str) -> Result<Vec<Symbol>, &'static str> {
+#[derive(Error, Debug)]
+pub enum LexError {
+}
+
+pub fn lex(text: &str) -> Result<Vec<Symbol>, LexError> {
     let mut symbols: Vec<Symbol> = Vec::new();
 
     let chars = text.chars().collect();

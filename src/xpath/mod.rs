@@ -1,9 +1,8 @@
 pub mod parse;
 mod tokenizer;
 
-use std::error::Error;
-
 use indextree::NodeId;
+use thiserror::Error;
 use crate::html::{HtmlDocument, HtmlNode, HtmlTag};
 
 pub use crate::xpath::parse::parse;
@@ -43,8 +42,12 @@ pub struct Xpath {
     elements: Vec<XpathElement>
 }
 
+#[derive(Error, Debug)]
+pub enum ParseError {
+}
+
 impl Xpath {
-    pub fn apply(&self, document: &HtmlDocument) -> Result<Vec<NodeId>, Box<dyn Error>> {
+    pub fn apply(&self, document: &HtmlDocument) -> Result<Vec<NodeId>, ParseError> {
         let elements = &mut self.elements.iter();
         let mut matched_nodes: Vec<NodeId> = Vec::new();
         let mut found_nodes: Vec<NodeId> = vec![document.root_key];

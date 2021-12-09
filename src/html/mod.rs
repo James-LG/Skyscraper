@@ -1,8 +1,9 @@
 mod tokenizer;
 
-use std::{collections::HashMap, error::Error, iter::Peekable};
+use std::{collections::HashMap, iter::Peekable};
 
 use indextree::{Arena, Node, NodeId};
+use thiserror::Error;
 use tokenizer::Symbol;
 
 pub struct HtmlTag {
@@ -41,7 +42,50 @@ lazy_static! {
     ];
 }
 
-pub fn parse(text: &str) -> Result<HtmlDocument, Box<dyn Error>> {
+#[derive(Error, Debug)]
+pub enum ParseError {
+    #[error("Lex error {0}")]
+    LexError(#[from] tokenizer::LexError),
+    #[error("Start tag encountered before previous tag was closed")]
+    StartTagBeforePreviousClosed,
+    #[error("Tag close encountered before a tag was opened")]
+    TagClosedBeforeOpened,
+    #[error("End tag attempted to close a text node")]
+    EndTagForTextNode,
+    #[error("New end tag encountered before previous tag was closed")]
+    EndTagBeforePreviousClosed,
+    #[error("End tag name `{end_name}` mismatched open tag name `{open_name}`")]
+    EndTagMismatch {
+        end_name: String,
+        open_name: String
+    },
+    #[error("Identifier `{identifier}` encountered outside of tag.")]
+    IdentifierOutsideTag {
+        identifier: String
+    },
+    #[error("Attempted to add attribute to text node")]
+    AttributeOnTextNode,
+    #[error("Expected literal after assignment sign {tag_name}")]
+    MissingLiteralAfterAssignmentSign {
+        tag_name: String
+    },
+    #[error("Unexpected end of tokens")]
+    UnexpectedEndOfTokens,
+    
+    #[error("Text encountered before previous tag was closed")]
+    TextBeforePreviousClosed,
+
+    #[error("No root node found")]
+    MissingRootNode,
+
+    #[error("Expected identifier `html` after !DOCSTRING")]
+    MissingHtmlAfterDocstring,
+
+    #[error("Expected tag close after !DOCSTRING html")]
+    MissingTagCloseAfterDocstring,
+}
+
+pub fn parse(text: &str) -> Result<HtmlDocument, ParseError> {
     let tokens = tokenizer::lex(text)?;
 
     let mut arena: Arena<HtmlNode> = Arena::new();
@@ -60,7 +104,7 @@ pub fn parse(text: &str) -> Result<HtmlDocument, Box<dyn Error>> {
                 }
 
                 if has_tag_open {
-                    return Err("Start tag encountered before previous tag was closed.".into());
+                    return Err(ParseError::StartTagBeforePreviousClosed);
                 }
 
                 has_tag_open = true;
@@ -79,12 +123,12 @@ pub fn parse(text: &str) -> Result<HtmlDocument, Box<dyn Error>> {
             },
             Symbol::TagClose => {
                 if !has_tag_open {
-                    return Err("Tag close encountered before a tag was opened.".into());
+                    return Err(ParseError::TagClosedBeforeOpened);
                 }
 
                 // This will be none if the root node was just closed.
                 if cur_key_o.is_some() {
-                    let cur_tree_node = try_get_tree_node(cur_key_o, &arena)?;
+                    let cur_tree_node = get_tree_node(cur_key_o, &arena);
                     match cur_tree_node.get() {
                         HtmlNode::Tag(cur_tag) => {
                             // If this is an unpaired tag, the tag begins and ends with this token.
@@ -93,7 +137,7 @@ pub fn parse(text: &str) -> Result<HtmlDocument, Box<dyn Error>> {
                                 cur_key_o = cur_tree_node.parent();
                             }
                         },
-                        HtmlNode::Text(_) => return Err("End tag attempted to close a text node.".into()),
+                        HtmlNode::Text(_) => return Err(ParseError::EndTagForTextNode),
                     }
                 }
                 
@@ -101,19 +145,22 @@ pub fn parse(text: &str) -> Result<HtmlDocument, Box<dyn Error>> {
             },
             Symbol::EndTag(tag_name) => {
                 if has_tag_open {
-                    return Err("End tag encountered before previous tag was closed.".into());
+                    return Err(ParseError::EndTagBeforePreviousClosed);
                 }
 
                 has_tag_open = true;
 
-                let cur_tree_node = try_get_tree_node(cur_key_o, &arena)?;
+                let cur_tree_node = get_tree_node(cur_key_o, &arena);
                 match cur_tree_node.get() {
                     HtmlNode::Tag(cur_tag) => {
                         if cur_tag.name != tag_name {
-                            return Err(format!("End tag name `{}` mismatched open tag name `{}`.", tag_name, cur_tag.name).into());
+                            return Err(ParseError::EndTagMismatch{
+                                end_name: cur_tag.name.to_string(),
+                                open_name: tag_name
+                            });
                         }
                     },
-                    HtmlNode::Text(_) => return Err("End tag attempted to close a text node.".into()),
+                    HtmlNode::Text(_) => return Err(ParseError::EndTagForTextNode),
                 }
 
                 // Set current key to the parent of this tag.
@@ -121,14 +168,14 @@ pub fn parse(text: &str) -> Result<HtmlDocument, Box<dyn Error>> {
             },
             Symbol::TagCloseAndEnd => {
                 if !has_tag_open {
-                    return Err("Tag close encountered before a tag was opened.".into());
+                    return Err(ParseError::TagClosedBeforeOpened);
                 }
                 
                 has_tag_open = false;
 
-                let cur_tree_node = try_get_tree_node(cur_key_o, &arena)?;
+                let cur_tree_node = get_tree_node(cur_key_o, &arena);
                 if let HtmlNode::Text(_) = cur_tree_node.get() {
-                    return Err("End tag attempted to close a text node.".into());
+                    return Err(ParseError::EndTagForTextNode);
                 }
 
                 // Set current key to the parent of this tag.
@@ -136,7 +183,9 @@ pub fn parse(text: &str) -> Result<HtmlDocument, Box<dyn Error>> {
             }
             Symbol::Identifier(iden) => {
                 if !has_tag_open {
-                    return Err(format!("Identifier `{}` encountered outside of tag.", iden).into());
+                    return Err(ParseError::IdentifierOutsideTag {
+                        identifier: iden
+                    });
                 }
 
                 if let Some(token) = tokens.peek() {
@@ -144,40 +193,42 @@ pub fn parse(text: &str) -> Result<HtmlDocument, Box<dyn Error>> {
                         tokens.next();
                         if let Some(token) = tokens.next() {
                             if let Symbol::Literal(lit) = token {
-                                let cur_tree_node = try_get_mut_tree_node(cur_key_o, &mut arena)?;
+                                let cur_tree_node = get_mut_tree_node(cur_key_o, &mut arena);
                                 match cur_tree_node.get_mut() {
                                     HtmlNode::Tag(tag) => {
                                         tag.attributes.insert(iden, lit);
                                     },
-                                    HtmlNode::Text(_) => return Err("Attempted to add attribute to text node.".into()),
+                                    HtmlNode::Text(_) => return Err(ParseError::AttributeOnTextNode),
                                 }
                             } else {
-                                let cur_tree_node = try_get_mut_tree_node(cur_key_o, &mut arena)?;
+                                let cur_tree_node = get_mut_tree_node(cur_key_o, &mut arena);
                                 match cur_tree_node.get_mut() {
-                                    HtmlNode::Tag(tag) => return Err(format!("Expected literal after assignment sign {}", tag.name).into()),
-                                    HtmlNode::Text(_) => return Err("Attempted to add attribute to text node.".into()),
+                                    HtmlNode::Tag(tag) => return Err(ParseError::MissingLiteralAfterAssignmentSign {
+                                        tag_name: tag.name.to_string()
+                                    }),
+                                    HtmlNode::Text(_) => return Err(ParseError::AttributeOnTextNode),
                                 }
                             }
                         } else {
-                            return Err("Unexpected end of tokens.".into());
+                            return Err(ParseError::UnexpectedEndOfTokens);
                         }
                     } else {
                         // Attribute has no value; e.g., <script defer></script>
-                        let cur_tree_node = try_get_mut_tree_node(cur_key_o, &mut arena)?;
+                        let cur_tree_node = get_mut_tree_node(cur_key_o, &mut arena);
                         match cur_tree_node.get_mut() {
                             HtmlNode::Tag(tag) => {
                                 tag.attributes.insert(iden, String::from(""));
                             },
-                            HtmlNode::Text(_) => return Err("Attempted to add attribute to text node.".into()),
+                            HtmlNode::Text(_) => return Err(ParseError::AttributeOnTextNode),
                         }
                     }
                 } else {
-                    return Err("Unexpected end of tokens.".into());
+                    return Err(ParseError::UnexpectedEndOfTokens);
                 }
             },
             Symbol::Text(text) => {
                 if has_tag_open {
-                    return Err("Text encountered before previous tag was closed.".into());
+                    return Err(ParseError::TextBeforePreviousClosed);
                 }
 
                 let node = HtmlNode::Text(text);
@@ -198,31 +249,31 @@ pub fn parse(text: &str) -> Result<HtmlDocument, Box<dyn Error>> {
         });
     }
 
-    Err("No root node found.".into())
+    Err(ParseError::MissingRootNode)
 }
 
-fn is_doctype(tag_name: &String, tokens: &mut Peekable<std::vec::IntoIter<Symbol>>) -> Result<bool, Box<dyn Error>> {
+fn is_doctype(tag_name: &String, tokens: &mut Peekable<std::vec::IntoIter<Symbol>>) -> Result<bool, ParseError> {
     if tag_name == "!DOCTYPE" {
         if let Some(token) = tokens.next() {
             if let Symbol::Identifier(iden) = token {
                 if iden != "html" {
-                    return Err("Expected identifier `html` after !DOCSTRING.".into());
+                    return Err(ParseError::MissingHtmlAfterDocstring);
                 }
                 if let Some(token) = tokens.next() {
                     match token {
                         Symbol::TagClose => {
                             // we good
                         },
-                        _ => return Err("Expected tag close after !DOCSTRING html".into()),
+                        _ => return Err(ParseError::MissingTagCloseAfterDocstring),
                     }
                 } else {
-                    return Err("Unexpected end of tokens.".into());
+                    return Err(ParseError::UnexpectedEndOfTokens);
                 }
             } else {
-                return Err("Expected identifier `html` after !DOCSTRING.".into());
+                return Err(ParseError::MissingHtmlAfterDocstring);
             }
         } else {
-            return Err("Unexpected end of tokens.".into());
+            return Err(ParseError::UnexpectedEndOfTokens);
         }
         
         return Ok(true);
@@ -231,29 +282,16 @@ fn is_doctype(tag_name: &String, tokens: &mut Peekable<std::vec::IntoIter<Symbol
     return Ok(false);
 }
 
-fn try_get_tree_node(key: Option<NodeId>, arena: &Arena<HtmlNode>) -> Result<&Node<HtmlNode>, &'static str> {
-    match key {
-        Some(key) => {
-            match arena.get(key) {
-                Some(node) => Ok(node),
-                None => Err("Could not get tree node from arena."),
-            }
-        },
-        None => Err("Unexpected None key."),
-    }
+fn get_tree_node(key: Option<NodeId>, arena: &Arena<HtmlNode>) -> &Node<HtmlNode> {
+    let key = key.unwrap();
+    let node = arena.get(key);
+    return node.unwrap();
 }
 
-fn try_get_mut_tree_node(key: Option<NodeId>, arena: &mut Arena<HtmlNode>) -> Result<&mut Node<HtmlNode>, &'static str> {
-    match key {
-        Some(key) => {
-            match arena.get_mut(key) {
-                Some(node) => Ok(node),
-                None => Err("Could not get tree node from arena."),
-            }
-        },
-        None => Err("Unexpected None key."),
-    }
-    
+fn get_mut_tree_node(key: Option<NodeId>, arena: &mut Arena<HtmlNode>) -> &mut Node<HtmlNode> {
+    let key = key.unwrap();
+    let node = arena.get_mut(key);
+    return node.unwrap();
 }
 
 #[cfg(test)]

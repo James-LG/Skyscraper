@@ -1,8 +1,28 @@
-use std::{error::Error, iter::Peekable};
+use std::iter::Peekable;
+
+use thiserror::Error;
 
 use crate::xpath::{Xpath, XpathElement, XpathPredicate, XpathQuery, tokenizer::{self, Symbol}};
 
-pub fn parse(text: &str) -> Result<Xpath, Box<dyn Error>> {
+use super::tokenizer::LexError;
+
+#[derive(Error, Debug)]
+pub enum ParseError {
+    #[error("Close square bracket has no matching opening square bracket")]
+    LeadingCloseBracket,
+    #[error("@ symbol cannot be outside of square brackets")]
+    MisplacedAtSign,
+    #[error("Equals predicate missing assignment sign")]
+    PredicateMissingAssignmentSign,
+    #[error("Equals predicate missing value")]
+    PredicateMissingValue,
+    #[error("Equals predicate missing attribute")]
+    PredicateMissingAttribute,
+    #[error("Lex error {0}")]
+    LexError(#[from] LexError)
+}
+
+pub fn parse(text: &str) -> Result<Xpath, ParseError> {
     let mut symbols = tokenizer::lex(text)?.into_iter().peekable();
     let mut elements: Vec<XpathElement> = Vec::new();
 
@@ -21,7 +41,7 @@ pub fn parse(text: &str) -> Result<Xpath, Box<dyn Error>> {
     Ok(Xpath { elements })
 }
 
-fn parse_query(identifier: String, symbols: &mut Peekable<std::vec::IntoIter<Symbol>>) -> Result<XpathQuery, Box<dyn Error>> {
+fn parse_query(identifier: String, symbols: &mut Peekable<std::vec::IntoIter<Symbol>>) -> Result<XpathQuery, ParseError> {
     let mut query = XpathQuery::new(identifier);
 
     let mut open_square_bracket = false;
@@ -36,13 +56,13 @@ fn parse_query(identifier: String, symbols: &mut Peekable<std::vec::IntoIter<Sym
                 if open_square_bracket {
                     open_square_bracket = false;
                 } else {
-                    return Err("Close square bracket has no matching opening square bracket".into());
+                    return Err(ParseError::LeadingCloseBracket);
                 }
             }
             Symbol::AtSign => {
                 symbols.next();
                 if !open_square_bracket {
-                    return Err("@ symbol cannot be outside of square brackets".into());
+                    return Err(ParseError::MisplacedAtSign);
                 }
                 let predicate = parse_equals_predicate(symbols)?;
                 query.predicates.push(predicate);
@@ -54,7 +74,7 @@ fn parse_query(identifier: String, symbols: &mut Peekable<std::vec::IntoIter<Sym
     Ok(query)
 }
 
-fn parse_equals_predicate(symbols: &mut Peekable<std::vec::IntoIter<Symbol>>) -> Result<XpathPredicate, Box<dyn Error>> {
+fn parse_equals_predicate(symbols: &mut Peekable<std::vec::IntoIter<Symbol>>) -> Result<XpathPredicate, ParseError> {
     let mut attr: Option<String> = None;
     let mut val: Option<String> = None;
 
@@ -66,7 +86,7 @@ fn parse_equals_predicate(symbols: &mut Peekable<std::vec::IntoIter<Symbol>>) ->
     if let Some(Symbol::AssignmentSign) = symbols.next_if(|expected| matches!(expected, &Symbol::AssignmentSign)) {
         // good
     } else {
-        return Err("Equals attribute missing assignment sign".into());
+        return Err(ParseError::PredicateMissingAssignmentSign);
     }
 
     if let Some(Symbol::Text(value)) = symbols.next_if(|expected| matches!(expected, &Symbol::Text(_))) {
@@ -77,10 +97,10 @@ fn parse_equals_predicate(symbols: &mut Peekable<std::vec::IntoIter<Symbol>>) ->
         if let Some(value) = val {
             Ok(XpathPredicate::Equals { attribute, value })
         } else {
-            Err("Equals predicate missing value".into())
+            Err(ParseError::PredicateMissingValue)
         }
     } else {
-        Err("Equals predicate missing attribute".into())
+        Err(ParseError::PredicateMissingAttribute)
     }
 }
 
