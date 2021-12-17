@@ -43,7 +43,7 @@ pub fn lex(text: &str) -> Result<Vec<Symbol>, LexError> {
         } else {
             if !c.is_whitespace(){
                 // Unknown symbol, move on ¯\_(ツ)_/¯
-                eprintln!("Unknown symbol {}", c);
+                eprintln!("Unknown HTML symbol {}", c);
             }
             pointer.next();
         }
@@ -54,6 +54,26 @@ pub fn lex(text: &str) -> Result<Vec<Symbol>, LexError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lex_should_work_with_single_char_text() {
+        // arrange
+        let text = "<node>1</node>";
+
+        // act
+        let result = lex(text).unwrap();
+
+        // assert
+        let expected = vec![
+            Symbol::StartTag(String::from("node")),
+            Symbol::TagClose,
+            Symbol::Text(String::from("1")),
+            Symbol::EndTag(String::from("node")),
+            Symbol::TagClose
+        ];
+
+        assert_eq!(expected, result);
+    }
 
     #[test]
     fn lex_should_handle_attribute_without_value() {

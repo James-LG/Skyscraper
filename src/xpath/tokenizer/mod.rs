@@ -55,7 +55,7 @@ pub fn lex(text: &str) -> Result<Vec<Symbol>, LexError> {
         } else {
             if !c.is_whitespace(){
                 // Unknown symbol, move on ¯\_(ツ)_/¯
-                eprintln!("Unknown symbol {}", c);
+                eprintln!("Unknown XPath symbol {}", c);
             }
             pointer.next();
         }

@@ -221,9 +221,9 @@ pub fn is_text(pointer: &mut VecPointer<char>, has_open_tag: bool) -> Option<Sym
     if let Some(c) = pointer.current() {
         if !INAVLID_TEXT_CHARS.contains(&c) {
             let start_index = pointer.index;
-            let mut has_non_whitespace = false;
+            let mut has_non_whitespace = !c.is_whitespace();
 
-            let mut text: Vec<char> = vec![c];
+            let mut buffer: Vec<char> = vec![c];
             loop {
                 match pointer.next() {
                     Some(c) if INAVLID_TEXT_CHARS.contains(&c) => break,
@@ -232,15 +232,15 @@ pub fn is_text(pointer: &mut VecPointer<char>, has_open_tag: bool) -> Option<Sym
                             has_non_whitespace = true;
                         }
 
-                        text.push(c);
+                        buffer.push(c);
                     },
                     None => break,
                 };
             }
-            let name: String = text.into_iter().collect();
-    
+            
             if has_non_whitespace {
-                return Some(Symbol::Text(name));
+                let text: String = buffer.into_iter().collect();
+                return Some(Symbol::Text(text));
             } else {
                 // roll back pointer
                 pointer.index = start_index;

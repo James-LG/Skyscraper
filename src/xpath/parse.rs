@@ -30,9 +30,16 @@ pub fn parse(text: &str) -> Result<Xpath, ParseError> {
         match symbol {
             Symbol::Slash => elements.push(XpathElement::SearchRoot),
             Symbol::DoubleSlash => elements.push(XpathElement::SearchAll),
+            Symbol::OpenSquareBracket => {
+                if let Some(num) = parse_index(&mut symbols) {
+                    elements.push(XpathElement::Index(num));
+                } else {
+                    let query = parse_query(&mut symbols)?;
+                    elements.push(XpathElement::Query(query));
+                }
+            },
             Symbol::Identifier(identifier) => {
-                let query = parse_query(identifier, &mut symbols)?;
-                elements.push(XpathElement::Query(query))
+                elements.push(XpathElement::Tag(identifier))
             }
             _ => continue,
         }
@@ -41,10 +48,23 @@ pub fn parse(text: &str) -> Result<Xpath, ParseError> {
     Ok(Xpath { elements })
 }
 
-fn parse_query(identifier: String, symbols: &mut Peekable<std::vec::IntoIter<Symbol>>) -> Result<XpathQuery, ParseError> {
-    let mut query = XpathQuery::new(identifier);
+fn parse_index(symbols: &mut Peekable<std::vec::IntoIter<Symbol>>) -> Option<usize> {
+    if let Some(Symbol::Number(num)) = symbols.next_if(|expected| matches!(expected, &Symbol::Number(_))) {
+        if let Some(Symbol::CloseSquareBracket) = symbols.next_if_eq(&Symbol::CloseSquareBracket) {
+            return Some(num as usize);
+        }
+    }
 
-    let mut open_square_bracket = false;
+    return None
+}
+
+/// Parses the inner section of square brackets in an Xpath expression.
+/// Assumes this set of square brackets has already been checked for an index value.
+/// Example: [@name='hi']
+fn parse_query(symbols: &mut Peekable<std::vec::IntoIter<Symbol>>) -> Result<XpathQuery, ParseError> {
+    let mut query = XpathQuery::new();
+
+    let mut open_square_bracket = true;
     while let Some(symbol) = symbols.peek() {
         match symbol {
             Symbol::OpenSquareBracket => {
@@ -118,9 +138,27 @@ mod tests {
 
         let expected = vec![
             XpathElement::SearchAll,
-            XpathElement::Query(XpathQuery::new(String::from("book"))),
+            XpathElement::Tag(String::from("book")),
             XpathElement::SearchRoot,
-            XpathElement::Query(XpathQuery::new(String::from("title")))
+            XpathElement::Tag(String::from("title"))
+        ];
+
+        // looping makes debugging much easier than just asserting the entire vectors are equal
+        for (e, r) in expected.into_iter().zip(result.elements) {
+            assert_eq!(e, r);
+        }
+    }
+
+    #[test]
+    fn parse_index() {
+        let text = r###"//a[0]"###;
+
+        let result = parse(text).unwrap();
+
+        let expected = vec![
+            XpathElement::SearchAll,
+            XpathElement::Tag(String::from("a")),
+            XpathElement::Index(0),
         ];
 
         // looping makes debugging much easier than just asserting the entire vectors are equal
@@ -137,9 +175,9 @@ mod tests {
 
         let expected = vec![
             XpathElement::SearchAll,
+            XpathElement::Tag(String::from("a")),
             XpathElement::Query(
                 XpathQuery {
-                    identifier: String::from("a"),
                     predicates: vec![
                         XpathPredicate::Equals {
                             attribute: String::from("hello"),
