@@ -22,6 +22,7 @@ pub enum ParseError {
     LexError(#[from] LexError)
 }
 
+/// Parse an Xpath expression into an Xpath object.
 pub fn parse(text: &str) -> Result<Xpath, ParseError> {
     let mut symbols = tokenizer::lex(text)?.into_iter().peekable();
     let mut elements: Vec<XpathElement> = Vec::new();

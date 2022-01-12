@@ -47,6 +47,7 @@ pub enum ApplyError {
 }
 
 impl Xpath {
+    /// Search the given HTML document according to this Xpath expression.
     pub fn apply(&self, document: &HtmlDocument) -> Result<Vec<NodeId>, ApplyError> {
         let elements = &mut self.elements.iter();
         let mut matched_nodes: Vec<NodeId> = Vec::new(); // The nodes matched by the search query
@@ -127,10 +128,12 @@ fn get_all_children(document: &HtmlDocument, matched_nodes: &Vec<NodeId>) -> Vec
     return found_nodes;
 }
 
+/// Search for an HTML tag matching the given name and query in the given list of nodes.
 pub fn search_root(tag_name: &String, query: &XpathQuery, document: &HtmlDocument, nodes: &Vec<NodeId>) -> Vec<NodeId> {
     search_internal(false, tag_name, query, document, nodes)
 }
 
+/// Search for an HTML tag matching the given name and query in the given list of nodes or any children of those nodes.
 pub fn search_all(tag_name: &String, query: &XpathQuery, document: &HtmlDocument, nodes: &Vec<NodeId>) -> Vec<NodeId> {
     search_internal(true, tag_name, query, document, nodes)
 }

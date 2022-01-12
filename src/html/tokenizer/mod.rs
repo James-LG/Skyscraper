@@ -9,6 +9,7 @@ use thiserror::Error;
 pub enum LexError {
 }
 
+/// Tokenize a string of HTML into Symbols used for parsing later on.
 pub fn lex(text: &str) -> Result<Vec<Symbol>, LexError> {
     let mut symbols: Vec<Symbol> = Vec::new();
 
