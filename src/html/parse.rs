@@ -14,7 +14,16 @@ lazy_static! {
         "img",
         "input",
         "br",
-        "hr"
+        "hr",
+        "col",
+        "area",
+        "base",
+        "embed",
+        "keygen",
+        "param",
+        "source",
+        "track",
+        "wbr"
     ];
 }
 
@@ -397,6 +406,15 @@ mod tests {
             <link rel="stylesheet">
             <img width="500">
             <input type="submit">
+            <col class="centercol">
+            <area>
+            <base>
+            <embed>
+            <keygen>
+            <param>
+            <source>
+            <track>
+            <wbr>
         </div>"###;
 
         // act
@@ -450,6 +468,62 @@ mod tests {
             let mut attributes = HashMap::new();
             attributes.insert("type", "submit");
             assert_tag(arena, key, "input", Some(attributes));
+        }
+
+        // <div> -> <col>
+        {
+            let key = children[6];
+            let mut attributes = HashMap::new();
+            attributes.insert("class", "centercol");
+            assert_tag(arena, key, "col", Some(attributes));
+        }
+
+        // <div> -> <area>
+        {
+            let key = children[7];
+            assert_tag(arena, key, "area", None);
+        }
+
+        // <div> -> <base>
+        {
+            let key = children[8];
+            assert_tag(arena, key, "base", None);
+        }
+        
+        // <div> -> <embed>
+        {
+            let key = children[9];
+            assert_tag(arena, key, "embed", None);
+        }
+
+        // <div> -> <keygen>
+        {
+            let key = children[10];
+            assert_tag(arena, key, "keygen", None);
+        }
+        
+        // <div> -> <param>
+        {
+            let key = children[11];
+            assert_tag(arena, key, "param", None);
+        }
+
+        // <div> -> <source>
+        {
+            let key = children[12];
+            assert_tag(arena, key, "source", None);
+        }
+
+        // <div> -> <track>
+        {
+            let key = children[13];
+            assert_tag(arena, key, "track", None);
+        }
+
+        // <div> -> <wbr>
+        {
+            let key = children[14];
+            assert_tag(arena, key, "wbr", None);
         }
     }
 
