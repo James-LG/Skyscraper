@@ -1,7 +1,6 @@
 use std::error::Error;
 
-use indextree::NodeId;
-use skyscraper::html::HtmlNode;
+use skyscraper::html::{HtmlNode, DocumentNode};
 use skyscraper::{html, xpath};
 
 
@@ -21,8 +20,8 @@ fn xpath_github_sample1() -> Result<(), Box<dyn Error>> {
     // assert
     assert_eq!(1, nodes.len());
 
-    let node_id = nodes[0];
-    match document.arena.get(node_id).unwrap().get() {
+    let doc_node = nodes[0];
+    match document.get_html_node(&doc_node).unwrap() {
         HtmlNode::Tag(t) => assert_eq!("main", t.name),
         HtmlNode::Text(_) => return Err("expected tag, got text instead".into()),
     }
@@ -44,15 +43,15 @@ fn xpath_github_sample2() -> Result<(), Box<dyn Error>> {
     // assert
     assert_eq!(5, nodes.len());
 
-    let node_id = nodes[0];
-    match document.arena.get(node_id).unwrap().get() {
+    let doc_node = nodes[0];
+    match document.get_html_node(&doc_node).unwrap() {
         HtmlNode::Tag(t) => {
             assert_eq!("a", t.name);
 
-            let children: Vec<NodeId> = node_id.children(&document.arena).collect();
+            let children: Vec<DocumentNode> = doc_node.children(&document).collect();
             assert_eq!(1, children.len());
 
-            match document.arena.get(children[0]).unwrap().get() {
+            match document.get_html_node(&children[0]).unwrap() {
                 HtmlNode::Tag(_) => return Err("expected text, got tag instead".into()),
                 HtmlNode::Text(text) => assert_eq!("refactor: Reorganize into workspace", text),
             }
@@ -77,15 +76,15 @@ fn xpath_github_sample3() -> Result<(), Box<dyn Error>> {
     // assert
     assert_eq!(1, nodes.len());
 
-    let node_id = nodes[0];
-    match document.arena.get(node_id).unwrap().get() {
+    let doc_node = nodes[0];
+    match document.get_html_node(&doc_node).unwrap() {
         HtmlNode::Tag(t) => {
             assert_eq!("a", t.name);
 
-            let children: Vec<NodeId> = node_id.children(&document.arena).collect();
+            let children: Vec<DocumentNode> = doc_node.children(&document).collect();
             assert_eq!(1, children.len());
 
-            match document.arena.get(children[0]).unwrap().get() {
+            match document.get_html_node(&children[0]).unwrap() {
                 HtmlNode::Tag(_) => return Err("expected text, got tag instead".into()),
                 HtmlNode::Text(text) => assert_eq!("Create a new release", text),
             }
@@ -110,9 +109,9 @@ fn xpath_github_get_text_sample() -> Result<(), Box<dyn Error>> {
     // assert
     assert_eq!(1, nodes.len());
 
-    let node_id = nodes[0];
-    let html_node = document.arena.get(node_id).unwrap().get();
-    let text = html_node.get_all_text(node_id, &document).unwrap();
+    let doc_node = nodes[0];
+    let html_node = document.get_html_node(&doc_node).unwrap();
+    let text = html_node.get_all_text(&doc_node, &document).unwrap();
 
     assert_eq!("James-LG / Skyscraper Public", text);
 
