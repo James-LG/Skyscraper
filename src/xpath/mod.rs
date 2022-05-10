@@ -1,9 +1,8 @@
 pub mod parse;
 mod tokenizer;
 
-use indextree::NodeId;
 use thiserror::Error;
-use crate::html::{HtmlDocument, HtmlNode, HtmlTag};
+use crate::html::{HtmlDocument, HtmlNode, HtmlTag, DocumentNode};
 
 pub use crate::xpath::parse::parse;
 
@@ -57,22 +56,22 @@ pub enum ApplyError {
 
 impl Xpath {
     /// Search the given HTML document according to this Xpath expression.
-    pub fn apply(&self, document: &HtmlDocument) -> Result<Vec<NodeId>, ApplyError> {
-        let searchable_nodes: Vec<NodeId> = vec![document.root_key];
+    pub fn apply(&self, document: &HtmlDocument) -> Result<Vec<DocumentNode>, ApplyError> {
+        let searchable_nodes: Vec<DocumentNode> = vec![document.root_key];
         self.internal_apply(document, searchable_nodes)
     }
 
     /// Search the the descendents of the given node in the given HTML document
     /// according to this Xpath expression.
-    pub fn apply_to_node(&self, document: &HtmlDocument, node_id: NodeId) -> Result<Vec<NodeId>, ApplyError> {
-        let searchable_nodes: Vec<NodeId> = get_all_children(document, &vec![node_id]);
+    pub fn apply_to_node(&self, document: &HtmlDocument, doc_node: DocumentNode) -> Result<Vec<DocumentNode>, ApplyError> {
+        let searchable_nodes: Vec<DocumentNode> = get_all_children(document, &vec![doc_node]);
         self.internal_apply(document, searchable_nodes)
     }
 
-    fn internal_apply(&self, document: &HtmlDocument, searchable_nodes: Vec<NodeId>) -> Result<Vec<NodeId>, ApplyError> {
+    fn internal_apply(&self, document: &HtmlDocument, searchable_nodes: Vec<DocumentNode>) -> Result<Vec<DocumentNode>, ApplyError> {
         let elements = &mut self.elements.iter();
-        let mut matched_nodes: Vec<NodeId> = Vec::new(); // The nodes matched by the search query
-        let mut searchable_nodes: Vec<NodeId> = searchable_nodes; // The list of nodes to search in (typically children of matched nodes)
+        let mut matched_nodes: Vec<DocumentNode> = Vec::new(); // The nodes matched by the search query
+        let mut searchable_nodes: Vec<DocumentNode> = searchable_nodes; // The list of nodes to search in (typically children of matched nodes)
 
         let mut is_root_search = true; // If false, then search all
         let mut cur_query: Option<&XpathQuery> = None;
@@ -108,9 +107,9 @@ fn perform_search(
     cur_query: Option<&XpathQuery>,
     cur_index: Option<usize>,
     is_root_search: bool,
-    matched_nodes: &mut Vec<NodeId>,
+    matched_nodes: &mut Vec<DocumentNode>,
     document: &HtmlDocument,
-    searchable_nodes: &mut Vec<NodeId>) {
+    searchable_nodes: &mut Vec<DocumentNode>) {
     if let Some(tag_name) = cur_tag_name {
         if let Some(query) = cur_query {
             *matched_nodes = search_internal(!is_root_search, tag_name, query, document, &searchable_nodes);
@@ -124,16 +123,16 @@ fn perform_search(
             let indexed_node = matched_nodes[i];
             matched_nodes.retain(|node| *node == indexed_node);
         }
-    
+
         *searchable_nodes = get_all_children(&document, &matched_nodes);
     }
 }
 
 /// Get all the children for all the given matched nodes.
-fn get_all_children(document: &HtmlDocument, matched_nodes: &Vec<NodeId>) -> Vec<NodeId> {
-    let mut child_nodes: Vec<NodeId> = Vec::new();
+fn get_all_children(document: &HtmlDocument, matched_nodes: &Vec<DocumentNode>) -> Vec<DocumentNode> {
+    let mut child_nodes: Vec<DocumentNode> = Vec::new();
     for node_id in matched_nodes {
-        let mut children = node_id.children(&document.arena).collect();
+        let mut children: Vec<DocumentNode> = node_id.children(&document).collect();
         child_nodes.append(&mut children);
     }
 
@@ -141,28 +140,28 @@ fn get_all_children(document: &HtmlDocument, matched_nodes: &Vec<NodeId>) -> Vec
 }
 
 /// Search for an HTML tag matching the given name and query in the given list of nodes.
-pub fn search_root(tag_name: &String, query: &XpathQuery, document: &HtmlDocument, searchable_nodes: &Vec<NodeId>) -> Vec<NodeId> {
+pub fn search_root(tag_name: &String, query: &XpathQuery, document: &HtmlDocument, searchable_nodes: &Vec<DocumentNode>) -> Vec<DocumentNode> {
     search_internal(false, tag_name, query, document, searchable_nodes)
 }
 
 /// Search for an HTML tag matching the given name and query in the given list of nodes or any children of those nodes.
-pub fn search_all(tag_name: &String, query: &XpathQuery, document: &HtmlDocument, searchable_nodes: &Vec<NodeId>) -> Vec<NodeId> {
+pub fn search_all(tag_name: &String, query: &XpathQuery, document: &HtmlDocument, searchable_nodes: &Vec<DocumentNode>) -> Vec<DocumentNode> {
     search_internal(true, tag_name, query, document, searchable_nodes)
 }
 
-fn search_internal(recursive: bool, tag_name: &String, query: &XpathQuery, document: &HtmlDocument, searchable_nodes: &Vec<NodeId>) -> Vec<NodeId> {
+fn search_internal(recursive: bool, tag_name: &String, query: &XpathQuery, document: &HtmlDocument, searchable_nodes: &Vec<DocumentNode>) -> Vec<DocumentNode> {
     let mut matches = Vec::new();
-    
+
     for node_id in searchable_nodes.iter() {
-        if let Some(node) = document.arena.get(*node_id) {
-            match node.get() {
+        if let Some(node) = document.get_html_node(node_id) {
+            match node {
                 HtmlNode::Tag(rtag) => {
                     if &rtag.name == tag_name && is_matching_predicates(query, rtag) {
                         matches.push(*node_id);
                     }
 
                     if recursive {
-                        let children = node_id.children(&document.arena).collect();
+                        let children: Vec<DocumentNode> = node_id.children(&document).collect();
                         let mut sub_matches = search_all(tag_name, query, document, &children);
                         matches.append(&mut sub_matches);
                     }
@@ -171,7 +170,7 @@ fn search_internal(recursive: bool, tag_name: &String, query: &XpathQuery, docum
             }
         }
     }
-    
+
     return matches;
 }
 
@@ -215,9 +214,9 @@ mod test {
         let result = search_root(&String::from("root"), &query, &document, &vec![document.root_key]);
 
         assert_eq!(1, result.len());
-        let node = document.arena.get(result[0]).unwrap();
+        let node = document.get_html_node(&result[0]).unwrap();
 
-        match node.get() {
+        match node {
             HtmlNode::Tag(tag) => {
                 assert_eq!("root", tag.name.as_str());
             },
@@ -243,9 +242,9 @@ mod test {
         assert_eq!(3, result.len());
 
         for r in result {
-            let node = document.arena.get(r).unwrap();
+            let node = document.get_html_node(&r).unwrap();
 
-            match node.get() {
+            match node {
                 HtmlNode::Tag(tag) => {
                     assert_eq!("a", tag.name.as_str());
                 },
@@ -276,9 +275,9 @@ mod test {
 
         assert_eq!(1, result.len());
 
-        let node = document.arena.get(result[0]).unwrap();
+        let node = document.get_html_node(&result[0]).unwrap();
 
-        match node.get() {
+        match node {
             HtmlNode::Tag(tag) => {
                 assert_eq!("a", tag.name.as_str());
                 assert!(tag.attributes["hello"] == String::from("world"));
@@ -310,9 +309,9 @@ mod test {
 
         assert_eq!(1, result.len());
 
-        let node = document.arena.get(result[0]).unwrap();
+        let node = document.get_html_node(&result[0]).unwrap();
 
-        match node.get() {
+        match node {
             HtmlNode::Tag(tag) => {
                 assert_eq!("a", tag.name.as_str());
                 assert!(tag.attributes["hello"] == String::from("world"));
@@ -339,7 +338,7 @@ mod test {
 
         // assert
         assert_eq!(1, nodes.len());
-        let node = document.arena.get(nodes[0]).unwrap().get();
+        let node = document.get_html_node(&nodes[0]).unwrap();
 
         match node {
             HtmlNode::Tag(t) => assert_eq!("node", t.name),
@@ -367,16 +366,16 @@ mod test {
         // assert
         assert_eq!(1, nodes.len());
         let node_id = nodes[0];
-        let node = document.arena.get(node_id).unwrap().get();
+        let node = document.get_html_node(&node_id).unwrap();
 
         match node {
             HtmlNode::Tag(t) => {
                 assert_eq!("node", t.name);
 
-                let children: Vec<NodeId> = node_id.children(&document.arena).collect();
+                let children: Vec<DocumentNode> = node_id.children(&document).collect();
                 assert_eq!(1, children.len());
 
-                let child_node = document.arena.get(children[0]).unwrap().get();
+                let child_node = document.get_html_node(&children[0]).unwrap();
                 match child_node {
                     HtmlNode::Tag(_) => panic!("expected child text, got tag instead"),
                     HtmlNode::Text(text) => assert_eq!(&String::from("1"), text),
@@ -405,17 +404,11 @@ mod test {
 
         // assert
         assert_eq!(2, nodes.len());
-        let node1_text = document.arena.get(nodes[0]).unwrap()
-            .get()
-            .get_text(nodes[0], &document)
-            .unwrap();
+        let node1_text = nodes[0].get_text(&document).unwrap();
 
         assert_eq!("0", node1_text);
 
-        let node2_text = document.arena.get(nodes[1]).unwrap()
-            .get()
-            .get_text(nodes[1], &document)
-            .unwrap();
+        let node2_text = nodes[1].get_text(&document).unwrap();
 
         assert_eq!("1", node2_text);
     }
@@ -444,8 +437,8 @@ mod test {
 
         // assert
         assert_eq!(1, nodes.len());
-        let node_id = nodes[0];
-        let node = document.arena.get(node_id).unwrap().get();
+        let doc_node = nodes[0];
+        let node = document.get_html_node(&doc_node).unwrap();
 
         match node {
             HtmlNode::Tag(t) => assert_eq!("node", t.name),
@@ -457,17 +450,17 @@ mod test {
         let xpath = xpath::parse("/div[@class='duplicate']").unwrap();
 
         // act
-        let nodes = xpath.apply_to_node(&document, node_id).unwrap();
+        let nodes = xpath.apply_to_node(&document, doc_node).unwrap();
 
         // assert
         assert_eq!(1, nodes.len());
-        let node_id = nodes[0];
-        let node = document.arena.get(node_id).unwrap().get();
+        let doc_node = nodes[0];
+        let node = document.get_html_node(&doc_node).unwrap();
 
         match node {
             HtmlNode::Tag(t) => {
                 assert_eq!("div", t.name);
-                assert_eq!("2", t.get_text(node_id, &document).unwrap());
+                assert_eq!("2", t.get_text(&doc_node, &document).unwrap());
             },
             HtmlNode::Text(_) => panic!("expected tag, got text instead"),
         }

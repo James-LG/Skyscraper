@@ -26,26 +26,25 @@ impl HtmlTag {
 impl HtmlTag {
     /// Gets any direct HtmlNode::Text children and concatenates them into a single string
     /// separated by a space character.
-    pub fn get_text(&self, node_id: NodeId, document: &HtmlDocument) -> Option<String> {
-        self.internal_get_text(node_id, document, false)
+    pub fn get_text(&self, doc_node: &DocumentNode, document: &HtmlDocument) -> Option<String> {
+        self.internal_get_text(doc_node, document, false)
     }
 
     /// Gets all HtmlNode::Text children and concatenates them into a single string separated
     /// by a space character.
-    pub fn get_all_text(&self, node_id: NodeId, document: &HtmlDocument) -> Option<String> {
-        self.internal_get_text(node_id, document, true)
+    pub fn get_all_text(&self, doc_node: &DocumentNode, document: &HtmlDocument) -> Option<String> {
+        self.internal_get_text(doc_node, document, true)
     }
 
-    fn internal_get_text(&self, node_id: NodeId, document: &HtmlDocument, recurse: bool) -> Option<String> {
+    fn internal_get_text(&self, doc_node: &DocumentNode, document: &HtmlDocument, recurse: bool) -> Option<String> {
         let mut o_text: Option<String> = None;
-        let children = node_id.children(&document.arena);
+        let children = doc_node.children(&document);
 
         // Iterate through this tag's children
         for child in children {
-            let child_node = document.arena.get(child);
+            let child_node = document.get_html_node(&child);
             if let Some(child_node) = child_node {
-                let child_html_node = child_node.get();
-                match child_html_node {
+                match child_node {
                     HtmlNode::Text(text) => {
                         // If the child is a text, simply append its text.
                         o_text = Some(HtmlTag::append_text(o_text, text.to_string()));
@@ -54,7 +53,7 @@ impl HtmlTag {
                         // If the child is a tag, only append its text if recurse=true was passed,
                         // otherwise skip this node.
                         if recurse {
-                            let o_child_text = child_html_node.internal_get_text(child, &document, true);
+                            let o_child_text = child_node.internal_get_text(&child, &document, true);
                             if let Some(child_text) = o_child_text {
                                 o_text = Some(HtmlTag::append_text(o_text, child_text));
                             }
@@ -88,25 +87,25 @@ pub enum HtmlNode {
 impl HtmlNode {
     /// Gets any direct HtmlNode::Text children and concatenates them into a single string
     /// separated by a space character.
-    pub fn get_text(&self, node_id: NodeId, document: &HtmlDocument) -> Option<String> {
-        self.internal_get_text(node_id, document, false)
+    pub fn get_text(&self, doc_node: &DocumentNode, document: &HtmlDocument) -> Option<String> {
+        self.internal_get_text(doc_node, document, false)
     }
 
     /// Gets all HtmlNode::Text children and concatenates them into a single string separated
     /// by a space character.
-    pub fn get_all_text(&self, node_id: NodeId, document: &HtmlDocument) -> Option<String> {
-        self.internal_get_text(node_id, document, true)
+    pub fn get_all_text(&self, doc_node: &DocumentNode, document: &HtmlDocument) -> Option<String> {
+        self.internal_get_text(doc_node, document, true)
     }
 
     /// Gets any direct HtmlNode::Text children and concatenates them into a single string
     /// separated by new line characters.
-    fn internal_get_text(&self, node_id: NodeId, document: &HtmlDocument, recurse: bool) -> Option<String> {
+    fn internal_get_text(&self, doc_node: &DocumentNode, document: &HtmlDocument, recurse: bool) -> Option<String> {
         match self {
             HtmlNode::Tag(tag) => {
                 if recurse {
-                    tag.get_all_text(node_id, document)
+                    tag.get_all_text(doc_node, document)
                 } else {
-                    tag.get_text(node_id, document)
+                    tag.get_text(doc_node, document)
                 }
             },
             HtmlNode::Text(text) => Some(text.to_string()),
@@ -118,8 +117,47 @@ impl HtmlNode {
 /// 
 /// Documents must have a single root node to be valid.
 pub struct HtmlDocument {
-    pub arena: Arena<HtmlNode>,
-    pub root_key: NodeId,
+    arena: Arena<HtmlNode>,
+    pub root_key: DocumentNode,
+}
+
+impl HtmlDocument {
+    pub fn new(arena: Arena<HtmlNode>, root_key: DocumentNode) -> HtmlDocument {
+        HtmlDocument { arena, root_key }
+    }
+
+    pub fn get_html_node<'a>(&self, node: &DocumentNode) -> Option<&HtmlNode> {
+        self.arena.get(node.id).map(|x| x.get())
+    }
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug, Hash)]
+pub struct DocumentNode {
+    id: NodeId
+}
+
+impl DocumentNode {
+    pub fn new(id: NodeId) -> DocumentNode {
+        DocumentNode { id }
+    }
+
+    pub fn get_all_text(&self, document: &HtmlDocument) -> Option<String> {
+        match document.get_html_node(self) {
+            Some(html_node) => html_node.get_all_text(self, document),
+            None => None
+        }
+    }
+
+    pub fn get_text(&self, document: &HtmlDocument) -> Option<String> {
+        match document.get_html_node(self) {
+            Some(html_node) => html_node.get_text(self, document),
+            None => None
+        }
+    }
+
+    pub fn children<'a>(&self, document: &'a HtmlDocument) -> impl Iterator<Item=DocumentNode> + 'a {
+        Box::new(self.id.children(&document.arena).map(|node_id| DocumentNode::new(node_id)))
+    }
 }
 
 #[cfg(test)]
@@ -131,12 +169,12 @@ mod tests {
         // arrange
         let mut arena = Arena::new();
         let text_node = HtmlNode::Text(String::from("hello world"));
-        let text_node_id = arena.new_node(text_node);
-        let document = HtmlDocument { arena, root_key: text_node_id };
+        let text_doc_node = DocumentNode::new(arena.new_node(text_node));
+        let document = HtmlDocument::new(arena, text_doc_node);
 
         // act
-        let text_node = document.arena.get(text_node_id).unwrap().get();
-        let result = text_node.get_text(text_node_id, &document).unwrap();
+        let text_node = document.get_html_node(&text_doc_node).unwrap();
+        let result = text_node.get_text(&text_doc_node, &document).unwrap();
 
         // assert
         assert_eq!("hello world", result);
@@ -151,13 +189,14 @@ mod tests {
 
         let tag_node = HtmlNode::Tag(HtmlTag::new(String::from("tag")));
         let tag_node_id = arena.new_node(tag_node);
+        let tag_doc_node = DocumentNode::new(tag_node_id);
         tag_node_id.append(text_node_id, &mut arena);
 
-        let document = HtmlDocument { arena, root_key: tag_node_id };
+        let document = HtmlDocument::new(arena, tag_doc_node);
 
         // act
-        let tag_node = document.arena.get(tag_node_id).unwrap().get();
-        let result = tag_node.get_text(tag_node_id, &document).unwrap();
+        let tag_node = document.get_html_node(&tag_doc_node).unwrap();
+        let result = tag_node.get_text(&tag_doc_node, &document).unwrap();
 
         // assert
         assert_eq!("hello world", result);
@@ -177,12 +216,13 @@ mod tests {
         let tag_node_id = arena.new_node(tag_node);
         tag_node_id.append(text_node_id, &mut arena);
         tag_node_id.append(text_node2_id, &mut arena);
+        let tag_doc_node = DocumentNode::new(tag_node_id);
 
-        let document = HtmlDocument { arena, root_key: tag_node_id };
+        let document = HtmlDocument::new(arena, tag_doc_node);
 
         // act
-        let tag_node = document.arena.get(tag_node_id).unwrap().get();
-        let result = tag_node.get_text(tag_node_id, &document).unwrap();
+        let tag_node = document.get_html_node(&tag_doc_node).unwrap();
+        let result = tag_node.get_text(&tag_doc_node, &document).unwrap();
 
         // assert
         assert_eq!("hello world", result);
@@ -206,12 +246,13 @@ mod tests {
         let tag_node2_id = arena.new_node(tag_node2);
         tag_node2_id.append(text_node2_id, &mut arena);
         tag_node_id.append(tag_node2_id, &mut arena);
+        let tag_doc_node = DocumentNode::new(tag_node_id);
 
-        let document = HtmlDocument { arena, root_key: tag_node_id };
+        let document = HtmlDocument::new(arena, tag_doc_node);
 
         // act
-        let tag_node = document.arena.get(tag_node_id).unwrap().get();
-        let result = tag_node.get_text(tag_node_id, &document).unwrap();
+        let tag_node = document.get_html_node(&tag_doc_node).unwrap();
+        let result = tag_node.get_text(&tag_doc_node, &document).unwrap();
 
         // assert
         assert_eq!("hello", result);
@@ -235,12 +276,13 @@ mod tests {
         let tag_node2_id = arena.new_node(tag_node2);
         tag_node2_id.append(text_node2_id, &mut arena);
         tag_node_id.append(tag_node2_id, &mut arena);
+        let tag_doc_node = DocumentNode::new(tag_node_id);
 
-        let document = HtmlDocument { arena, root_key: tag_node_id };
+        let document = HtmlDocument::new(arena, tag_doc_node);
 
         // act
-        let tag_node = document.arena.get(tag_node_id).unwrap().get();
-        let result = tag_node.get_all_text(tag_node_id, &document).unwrap();
+        let tag_node = document.get_html_node(&tag_doc_node).unwrap();
+        let result = tag_node.get_all_text(&tag_doc_node, &document).unwrap();
 
         // assert
         assert_eq!("hello world", result);

@@ -4,7 +4,7 @@ use indextree::{Arena, Node, NodeId};
 use thiserror::Error;
 use crate::html::tokenizer::{self, LexError, Symbol};
 
-use super::{HtmlDocument, HtmlNode, HtmlTag};
+use super::{HtmlDocument, HtmlNode, HtmlTag, DocumentNode};
 
 lazy_static! {
     /// List of HTML tags that do not have end tags.
@@ -229,10 +229,7 @@ pub fn parse(text: &str) -> Result<HtmlDocument, ParseError> {
     }
 
     if let Some(root_key) = root_key_o {
-        return Ok(HtmlDocument {
-            arena,
-            root_key,
-        });
+        return Ok(HtmlDocument::new(arena, DocumentNode::new(root_key)));
     }
 
     Err(ParseError::MissingRootNode)
@@ -286,9 +283,8 @@ mod tests {
 
     use super::*;
 
-    fn assert_tag(arena: &Arena<HtmlNode>, key: NodeId, tag_name: &str, attributes: Option<HashMap<&str, &str>>) -> Vec<NodeId> {
-        let tree_node = arena.get(key).unwrap();
-        let html_node = tree_node.get();
+    fn assert_tag(document: &HtmlDocument, doc_node: DocumentNode, tag_name: &str, attributes: Option<HashMap<&str, &str>>) -> Vec<DocumentNode> {
+        let html_node = document.get_html_node(&doc_node).unwrap();
 
         match html_node {
             HtmlNode::Tag(tag) => {
@@ -300,15 +296,14 @@ mod tests {
                     }
                 }
 
-                return key.children(&arena).collect();
+                return doc_node.children(&document).collect();
             },
             _ => panic!("Expected Tag, got different variant instead."),
         }
     }
 
-    fn assert_text(arena: &Arena<HtmlNode>, key: NodeId, text: &str) {
-        let tree_node = arena.get(key).unwrap();
-        let html_node = tree_node.get();
+    fn assert_text(document: &HtmlDocument, key: DocumentNode, text: &str) {
+        let html_node = document.get_html_node(&key).unwrap();
 
         match html_node {
             HtmlNode::Text(node_text) => {
@@ -327,34 +322,32 @@ mod tests {
         let result = parse(text).unwrap();
 
         // assert
-        let arena = &result.arena;
-
         // <html>
-        let children = assert_tag(arena, result.root_key, "html", None);
+        let children = assert_tag(&result, result.root_key, "html", None);
 
         // <html> -> <a class="beans">
         {
             let key = children[0];
             let mut attributes = HashMap::new();
             attributes.insert("class", "beans");
-            assert_tag(arena, key, "a", Some(attributes));
+            assert_tag(&result, key, "a", Some(attributes));
         }
 
         // <html> -> <b>
         {
             let key = children[1];
-            let children = assert_tag(arena, key, "b", None);
+            let children = assert_tag(&result, key, "b", None);
 
             // <html> -> <b> -> <ba>
             {
                 let key = children[0];
-                assert_tag(arena, key, "ba", None);
+                assert_tag(&result, key, "ba", None);
             }
 
             // <html> -> <b> -> text()
             {
                 let key = children[1];
-                assert_text(arena, key, "yo");
+                assert_text(&result, key, "yo");
             }
         }
     }
@@ -368,13 +361,11 @@ mod tests {
         let result = parse(html).unwrap();
 
         // assert
-        let arena = &result.arena;
-
         // <script>
         let key = result.root_key;
         let mut attributes = HashMap::new();
         attributes.insert("defer", "");
-        assert_tag(arena, key, "script", Some(attributes));
+        assert_tag(&result, key, "script", Some(attributes));
     }
 
     #[test]
@@ -386,14 +377,12 @@ mod tests {
         let result = parse(html).unwrap();
 
         // assert
-        let arena = &result.arena;
-
         // <script>
         let key = result.root_key;
         let mut attributes = HashMap::new();
         attributes.insert("defer", "");
         attributes.insert("src", "hi");
-        assert_tag(arena, key, "script", Some(attributes));
+        assert_tag(&result, key, "script", Some(attributes));
     }
 
     #[test]
@@ -421,21 +410,19 @@ mod tests {
         let result = parse(html).unwrap();
 
         // assert
-        let arena = &result.arena;
-
         // <div>
-        let children = assert_tag(arena, result.root_key, "div", None);
+        let children = assert_tag(&result, result.root_key, "div", None);
 
         // <div> -> <br>
         {
             let key = children[0];
-            assert_tag(arena, key, "br", None);
+            assert_tag(&result, key, "br", None);
         }
 
         // <div> -> <hr>
         {
             let key = children[1];
-            assert_tag(arena, key, "hr", None);
+            assert_tag(&result, key, "hr", None);
         }
         
         // <div> -> <meta>
@@ -443,7 +430,7 @@ mod tests {
             let key = children[2];
             let mut attributes = HashMap::new();
             attributes.insert("charset", "UTF-8");
-            assert_tag(arena, key, "meta", Some(attributes));
+            assert_tag(&result, key, "meta", Some(attributes));
         }
 
         // <div> -> <link>
@@ -451,7 +438,7 @@ mod tests {
             let key = children[3];
             let mut attributes = HashMap::new();
             attributes.insert("rel", "stylesheet");
-            assert_tag(arena, key, "link", Some(attributes));
+            assert_tag(&result, key, "link", Some(attributes));
         }
 
         // <div> -> <img>
@@ -459,7 +446,7 @@ mod tests {
             let key = children[4];
             let mut attributes = HashMap::new();
             attributes.insert("width", "500");
-            assert_tag(arena, key, "img", Some(attributes));
+            assert_tag(&result, key, "img", Some(attributes));
         }
 
         // <div> -> <input>
@@ -467,7 +454,7 @@ mod tests {
             let key = children[5];
             let mut attributes = HashMap::new();
             attributes.insert("type", "submit");
-            assert_tag(arena, key, "input", Some(attributes));
+            assert_tag(&result, key, "input", Some(attributes));
         }
 
         // <div> -> <col>
@@ -475,55 +462,55 @@ mod tests {
             let key = children[6];
             let mut attributes = HashMap::new();
             attributes.insert("class", "centercol");
-            assert_tag(arena, key, "col", Some(attributes));
+            assert_tag(&result, key, "col", Some(attributes));
         }
 
         // <div> -> <area>
         {
             let key = children[7];
-            assert_tag(arena, key, "area", None);
+            assert_tag(&result, key, "area", None);
         }
 
         // <div> -> <base>
         {
             let key = children[8];
-            assert_tag(arena, key, "base", None);
+            assert_tag(&result, key, "base", None);
         }
         
         // <div> -> <embed>
         {
             let key = children[9];
-            assert_tag(arena, key, "embed", None);
+            assert_tag(&result, key, "embed", None);
         }
 
         // <div> -> <keygen>
         {
             let key = children[10];
-            assert_tag(arena, key, "keygen", None);
+            assert_tag(&result, key, "keygen", None);
         }
         
         // <div> -> <param>
         {
             let key = children[11];
-            assert_tag(arena, key, "param", None);
+            assert_tag(&result, key, "param", None);
         }
 
         // <div> -> <source>
         {
             let key = children[12];
-            assert_tag(arena, key, "source", None);
+            assert_tag(&result, key, "source", None);
         }
 
         // <div> -> <track>
         {
             let key = children[13];
-            assert_tag(arena, key, "track", None);
+            assert_tag(&result, key, "track", None);
         }
 
         // <div> -> <wbr>
         {
             let key = children[14];
-            assert_tag(arena, key, "wbr", None);
+            assert_tag(&result, key, "wbr", None);
         }
     }
 
@@ -570,25 +557,23 @@ mod tests {
         let result = parse(html).unwrap();
 
         // assert
-        let arena = &result.arena;
-
         // <html>
-        let children = assert_tag(arena, result.root_key, "html", None);
+        let children = assert_tag(&result, result.root_key, "html", None);
 
         // <html> -> <head>
         {
             let key = children[0];
-            let children = assert_tag(arena, key, "head", None);
+            let children = assert_tag(&result, key, "head", None);
 
             // <html> -> <head> -> <title>
             {
                 let key = children[0];
-                let children = assert_tag(arena, key, "title", None);
+                let children = assert_tag(&result, key, "title", None);
 
                 // <html> -> head> -> <title> -> text()
                 {
                     let key = children[0];
-                    assert_text(arena, key, "Rust Programming Language");
+                    assert_text(&result, key, "Rust Programming Language");
                 }
             }
 
@@ -598,7 +583,7 @@ mod tests {
                 let mut attributes = HashMap::new();
                 attributes.insert("name", "viewport");
                 attributes.insert("content", "width=device-width,initial-scale=1.0");
-                assert_tag(arena, key, "meta", Some(attributes));
+                assert_tag(&result, key, "meta", Some(attributes));
             }
 
             // <html> -> <head> -> <meta name="twitter:card" content="summary">
@@ -607,19 +592,19 @@ mod tests {
                 let mut attributes = HashMap::new();
                 attributes.insert("name", "twitter:card");
                 attributes.insert("content", "summary");
-                assert_tag(arena, key, "meta", Some(attributes));
+                assert_tag(&result, key, "meta", Some(attributes));
             }
         }
 
         // <html> -> <body>
         {
             let key = children[1];
-            let children = assert_tag(arena, key, "body", None);
+            let children = assert_tag(&result, key, "body", None);
 
             // <html> -> <body> -> <main>
             {
                 let key = children[0];
-                let children = assert_tag(arena, key, "main", None);
+                let children = assert_tag(&result, key, "main", None);
 
                 // <html> -> <body> -> <main> -> <section id="language-values" class="green">
                 {
@@ -627,31 +612,31 @@ mod tests {
                     let mut attributes = HashMap::new();
                     attributes.insert("id", "language-values");
                     attributes.insert("class", "green");
-                    let children = assert_tag(arena, key, "section", Some(attributes));
+                    let children = assert_tag(&result, key, "section", Some(attributes));
 
                     // <html> -> <body> -> <main> -> <section> -> <div class="w-100 mw-none ph3 mw8-m mw9-l center f3">
                     {
                         let key = children[0];
                         let mut attributes = HashMap::new();
                         attributes.insert("class", "w-100 mw-none ph3 mw8-m mw9-l center f3");
-                        let children = assert_tag(arena, key, "div", Some(attributes));
+                        let children = assert_tag(&result, key, "div", Some(attributes));
 
                         // <html> -> <body> -> <main> -> <section> -> <div> -> <header class="pb0">
                         {
                             let key = children[0];
                             let mut attributes = HashMap::new();
                             attributes.insert("class", "pb0");
-                            let children = assert_tag(arena, key, "header", Some(attributes));
+                            let children = assert_tag(&result, key, "header", Some(attributes));
 
                             // <html> -> <body> -> <main> -> <section> -> <div> -> <header> -> <h2>
                             {
                                 let key = children[0];
-                                let children = assert_tag(arena, key, "h2", None);
+                                let children = assert_tag(&result, key, "h2", None);
 
                                 // <html> -> <body> -> <main> -> <section> -> <div> -> <header> -> <h2> -> text()
                                 {
                                     let key = children[0];
-                                    assert_text(arena, key, "Why Rust?")
+                                    assert_text(&result, key, "Why Rust?")
                                 }
                             }
                         }
@@ -661,26 +646,26 @@ mod tests {
                             let key = children[1];
                             let mut attributes = HashMap::new();
                             attributes.insert("class", "flex-none flex-l");
-                            let children = assert_tag(arena, key, "div", Some(attributes));
+                            let children = assert_tag(&result, key, "div", Some(attributes));
 
                             // <html> -> <body> -> <main> -> <section> -> <div> -> <div> -> <section class="w-100 pv2 pv0-l mt4">
                             {
                                 let key = children[0];
                                 let mut attributes = HashMap::new();
                                 attributes.insert("class", "w-100 pv2 pv0-l mt4");
-                                let children = assert_tag(arena, key, "section", Some(attributes));
+                                let children = assert_tag(&result, key, "section", Some(attributes));
 
                                 // <html> -> <body> -> <main> -> <section> -> <div> -> <div> -> <section> -> <h3 class="f2 f1-l">
                                 {
                                     let key = children[0];
                                     let mut attributes = HashMap::new();
                                     attributes.insert("class", "f2 f1-l");
-                                    let children = assert_tag(arena, key, "h3", Some(attributes));
+                                    let children = assert_tag(&result, key, "h3", Some(attributes));
 
                                     // <html> -> <body> -> <main> -> <section> -> <div> -> <div> -> <section> -> <h3> -> text()
                                     {
                                         let key = children[0];
-                                        assert_text(arena, key, "Performance");
+                                        assert_text(&result, key, "Performance");
                                     }
                                 }
 
@@ -689,12 +674,12 @@ mod tests {
                                     let key = children[1];
                                     let mut attributes = HashMap::new();
                                     attributes.insert("class", "f3 lh-copy");
-                                    let children = assert_tag(arena, key, "p", Some(attributes));
+                                    let children = assert_tag(&result, key, "p", Some(attributes));
 
                                     // <html> -> <body> -> <main> -> <section> -> <div> -> <div> -> <section> -> <p> -> text()
                                     {
                                         let key = children[0];
-                                        assert_text(arena, key, r###"Rust is blazingly fast and memory-efficient: with no runtime or
+                                        assert_text(&result, key, r###"Rust is blazingly fast and memory-efficient: with no runtime or
                                     garbage collector, it can power performance-critical services, run on
                                     embedded devices, and easily integrate with other languages."###);
                                     }
@@ -710,7 +695,7 @@ mod tests {
                 let key = children[1];
                 let mut attributes = HashMap::new();
                 attributes.insert("src", "./Rust Programming Language_files/languages.js.download");
-                assert_tag(arena, key, "script", Some(attributes));
+                assert_tag(&result, key, "script", Some(attributes));
             }
         }
     }
