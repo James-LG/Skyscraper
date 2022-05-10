@@ -37,12 +37,11 @@ pub enum XpathElement {
     Index(usize)
 }
 
-// TODO: Use this in search and apply functions.
 #[derive(Debug, PartialEq)]
-pub struct XpathExpression {
+struct XpathSearch<'a> {
     is_root_search: bool,
-    tag_name: Option<String>,
-    query: Option<XpathQuery>,
+    tag_name: Option<&'a String>,
+    query: Option<&'a XpathQuery>,
     index: Option<usize>,
 }
 
@@ -73,53 +72,52 @@ impl Xpath {
         let mut matched_nodes: Vec<DocumentNode> = Vec::new(); // The nodes matched by the search query
         let mut searchable_nodes: Vec<DocumentNode> = searchable_nodes; // The list of nodes to search in (typically children of matched nodes)
 
-        let mut is_root_search = true; // If false, then search all
-        let mut cur_query: Option<&XpathQuery> = None;
-        let mut cur_tag_name: Option<&String> = None; 
-        let mut cur_index: Option<usize> = None;
+        let mut search = XpathSearch {
+            is_root_search: true,
+            query: None,
+            tag_name: None,
+            index: None
+        };
 
         while let Some(element) = elements.next() {
             match element {
                 XpathElement::SearchRoot | XpathElement::SearchAll => {
                     // Perform the previously defined search now that it has ended
-                    perform_search(cur_tag_name, cur_query, cur_index, is_root_search, &mut matched_nodes, document, &mut searchable_nodes);
+                    perform_search(&search, &mut matched_nodes, document, &mut searchable_nodes);
 
                     // Set parameters for next iteration
-                    is_root_search = matches!(element, XpathElement::SearchRoot);
-                    cur_query = None;
-                    cur_tag_name = None;
-                    cur_index = None;
+                    search.is_root_search = matches!(element, XpathElement::SearchRoot);
+                    search.query = None;
+                    search.tag_name = None;
+                    search.index = None;
                 },
-                XpathElement::Tag(identifier) => cur_tag_name = Some(identifier),
-                XpathElement::Query(query) => cur_query = Some(query),
-                XpathElement::Index(i) => cur_index = Some(*i),
+                XpathElement::Tag(identifier) => search.tag_name = Some(identifier),
+                XpathElement::Query(query) => search.query = Some(query),
+                XpathElement::Index(i) => search.index = Some(*i),
             }
         }
 
         // Perform the last search now that the entire xpath expression has finished
-        perform_search(cur_tag_name, cur_query, cur_index, is_root_search, &mut matched_nodes, document, &mut searchable_nodes);
+        perform_search(&search, &mut matched_nodes, document, &mut searchable_nodes);
         Ok(matched_nodes)
     }
 }
 
 fn perform_search(
-    cur_tag_name: Option<&String>,
-    cur_query: Option<&XpathQuery>,
-    cur_index: Option<usize>,
-    is_root_search: bool,
+    search: &XpathSearch,
     matched_nodes: &mut Vec<DocumentNode>,
     document: &HtmlDocument,
     searchable_nodes: &mut Vec<DocumentNode>) {
-    if let Some(tag_name) = cur_tag_name {
-        if let Some(query) = cur_query {
-            *matched_nodes = search_internal(!is_root_search, tag_name, query, document, &searchable_nodes);
+    if let Some(tag_name) = &search.tag_name {
+        if let Some(query) = &search.query {
+            *matched_nodes = search_internal(!search.is_root_search, tag_name, query, document, &searchable_nodes);
         } else {
             let query = XpathQuery::new();
-            *matched_nodes = search_internal(!is_root_search, tag_name, &query, document, &searchable_nodes);
+            *matched_nodes = search_internal(!search.is_root_search, tag_name, &query, document, &searchable_nodes);
         }
 
         // Apply indexing if required
-        if let Some(i) = cur_index {
+        if let Some(i) = search.index {
             let indexed_node = matched_nodes[i];
             matched_nodes.retain(|node| *node == indexed_node);
         }
