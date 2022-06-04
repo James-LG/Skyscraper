@@ -16,3 +16,8 @@ categories = ["parsing"]
 indextree = "4.3.1"
 lazy_static = "1.4.0"
 thiserror = "1.0.30"
+criterion = "0.3"
+
+[[bench]]
+name = "benchmarks"
+harness = false

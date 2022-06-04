@@ -1,7 +1,7 @@
 mod symbols;
 mod helpers;
 
-use crate::vecpointer::VecPointer;
+use crate::vecpointer::VecPointerRef;
 pub use symbols::Symbol;
 use thiserror::Error;
 
@@ -13,12 +13,12 @@ pub enum LexError {
 pub fn lex(text: &str) -> Result<Vec<Symbol>, LexError> {
     let mut symbols: Vec<Symbol> = Vec::new();
 
-    let chars = text.chars().collect();
-    let mut pointer = VecPointer::new(chars);
+    let chars: Vec<char> = text.chars().collect();
+    let mut pointer = VecPointerRef::new(&chars);
 
     let mut has_open_tag = false;
 
-    while let Some(c) = pointer.current() {
+    while pointer.has_next() {
         if let Some(s) = helpers::is_comment(&mut pointer) {
             symbols.push(s);
         } else if let Some(s) = helpers::is_start_tag(&mut pointer) {
@@ -42,9 +42,11 @@ pub fn lex(text: &str) -> Result<Vec<Symbol>, LexError> {
         } else if let Some(s) = helpers::is_text(&mut pointer, has_open_tag) {
             symbols.push(s);
         } else {
-            if !c.is_whitespace(){
-                // Unknown symbol, move on ¯\_(ツ)_/¯
-                eprintln!("Unknown HTML symbol {}", c);
+            if let Some(c) = pointer.current() {
+                if !c.is_whitespace(){
+                    // Unknown symbol, move on ¯\_(ツ)_/¯
+                    eprintln!("Unknown HTML symbol {}", c);
+                }
             }
             pointer.next();
         }
