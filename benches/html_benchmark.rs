@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::Criterion;
 use skyscraper::html;
 
 static HTML: &'static str = include_str!("../tests/samples/James-LG_Skyscraper.html");

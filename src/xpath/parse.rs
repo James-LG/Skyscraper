@@ -99,7 +99,6 @@ fn parse_equals_predicate(symbols: &mut Peekable<std::vec::IntoIter<Symbol>>) ->
     let mut attr: Option<String> = None;
     let mut val: Option<String> = None;
 
-    println!("{:?}", symbols.peek());
     if let Some(Symbol::Identifier(attribute)) = symbols.next_if(|expected| matches!(expected, &Symbol::Identifier(_))) {
         attr = Some(attribute);
     }
