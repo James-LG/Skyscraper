@@ -149,4 +149,29 @@ mod tests {
 
         assert_eq!(expected, result);
     }
+
+    #[test]
+    fn lex_works4() {
+        // arrange
+        let text = r###"//h1[@hello="world"]/h2"###;
+
+        // act
+        let result = lex(text).unwrap();
+
+        // assert
+        let expected = vec![
+            Symbol::DoubleSlash,
+            Symbol::Identifier(String::from("h1")),
+            Symbol::OpenSquareBracket,
+            Symbol::AtSign,
+            Symbol::Identifier(String::from("hello")),
+            Symbol::AssignmentSign,
+            Symbol::Text(String::from("world")),
+            Symbol::CloseSquareBracket,
+            Symbol::Slash,
+            Symbol::Identifier(String::from("h2"))
+        ];
+
+        assert_eq!(expected, result);
+    }
 }

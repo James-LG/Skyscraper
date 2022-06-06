@@ -190,11 +190,13 @@ pub fn is_number(pointer: &mut VecPointerRef<char>) -> Option<Symbol> {
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 pub fn is_identifier(pointer: &mut VecPointerRef<char>) -> Option<Symbol> {
     if let Some(c) = pointer.current() {
+        // Identifier must start with a letter
         if c.is_alphabetic() {
             let mut id = c.to_string();
 
             while let Some(c) = pointer.next() {
-                if c.is_alphabetic() {
+                // Identifier can contain letters and numbers
+                if c.is_alphanumeric() {
                     id.push(*c);
                 } else {
                     break;
