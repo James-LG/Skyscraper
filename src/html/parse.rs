@@ -174,42 +174,41 @@ pub fn parse(text: &str) -> Result<HtmlDocument, ParseError> {
                     });
                 }
 
-                if let Some(token) = tokens.peek() {
-                    if let Symbol::AssignmentSign = token {
-                        tokens.next();
-                        if let Some(token) = tokens.next() {
-                            if let Symbol::Literal(lit) = token {
-                                let cur_tree_node = get_mut_tree_node(cur_key_o, &mut arena);
-                                match cur_tree_node.get_mut() {
-                                    HtmlNode::Tag(tag) => {
-                                        tag.attributes.insert(iden, lit);
-                                    },
-                                    HtmlNode::Text(_) => return Err(ParseError::AttributeOnTextNode),
-                                }
-                            } else {
-                                let cur_tree_node = get_mut_tree_node(cur_key_o, &mut arena);
-                                match cur_tree_node.get_mut() {
-                                    HtmlNode::Tag(tag) => return Err(ParseError::MissingLiteralAfterAssignmentSign {
-                                        tag_name: tag.name.to_string()
-                                    }),
-                                    HtmlNode::Text(_) => return Err(ParseError::AttributeOnTextNode),
-                                }
-                            }
-                        } else {
-                            return Err(ParseError::UnexpectedEndOfTokens);
-                        }
-                    } else {
-                        // Attribute has no value; e.g., <script defer></script>
+                let token = tokens.peek()
+                    .ok_or_else(|| ParseError::UnexpectedEndOfTokens)?;
+
+                if let Symbol::AssignmentSign = token {
+                    tokens.next();
+
+                    let token = tokens.next()
+                        .ok_or_else(|| ParseError::UnexpectedEndOfTokens)?;
+
+                    if let Symbol::Literal(lit) = token {
                         let cur_tree_node = get_mut_tree_node(cur_key_o, &mut arena);
                         match cur_tree_node.get_mut() {
                             HtmlNode::Tag(tag) => {
-                                tag.attributes.insert(iden, String::from(""));
+                                tag.attributes.insert(iden, lit);
                             },
+                            HtmlNode::Text(_) => return Err(ParseError::AttributeOnTextNode),
+                        }
+                    } else {
+                        let cur_tree_node = get_mut_tree_node(cur_key_o, &mut arena);
+                        match cur_tree_node.get_mut() {
+                            HtmlNode::Tag(tag) => return Err(ParseError::MissingLiteralAfterAssignmentSign {
+                                tag_name: tag.name.to_string()
+                            }),
                             HtmlNode::Text(_) => return Err(ParseError::AttributeOnTextNode),
                         }
                     }
                 } else {
-                    return Err(ParseError::UnexpectedEndOfTokens);
+                    // Attribute has no value; e.g., <script defer></script>
+                    let cur_tree_node = get_mut_tree_node(cur_key_o, &mut arena);
+                    match cur_tree_node.get_mut() {
+                        HtmlNode::Tag(tag) => {
+                            tag.attributes.insert(iden, String::from(""));
+                        },
+                        HtmlNode::Text(_) => return Err(ParseError::AttributeOnTextNode),
+                    }
                 }
             },
             Symbol::Text(text) => {
@@ -237,26 +236,21 @@ pub fn parse(text: &str) -> Result<HtmlDocument, ParseError> {
 
 fn is_doctype(tag_name: &String, tokens: &mut Peekable<std::vec::IntoIter<Symbol>>) -> Result<bool, ParseError> {
     if tag_name == "!DOCTYPE" {
-        if let Some(token) = tokens.next() {
-            if let Symbol::Identifier(iden) = token {
-                if iden != "html" {
-                    return Err(ParseError::MissingHtmlAfterDocstring);
-                }
-                if let Some(token) = tokens.next() {
-                    match token {
-                        Symbol::TagClose => {
-                            // we good
-                        },
-                        _ => return Err(ParseError::MissingTagCloseAfterDocstring),
-                    }
-                } else {
-                    return Err(ParseError::UnexpectedEndOfTokens);
-                }
-            } else {
+        let token = tokens.next()
+            .ok_or_else(|| ParseError::UnexpectedEndOfTokens)?;
+
+        if let Symbol::Identifier(iden) = token {
+            if iden != "html" {
                 return Err(ParseError::MissingHtmlAfterDocstring);
             }
+            let token = tokens.next()
+                .ok_or_else(|| ParseError::UnexpectedEndOfTokens)?;
+
+            if ! matches!(token, Symbol::TagClose) {
+                return Err(ParseError::MissingTagCloseAfterDocstring)
+            }
         } else {
-            return Err(ParseError::UnexpectedEndOfTokens);
+            return Err(ParseError::MissingHtmlAfterDocstring);
         }
         
         return Ok(true);
@@ -266,15 +260,15 @@ fn is_doctype(tag_name: &String, tokens: &mut Peekable<std::vec::IntoIter<Symbol
 }
 
 fn get_tree_node(key: Option<NodeId>, arena: &Arena<HtmlNode>) -> &Node<HtmlNode> {
-    let key = key.unwrap();
+    let key = key.expect("Attempted to get a node on a none value");
     let node = arena.get(key);
-    return node.unwrap();
+    return node.expect("Node not found in arena");
 }
 
 fn get_mut_tree_node(key: Option<NodeId>, arena: &mut Arena<HtmlNode>) -> &mut Node<HtmlNode> {
-    let key = key.unwrap();
+    let key = key.expect("Attempted to get a node on a none value");
     let node = arena.get_mut(key);
-    return node.unwrap();
+    return node.expect("Node not found in arena");
 }
 
 #[cfg(test)]

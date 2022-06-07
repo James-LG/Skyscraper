@@ -108,6 +108,7 @@ fn perform_search(
     matched_nodes: &mut Vec<DocumentNode>,
     document: &HtmlDocument,
     searchable_nodes: &mut Vec<DocumentNode>) {
+
     if let Some(tag_name) = &search.tag_name {
         if let Some(query) = &search.query {
             *matched_nodes = search_internal(!search.is_root_search, tag_name, query, document, &searchable_nodes);
