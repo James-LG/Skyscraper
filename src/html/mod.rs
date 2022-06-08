@@ -158,6 +158,11 @@ impl DocumentNode {
     pub fn children<'a>(&self, document: &'a HtmlDocument) -> impl Iterator<Item=DocumentNode> + 'a {
         Box::new(self.id.children(&document.arena).map(|node_id| DocumentNode::new(node_id)))
     }
+
+    pub fn parent(&self, document: &HtmlDocument) -> Option<DocumentNode> {
+        self.id.ancestors(&document.arena).skip(1).next()
+            .map(|node_id| DocumentNode::new(node_id))
+    }
 }
 
 #[cfg(test)]

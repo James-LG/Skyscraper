@@ -49,6 +49,8 @@ pub fn lex(text: &str) -> Result<Vec<Symbol>, LexError> {
             symbols.push(s);
         } else if let Some(s) = helpers::is_less_than_sign(&mut pointer) {
             symbols.push(s);
+        } else if let Some(s) = helpers::is_double_colon(&mut pointer) {
+            symbols.push(s);
         } else if let Some(s) = helpers::is_identifier(&mut pointer) {
             symbols.push(s);
         } else if let Some(s) = helpers::is_text(&mut pointer) {
@@ -151,7 +153,7 @@ mod tests {
     }
 
     #[test]
-    fn lex_works4() {
+    fn lex_works_alphanumeric_identifier() {
         // arrange
         let text = r###"//h1[@hello="world"]/h2"###;
 
@@ -170,6 +172,27 @@ mod tests {
             Symbol::CloseSquareBracket,
             Symbol::Slash,
             Symbol::Identifier(String::from("h2"))
+        ];
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn lex_works_double_colon() {
+        // arrange
+        let text = r###"//h1/parent::div"###;
+
+        // act
+        let result = lex(text).unwrap();
+
+        // assert
+        let expected = vec![
+            Symbol::DoubleSlash,
+            Symbol::Identifier(String::from("h1")),
+            Symbol::Slash,
+            Symbol::Identifier(String::from("parent")),
+            Symbol::DoubleColon,
+            Symbol::Identifier(String::from("div"))
         ];
 
         assert_eq!(expected, result);

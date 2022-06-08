@@ -154,6 +154,16 @@ pub fn is_less_than_sign(pointer: &mut VecPointerRef<char>) -> Option<Symbol> {
     None
 }
 
+/// Checks if the [TextPointer](TextPointer) is currently pointing to a DoubleColon [Symbol](Symbol).
+/// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
+pub fn is_double_colon(pointer: &mut VecPointerRef<char>) -> Option<Symbol> {
+    if let (Some(':'), Some(':')) = (pointer.current(), pointer.peek()) {
+        pointer.next_add(2);
+        return Some(Symbol::DoubleColon);
+    }
+    None
+}
+
 /// Checks if the [TextPointer](TextPointer) is currently pointing to a Number [Symbol](Symbol).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 pub fn is_number(pointer: &mut VecPointerRef<char>) -> Option<Symbol> {

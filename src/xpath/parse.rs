@@ -4,22 +4,28 @@ use thiserror::Error;
 
 use crate::xpath::{Xpath, XpathElement, XpathPredicate, XpathQuery, tokenizer::{self, Symbol}};
 
-use super::tokenizer::LexError;
+use super::{tokenizer::LexError, XpathAxes};
 
 #[derive(Error, Debug)]
 pub enum ParseError {
-    #[error("Close square bracket has no matching opening square bracket")]
+    #[error("close square bracket has no matching opening square bracket")]
     LeadingCloseBracket,
     #[error("@ symbol cannot be outside of square brackets")]
     MisplacedAtSign,
-    #[error("Equals predicate missing assignment sign")]
+    #[error("predicate missing assignment sign")]
     PredicateMissingAssignmentSign,
-    #[error("Equals predicate missing value")]
+    #[error("predicate missing value")]
     PredicateMissingValue,
-    #[error("Equals predicate missing attribute")]
+    #[error("predicate missing attribute")]
     PredicateMissingAttribute,
-    #[error("Lex error {0}")]
-    LexError(#[from] LexError)
+    #[error("lex error {0}")]
+    LexError(#[from] LexError),
+    #[error("'::' must be preceded by a tree selector axis (e.g. parent)")]
+    MissingTreeSelectorAxis,
+    #[error("'::' must be proceeded by a tree selector tag (e.g. div)")]
+    MissingTreeSelectorTag,
+    #[error("unknown tree selector `{0}`")]
+    UnknownTreeSelector(String)
 }
 
 /// Parse an Xpath expression into an Xpath object.
@@ -41,6 +47,9 @@ pub fn parse(text: &str) -> Result<Xpath, ParseError> {
             },
             Symbol::Identifier(identifier) => {
                 elements.push(XpathElement::Tag(identifier))
+            },
+            Symbol::DoubleColon => {
+                parse_tree_selector(&mut elements, &mut symbols)?;
             }
             _ => continue,
         }
@@ -49,6 +58,34 @@ pub fn parse(text: &str) -> Result<Xpath, ParseError> {
     Ok(Xpath { elements })
 }
 
+/// Parses tree selectors. Triggered when a DoubleColon (Symbol)[Symbol] is found and expects a tag to
+/// have preceded it as well as an identifier to be the next (Symbol)[Symbol] in line.
+/// E.g. /div/parent::div
+fn parse_tree_selector(elements: &mut Vec<XpathElement>, symbols: &mut Peekable<std::vec::IntoIter<Symbol>>) -> Result<(), ParseError> {
+    let last_item = elements.pop()
+        .ok_or_else(|| ParseError::MissingTreeSelectorAxis)?;
+    let axis = match last_item {
+        XpathElement::Tag(last_tag) => {
+            match last_tag.as_str() {
+                "parent" => XpathAxes::Parent,
+                _ => return Err(ParseError::UnknownTreeSelector(last_tag))
+            }
+        
+        },
+        _ => return Err(ParseError::MissingTreeSelectorAxis)
+    };
+    let next_tag = symbols.next()
+        .ok_or_else(|| ParseError::MissingTreeSelectorTag)?;
+    let tag_name = match next_tag {
+        Symbol::Identifier(identifier) => identifier,
+        _ => return Err(ParseError::MissingTreeSelectorTag)
+    };
+    elements.push(XpathElement::TreeSelector { axis, tag_name });
+    Ok(())
+}
+
+/// Parses an index selector.
+/// Example: [1]
 fn parse_index(symbols: &mut Peekable<std::vec::IntoIter<Symbol>>) -> Option<usize> {
     if let Some(Symbol::Number(num)) = symbols.next_if(|expected| matches!(expected, &Symbol::Number(_))) {
         if let Some(Symbol::CloseSquareBracket) = symbols.next_if_eq(&Symbol::CloseSquareBracket) {

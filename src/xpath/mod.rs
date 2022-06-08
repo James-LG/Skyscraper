@@ -1,12 +1,15 @@
 pub mod parse;
 mod tokenizer;
 
+use std::ops::Index;
+
+use indexmap::{IndexSet, indexset};
 use thiserror::Error;
 use crate::html::{HtmlDocument, HtmlNode, HtmlTag, DocumentNode};
 
 pub use crate::xpath::parse::parse;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 pub struct XpathQuery {
     pub predicates: Vec<XpathPredicate>
 }
@@ -34,15 +37,39 @@ pub enum XpathElement {
     SearchAll,
     Tag(String),
     Query(XpathQuery),
-    Index(usize)
+    Index(usize),
+    TreeSelector {
+        axis: XpathAxes,
+        tag_name: String
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum XpathAxes {
+    Child,
+    DescendantOrSelf,
+    Parent
+}
+
+impl Default for XpathAxes {
+    fn default() -> Self { XpathAxes::Child }
 }
 
 #[derive(Debug, PartialEq)]
-struct XpathSearch<'a> {
-    is_root_search: bool,
-    tag_name: Option<&'a String>,
-    query: Option<&'a XpathQuery>,
+struct WeakXpathSearchParams<'a> {
+    is_first_search: bool,
+    tag_name: Option<&'a str>,
+    query: &'a XpathQuery,
     index: Option<usize>,
+    axis: XpathAxes,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct XpathSearchParams<'a> {
+    tag_name: &'a str,
+    query: &'a XpathQuery,
+    index: Option<usize>,
+    axis: XpathAxes,
 }
 
 pub struct Xpath {
@@ -51,118 +78,252 @@ pub struct Xpath {
 
 #[derive(Error, Debug)]
 pub enum ApplyError {
+    #[error("missing trailing tag (e.g. `//<TAG_HERE>`)")]
+    TagMissing
+}
+
+#[derive(Default)]
+pub struct DocumentNodeSet {
+    index_set: IndexSet<DocumentNode>
+}
+
+impl DocumentNodeSet {
+    pub fn new() -> DocumentNodeSet {
+        DocumentNodeSet { index_set: Default::default() }
+    }
+
+    pub fn from(index_set: IndexSet<DocumentNode>) -> DocumentNodeSet {
+        DocumentNodeSet { index_set }
+    }
+
+    pub fn insert(&mut self, value: DocumentNode) -> bool {
+        self.index_set.insert(value)
+    }
+
+    pub fn pop(&mut self) -> Option<DocumentNode> {
+        self.index_set.pop()
+    }
+
+    pub fn append(&mut self, other: DocumentNodeSet) {
+        for node in other.into_iter() {
+            self.insert(node);
+        }
+    }
+
+    pub fn insert_all(&mut self, vec: Vec<DocumentNode>) {
+        for node in vec.into_iter() {
+            self.insert(node);
+        }
+    }
+
+    pub fn retain<F>(&mut self, f: F)
+    where F: FnMut(&DocumentNode) -> bool {
+        self.index_set.retain(f)
+    }
+
+    pub fn iter(&self) -> indexmap::set::Iter<DocumentNode> {
+        self.index_set.iter()
+    }
+
+    pub fn contains(&self, node: &DocumentNode) -> bool {
+        self.index_set.contains(node)
+    }
+
+    pub fn len(&self) -> usize {
+        self.index_set.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+impl IntoIterator for DocumentNodeSet {
+    type Item = DocumentNode;
+
+    type IntoIter = indexmap::set::IntoIter<DocumentNode>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.index_set.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a DocumentNodeSet {
+    type Item = &'a DocumentNode;
+
+    type IntoIter = indexmap::set::Iter<'a, DocumentNode>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.index_set.iter()
+    }
+}
+
+impl Index<usize> for DocumentNodeSet {
+    type Output = DocumentNode;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.index_set[index]
+    }
 }
 
 impl Xpath {
     /// Search the given HTML document according to this Xpath expression.
     pub fn apply(&self, document: &HtmlDocument) -> Result<Vec<DocumentNode>, ApplyError> {
-        let searchable_nodes: Vec<DocumentNode> = vec![document.root_key];
+        let searchable_nodes: DocumentNodeSet = DocumentNodeSet::from(indexset![document.root_key]);
         self.internal_apply(document, searchable_nodes)
     }
 
     /// Search the the descendents of the given node in the given HTML document
     /// according to this Xpath expression.
     pub fn apply_to_node(&self, document: &HtmlDocument, doc_node: DocumentNode) -> Result<Vec<DocumentNode>, ApplyError> {
-        let searchable_nodes: Vec<DocumentNode> = get_all_children(document, &vec![doc_node]);
+        let searchable_nodes: DocumentNodeSet = get_all_children(document, &DocumentNodeSet::from(indexset![doc_node]));
         self.internal_apply(document, searchable_nodes)
     }
 
-    fn internal_apply(&self, document: &HtmlDocument, searchable_nodes: Vec<DocumentNode>) -> Result<Vec<DocumentNode>, ApplyError> {
+    fn internal_apply(&self, document: &HtmlDocument, searchable_nodes: DocumentNodeSet) -> Result<Vec<DocumentNode>, ApplyError> {
         let elements = &mut self.elements.iter();
-        let mut matched_nodes: Vec<DocumentNode> = Vec::new(); // The nodes matched by the search query
-        let mut searchable_nodes: Vec<DocumentNode> = searchable_nodes; // The list of nodes to search in (typically children of matched nodes)
+        let mut matched_nodes: DocumentNodeSet = DocumentNodeSet::new(); // The nodes matched by the search query
+        let mut searchable_nodes: DocumentNodeSet = searchable_nodes; // The list of nodes to search in (typically children of matched nodes)
 
-        let mut search = XpathSearch {
-            is_root_search: true,
-            query: None,
+        let default_query = XpathQuery::new();
+
+        let mut search_params = WeakXpathSearchParams {
+            is_first_search: true,
+            query: &default_query,
             tag_name: None,
-            index: None
+            index: None,
+            axis: XpathAxes::Child
         };
 
+        let mut first_element = true;
         while let Some(element) = elements.next() {
             match element {
                 XpathElement::SearchRoot | XpathElement::SearchAll => {
-                    // Perform the previously defined search now that it has ended
-                    perform_search(&search, &mut matched_nodes, document, &mut searchable_nodes);
+                    if !first_element {
+                        // Perform the previously defined search now that it has ended
+                        perform_search(&search_params, &mut matched_nodes, document, &mut searchable_nodes)?;
+                        search_params.is_first_search = false;
+                    }
 
                     // Set parameters for next iteration
-                    search.is_root_search = matches!(element, XpathElement::SearchRoot);
-                    search.query = None;
-                    search.tag_name = None;
-                    search.index = None;
+                    search_params.axis = if matches!(element, XpathElement::SearchRoot) {
+                        XpathAxes::Child
+                    } else {
+                        XpathAxes::DescendantOrSelf
+                    };
+                    search_params.query = &default_query;
+                    search_params.tag_name = None;
+                    search_params.index = None;
                 },
-                XpathElement::Tag(identifier) => search.tag_name = Some(identifier),
-                XpathElement::Query(query) => search.query = Some(query),
-                XpathElement::Index(i) => search.index = Some(*i),
+                XpathElement::Tag(identifier) => search_params.tag_name = Some(identifier),
+                XpathElement::Query(query) => search_params.query = query,
+                XpathElement::Index(i) => search_params.index = Some(*i),
+                XpathElement::TreeSelector { axis, tag_name } => {
+                    search_params.axis = *axis;
+                    search_params.tag_name = Some(tag_name)
+                }
             }
+            first_element = false;
         }
 
         // Perform the last search now that the entire xpath expression has finished
-        perform_search(&search, &mut matched_nodes, document, &mut searchable_nodes);
-        Ok(matched_nodes)
+        perform_search(&search_params, &mut matched_nodes, document, &mut searchable_nodes)?;
+        Ok(matched_nodes.into_iter().collect())
     }
 }
 
 fn perform_search(
-    search: &XpathSearch,
-    matched_nodes: &mut Vec<DocumentNode>,
+    weak_search: &WeakXpathSearchParams,
+    matched_nodes: &mut DocumentNodeSet,
     document: &HtmlDocument,
-    searchable_nodes: &mut Vec<DocumentNode>) {
+    searchable_nodes: &mut DocumentNodeSet) -> Result<(), ApplyError> {
 
-    if let Some(tag_name) = &search.tag_name {
-        if let Some(query) = &search.query {
-            *matched_nodes = search_internal(!search.is_root_search, tag_name, query, document, &searchable_nodes);
-        } else {
-            let query = XpathQuery::new();
-            *matched_nodes = search_internal(!search.is_root_search, tag_name, &query, document, &searchable_nodes);
+    let tag_name = weak_search.tag_name.ok_or_else(|| ApplyError::TagMissing)?;
+
+    let search_params = XpathSearchParams {
+        tag_name,
+        query: weak_search.query,
+        axis: weak_search.axis,
+        index: weak_search.index,
+    };
+
+    if !weak_search.is_first_search {
+        match search_params.axis {
+            XpathAxes::Child => {
+                *searchable_nodes = get_all_children(&document, &matched_nodes);
+            },
+            XpathAxes::DescendantOrSelf => {
+                *searchable_nodes = get_all_descendants_or_self(document, &matched_nodes);
+            }
+            XpathAxes::Parent => {
+                *searchable_nodes = get_all_parents(&document, &matched_nodes);
+            }
         }
+    }
 
-        // Apply indexing if required
-        if let Some(i) = search.index {
-            let indexed_node = matched_nodes[i];
-            matched_nodes.retain(|node| *node == indexed_node);
-        }
+    *matched_nodes = search(&search_params, document, &searchable_nodes)?;
 
-        *searchable_nodes = get_all_children(&document, &matched_nodes);
+    // Apply indexing if required
+    if let Some(i) = search_params.index {
+        let indexed_node = matched_nodes[i];
+        matched_nodes.retain(|node| *node == indexed_node);
+    }
+
+    Ok(())
+}
+
+fn apply_axis(axis: &XpathAxes, searchable_nodes: &mut DocumentNodeSet) {
+    match axis {
+        XpathAxes::Child => todo!(),
+        XpathAxes::DescendantOrSelf => todo!(),
+        XpathAxes::Parent => todo!(),
     }
 }
 
 /// Get all the children for all the given matched nodes.
-fn get_all_children(document: &HtmlDocument, matched_nodes: &Vec<DocumentNode>) -> Vec<DocumentNode> {
-    let mut child_nodes: Vec<DocumentNode> = Vec::new();
+fn get_all_children(document: &HtmlDocument, matched_nodes: &DocumentNodeSet) -> DocumentNodeSet {
+    let mut child_nodes = DocumentNodeSet::new();
     for node_id in matched_nodes {
-        let mut children: Vec<DocumentNode> = node_id.children(&document).collect();
-        child_nodes.append(&mut children);
+        let children: Vec<DocumentNode> = node_id.children(&document).collect();
+        child_nodes.insert_all(children);
     }
 
-    return child_nodes;
+    child_nodes
 }
 
-/// Search for an HTML tag matching the given name and query in the given list of nodes.
-pub fn search_root(tag_name: &String, query: &XpathQuery, document: &HtmlDocument, searchable_nodes: &Vec<DocumentNode>) -> Vec<DocumentNode> {
-    search_internal(false, tag_name, query, document, searchable_nodes)
+/// Get all descendants and self for all the given matched nodes.
+fn get_all_descendants_or_self(document: &HtmlDocument, matched_nodes: &DocumentNodeSet) -> DocumentNodeSet {
+    let mut descendant_or_self_nodes: DocumentNodeSet = DocumentNodeSet::new();
+    for node_id in matched_nodes {
+        let children: Vec<DocumentNode> = node_id.children(&document).collect();
+        descendant_or_self_nodes.insert_all(children);
+    }
+
+    descendant_or_self_nodes
 }
 
-/// Search for an HTML tag matching the given name and query in the given list of nodes or any children of those nodes.
-pub fn search_all(tag_name: &String, query: &XpathQuery, document: &HtmlDocument, searchable_nodes: &Vec<DocumentNode>) -> Vec<DocumentNode> {
-    search_internal(true, tag_name, query, document, searchable_nodes)
+/// Get all the parents for all the given matched nodes.
+fn get_all_parents(document: &HtmlDocument, matched_nodes: &DocumentNodeSet) -> DocumentNodeSet {
+    let mut parent_nodes = DocumentNodeSet::new();
+    for node_id in matched_nodes {
+        if let Some(parent) = node_id.parent(&document) {
+            parent_nodes.insert(parent);
+        }
+    }
+
+    parent_nodes
 }
 
-fn search_internal(recursive: bool, tag_name: &String, query: &XpathQuery, document: &HtmlDocument, searchable_nodes: &Vec<DocumentNode>) -> Vec<DocumentNode> {
-    let mut matches = Vec::new();
+/// Search for an HTML tag matching the given search parameters in the given list of nodes.
+pub fn search(search_params: &XpathSearchParams, document: &HtmlDocument, searchable_nodes: &DocumentNodeSet) -> Result<DocumentNodeSet, ApplyError> {
+    let mut matches = DocumentNodeSet::new();
 
     for node_id in searchable_nodes.iter() {
         if let Some(node) = document.get_html_node(node_id) {
             match node {
                 HtmlNode::Tag(rtag) => {
-                    if &rtag.name == tag_name && is_matching_predicates(query, rtag) {
-                        matches.push(*node_id);
-                    }
-
-                    if recursive {
-                        let children: Vec<DocumentNode> = node_id.children(&document).collect();
-                        let mut sub_matches = search_all(tag_name, query, document, &children);
-                        matches.append(&mut sub_matches);
+                    if &rtag.name == search_params.tag_name && is_matching_predicates(search_params.query, rtag) && !matches.contains(node_id) {
+                        matches.insert(*node_id);
                     }
                 },
                 HtmlNode::Text(_) => continue,
@@ -170,7 +331,28 @@ fn search_internal(recursive: bool, tag_name: &String, query: &XpathQuery, docum
         }
     }
 
-    return matches;
+    // Some axes require recursion
+    if !searchable_nodes.is_empty() {
+        let sub_matches = match search_params.axis {
+            XpathAxes::DescendantOrSelf => {
+                let children = get_all_children(document, searchable_nodes);
+                if !children.is_empty() {
+                    Some(search(search_params, document, &children)?)
+                } else {
+                    None
+                }
+            },
+            _ => None
+        };
+
+        if let Some(sub_matches) = sub_matches {
+            for sub_match in sub_matches {
+                matches.insert(sub_match);
+            }
+        }
+    }
+
+    Ok(matches)
 }
 
 fn is_matching_predicates(query: &XpathQuery, rtag: &HtmlTag) -> bool {
@@ -188,7 +370,7 @@ fn is_matching_predicates(query: &XpathQuery, rtag: &HtmlTag) -> bool {
         }
     }
 
-    return true;
+    true
 }
 
 #[cfg(test)]
@@ -209,8 +391,14 @@ mod test {
 
         let document = html::parse(text).unwrap();
 
-        let query = XpathQuery::new();
-        let result = search_root(&String::from("root"), &query, &document, &vec![document.root_key]);
+        let query:XpathQuery = Default::default();
+        let search_params = XpathSearchParams {
+            tag_name: "root",
+            query: &query,
+            axis: Default::default(),
+            index: Default::default()
+        };
+        let result = search(&search_params, &document, &DocumentNodeSet::from(indexset![document.root_key])).unwrap();
 
         assert_eq!(1, result.len());
         let node = document.get_html_node(&result[0]).unwrap();
@@ -235,8 +423,14 @@ mod test {
 
         let document = html::parse(text).unwrap();
 
-        let query = XpathQuery::new();
-        let result = search_all(&String::from("a"), &query, &document, &vec![document.root_key]);
+        let query:XpathQuery = Default::default();
+        let search_params = XpathSearchParams {
+            tag_name: "a",
+            query: &query,
+            axis: XpathAxes::DescendantOrSelf,
+            index: Default::default()
+        };
+        let result = search(&search_params, &document, &DocumentNodeSet::from(indexset![document.root_key])).unwrap();
 
         assert_eq!(3, result.len());
 
@@ -269,8 +463,13 @@ mod test {
                 XpathPredicate::Equals { attribute: String::from("hello"), value: String::from("world") },
             ]
         };
-
-        let result = search_all(&String::from("a"), &query, &document, &vec![document.root_key]);
+        let search_params = XpathSearchParams {
+            tag_name: "a",
+            query: &query,
+            axis: XpathAxes::DescendantOrSelf,
+            index: Default::default()
+        };
+        let result = search(&search_params, &document, &DocumentNodeSet::from(indexset![document.root_key])).unwrap();
 
         assert_eq!(1, result.len());
 
@@ -303,8 +502,13 @@ mod test {
                 XpathPredicate::Equals { attribute: String::from("foo"), value: String::from("bar") },
             ]
         };
-        
-        let result = search_all(&String::from("a"), &query, &document, &vec![document.root_key]);
+        let search_params = XpathSearchParams {
+            tag_name: "a",
+            query: &query,
+            axis: XpathAxes::DescendantOrSelf,
+            index: Default::default()
+        };
+        let result = search(&search_params, &document, &DocumentNodeSet::from(indexset![document.root_key])).unwrap();
 
         assert_eq!(1, result.len());
 
@@ -379,6 +583,51 @@ mod test {
                     HtmlNode::Tag(_) => panic!("expected child text, got tag instead"),
                     HtmlNode::Text(text) => assert_eq!(&String::from("1"), text),
                 }
+            },
+            HtmlNode::Text(_) => panic!("expected tag, got text instead"),
+        }
+    }
+
+    #[test]
+    fn xpath_apply_handles_parent_axis() {
+        // arrange
+        let text = r###"<!DOCTYPE html>
+        <root>
+            <node id='1'>
+                <apple/>
+            </node>
+            <node id='2'>
+                <apple/>
+            </node>
+        </root>
+        "###;
+
+        let document = html::parse(text).unwrap();
+
+        let xpath = xpath::parse("//apple/parent::node").unwrap();
+
+        // act
+        let nodes = xpath.apply(&document).unwrap();
+
+        // assert
+        assert_eq!(2, nodes.len());
+
+        let node_id = nodes[0];
+        let node = document.get_html_node(&node_id).unwrap();
+
+        match node {
+            HtmlNode::Tag(t) => {
+                assert_eq!(String::from("1"), t.attributes["id"])
+            },
+            HtmlNode::Text(_) => panic!("expected tag, got text instead"),
+        }
+
+        let node_id = nodes[1];
+        let node = document.get_html_node(&node_id).unwrap();
+
+        match node {
+            HtmlNode::Tag(t) => {
+                assert_eq!(String::from("2"), t.attributes["id"])
             },
             HtmlNode::Text(_) => panic!("expected tag, got text instead"),
         }

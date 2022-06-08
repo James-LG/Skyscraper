@@ -47,6 +47,9 @@ pub enum Symbol {
     /// `<`
     LessThanSign,
 
+    /// `::`
+    DoubleColon,
+
     /// Unquoted identifier. Example: div
     Identifier(String),
 
