@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use crate::xpath::{Xpath, XpathElement, XpathPredicate, XpathQuery, tokenizer::{self, Symbol}};
 
-use super::{tokenizer::LexError, XpathAxes};
+use super::{tokenizer::LexError, XpathAxes, XpathSearchItem, XpathSearchNodeType};
 
 #[derive(Error, Debug)]
 pub enum ParseError {
@@ -20,16 +20,73 @@ pub enum ParseError {
     PredicateMissingAttribute,
     #[error("lex error {0}")]
     LexError(#[from] LexError),
-    #[error("'::' must be preceded by a tree selector axis (e.g. parent)")]
-    MissingTreeSelectorAxis,
-    #[error("'::' must be proceeded by a tree selector tag (e.g. div)")]
-    MissingTreeSelectorTag,
-    #[error("unknown tree selector `{0}`")]
-    UnknownTreeSelector(String)
+    #[error("'::' must be preceded by an axis (e.g. parent)")]
+    MissingAxis,
+    #[error("'::' must be proceeded by a tag (e.g. div)")]
+    MissingAxisTag,
+    #[error("unknown axis type `{0}`")]
+    UnknownAxisType(String)
 }
 
 /// Parse an Xpath expression into an Xpath object.
 pub fn parse(text: &str) -> Result<Xpath, ParseError> {
+    let elements = inner_parse(text)?;
+    let mut xpath_items: Vec<XpathSearchItem> = Vec::new();
+
+    let mut cur_search_item: XpathSearchItem = Default::default();
+    let mut is_first_element = true;
+    let mut was_last_element_search = false;
+    for element in elements.into_iter() {
+        was_last_element_search = false;
+        match element {
+            XpathElement::SearchRoot => {
+                if !is_first_element {
+                    xpath_items.push(cur_search_item);
+                    cur_search_item = Default::default();
+                }
+                was_last_element_search = true;
+            },
+            XpathElement::SearchAll => {
+                if !is_first_element {
+                    xpath_items.push(cur_search_item);
+                    cur_search_item = Default::default();
+                }
+                was_last_element_search = true;
+
+                // SearchAll is an abbreviation of `/descendant-or-self::node()/`
+                xpath_items.push(XpathSearchItem {
+                    axis: XpathAxes::DescendantOrSelf,
+                    index: None,
+                    query: None,
+                    search_node_type: XpathSearchNodeType::Any
+                });
+            },
+            XpathElement::Tag(tag_name) => {
+                cur_search_item.search_node_type = XpathSearchNodeType::Element(tag_name);
+            },
+            XpathElement::Query(query) => {
+                cur_search_item.query = Some(query);
+            },
+            XpathElement::Index(index) => {
+                cur_search_item.index = Some(index);
+            },
+            XpathElement::Axis(axis) => {
+                cur_search_item.axis = axis;
+            },
+        }
+        is_first_element = false;
+    }
+
+    // If we have a dangling item due to no trailing slashes, add it now.
+    if !was_last_element_search {
+        xpath_items.push(cur_search_item);
+    }
+
+    Ok(Xpath { items: xpath_items })
+}
+
+/// First stage of parsing, converts tokens into more structured [XpathElements](XpathElement).
+fn inner_parse(text: &str) -> Result<Vec<XpathElement>, ParseError> {
     let mut symbols = tokenizer::lex(text)?.into_iter().peekable();
     let mut elements: Vec<XpathElement> = Vec::new();
 
@@ -46,41 +103,35 @@ pub fn parse(text: &str) -> Result<Xpath, ParseError> {
                 }
             },
             Symbol::Identifier(identifier) => {
-                elements.push(XpathElement::Tag(identifier))
+                elements.push(XpathElement::Tag(identifier));
             },
             Symbol::DoubleColon => {
-                parse_tree_selector(&mut elements, &mut symbols)?;
+                parse_axis_selector(&mut elements)?;
             }
             _ => continue,
         }
     }
 
-    Ok(Xpath { elements })
+    Ok(elements)
 }
 
 /// Parses tree selectors. Triggered when a DoubleColon (Symbol)[Symbol] is found and expects a tag to
-/// have preceded it as well as an identifier to be the next (Symbol)[Symbol] in line.
+/// have preceded it which will now be converted to an axis.
 /// E.g. /div/parent::div
-fn parse_tree_selector(elements: &mut Vec<XpathElement>, symbols: &mut Peekable<std::vec::IntoIter<Symbol>>) -> Result<(), ParseError> {
+fn parse_axis_selector(elements: &mut Vec<XpathElement>) -> Result<(), ParseError> {
     let last_item = elements.pop()
-        .ok_or_else(|| ParseError::MissingTreeSelectorAxis)?;
+        .ok_or_else(|| ParseError::MissingAxis)?;
     let axis = match last_item {
         XpathElement::Tag(last_tag) => {
             match last_tag.as_str() {
                 "parent" => XpathAxes::Parent,
-                _ => return Err(ParseError::UnknownTreeSelector(last_tag))
+                _ => return Err(ParseError::UnknownAxisType(last_tag))
             }
         
         },
-        _ => return Err(ParseError::MissingTreeSelectorAxis)
+        _ => return Err(ParseError::MissingAxis)
     };
-    let next_tag = symbols.next()
-        .ok_or_else(|| ParseError::MissingTreeSelectorTag)?;
-    let tag_name = match next_tag {
-        Symbol::Identifier(identifier) => identifier,
-        _ => return Err(ParseError::MissingTreeSelectorTag)
-    };
-    elements.push(XpathElement::TreeSelector { axis, tag_name });
+    elements.push(XpathElement::Axis(axis));
     Ok(())
 }
 
@@ -168,10 +219,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_works() {
+    fn inner_parse_works() {
         let text = "//book/title";
 
-        let result = parse(text).unwrap();
+        let result = inner_parse(text).unwrap();
 
         let expected = vec![
             XpathElement::SearchAll,
@@ -181,16 +232,16 @@ mod tests {
         ];
 
         // looping makes debugging much easier than just asserting the entire vectors are equal
-        for (e, r) in expected.into_iter().zip(result.elements) {
+        for (e, r) in expected.into_iter().zip(result) {
             assert_eq!(e, r);
         }
     }
 
     #[test]
-    fn parse_index() {
+    fn inner_parse_index() {
         let text = r###"//a[0]"###;
 
-        let result = parse(text).unwrap();
+        let result = inner_parse(text).unwrap();
 
         let expected = vec![
             XpathElement::SearchAll,
@@ -199,16 +250,16 @@ mod tests {
         ];
 
         // looping makes debugging much easier than just asserting the entire vectors are equal
-        for (e, r) in expected.into_iter().zip(result.elements) {
+        for (e, r) in expected.into_iter().zip(result) {
             assert_eq!(e, r);
         }
     }
 
     #[test]
-    fn parse_attribute() {
+    fn inner_parse_attribute() {
         let text = r###"//a[@hello="world"]"###;
 
-        let result = parse(text).unwrap();
+        let result = inner_parse(text).unwrap();
 
         let expected = vec![
             XpathElement::SearchAll,
@@ -226,7 +277,179 @@ mod tests {
         ];
 
         // looping makes debugging much easier than just asserting the entire vectors are equal
-        for (e, r) in expected.into_iter().zip(result.elements) {
+        for (e, r) in expected.into_iter().zip(result) {
+            assert_eq!(e, r);
+        }
+    }
+
+    #[test]
+    fn parse_works() {
+        let text = r###"//book/title"###;
+
+        let result = parse(text).unwrap();
+
+        let expected = vec![
+            XpathSearchItem {
+                axis: XpathAxes::DescendantOrSelf,
+                search_node_type: XpathSearchNodeType::Any,
+                index: None,
+                query: None
+            },
+            XpathSearchItem {
+                axis: XpathAxes::Child,
+                search_node_type: XpathSearchNodeType::Element(String::from("book")),
+                index: None,
+                query: None
+            },
+            XpathSearchItem {
+                axis: XpathAxes::Child,
+                search_node_type: XpathSearchNodeType::Element(String::from("title")),
+                index: None,
+                query: None
+            }
+        ];
+
+        // looping makes debugging much easier than just asserting the entire vectors are equal
+        assert_eq!(expected.len(), result.items.len());
+        for (e, r) in expected.into_iter().zip(result.items) {
+            assert_eq!(e, r);
+        }
+    }
+
+    #[test]
+    fn parse_works_with_root() {
+        let text = r###"/book/title"###;
+
+        let result = parse(text).unwrap();
+
+        let expected = vec![
+            XpathSearchItem {
+                axis: XpathAxes::Child,
+                search_node_type: XpathSearchNodeType::Element(String::from("book")),
+                index: None,
+                query: None
+            },
+            XpathSearchItem {
+                axis: XpathAxes::Child,
+                search_node_type: XpathSearchNodeType::Element(String::from("title")),
+                index: None,
+                query: None
+            }
+        ];
+
+        // looping makes debugging much easier than just asserting the entire vectors are equal
+        assert_eq!(expected.len(), result.items.len());
+        for (e, r) in expected.into_iter().zip(result.items) {
+            assert_eq!(e, r);
+        }
+    }
+
+    #[test]
+    fn parse_index() {
+        let text = r###"//a[0]"###;
+
+        let result = parse(text).unwrap();
+
+        let expected = vec![
+            XpathSearchItem {
+                axis: XpathAxes::DescendantOrSelf,
+                search_node_type: XpathSearchNodeType::Any,
+                index: None,
+                query: None
+            },
+            XpathSearchItem {
+                axis: XpathAxes::Child,
+                search_node_type: XpathSearchNodeType::Element(String::from("a")),
+                index: Some(0),
+                query: None
+            }
+        ];
+
+        // looping makes debugging much easier than just asserting the entire vectors are equal
+        assert_eq!(expected.len(), result.items.len());
+        for (e, r) in expected.into_iter().zip(result.items) {
+            assert_eq!(e, r);
+        }
+    }
+
+    #[test]
+    fn parse_attribute() {
+        let text = r###"//a[@hello="world"]"###;
+
+        let result = parse(text).unwrap();
+
+        let expected = vec![
+            XpathSearchItem {
+                axis: XpathAxes::DescendantOrSelf,
+                search_node_type: XpathSearchNodeType::Any,
+                index: None,
+                query: None
+            },
+            XpathSearchItem {
+                axis: XpathAxes::Child,
+                search_node_type: XpathSearchNodeType::Element(String::from("a")),
+                index: None,
+                query: Some(XpathQuery {
+                    predicates: vec![
+                        XpathPredicate::Equals {
+                            attribute: String::from("hello"),
+                            value: String::from("world")
+                        }
+                    ]
+                })
+            }
+        ];
+
+        // looping makes debugging much easier than just asserting the entire vectors are equal
+        assert_eq!(expected.len(), result.items.len());
+        for (e, r) in expected.into_iter().zip(result.items) {
+            assert_eq!(e, r);
+        }
+    }
+
+    #[test]
+    fn parse_parent_axis() {
+        let text = r###"//div[@role='gridcell']//parent::div"###;
+
+        let result = parse(text).unwrap();
+
+        let expected = vec![
+            XpathSearchItem {
+                axis: XpathAxes::DescendantOrSelf,
+                search_node_type: XpathSearchNodeType::Any,
+                index: None,
+                query: None
+            },
+            XpathSearchItem {
+                axis: XpathAxes::Child,
+                search_node_type: XpathSearchNodeType::Element(String::from("div")),
+                index: None,
+                query: Some(XpathQuery {
+                    predicates: vec![
+                        XpathPredicate::Equals {
+                            attribute: String::from("role"),
+                            value: String::from("gridcell")
+                        }
+                    ]
+                })
+            },
+            XpathSearchItem {
+                axis: XpathAxes::DescendantOrSelf,
+                search_node_type: XpathSearchNodeType::Any,
+                index: None,
+                query: None
+            },
+            XpathSearchItem {
+                axis: XpathAxes::Parent,
+                search_node_type: XpathSearchNodeType::Element(String::from("div")),
+                index: None,
+                query: None
+            },
+        ];
+
+        // looping makes debugging much easier than just asserting the entire vectors are equal
+        assert_eq!(expected.len(), result.items.len());
+        for (e, r) in expected.into_iter().zip(result.items) {
             assert_eq!(e, r);
         }
     }
