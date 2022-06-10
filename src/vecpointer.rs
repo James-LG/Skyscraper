@@ -5,17 +5,11 @@ pub struct VecPointerRef<'a, T> {
 
 impl<'a, T> VecPointerRef<'a, T> {
     pub fn new(values: &[T]) -> VecPointerRef<T> {
-        VecPointerRef {
-            values,
-            index: 0,
-        }
+        VecPointerRef { values, index: 0 }
     }
 
     pub fn has_next(&self) -> bool {
-        match self.get(self.index) {
-            Some(_) => true,
-            None => false
-        }
+        self.get(self.index).is_some()
     }
 
     pub fn current(&self) -> Option<&T> {

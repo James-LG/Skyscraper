@@ -1,17 +1,16 @@
-mod symbols;
 mod helpers;
+mod tokens;
 
 use crate::vecpointer::VecPointerRef;
-pub use symbols::Symbol;
+pub use tokens::Token;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum LexError {
-}
+pub enum LexError {}
 
 /// Tokenize an Xpath string to symbols for used in parsing later.
-pub fn lex(text: &str) -> Result<Vec<Symbol>, LexError> {
-    let mut symbols: Vec<Symbol> = Vec::new();
+pub fn lex(text: &str) -> Result<Vec<Token>, LexError> {
+    let mut symbols: Vec<Token> = Vec::new();
 
     let chars: Vec<char> = text.chars().collect();
     let mut pointer = VecPointerRef::new(&chars);
@@ -57,7 +56,7 @@ pub fn lex(text: &str) -> Result<Vec<Symbol>, LexError> {
             symbols.push(s);
         } else {
             if let Some(c) = pointer.current() {
-                if !c.is_whitespace(){
+                if !c.is_whitespace() {
                     // Unknown symbol, move on ¯\_(ツ)_/¯
                     eprintln!("Unknown XPath symbol {}", c);
                 }
@@ -82,22 +81,22 @@ mod tests {
 
         // assert
         let expected = vec![
-            Symbol::DoubleSlash,
-            Symbol::Identifier(String::from("bookstore")),
-            Symbol::Slash,
-            Symbol::Identifier(String::from("book")),
-            Symbol::OpenSquareBracket,
-            Symbol::Number(1.0),
-            Symbol::CloseSquareBracket,
-            Symbol::Slash,
-            Symbol::Identifier(String::from("page")),
-            Symbol::OpenSquareBracket,
-            Symbol::Identifier(String::from("last")),
-            Symbol::OpenBracket,
-            Symbol::CloseBracket,
-            Symbol::MinusSign,
-            Symbol::Number(1.0),
-            Symbol::CloseSquareBracket,
+            Token::DoubleSlash,
+            Token::Identifier(String::from("bookstore")),
+            Token::Slash,
+            Token::Identifier(String::from("book")),
+            Token::OpenSquareBracket,
+            Token::Number(1.0),
+            Token::CloseSquareBracket,
+            Token::Slash,
+            Token::Identifier(String::from("page")),
+            Token::OpenSquareBracket,
+            Token::Identifier(String::from("last")),
+            Token::OpenBracket,
+            Token::CloseBracket,
+            Token::MinusSign,
+            Token::Number(1.0),
+            Token::CloseSquareBracket,
         ];
 
         assert_eq!(expected, result);
@@ -113,17 +112,17 @@ mod tests {
 
         // assert
         let expected = vec![
-            Symbol::Slash,
-            Symbol::Identifier(String::from("bookstore")),
-            Symbol::Slash,
-            Symbol::Identifier(String::from("book")),
-            Symbol::OpenSquareBracket,
-            Symbol::Identifier(String::from("price")),
-            Symbol::GreaterThanSign,
-            Symbol::Number(35.0),
-            Symbol::CloseSquareBracket,
-            Symbol::Slash,
-            Symbol::Identifier(String::from("price"))
+            Token::Slash,
+            Token::Identifier(String::from("bookstore")),
+            Token::Slash,
+            Token::Identifier(String::from("book")),
+            Token::OpenSquareBracket,
+            Token::Identifier(String::from("price")),
+            Token::GreaterThanSign,
+            Token::Number(35.0),
+            Token::CloseSquareBracket,
+            Token::Slash,
+            Token::Identifier(String::from("price")),
         ];
 
         assert_eq!(expected, result);
@@ -139,14 +138,14 @@ mod tests {
 
         // assert
         let expected = vec![
-            Symbol::DoubleSlash,
-            Symbol::Identifier(String::from("a")),
-            Symbol::OpenSquareBracket,
-            Symbol::AtSign,
-            Symbol::Identifier(String::from("hello")),
-            Symbol::AssignmentSign,
-            Symbol::Text(String::from("world")),
-            Symbol::CloseSquareBracket,
+            Token::DoubleSlash,
+            Token::Identifier(String::from("a")),
+            Token::OpenSquareBracket,
+            Token::AtSign,
+            Token::Identifier(String::from("hello")),
+            Token::AssignmentSign,
+            Token::Text(String::from("world")),
+            Token::CloseSquareBracket,
         ];
 
         assert_eq!(expected, result);
@@ -162,16 +161,16 @@ mod tests {
 
         // assert
         let expected = vec![
-            Symbol::DoubleSlash,
-            Symbol::Identifier(String::from("h1")),
-            Symbol::OpenSquareBracket,
-            Symbol::AtSign,
-            Symbol::Identifier(String::from("hello")),
-            Symbol::AssignmentSign,
-            Symbol::Text(String::from("world")),
-            Symbol::CloseSquareBracket,
-            Symbol::Slash,
-            Symbol::Identifier(String::from("h2"))
+            Token::DoubleSlash,
+            Token::Identifier(String::from("h1")),
+            Token::OpenSquareBracket,
+            Token::AtSign,
+            Token::Identifier(String::from("hello")),
+            Token::AssignmentSign,
+            Token::Text(String::from("world")),
+            Token::CloseSquareBracket,
+            Token::Slash,
+            Token::Identifier(String::from("h2")),
         ];
 
         assert_eq!(expected, result);
@@ -187,12 +186,12 @@ mod tests {
 
         // assert
         let expected = vec![
-            Symbol::DoubleSlash,
-            Symbol::Identifier(String::from("h1")),
-            Symbol::Slash,
-            Symbol::Identifier(String::from("parent")),
-            Symbol::DoubleColon,
-            Symbol::Identifier(String::from("div"))
+            Token::DoubleSlash,
+            Token::Identifier(String::from("h1")),
+            Token::Slash,
+            Token::Identifier(String::from("parent")),
+            Token::DoubleColon,
+            Token::Identifier(String::from("div")),
         ];
 
         assert_eq!(expected, result);

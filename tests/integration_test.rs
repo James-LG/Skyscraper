@@ -1,6 +1,5 @@
-use skyscraper::html::{HtmlNode, DocumentNode};
+use skyscraper::html::{DocumentNode, HtmlNode};
 use skyscraper::{html, xpath};
-
 
 static HTML: &'static str = include_str!("samples/James-LG_Skyscraper.html");
 
@@ -51,7 +50,7 @@ fn xpath_github_sample2() {
                 HtmlNode::Tag(_) => panic!("expected text, got tag instead"),
                 HtmlNode::Text(text) => assert_eq!("refactor: Reorganize into workspace", text),
             }
-        },
+        }
         HtmlNode::Text(_) => panic!("expected tag, got text instead"),
     }
 }
@@ -62,7 +61,8 @@ fn xpath_github_sample3() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
-    let xpath = xpath::parse("//div[@class='BorderGrid-cell']/div[@class=' text-small']/a").unwrap();
+    let xpath =
+        xpath::parse("//div[@class='BorderGrid-cell']/div[@class=' text-small']/a").unwrap();
 
     // act
     let nodes = xpath.apply(&document).unwrap();
@@ -82,7 +82,7 @@ fn xpath_github_sample3() {
                 HtmlNode::Tag(_) => panic!("expected text, got tag instead"),
                 HtmlNode::Text(text) => assert_eq!("Create a new release", text),
             }
-        },
+        }
         HtmlNode::Text(_) => panic!("expected tag, got text instead"),
     }
 }
