@@ -1,5 +1,10 @@
 # Skyscraper - HTML scraping with XPath
 
+[![Dependency Status](https://deps.rs/repo/github/James-LG/Skyscraper/status.svg)](https://deps.rs/repo/github/James-LG/Skyscraper)
+[![License MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/James-LG/Skyscraper/blob/main/LICENSE)
+[![Crates.io](https://img.shields.io/crates/v/skyscraper.svg)](https://crates.io/crates/skyscraper)
+[![doc.rs](https://docs.rs/skyscraper/badge.svg)](https://docs.rs/skyscraper)
+
 Rust library to scrape HTML documents with XPath expressions.
 
 ## HTML Parsing
