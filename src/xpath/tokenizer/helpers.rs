@@ -206,7 +206,7 @@ pub fn is_identifier(pointer: &mut VecPointerRef<char>) -> Option<Token> {
 
             while let Some(c) = pointer.next() {
                 // Identifier can contain letters and numbers
-                if c.is_alphanumeric() {
+                if c.is_alphanumeric() || c == &'-' {
                     id.push(*c);
                 } else {
                     break;

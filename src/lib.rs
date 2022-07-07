@@ -44,7 +44,7 @@
 //! # }
 //! ```
 //! 
-//! # Example: use [mod@lazy_static] if Xpath expressions are static
+//! # Example: use lazy_static if Xpath expressions are static
 //! 
 //! If your Xpath expressions are static, and you have a function that
 //! parses and applies the expression every time the function is called,

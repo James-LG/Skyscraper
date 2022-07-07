@@ -137,3 +137,18 @@ fn xpath_github_parent_axis_recursive() {
     // assert
     assert_eq!(20, nodes.len());
 }
+
+#[test]
+fn xpath_github_dashed_attribute() {
+    // arrange
+    let text: String = HTML.parse().unwrap();
+
+    let document = html::parse(&text).unwrap();
+    let xpath = xpath::parse("//span[@data-view-component='true']").unwrap();
+
+    // act
+    let nodes = xpath.apply(&document).unwrap();
+
+    // assert
+    assert_eq!(19, nodes.len());
+}
