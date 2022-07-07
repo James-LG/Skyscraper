@@ -373,7 +373,7 @@ impl Xpath {
 
             // Apply indexing if required
             if let Some(i) = search_item.index {
-                let indexed_node = matched_nodes[i];
+                let indexed_node = matched_nodes[i - 1];
                 matched_nodes.retain(|node| *node == indexed_node);
             }
 
@@ -738,7 +738,7 @@ mod test {
                 let child_node = document.get_html_node(&children[0]).unwrap();
                 match child_node {
                     HtmlNode::Tag(_) => panic!("expected child text, got tag instead"),
-                    HtmlNode::Text(text) => assert_eq!(&String::from("1"), text),
+                    HtmlNode::Text(text) => assert_eq!(&String::from("0"), text),
                 }
             }
             HtmlNode::Text(_) => panic!("expected tag, got text instead"),
