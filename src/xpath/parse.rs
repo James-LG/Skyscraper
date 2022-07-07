@@ -109,6 +109,16 @@ pub enum ParseError {
     ///       └┴┴┴┴ Error: "bogus" is not a valid axis name.
     #[error("unknown axis type `{0}`")]
     UnknownAxisType(String),
+
+    /// Index value must be >= 1.
+    ///
+    /// ```text
+    /// //div[0]
+    ///       ^
+    ///       └ Error: Index value must be >= 1.
+    /// ```
+    #[error("index value can not be zero")]
+    IndexValueIsZero,
 }
 
 /// Parse an Xpath expression into an Xpath object.
@@ -188,7 +198,11 @@ fn inner_parse(text: &str) -> Result<Vec<XpathElement>, ParseError> {
             Token::DoubleSlash => elements.push(XpathElement::SearchAll),
             Token::OpenSquareBracket => {
                 if let Some(num) = parse_index(&mut symbols) {
-                    elements.push(XpathElement::Index(num));
+                    if num == 0 {
+                        return Err(ParseError::IndexValueIsZero);
+                    } else {
+                        elements.push(XpathElement::Index(num));
+                    }
                 } else {
                     let query = parse_query(&mut symbols)?;
                     elements.push(XpathElement::Query(query));
@@ -343,20 +357,30 @@ mod tests {
 
     #[test]
     fn inner_parse_index() {
-        let text = r###"//a[0]"###;
+        let text = r###"//a[1]"###;
 
         let result = inner_parse(text).unwrap();
 
         let expected = vec![
             XpathElement::SearchAll,
             XpathElement::Tag(String::from("a")),
-            XpathElement::Index(0),
+            XpathElement::Index(1),
         ];
 
         // looping makes debugging much easier than just asserting the entire vectors are equal
         for (e, r) in expected.into_iter().zip(result) {
             assert_eq!(e, r);
         }
+    }
+
+    #[test]
+    fn inner_parse_zero_index() {
+        let text = r###"//a[0]"###;
+        let result = inner_parse(text);
+	assert!(result.is_err());
+	let err = result.unwrap_err();
+	assert!(matches!(&err, ParseError::IndexValueIsZero));
+	assert_eq!(err.to_string(), "index value can not be zero");
     }
 
     #[test]
@@ -446,7 +470,7 @@ mod tests {
 
     #[test]
     fn parse_index() {
-        let text = r###"//a[0]"###;
+        let text = r###"//a[1]"###;
 
         let result = parse(text).unwrap();
 
@@ -460,7 +484,7 @@ mod tests {
             XpathSearchItem {
                 axis: XpathAxes::Child,
                 search_node_type: XpathSearchNodeType::Element(String::from("a")),
-                index: Some(0),
+                index: Some(1),
                 query: None,
             },
         ];
