@@ -137,23 +137,23 @@ pub fn parse(text: &str) -> Result<Xpath, ParseError> {
 
     let mut cur_search_item: XpathSearchItem = Default::default();
     let mut is_first_element = true;
-    let mut was_last_element_search = false;
+    let mut last_element_was_search = false;
     for element in elements.into_iter() {
-        was_last_element_search = false;
+        last_element_was_search = false;
         match element {
             XpathElement::SearchRoot => {
                 if !is_first_element {
                     xpath_items.push(cur_search_item);
                     cur_search_item = Default::default();
                 }
-                was_last_element_search = true;
+                last_element_was_search = true;
             }
             XpathElement::SearchAll => {
                 if !is_first_element {
                     xpath_items.push(cur_search_item);
                     cur_search_item = Default::default();
                 }
-                was_last_element_search = true;
+                last_element_was_search = true;
 
                 // SearchAll is an abbreviation of `/descendant-or-self::node()/`
                 xpath_items.push(XpathSearchItem {
@@ -180,7 +180,7 @@ pub fn parse(text: &str) -> Result<Xpath, ParseError> {
     }
 
     // If we have a dangling item due to no trailing slashes, add it now.
-    if !was_last_element_search {
+    if !last_element_was_search {
         xpath_items.push(cur_search_item);
     }
 
@@ -228,10 +228,8 @@ fn inner_parse(text: &str) -> Result<Vec<XpathElement>, ParseError> {
 fn parse_axis_selector(elements: &mut Vec<XpathElement>) -> Result<(), ParseError> {
     let last_item = elements.pop().ok_or(ParseError::MissingAxis)?;
     let axis = match last_item {
-        XpathElement::Tag(last_tag) => match last_tag.as_str() {
-            "parent" => XpathAxes::Parent,
-            _ => return Err(ParseError::UnknownAxisType(last_tag)),
-        },
+        XpathElement::Tag(last_tag) => XpathAxes::from_str(last_tag.as_str())
+            .ok_or_else(|| ParseError::UnknownAxisType(last_tag))?,
         _ => return Err(ParseError::MissingAxis),
     };
     elements.push(XpathElement::Axis(axis));

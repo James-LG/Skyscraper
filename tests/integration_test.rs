@@ -172,3 +172,43 @@ fn xpath_github_get_attributes_sample() {
     let attributes = html_node.get_attributes().unwrap();
     assert_eq!("flex-auto min-width-0 width-fit mr-3", attributes["class"]);
 }
+
+#[test]
+fn xpath_github_root_search() {
+    // arrange
+    let text: String = HTML.parse().unwrap();
+
+    let document = html::parse(&text).unwrap();
+    let xpath = xpath::parse("/html").unwrap();
+
+    // act
+    let nodes = xpath.apply(&document).unwrap();
+
+    // assert
+    assert_eq!(1, nodes.len());
+
+    let doc_node = nodes[0];
+    let html_node = document.get_html_node(&doc_node).unwrap();
+    let tag = html_node.unwrap_tag();
+    assert_eq!("html", tag.name);
+}
+
+#[test]
+fn xpath_github_root_search_all() {
+    // arrange
+    let text: String = HTML.parse().unwrap();
+
+    let document = html::parse(&text).unwrap();
+    let xpath = xpath::parse("//html").unwrap();
+
+    // act
+    let nodes = xpath.apply(&document).unwrap();
+
+    // assert
+    assert_eq!(1, nodes.len());
+
+    let doc_node = nodes[0];
+    let html_node = document.get_html_node(&doc_node).unwrap();
+    let tag = html_node.unwrap_tag();
+    assert_eq!("html", tag.name);
+}
