@@ -24,6 +24,8 @@ use indextree::{Arena, NodeId};
 
 pub use crate::html::parse::parse;
 
+type TagAttributes = HashMap<String, String>;
+
 /// An HTML tag and its attributes.
 #[derive(Debug, PartialEq)]
 pub struct HtmlTag {
@@ -31,7 +33,7 @@ pub struct HtmlTag {
     pub name: String,
     /// Map of the tag's attributes and their corresponding values.
     /// Example: Attributes of <div class="hello" id="world"/>
-    pub attributes: HashMap<String, String>,
+    pub attributes: TagAttributes,
 }
 
 impl HtmlTag {
@@ -159,6 +161,15 @@ impl HtmlNode {
                 }
             }
             HtmlNode::Text(text) => Some(text.to_string()),
+        }
+    }
+
+    /// Gets attributes.
+    /// If Node is a `Text` return None
+    pub fn get_attributes(&self) -> Option<&TagAttributes> {
+        match self {
+            HtmlNode::Tag(tag) => Some(&tag.attributes),
+            &HtmlNode::Text(_) => None,
         }
     }
 }
@@ -296,6 +307,31 @@ impl DocumentNode {
     pub fn get_text(&self, document: &HtmlDocument) -> Option<String> {
         match document.get_html_node(self) {
             Some(html_node) => html_node.get_text(self, document),
+            None => None,
+        }
+    }
+
+    /// Get attributes.
+    ///
+    /// If Node is a `Text` return None
+    ///
+    /// ```rust
+    /// use skyscraper::html::{self, parse::ParseError};
+    /// # fn main() -> Result<(), ParseError> {
+    /// // Parse the text into a document.
+    /// let html_text = r##"<div attr1="attr1_value"></div>"##;
+    /// let document = html::parse(html_text)?;
+    ///
+    /// // Get root node.
+    /// let doc_node = document.root_node;
+    /// let attributes = doc_node.get_attributes(&document).expect("No attributes");
+    ///
+    /// assert_eq!("attr1_value", attributes["attr1"]);
+    /// # Ok(())
+    /// # }
+    pub fn get_attributes<'a>(&'a self, document: &'a HtmlDocument) -> Option<&'a TagAttributes> {
+        match document.get_html_node(self) {
+            Some(html_node) => html_node.get_attributes(),
             None => None,
         }
     }
@@ -443,5 +479,63 @@ mod tests {
 
         // assert
         assert_eq!("hello world", result);
+    }
+
+    #[test]
+    fn html_node_get_attributes_for_tag() {
+        // arrange
+        let node = HtmlNode::Tag(HtmlTag {
+            name: "div".to_string(),
+            attributes: HashMap::from([("attr_name".to_string(), "attr_value".to_string())]),
+        });
+
+        // assert
+        assert!(node.get_attributes().is_some());
+        assert_eq!(node.get_attributes().unwrap()["attr_name"], "attr_value");
+    }
+
+    #[test]
+    fn html_node_get_attributes_for_text() {
+        // arrange
+        let node = HtmlNode::Text(String::from("hello world"));
+
+        // assert
+        assert!(node.get_attributes().is_none())
+    }
+
+    #[test]
+    fn document_node_get_attributes_for_tag() {
+        // arrange
+        let mut arena = Arena::new();
+        let html_node = HtmlNode::Tag(HtmlTag {
+            name: "div".to_string(),
+            attributes: HashMap::from([("attr_name".to_string(), "attr_value".to_string())]),
+        });
+        let doc_node = DocumentNode::new(arena.new_node(html_node));
+        let html_document = HtmlDocument::new(arena, doc_node);
+
+        // act
+        let node = html_document.get_html_node(&doc_node).unwrap();
+        let attributes = node.get_attributes();
+
+        // assert
+        assert!(attributes.is_some());
+        assert_eq!(attributes.unwrap()["attr_name"], "attr_value");
+    }
+
+    #[test]
+    fn document_node_get_attributes_for_text() {
+        // arrange
+        let mut arena = Arena::new();
+        let html_node = HtmlNode::Text(String::from("hello world"));
+        let doc_node = DocumentNode::new(arena.new_node(html_node));
+        let html_document = HtmlDocument::new(arena, doc_node);
+
+        // act
+        let node = html_document.get_html_node(&doc_node).unwrap();
+        let attributes = node.get_attributes();
+
+        // assert
+        assert!(attributes.is_none());
     }
 }

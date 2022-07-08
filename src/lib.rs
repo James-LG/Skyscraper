@@ -40,6 +40,11 @@
 //!     .ok_or_else(|| "text is missing")?;
 //!
 //! assert_eq!("Good info", text);
+//!
+//! // Assert that node class attribute is "duplicate" string.
+//! let attributes = nodes[0].get_attributes(&document).unwrap();
+//! assert_eq!("duplicate", attributes["class"]);
+//!
 //! # Ok(())
 //! # }
 //! ```
