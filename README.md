@@ -57,7 +57,7 @@ use skyscraper::{html, xpath};
 let html_text = r##"
 <div>
     <div class="foo">
-        <span>yes</span>
+        <span some_attr="value">yes</span>
     </div>
     <div class="bar">
         <span>no</span>
@@ -74,4 +74,8 @@ assert_eq!(1, results.len());
 // Get text from the node
 let text = results[0].get_text(&document).expect("text missing");
 assert_eq!("yes", text);
+
+// Get attributes from the node
+let attributes = results[0].get_attributes(&document).expect("no attributes");
+assert_eq!("value", attributes["some_attr"]);
 ```

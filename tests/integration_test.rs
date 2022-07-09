@@ -152,3 +152,23 @@ fn xpath_github_dashed_attribute() {
     // assert
     assert_eq!(19, nodes.len());
 }
+
+#[test]
+fn xpath_github_get_attributes_sample() {
+    // arrange
+    let text: String = HTML.parse().unwrap();
+
+    let document = html::parse(&text).unwrap();
+    let xpath = xpath::parse("//div[@class='flex-auto min-width-0 width-fit mr-3']").unwrap();
+
+    // act
+    let nodes = xpath.apply(&document).unwrap();
+
+    // assert
+    assert_eq!(1, nodes.len());
+
+    let doc_node = nodes[0];
+    let html_node = document.get_html_node(&doc_node).unwrap();
+    let attributes = html_node.get_attributes().unwrap();
+    assert_eq!("flex-auto min-width-0 width-fit mr-3", attributes["class"]);
+}
