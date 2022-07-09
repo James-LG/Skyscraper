@@ -374,31 +374,23 @@ mod tests {
     ) -> Vec<DocumentNode> {
         let html_node = document.get_html_node(&doc_node).unwrap();
 
-        match html_node {
-            HtmlNode::Tag(tag) => {
-                assert_eq!(String::from(tag_name), tag.name);
+        let tag = html_node.unwrap_tag();
+        assert_eq!(String::from(tag_name), tag.name);
 
-                if let Some(attributes) = attributes {
-                    for attr in attributes {
-                        assert_eq!(&String::from(attr.1), tag.attributes.get(attr.0).unwrap());
-                    }
-                }
-
-                return doc_node.children(&document).collect();
+        if let Some(attributes) = attributes {
+            for attr in attributes {
+                assert_eq!(&String::from(attr.1), tag.attributes.get(attr.0).unwrap());
             }
-            _ => panic!("Expected Tag, got different variant instead."),
         }
+
+        return doc_node.children(&document).collect();
     }
 
     fn assert_text(document: &HtmlDocument, key: DocumentNode, text: &str) {
         let html_node = document.get_html_node(&key).unwrap();
 
-        match html_node {
-            HtmlNode::Text(node_text) => {
-                assert_eq!(String::from(text), node_text.trim());
-            }
-            _ => panic!("Expected Text, got different variant instead."),
-        }
+        let node_text = html_node.unwrap_text();
+        assert_eq!(String::from(text), node_text.trim());
     }
 
     #[test]

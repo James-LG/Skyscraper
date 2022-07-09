@@ -172,6 +172,28 @@ impl HtmlNode {
             &HtmlNode::Text(_) => None,
         }
     }
+
+    /// If this is node is an [HtmlNode::Tag], unwrap and return it, otherwise panic.
+    /// 
+    /// Prefer using a `match`; only use this if you *know* this is a [HtmlNode::Tag], or
+    /// if panicking is ok, such as during testing.
+    pub fn unwrap_tag(&self) -> &HtmlTag {
+        match self {
+            HtmlNode::Tag(tag) => tag,
+            _ => panic!("node is not a tag"),
+        }
+    }
+
+    /// If this is node is an [HtmlNode::Text], unwrap and return it, otherwise panic.
+    /// 
+    /// Prefer using a `match`; only use this if you *know* this is a [HtmlNode::Text], or
+    /// if panicking is ok, such as during testing.
+    pub fn unwrap_text(&self) -> &str {
+        match self {
+            HtmlNode::Text(text) => text,
+            _ => panic!("node is not text"),
+        }
+    }
 }
 
 /// HTML document tree represented by an indextree arena and a root node.
