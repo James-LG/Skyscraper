@@ -466,6 +466,46 @@ mod tests {
     }
 
     #[test]
+    fn parse_should_handle_text_with_triangle_brackets() {
+        // arrange
+        let html = r###"<div>foo > bar < baz</div>"###;
+
+        // act
+        let result = parse(html).unwrap();
+
+        // assert
+        // <div>
+        let key = result.root_node;
+        let children = assert_tag(&result, key, "div", None);
+
+        // <div> -> -> text()
+        {
+            let key = children[0];
+            assert_text(&result, key, "foo > bar < baz");
+        }
+    }
+
+    #[test]
+    fn parse_should_include_tag_like_text_in_script_tags() {
+        // arrange
+        let html = r###"<script>foo<bar></baz></script>"###;
+
+        // act
+        let result = parse(html).unwrap();
+
+        // assert
+        // <script>
+        let key = result.root_node;
+        let children = assert_tag(&result, key, "script", None);
+
+        // <script> -> -> text()
+        {
+            let key = children[0];
+            assert_text(&result, key, "foo<bar></baz>");
+        }
+    }
+
+    #[test]
     fn parse_should_handle_single_tags() {
         // arrange
         let html = r###"

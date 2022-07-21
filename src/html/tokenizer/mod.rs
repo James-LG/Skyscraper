@@ -16,18 +16,32 @@ pub fn lex(text: &str) -> Result<Vec<Token>, LexError> {
     let mut pointer = VecPointerRef::new(&chars);
 
     let mut has_open_tag = false;
+    let mut in_script_tag = false;
 
     while pointer.has_next() {
         if let Some(s) = helpers::is_comment(&mut pointer) {
             symbols.push(s);
         } else if let Some(s) = helpers::is_start_tag(&mut pointer) {
             has_open_tag = true;
+
+            // Check if this is a "script" tag so the flag can be set if required
+            match &s {
+                Token::StartTag(start_tag) => {
+                    if start_tag == "script" {
+                        in_script_tag = true;
+                    }
+                },
+                token => panic!("is_start_tag returned {:?} instead of Token::StartTag", token)
+            }
+
             symbols.push(s);
         } else if let Some(s) = helpers::is_end_tag(&mut pointer) {
             has_open_tag = true;
+            in_script_tag = false;
             symbols.push(s);
         } else if let Some(s) = helpers::is_tag_close_and_end(&mut pointer) {
             has_open_tag = false;
+            in_script_tag = false;
             symbols.push(s);
         } else if let Some(s) = helpers::is_tag_close(&mut pointer) {
             has_open_tag = false;
@@ -38,7 +52,7 @@ pub fn lex(text: &str) -> Result<Vec<Token>, LexError> {
             symbols.push(s);
         } else if let Some(s) = helpers::is_identifier(&mut pointer, has_open_tag) {
             symbols.push(s);
-        } else if let Some(s) = helpers::is_text(&mut pointer, has_open_tag) {
+        } else if let Some(s) = helpers::is_text(&mut pointer, has_open_tag, in_script_tag) {
             symbols.push(s);
         } else {
             if let Some(c) = pointer.current() {

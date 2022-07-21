@@ -228,8 +228,8 @@ fn inner_parse(text: &str) -> Result<Vec<XpathElement>, ParseError> {
 fn parse_axis_selector(elements: &mut Vec<XpathElement>) -> Result<(), ParseError> {
     let last_item = elements.pop().ok_or(ParseError::MissingAxis)?;
     let axis = match last_item {
-        XpathElement::Tag(last_tag) => XpathAxes::from_str(last_tag.as_str())
-            .ok_or_else(|| ParseError::UnknownAxisType(last_tag))?,
+        XpathElement::Tag(last_tag) => XpathAxes::try_from_str(last_tag.as_str())
+            .ok_or(ParseError::UnknownAxisType(last_tag))?,
         _ => return Err(ParseError::MissingAxis),
     };
     elements.push(XpathElement::Axis(axis));
