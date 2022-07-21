@@ -10,7 +10,8 @@ use super::Token;
 /// Has additional checks to make sure it is not an end tag.
 pub fn is_start_tag(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     if let (Some('<'), Some(c2)) = (pointer.current(), pointer.peek()) {
-        if *c2 != '/' {
+        let c2 = *c2;
+        if c2 != '/' && !c2.is_whitespace() {
             let mut name: Vec<char> = Vec::new();
             loop {
                 match pointer.next() {
@@ -213,29 +214,57 @@ pub fn is_identifier(pointer: &mut VecPointerRef<char>, has_open_tag: bool) -> O
     None
 }
 
-lazy_static! {
-    /// List of characters that end a Text [Symbol](Symbol).
-    static ref INAVLID_TEXT_CHARS: Vec<char> = vec!['<', '>'];
-}
-
 /// Checks if the [TextPointer](TextPointer) is currently pointing to a Text [Symbol](Symbol).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 ///
 /// Text is defined as any text outside a tag definition.
-pub fn is_text(pointer: &mut VecPointerRef<char>, has_open_tag: bool) -> Option<Token> {
+pub fn is_text(pointer: &mut VecPointerRef<char>, has_open_tag: bool, in_script_tag: bool) -> Option<Token> {
     if has_open_tag {
         return None;
     }
 
     if let Some(c) = pointer.current() {
-        if !INAVLID_TEXT_CHARS.contains(c) {
-            let start_index = pointer.index;
+        let c = *c;
+        let start_index = pointer.index;
+        // If character is not '<', or if it is, make sure its not a start or end tag.
+        if c != '<' || (is_end_tag(pointer).is_none() && is_start_tag(pointer).is_none()) {
             let mut has_non_whitespace = !c.is_whitespace();
 
-            let mut buffer: Vec<char> = vec![*c];
+            let mut buffer: Vec<char> = vec![c];
             loop {
                 match pointer.next() {
-                    Some(c) if INAVLID_TEXT_CHARS.contains(c) => break,
+                    Some('<') => {
+                        let pointer_index = pointer.index;
+
+                        // In a script tag the *only* thing that can end a text is an end script tag.
+                        if in_script_tag {
+                            
+                            if let Some(end_tag) = is_end_tag(pointer) {
+                                match end_tag {
+                                    Token::EndTag(end_tag) => {
+                                        if end_tag == "script" {
+                                            // We can finally close the text
+                                            pointer.index = pointer_index;
+                                            break;
+                                        }
+                                    },
+                                    token => panic!("is_end_tag returned {:?} instead of Token::EndTag", token)
+                                }
+                            }
+                        } else {
+                            // The current tag can end or a new tag can be started mid-text.
+                            if is_end_tag(pointer).is_some() || is_start_tag(pointer).is_some() {
+                                // Start or end tag was matched meaning we've moved the pointer up;
+                                // reset it now so it can be matched in the main tokenizer loop.
+                                pointer.index = pointer_index;
+                                break;
+                            }
+                        }
+
+                        // If the loop hasn't been broken at this point, add the '<' and move on.
+                        pointer.index = pointer_index;
+                        buffer.push('<');
+                    },
                     Some(c) => {
                         if !c.is_whitespace() {
                             has_non_whitespace = true;
@@ -255,8 +284,12 @@ pub fn is_text(pointer: &mut VecPointerRef<char>, has_open_tag: bool) -> Option<
                 pointer.index = start_index;
                 return None;
             }
+        } else {
+            // Start or end tag was matched meaning we've moved the pointer up;
+            // reset it now so it can be matched in the main tokenizer loop.
+            pointer.index = start_index;
+            return None;
         }
-        return None;
     }
     None
 }
@@ -555,7 +588,7 @@ mod tests {
         let mut pointer = VecPointerRef::new(&chars);
 
         // act
-        let result = is_text(&mut pointer, false).unwrap();
+        let result = is_text(&mut pointer, false, false).unwrap();
 
         // assert
         assert_eq!(Token::Text(String::from("foo bar")), result);
@@ -563,16 +596,72 @@ mod tests {
     }
 
     #[test]
-    fn is_text_not_move_pointer_if_not_found() {
+    fn is_text_not_move_pointer_if_end_tag() {
         // arrange
-        let chars: Vec<char> = "<".chars().collect();
+        let chars: Vec<char> = "</foo>".chars().collect();
         let mut pointer = VecPointerRef::new(&chars);
 
         // act
-        let result = is_text(&mut pointer, false);
+        let result = is_text(&mut pointer, false, false);
 
         // assert
-        assert!(matches!(result, None));
+        assert_eq!(None, result);
         assert_eq!(0, pointer.index);
+    }
+
+    #[test]
+    fn is_text_not_move_pointer_if_start_tag() {
+        // arrange
+        let chars: Vec<char> = "<foo>".chars().collect();
+        let mut pointer = VecPointerRef::new(&chars);
+
+        // act
+        let result = is_text(&mut pointer, false, false);
+
+        // assert
+        assert_eq!(None, result);
+        assert_eq!(0, pointer.index);
+    }
+
+    #[test]
+    fn is_text_should_not_end_on_floating_triangle_bracket() {
+        // arrange
+        let chars: Vec<char> = "foo > bar < baz".chars().collect();
+        let mut pointer = VecPointerRef::new(&chars);
+
+        // act
+        let result = is_text(&mut pointer, false, false).unwrap();
+
+        // assert
+        assert_eq!(Token::Text(String::from("foo > bar < baz")), result);
+        assert_eq!(15, pointer.index);
+    }
+
+    #[test]
+    fn is_text_should_end_on_tag_end() {
+        // arrange
+        let chars: Vec<char> = "foo > bar </baz>".chars().collect();
+        let mut pointer = VecPointerRef::new(&chars);
+
+        // act
+        let result = is_text(&mut pointer, false, false).unwrap();
+
+        // assert
+        assert_eq!(Token::Text(String::from("foo > bar ")), result);
+        assert_eq!(10, pointer.index);
+    }
+
+    #[test]
+    fn is_text_should_allow_tag_like_strings_in_script_tags() {
+        // arrange
+        let chars: Vec<char> = "foo<bar></baz>".chars().collect();
+        let mut pointer = VecPointerRef::new(&chars);
+
+        // act
+        let result = is_text(&mut pointer, false, true).unwrap();
+
+        // assert
+        assert_eq!(Token::Text(String::from("foo<bar></baz>")), result);
+        assert_eq!(14, pointer.index);
     }
 }

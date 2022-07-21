@@ -144,7 +144,7 @@ pub enum XpathAxes {
 impl XpathAxes {
     /// Returns the [XpathAxes] corresponding to the given `text`, or [None] if the string
     /// is not a known axis.
-    pub fn from_str(text: &str) -> Option<Self> {
+    pub fn try_from_str(text: &str) -> Option<Self> {
         match text {
             "parent" => Some(XpathAxes::Parent),
             "child" => Some(XpathAxes::Child),
