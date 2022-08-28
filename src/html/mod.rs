@@ -27,7 +27,7 @@ pub use crate::html::parse::parse;
 type TagAttributes = HashMap<String, String>;
 
 /// An HTML tag and its attributes.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct HtmlTag {
     /// Name of the tag.
     pub name: String,
@@ -111,6 +111,7 @@ impl HtmlTag {
 }
 
 /// An HTML node can be either a tag or raw text.
+#[derive(Clone)]
 pub enum HtmlNode {
     /// An HTML tag.
     Tag(HtmlTag),
@@ -199,6 +200,7 @@ impl HtmlNode {
 /// HTML document tree represented by an indextree arena and a root node.
 ///
 /// Documents must have a single root node to be valid.
+#[derive(Clone)]
 pub struct HtmlDocument {
     arena: Arena<HtmlNode>,
     /// The root node of the document.
