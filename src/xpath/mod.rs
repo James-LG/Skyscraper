@@ -48,14 +48,14 @@ pub use crate::xpath::parse::parse;
 ///       ^^^^^^^^^^^^^ ^^^^^^^^^^^
 ///       Predicate 1   Predicate 2
 /// ```
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct XpathQuery {
     /// The list of conditions.
     pub predicates: Vec<XpathPredicate>,
 }
 
 /// A single condition for an XPath search.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum XpathPredicate {
     /// Asserts that an attribute has a value greater than the given `value`.
     /// 
@@ -161,7 +161,7 @@ impl Default for XpathAxes {
 }
 
 /// A type of node to search for.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum XpathSearchNodeType {
     /// Search for a tag with the given name.
     Element(String),
@@ -182,7 +182,7 @@ impl Default for XpathSearchNodeType {
 /// ^-------------------^----
 /// Search Item 1       Search item 2
 /// ```
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct XpathSearchItem {
     /// The axis to search on.
     pub axis: XpathAxes,
@@ -218,6 +218,7 @@ pub struct XpathSearchItem {
 /// # Ok(())
 /// # }
 /// ```
+#[derive(Clone)]
 pub struct Xpath {
     items: Vec<XpathSearchItem>,
 }
