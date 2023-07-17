@@ -168,10 +168,10 @@ pub fn is_double_colon(pointer: &mut VecPointerRef<char>) -> Option<Token> {
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 pub fn is_number(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     if let Some(c) = pointer.current() {
-        if c.is_digit(10) {
+        if c.is_ascii_digit() {
             let mut num = c.to_string();
             while let Some(c) = pointer.next() {
-                if c.is_digit(10) {
+                if c.is_ascii_digit() {
                     num.push(*c);
                 } else {
                     break;
@@ -182,7 +182,7 @@ pub fn is_number(pointer: &mut VecPointerRef<char>) -> Option<Token> {
             if let Some('.') = pointer.current() {
                 num.push('.');
                 while let Some(c) = pointer.next() {
-                    if c.is_digit(10) {
+                    if c.is_ascii_digit() {
                         num.push(*c);
                     } else {
                         break;

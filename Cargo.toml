@@ -16,10 +16,13 @@ categories = ["parsing"]
 indextree = "4.3.1"
 lazy_static = "1.4.0"
 thiserror = "1.0.30"
-indexmap = "1.8.2"
+indexmap = "2.0.0"
+log = "0.4.19"
 
 [dev-dependencies]
-criterion = "0.3"
+criterion = "0.5.1"
+mockall = "0.11.4"
+indoc = "2"
 
 [[bench]]
 name = "benchmarks"

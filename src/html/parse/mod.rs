@@ -1,33 +1,22 @@
 //! Create [HtmlDocuments](HtmlDocument) from textual input.
 
+// modules
+pub mod malformed_html_handlers;
+pub mod parse_options;
+
+// re-exports
+pub use parse_options::ParseOptionsBuilder;
+
+// regular imports
 use std::iter::Peekable;
 
 use crate::html::tokenizer::{self, LexError, Token};
 use indextree::{Arena, Node, NodeId};
 use thiserror::Error;
 
-use super::{DocumentNode, HtmlDocument, HtmlNode, HtmlTag};
+use self::{malformed_html_handlers::MismatchedTagHandlerContext, parse_options::ParseOptions};
 
-lazy_static! {
-    /// List of HTML tags that do not have end tags.
-    static ref UNPAIRED_TAGS: Vec<&'static str> = vec![
-        "meta",
-        "link",
-        "img",
-        "input",
-        "br",
-        "hr",
-        "col",
-        "area",
-        "base",
-        "embed",
-        "keygen",
-        "param",
-        "source",
-        "track",
-        "wbr"
-    ];
-}
+use super::{DocumentNode, HtmlDocument, HtmlNode, HtmlTag, VOID_TAGS};
 
 /// An error occuring during the parsing of text to an [HtmlDocument].
 #[derive(Error, Debug)]
@@ -37,10 +26,10 @@ pub enum ParseError {
     LexError(#[from] LexError),
 
     /// Another tag was started before the previous tag was closed.
-    /// 
+    ///
     /// The starting and closing of tags in this scenario is not referring to
     /// the contents of the tag, but the tag definition itself as shown below.
-    /// 
+    ///
     /// ```text
     /// <div  </div>
     /// ^   ^ ^^   ^
@@ -53,10 +42,10 @@ pub enum ParseError {
     OpenTagBeforePreviousClosed,
 
     /// Attempted to close a tag before it was opened
-    /// 
+    ///
     /// The starting and closing of tags in this scenario is not referring to
     /// the contents of the tag, but the tag definition itself as shown below.
-    /// 
+    ///
     /// ```text
     ///  div> </div>
     /// ^   ^ ^^   ^
@@ -69,14 +58,14 @@ pub enum ParseError {
     TagClosedBeforeOpened,
 
     /// Attempted to apply an end tag to an [HtmlNode::Text].
-    /// 
+    ///
     /// This would most likely caused by a bug in the parser or tokenizer,
     /// rather than being due to malformed HTML input.
     #[error("End tag attempted to close a text node")]
     EndTagForTextNode,
 
     /// Caused when the end tag name does not match the start tag name.
-    /// 
+    ///
     /// ```text
     /// <div></span>
     ///  ^^^   ^^^^
@@ -88,13 +77,14 @@ pub enum ParseError {
         /// The name of the ending tag. E.g. `</div` = "div".
         end_name: String,
         /// The name of the starting tag. E.g. `<div` = "div".
-        open_name: String },
+        open_name: String,
+    },
 
     /// An identifier token such as "div" was found outside of a tag.
-    /// 
+    ///
     /// This would most likely be caused by a bug in the tokenizer, as
     /// any string outside of a tag should be marked as a text token.
-    /// 
+    ///
     /// For example this should *not* cause an error:
     /// ```text
     /// <div>div</div>
@@ -104,7 +94,7 @@ pub enum ParseError {
     #[error("Identifier `{identifier}` encountered outside of tag.")]
     IdentifierOutsideTag {
         /// The identifier that was found outside of a tag.
-        identifier: String
+        identifier: String,
     },
 
     /// Attempted to add an HTML attribute such as `id="node"` to an [HtmlNode::Text].
@@ -112,7 +102,7 @@ pub enum ParseError {
     AttributeOnTextNode,
 
     /// Missing a quoted literal value after an assignment sign in a tag.
-    /// 
+    ///
     /// ```text
     /// <div id =  />
     ///  ^^^ ^^ ^ ^
@@ -124,11 +114,11 @@ pub enum ParseError {
     #[error("Expected literal after assignment sign {tag_name}")]
     MissingLiteralAfterAssignmentSign {
         /// The name of the tag with the error.
-        tag_name: String
+        tag_name: String,
     },
 
     /// Token iterator ended while a tag was still being parsed.
-    /// 
+    ///
     /// ```text
     /// <div
     ///     ^
@@ -142,13 +132,13 @@ pub enum ParseError {
     TextBeforePreviousClosed,
 
     /// Could not find the root node of the document.
-    /// 
+    ///
     /// Check if the document is empty or malformed.
     #[error("No root node found")]
     MissingRootNode,
 
     /// Special <!DOCTYPE html> tag was missing the `html` type.
-    /// 
+    ///
     /// ```text
     /// <!DOCTYPE >
     ///          ^
@@ -158,170 +148,225 @@ pub enum ParseError {
     MissingHtmlAfterDoctype,
 
     /// Special <!DOCTYPE html> tag was missing the tag close token.
-    /// 
+    ///
     /// ```text
     /// <!DOCTYPE html
     ///                ^
     ///                └ Error: Missing tag close ">"
     /// ```
     #[error("Expected tag close after !DOCSTRING html")]
-    MissingTagCloseAfterDocstring,
+    MissingTagCloseAfterDoctype,
 }
 
-/// Parse the HTML text into a document object.
-pub fn parse(text: &str) -> Result<HtmlDocument, ParseError> {
-    let tokens = tokenizer::lex(text)?;
+/// Represents the current state of a [Parser].
+#[derive(Default)]
+pub struct ParserState {
+    arena: Arena<HtmlNode>,
+    root_key_o: Option<NodeId>,
+    cur_key_o: Option<NodeId>,
+    has_tag_open: bool,
+}
 
-    let mut arena: Arena<HtmlNode> = Arena::new();
-    let mut root_key_o: Option<NodeId> = None;
-    let mut cur_key_o: Option<NodeId> = None;
-    let mut has_tag_open = false;
+/// Handles the parsing of HTML text into an [HtmlDocument].
+///
+/// ```rust
+/// # use std::error::Error;
+/// # fn main() -> Result<(), Box<dyn Error>> {
+/// use skyscraper::html::parse::{Parser, ParseOptionsBuilder, malformed_html_handlers::CloseMismatchedTagHandler};
+/// let input = r#"<html>hi</html>"#;
+///
+/// let options = ParseOptionsBuilder::new()
+///     .with_mismatched_tag_handler(Box::new(CloseMismatchedTagHandler::new(None)))
+///     .build();
+///
+/// let html = Parser::new(options).parse(input)?;
+/// # Ok(())
+/// # }
+/// ```
+pub struct Parser {
+    options: ParseOptions,
+}
 
-    let mut tokens = tokens.into_iter().peekable();
+impl Parser {
+    /// Creates a new [Parser].
+    pub fn new(options: ParseOptions) -> Self {
+        Self { options }
+    }
 
-    while let Some(token) = tokens.next() {
-        match token {
-            Token::StartTag(tag_name) => {
-                // Skip the special doctype tag so a proper root is selected.
-                if is_doctype(&tag_name, &mut tokens)? {
-                    continue;
+    /// Parses `text` into an [HtmlDocument].
+    pub fn parse(&self, text: &str) -> Result<HtmlDocument, ParseError> {
+        let tokens = tokenizer::lex(text)?;
+
+        let mut state = ParserState {
+            arena: Arena::new(),
+            root_key_o: None,
+            cur_key_o: None,
+            has_tag_open: false,
+        };
+
+        let mut tokens = tokens.into_iter().peekable();
+
+        while let Some(token) = tokens.next() {
+            match token {
+                Token::StartTag(tag_name) => {
+                    // Skip the special doctype tag so a proper root is selected.
+                    if is_doctype(&tag_name, &mut tokens)? {
+                        continue;
+                    }
+
+                    if state.has_tag_open {
+                        return Err(ParseError::OpenTagBeforePreviousClosed);
+                    }
+
+                    state.has_tag_open = true;
+
+                    let node = HtmlNode::Tag(HtmlTag::new(tag_name));
+                    let node_key = state.arena.new_node(node);
+
+                    if let Some(cur_key) = state.cur_key_o {
+                        cur_key.append(node_key, &mut state.arena);
+                    }
+
+                    state.cur_key_o = Some(node_key);
+                    if state.root_key_o.is_none() {
+                        state.root_key_o = state.cur_key_o;
+                    }
                 }
+                Token::TagClose => {
+                    if !state.has_tag_open {
+                        return Err(ParseError::TagClosedBeforeOpened);
+                    }
 
-                if has_tag_open {
-                    return Err(ParseError::OpenTagBeforePreviousClosed);
+                    // This will be none if the root node was just closed.
+                    if state.cur_key_o.is_some() {
+                        let cur_tree_node = get_tree_node(state.cur_key_o, &state.arena);
+                        match cur_tree_node.get() {
+                            HtmlNode::Tag(cur_tag) => {
+                                // If this is an unpaired tag, the tag begins and ends with this token.
+                                if VOID_TAGS.contains(&cur_tag.name.as_str()) {
+                                    // Set current key to the parent of this tag.
+                                    state.cur_key_o = cur_tree_node.parent();
+                                }
+                            }
+                            HtmlNode::Text(_) => return Err(ParseError::EndTagForTextNode),
+                        }
+                    }
+
+                    state.has_tag_open = false;
                 }
+                Token::EndTag(tag_name) => {
+                    if state.has_tag_open {
+                        return Err(ParseError::OpenTagBeforePreviousClosed);
+                    }
 
-                has_tag_open = true;
+                    state.has_tag_open = true;
 
-                let node = HtmlNode::Tag(HtmlTag::new(tag_name));
-                let node_key = arena.new_node(node);
+                    let cur_tree_node = get_tree_node(state.cur_key_o, &state.arena);
+                    let cur_html_node = cur_tree_node.get().clone();
 
-                if let Some(cur_key) = cur_key_o {
-                    cur_key.append(node_key, &mut arena);
-                }
-
-                cur_key_o = Some(node_key);
-                if root_key_o.is_none() {
-                    root_key_o = cur_key_o;
-                }
-            }
-            Token::TagClose => {
-                if !has_tag_open {
-                    return Err(ParseError::TagClosedBeforeOpened);
-                }
-
-                // This will be none if the root node was just closed.
-                if cur_key_o.is_some() {
-                    let cur_tree_node = get_tree_node(cur_key_o, &arena);
-                    match cur_tree_node.get() {
+                    match cur_html_node {
                         HtmlNode::Tag(cur_tag) => {
-                            // If this is an unpaired tag, the tag begins and ends with this token.
-                            if UNPAIRED_TAGS.contains(&cur_tag.name.as_str()) {
-                                // Set current key to the parent of this tag.
-                                cur_key_o = cur_tree_node.parent();
+                            if cur_tag.name != tag_name {
+                                let handler_context = MismatchedTagHandlerContext {
+                                    open_tag_name: &cur_tag.name,
+                                    close_tag_name: &tag_name,
+                                    parser_state: &mut state,
+                                };
+
+                                self.options
+                                    .mismatched_tag_handler
+                                    .invoke(handler_context)?;
                             }
                         }
                         HtmlNode::Text(_) => return Err(ParseError::EndTagForTextNode),
                     }
+
+                    // Set current key to the parent of this tag.
+                    let cur_tree_node = get_tree_node(state.cur_key_o, &state.arena);
+                    state.cur_key_o = cur_tree_node.parent();
                 }
-
-                has_tag_open = false;
-            }
-            Token::EndTag(tag_name) => {
-                if has_tag_open {
-                    return Err(ParseError::OpenTagBeforePreviousClosed);
-                }
-
-                has_tag_open = true;
-
-                let cur_tree_node = get_tree_node(cur_key_o, &arena);
-                match cur_tree_node.get() {
-                    HtmlNode::Tag(cur_tag) => {
-                        if cur_tag.name != tag_name {
-                            return Err(ParseError::EndTagMismatch {
-                                end_name: cur_tag.name.to_string(),
-                                open_name: tag_name,
-                            });
-                        }
+                Token::TagCloseAndEnd => {
+                    if !state.has_tag_open {
+                        return Err(ParseError::TagClosedBeforeOpened);
                     }
-                    HtmlNode::Text(_) => return Err(ParseError::EndTagForTextNode),
+
+                    state.has_tag_open = false;
+
+                    let cur_tree_node = get_tree_node(state.cur_key_o, &state.arena);
+                    if let HtmlNode::Text(_) = cur_tree_node.get() {
+                        return Err(ParseError::EndTagForTextNode);
+                    }
+
+                    // Set current key to the parent of this tag.
+                    state.cur_key_o = cur_tree_node.parent();
                 }
+                Token::Identifier(iden) => {
+                    if !state.has_tag_open {
+                        return Err(ParseError::IdentifierOutsideTag { identifier: iden });
+                    }
 
-                // Set current key to the parent of this tag.
-                cur_key_o = cur_tree_node.parent();
-            }
-            Token::TagCloseAndEnd => {
-                if !has_tag_open {
-                    return Err(ParseError::TagClosedBeforeOpened);
-                }
+                    let token = tokens.peek().ok_or(ParseError::UnexpectedEndOfTokens)?;
 
-                has_tag_open = false;
+                    if let Token::AssignmentSign = token {
+                        tokens.next();
 
-                let cur_tree_node = get_tree_node(cur_key_o, &arena);
-                if let HtmlNode::Text(_) = cur_tree_node.get() {
-                    return Err(ParseError::EndTagForTextNode);
-                }
+                        let token = tokens.next().ok_or(ParseError::UnexpectedEndOfTokens)?;
 
-                // Set current key to the parent of this tag.
-                cur_key_o = cur_tree_node.parent();
-            }
-            Token::Identifier(iden) => {
-                if !has_tag_open {
-                    return Err(ParseError::IdentifierOutsideTag { identifier: iden });
-                }
-
-                let token = tokens.peek().ok_or(ParseError::UnexpectedEndOfTokens)?;
-
-                if let Token::AssignmentSign = token {
-                    tokens.next();
-
-                    let token = tokens.next().ok_or(ParseError::UnexpectedEndOfTokens)?;
-
-                    let cur_tree_node = get_mut_tree_node(cur_key_o, &mut arena);
-                    match cur_tree_node.get_mut() {
-                        HtmlNode::Tag(tag) => {
-                            if let Token::Literal(lit) = token {
-                                tag.attributes.insert(iden, lit);
-                            } else {
-                                return Err(ParseError::MissingLiteralAfterAssignmentSign {
-                                    tag_name: tag.name.to_string(),
-                                })
+                        let cur_tree_node = get_mut_tree_node(state.cur_key_o, &mut state.arena);
+                        match cur_tree_node.get_mut() {
+                            HtmlNode::Tag(tag) => {
+                                if let Token::Literal(lit) = token {
+                                    tag.attributes.insert(iden, lit);
+                                } else {
+                                    return Err(ParseError::MissingLiteralAfterAssignmentSign {
+                                        tag_name: tag.name.to_string(),
+                                    });
+                                }
                             }
+                            HtmlNode::Text(_) => return Err(ParseError::AttributeOnTextNode),
                         }
-                        HtmlNode::Text(_) => return Err(ParseError::AttributeOnTextNode),
-                    }
-                } else {
-                    // Attribute has no value; e.g., <script defer></script>
-                    let cur_tree_node = get_mut_tree_node(cur_key_o, &mut arena);
-                    match cur_tree_node.get_mut() {
-                        HtmlNode::Tag(tag) => {
-                            tag.attributes.insert(iden, String::from(""));
+                    } else {
+                        // Attribute has no value; e.g., <script defer></script>
+                        let cur_tree_node = get_mut_tree_node(state.cur_key_o, &mut state.arena);
+                        match cur_tree_node.get_mut() {
+                            HtmlNode::Tag(tag) => {
+                                tag.attributes.insert(iden, String::from(""));
+                            }
+                            HtmlNode::Text(_) => return Err(ParseError::AttributeOnTextNode),
                         }
-                        HtmlNode::Text(_) => return Err(ParseError::AttributeOnTextNode),
                     }
                 }
-            }
-            Token::Text(text) => {
-                if has_tag_open {
-                    return Err(ParseError::TextBeforePreviousClosed);
-                }
+                Token::Text(text) => {
+                    if state.has_tag_open {
+                        return Err(ParseError::TextBeforePreviousClosed);
+                    }
 
-                let node = HtmlNode::Text(text);
-                let node_key = arena.new_node(node);
+                    let node = HtmlNode::Text(text.trim().to_string());
+                    let node_key = state.arena.new_node(node);
 
-                if let Some(cur_key) = cur_key_o {
-                    cur_key.append(node_key, &mut arena);
+                    if let Some(cur_key) = state.cur_key_o {
+                        cur_key.append(node_key, &mut state.arena);
+                    }
                 }
+                _ => (),
             }
-            _ => (),
         }
-    }
 
-    if let Some(root_key) = root_key_o {
-        return Ok(HtmlDocument::new(arena, DocumentNode::new(root_key)));
-    }
+        if let Some(root_key) = state.root_key_o {
+            return Ok(HtmlDocument::new(state.arena, DocumentNode::new(root_key)));
+        }
 
-    Err(ParseError::MissingRootNode)
+        Err(ParseError::MissingRootNode)
+    }
+}
+
+/// Parses HTML text into an [HtmlDocument].
+///
+/// This is a convenience method that creates a new [Parser] with default [ParseOptions].
+/// To change the options, use [Parser] directly.
+pub fn parse(text: &str) -> Result<HtmlDocument, ParseError> {
+    let options = ParseOptionsBuilder::new().build();
+    Parser::new(options).parse(text)
 }
 
 fn is_doctype(
@@ -338,7 +383,7 @@ fn is_doctype(
             let token = tokens.next().ok_or(ParseError::UnexpectedEndOfTokens)?;
 
             if !matches!(token, Token::TagClose) {
-                return Err(ParseError::MissingTagCloseAfterDocstring);
+                return Err(ParseError::MissingTagCloseAfterDoctype);
             }
         } else {
             return Err(ParseError::MissingHtmlAfterDoctype);
@@ -361,12 +406,12 @@ fn get_mut_tree_node(key: Option<NodeId>, arena: &mut Arena<HtmlNode>) -> &mut N
 }
 
 #[cfg(test)]
-mod tests {
+pub mod test_helpers {
     use std::collections::HashMap;
 
-    use super::*;
+    use crate::html::{DocumentNode, HtmlDocument};
 
-    fn assert_tag(
+    pub fn assert_tag(
         document: &HtmlDocument,
         doc_node: DocumentNode,
         tag_name: &str,
@@ -386,12 +431,22 @@ mod tests {
         return doc_node.children(&document).collect();
     }
 
-    fn assert_text(document: &HtmlDocument, key: DocumentNode, text: &str) {
+    pub fn assert_text(document: &HtmlDocument, key: DocumentNode, text: &str) {
         let html_node = document.get_html_node(&key).unwrap();
 
         let node_text = html_node.unwrap_text();
-        assert_eq!(String::from(text), node_text.trim());
+        assert_eq!(String::from(text), node_text);
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::{
+        test_helpers::{assert_tag, assert_text},
+        *,
+    };
 
     #[test]
     fn parse_works() {
