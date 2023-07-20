@@ -1,5 +1,5 @@
 //! Parse and apply XPath expressions to HTML documents.
-//! 
+//!
 //! # Example: parse and apply an XPath expression.
 //! ```rust
 //! # use std::error::Error;
@@ -17,12 +17,12 @@
 //! </div>
 //! "##;
 //! let document = html::parse(html_text)?;
-//! 
+//!
 //! // Parse and apply the xpath.
 //! let expr = xpath::parse("//div[@class='foo']/span")?;
 //! let results = expr.apply(&document)?;
 //! assert_eq!(1, results.len());
-//! 
+//!
 //! // Get text from the node
 //! let text = results[0].get_text(&document).expect("text missing");
 //! assert_eq!("yes", text);
@@ -42,7 +42,7 @@ use thiserror::Error;
 pub use crate::xpath::parse::parse;
 
 /// Represents a set of additional conditions for a single XPath search.
-/// 
+///
 /// ```text
 /// //div[@class="node" @id="input"]
 ///       ^^^^^^^^^^^^^ ^^^^^^^^^^^
@@ -58,42 +58,42 @@ pub struct XpathQuery {
 #[derive(Debug, PartialEq, Clone)]
 pub enum XpathPredicate {
     /// Asserts that an attribute has a value greater than the given `value`.
-    /// 
+    ///
     /// Example: `price>3`
     GreaterThan {
         /// The attribute name.
         attribute: String,
         /// The value the attribute must be greater than.
-        value: u64
+        value: u64,
     },
 
     /// Asserts than an attribute has a value less than the given `value`.
-    /// 
+    ///
     /// Example: `price<3`
     LessThan {
         /// The attribute name.
         attribute: String,
         /// The value the attribute must be less than.
-        value: u64
+        value: u64,
     },
 
     /// Asserts than an attribute has a value equal to the given `value`.
-    /// 
+    ///
     /// Example: `id="input"`
     Equals {
         /// The attribute name.
         attribute: String,
         /// The value the attribute must be equal to.
-        value: String
+        value: String,
     },
 
     /// Combines two conditions with an 'and' relationship.
-    /// 
+    ///
     /// Example: `price>3 and price<5`
     And(Box<XpathPredicate>, Box<XpathPredicate>),
 
     ///Combines two conditions with an 'or' relationship.
-    /// 
+    ///
     /// Example: `price<3 or price>5`
     Or(Box<XpathPredicate>, Box<XpathPredicate>),
 }
@@ -129,9 +129,10 @@ impl XpathQuery {
 }
 
 /// XPath axes as defined in <https://www.w3.org/TR/2017/REC-xpath-31-20170321/#axes>.
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Default, Debug, PartialEq, Clone, Copy)]
 pub enum XpathAxes {
     /// Get direct children.
+    #[default]
     Child,
 
     /// Get all descendants and self.
@@ -149,14 +150,8 @@ impl XpathAxes {
             "parent" => Some(XpathAxes::Parent),
             "child" => Some(XpathAxes::Child),
             "descendent-or-self" => Some(XpathAxes::DescendantOrSelf),
-            _ => None
+            _ => None,
         }
-    }
-}
-
-impl Default for XpathAxes {
-    fn default() -> Self {
-        XpathAxes::Child
     }
 }
 
@@ -176,7 +171,7 @@ impl Default for XpathSearchNodeType {
 }
 
 /// Everything needed for a single XPath search
-/// 
+///
 /// ```text
 /// //div[@class="node"]/span
 /// ^-------------------^----
@@ -195,7 +190,7 @@ pub struct XpathSearchItem {
 }
 
 /// A full XPath expression.
-/// 
+///
 /// # Example: parse and apply an XPath expression.
 /// ```rust
 /// # use std::error::Error;
@@ -209,11 +204,11 @@ pub struct XpathSearchItem {
 /// </div>
 /// "##;
 /// let document = html::parse(html_text)?;
-/// 
+///
 /// // Parse and apply the xpath.
 /// let expr = xpath::parse("/div/span")?;
 /// let results = expr.apply(&document)?;
-/// 
+///
 /// assert_eq!(2, results.len());
 /// # Ok(())
 /// # }
@@ -225,12 +220,11 @@ pub struct Xpath {
 
 /// An error occurring while applying an [Xpath] expression
 /// to an [HtmlDocument].
-/// 
+///
 /// **Note:** Currently empty. Exists in case items are added
 /// while expanind Skyscraper feature set.
 #[derive(Error, Debug)]
-pub enum ApplyError {
-}
+pub enum ApplyError {}
 
 /// An ordered set of unique [DocumentNodes](DocumentNode).
 ///
@@ -242,27 +236,30 @@ pub struct DocumentNodeSet {
     /// `has_super_root` states that there is a fake node that we should pretend is included
     /// in `index_set`. It is defined as the parent of `document.root_node`. Its purpose
     /// is to facilitate the selection of `document.root_node` absolute path queries.
-    has_super_root: bool
+    has_super_root: bool,
 }
 
 impl From<IndexSet<DocumentNode>> for DocumentNodeSet {
     fn from(index_set: IndexSet<DocumentNode>) -> Self {
-        DocumentNodeSet { index_set, has_super_root: false }
+        DocumentNodeSet {
+            index_set,
+            has_super_root: false,
+        }
     }
 }
 
 impl DocumentNodeSet {
     /// Create a new empty [DocumentNodeSet].
-    /// 
+    ///
     /// Setting `has_super_root` includes a fake node dubbed the "super root" in this
     /// [DocumentNodeSet]. The super root node is defined as the parent of
     /// `document.root_node` and can be used to match the document's root node with a query.
-    /// 
+    ///
     /// See [search] for more information on using `has_super_root`.
     pub fn new(has_super_root: bool) -> DocumentNodeSet {
         DocumentNodeSet {
             index_set: Default::default(),
-            has_super_root
+            has_super_root,
         }
     }
 
@@ -401,15 +398,9 @@ fn apply_axis(
     searchable_nodes: &DocumentNodeSet,
 ) -> DocumentNodeSet {
     match axis {
-        XpathAxes::Child => {
-            get_all_children(document, searchable_nodes)
-        }
-        XpathAxes::DescendantOrSelf => {
-            get_all_descendants_or_self(document, searchable_nodes)
-        }
-        XpathAxes::Parent => {
-            get_all_parents(document, searchable_nodes)
-        }
+        XpathAxes::Child => get_all_children(document, searchable_nodes),
+        XpathAxes::DescendantOrSelf => get_all_descendants_or_self(document, searchable_nodes),
+        XpathAxes::Parent => get_all_parents(document, searchable_nodes),
     }
 }
 
@@ -437,7 +428,11 @@ fn get_all_descendants_or_self(
     document: &HtmlDocument,
     matched_nodes: &DocumentNodeSet,
 ) -> DocumentNodeSet {
-    fn internal_get_all_descendants_or_self(node_id: DocumentNode, document: &HtmlDocument, descendant_or_self_nodes: &mut DocumentNodeSet) {
+    fn internal_get_all_descendants_or_self(
+        node_id: DocumentNode,
+        document: &HtmlDocument,
+        descendant_or_self_nodes: &mut DocumentNodeSet,
+    ) {
         descendant_or_self_nodes.insert(node_id);
         let mut children: DocumentNodeSet = node_id.children(document).collect();
         if !children.is_empty() {
@@ -452,7 +447,11 @@ fn get_all_descendants_or_self(
         // Pretend a super root item *above* the official document root is included
         // in the given matched_nodes. Meaning we must now move down to the official document
         // root as it is a child of the super root.
-        internal_get_all_descendants_or_self(document.root_node, document, &mut descendant_or_self_nodes);
+        internal_get_all_descendants_or_self(
+            document.root_node,
+            document,
+            &mut descendant_or_self_nodes,
+        );
     }
 
     for node_id in matched_nodes {
@@ -478,7 +477,7 @@ fn get_all_parents(document: &HtmlDocument, matched_nodes: &DocumentNodeSet) -> 
 }
 
 /// Search for an HTML tag matching the given search parameters in the given list of nodes.
-/// 
+///
 /// # Example: search for a root node using `has_super_root`
 /// ```rust
 /// # use std::error::Error;
@@ -492,7 +491,7 @@ fn get_all_parents(document: &HtmlDocument, matched_nodes: &DocumentNodeSet) -> 
 /// </div>
 /// "##;
 /// let document = html::parse(html_text)?;
-/// 
+///
 /// let search_params = XpathSearchItem {
 ///     search_node_type: XpathSearchNodeType::Element(String::from("div")),
 ///     ..Default::default()
@@ -502,23 +501,23 @@ fn get_all_parents(document: &HtmlDocument, matched_nodes: &DocumentNodeSet) -> 
 ///     &document,
 ///     &DocumentNodeSet::new(true),
 /// ).unwrap();
-/// 
+///
 /// assert_eq!(1, result.len());
-/// 
+///
 /// let html_node = document.get_html_node(&result[0]).unwrap();
 /// let tag = html_node.unwrap_tag();
 /// assert_eq!("div", tag.name);
-/// 
+///
 /// # Ok(())
 /// # }
 /// ```
-/// 
+///
 /// # Example: search for child nodes node by starting from specified node
 /// ```rust
 /// # use std::error::Error;
 /// #[macro_use]
 /// extern crate indexmap;
-/// 
+///
 /// use skyscraper::{html, xpath::{self, XpathSearchItem, XpathSearchNodeType, DocumentNodeSet}};
 /// # fn main() -> Result<(), Box<dyn Error>> {
 /// // Parse the html text into a document.
@@ -529,7 +528,7 @@ fn get_all_parents(document: &HtmlDocument, matched_nodes: &DocumentNodeSet) -> 
 /// </div>
 /// "##;
 /// let document = html::parse(html_text)?;
-/// 
+///
 /// let search_params = XpathSearchItem {
 ///     search_node_type: XpathSearchNodeType::Element(String::from("span")),
 ///     ..Default::default()
@@ -539,17 +538,17 @@ fn get_all_parents(document: &HtmlDocument, matched_nodes: &DocumentNodeSet) -> 
 ///     &document,
 ///     &DocumentNodeSet::from(indexset![document.root_node]),
 /// ).unwrap();
-/// 
+///
 /// assert_eq!(2, result.len());
-/// 
+///
 /// # Ok(())
 /// # }
 /// ```
-/// 
+///
 /// # Example: searching with an index and axis
 /// ```rust
 /// # use std::error::Error;
-/// 
+///
 /// use skyscraper::{html, xpath::{self, XpathSearchItem, XpathSearchNodeType, DocumentNodeSet, XpathAxes}};
 /// # fn main() -> Result<(), Box<dyn Error>> {
 /// // Parse the html text into a document.
@@ -560,7 +559,7 @@ fn get_all_parents(document: &HtmlDocument, matched_nodes: &DocumentNodeSet) -> 
 /// </div>
 /// "##;
 /// let document = html::parse(html_text)?;
-/// 
+///
 /// let search_params = XpathSearchItem {
 ///     search_node_type: XpathSearchNodeType::Element(String::from("span")),
 ///     axis: XpathAxes::DescendantOrSelf,
@@ -572,29 +571,25 @@ fn get_all_parents(document: &HtmlDocument, matched_nodes: &DocumentNodeSet) -> 
 ///     &document,
 ///     &DocumentNodeSet::new(true),
 /// ).unwrap();
-/// 
+///
 /// assert_eq!(1, result.len());
-/// 
+///
 /// let html_node = document.get_html_node(&result[0]).unwrap();
 /// let tag = html_node.unwrap_tag();
 /// assert_eq!("span", tag.name);
-/// 
+///
 /// let text = result[0].get_text(&document).unwrap();
 /// assert_eq!("world", text);
-/// 
+///
 /// # Ok(())
 /// # }
 /// ```
 pub fn search(
     search_item: &XpathSearchItem,
     document: &HtmlDocument,
-    searchable_nodes: &DocumentNodeSet
+    searchable_nodes: &DocumentNodeSet,
 ) -> Result<DocumentNodeSet, ApplyError> {
-    let searchable_nodes = apply_axis(
-        document,
-        &search_item.axis,
-        searchable_nodes,
-    );
+    let searchable_nodes = apply_axis(document, &search_item.axis, searchable_nodes);
 
     let mut matches = DocumentNodeSet::new(searchable_nodes.has_super_root);
 
@@ -612,12 +607,12 @@ pub fn search(
                                 matches.insert(*node_id);
                             }
                         }
-                    },
+                    }
                     HtmlNode::Text(_) => continue,
                 },
                 XpathSearchNodeType::Any => {
                     matches.insert(*node_id);
-                },
+                }
             }
         }
     }
@@ -653,12 +648,7 @@ mod test {
             search_node_type: XpathSearchNodeType::Element(String::from("root")),
             ..Default::default()
         };
-        let result = search(
-            &search_params,
-            &document,
-            &DocumentNodeSet::new(true),
-        )
-        .unwrap();
+        let result = search(&search_params, &document, &DocumentNodeSet::new(true)).unwrap();
 
         assert_eq!(1, result.len());
         let node = document.get_html_node(&result[0]).unwrap();
@@ -684,12 +674,7 @@ mod test {
             index: Some(2),
             ..Default::default()
         };
-        let result = search(
-            &search_params,
-            &document,
-            &DocumentNodeSet::new(true),
-        )
-        .unwrap();
+        let result = search(&search_params, &document, &DocumentNodeSet::new(true)).unwrap();
 
         assert_eq!(1, result.len());
         let node = document.get_html_node(&result[0]).unwrap();
@@ -718,12 +703,7 @@ mod test {
             axis: XpathAxes::DescendantOrSelf,
             ..Default::default()
         };
-        let result = search(
-            &search_params,
-            &document,
-            &DocumentNodeSet::new(true),
-        )
-        .unwrap();
+        let result = search(&search_params, &document, &DocumentNodeSet::new(true)).unwrap();
 
         assert_eq!(3, result.len());
 
@@ -759,12 +739,7 @@ mod test {
             query: Some(query),
             ..Default::default()
         };
-        let result = search(
-            &search_params,
-            &document,
-            &DocumentNodeSet::new(true),
-        )
-        .unwrap();
+        let result = search(&search_params, &document, &DocumentNodeSet::new(true)).unwrap();
 
         assert_eq!(1, result.len());
 
@@ -805,12 +780,7 @@ mod test {
             query: Some(query),
             ..Default::default()
         };
-        let result = search(
-            &search_params,
-            &document,
-            &DocumentNodeSet::new(true),
-        )
-        .unwrap();
+        let result = search(&search_params, &document, &DocumentNodeSet::new(true)).unwrap();
 
         assert_eq!(1, result.len());
 

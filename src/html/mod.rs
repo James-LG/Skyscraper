@@ -1,5 +1,5 @@
 //! Parse HTML documents into [HtmlDocuments](HtmlDocument).
-//! 
+//!
 //! # Example: parse HTML text into a document
 //! ```rust
 //! use skyscraper::html::{self, parse::ParseError};
@@ -10,7 +10,7 @@
 //!         <div>Hello world</div>
 //!     </body>
 //! </html>"##;
-//! 
+//!
 //! let document = html::parse(html_text)?;
 //! # Ok(())
 //! # }
@@ -18,11 +18,32 @@
 pub mod parse;
 mod tokenizer;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt};
 
 use indextree::{Arena, NodeId};
 
 pub use crate::html::parse::parse;
+
+lazy_static! {
+    /// List of HTML tags that do not have end tags and cannot have any content.
+    static ref VOID_TAGS: Vec<&'static str> = vec![
+        "meta",
+        "link",
+        "img",
+        "input",
+        "br",
+        "hr",
+        "col",
+        "area",
+        "base",
+        "embed",
+        "keygen",
+        "param",
+        "source",
+        "track",
+        "wbr"
+    ];
+}
 
 type TagAttributes = HashMap<String, String>;
 
@@ -44,9 +65,7 @@ impl HtmlTag {
             attributes: HashMap::new(),
         }
     }
-}
 
-impl HtmlTag {
     /// Gets any direct HtmlNode::Text children and concatenates them into a single string
     /// separated by a space character if no whitespace already separates them.
     pub fn get_text(&self, doc_node: &DocumentNode, document: &HtmlDocument) -> Option<String> {
@@ -98,12 +117,13 @@ impl HtmlTag {
         match o_text {
             Some(t) => {
                 // If whitespace is already separating them, do not add another.
-                if t.ends_with(|ch: char| ch.is_whitespace()) || append_text.starts_with(|ch: char| ch.is_whitespace()) {
+                if t.ends_with(|ch: char| ch.is_whitespace())
+                    || append_text.starts_with(|ch: char| ch.is_whitespace())
+                {
                     format!("{}{}", t, append_text)
                 } else {
                     format!("{} {}", t, append_text)
                 }
-                
             }
             None => append_text,
         }
@@ -116,11 +136,11 @@ pub enum HtmlNode {
     /// An HTML tag.
     Tag(HtmlTag),
     /// Text content contained within [HtmlNode::Tag].
-    /// 
+    ///
     /// Kept as separate enum value rather than a field on [HtmlTag] so
     /// that order can be maintained in nodes containing a mix of text
     /// and tags.
-    /// 
+    ///
     /// # Example: order of mixed text and tag contents is preserved
     /// ```html
     /// <div>
@@ -128,7 +148,7 @@ pub enum HtmlNode {
     /// </div>
     /// ```
     /// Where the inner contents of `div` would be: `Text("Hello ")`, `Tag(span)`, `Text("!")`.
-    /// 
+    ///
     Text(String),
 }
 
@@ -175,7 +195,7 @@ impl HtmlNode {
     }
 
     /// If this is node is an [HtmlNode::Tag], unwrap and return it, otherwise panic.
-    /// 
+    ///
     /// Prefer using a `match`; only use this if you *know* this is a [HtmlNode::Tag], or
     /// if panicking is ok, such as during testing.
     pub fn unwrap_tag(&self) -> &HtmlTag {
@@ -186,7 +206,7 @@ impl HtmlNode {
     }
 
     /// If this is node is an [HtmlNode::Text], unwrap and return it, otherwise panic.
-    /// 
+    ///
     /// Prefer using a `match`; only use this if you *know* this is a [HtmlNode::Text], or
     /// if panicking is ok, such as during testing.
     pub fn unwrap_text(&self) -> &str {
@@ -219,25 +239,78 @@ impl HtmlDocument {
     }
 }
 
+impl fmt::Display for HtmlDocument {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fn display_indent(indent: u8, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            for _ in 0..indent {
+                write!(f, "    ")?;
+            }
+            Ok(())
+        }
+
+        fn display_node(
+            indent: u8,
+            doc: &HtmlDocument,
+            doc_node: &DocumentNode,
+            f: &mut fmt::Formatter<'_>,
+        ) -> fmt::Result {
+            let html_node = doc.get_html_node(doc_node).unwrap();
+
+            match html_node {
+                HtmlNode::Tag(tag) => {
+                    // display begin tag
+                    display_indent(indent, f)?;
+                    write!(f, "<{}", tag.name)?;
+                    for attribute in &tag.attributes {
+                        write!(f, r#" {}="{}""#, attribute.0, attribute.1)?;
+                    }
+                    writeln!(f, ">")?;
+
+                    // self-closing tags cannot have content or an end tag
+                    if !VOID_TAGS.contains(&tag.name.as_str()) {
+                        // recursively display all children
+                        let children = doc_node.children(doc);
+                        for child in children {
+                            display_node(indent + 1, doc, &child, f)?;
+                        }
+
+                        // display end tag
+                        display_indent(indent, f)?;
+                        writeln!(f, "</{}>", tag.name)?;
+                    }
+
+                    Ok(())
+                }
+                HtmlNode::Text(text) => {
+                    display_indent(indent, f)?;
+                    writeln!(f, "{}", text)
+                }
+            }
+        }
+
+        display_node(0, self, &self.root_node, f)
+    }
+}
+
 /// A key representing a single [HtmlNode] contained in a [HtmlDocument].
-/// 
+///
 /// Contains tree information such as parents and children.
-/// 
+///
 /// Implements [Copy] so that it can be easily passed around, unlike its associated [HtmlNode].
-/// 
+///
 /// # Example: get associated [HtmlNode]
-/// 
+///
 /// ```rust
 /// # use skyscraper::html::{self, DocumentNode, HtmlNode, parse::ParseError};
 /// # fn main() -> Result<(), ParseError> {
 /// // Parse the HTML text into a document
 /// let text = r#"<div/>"#;
 /// let document = html::parse(text)?;
-/// 
+///
 /// // Get the root document node's associated HTML node
 /// let doc_node: DocumentNode = document.root_node;
 /// let html_node = document.get_html_node(&doc_node).expect("root node must be in document");
-/// 
+///
 /// // Check we got the right node
 /// match html_node {
 ///     HtmlNode::Tag(tag) => assert_eq!(String::from("div"), tag.name),
@@ -246,25 +319,25 @@ impl HtmlDocument {
 /// # Ok(())
 /// # }
 /// ```
-/// 
+///
 /// # Example: get children and parents
-/// 
+///
 /// ```rust
 /// # use skyscraper::html::{self, DocumentNode, HtmlNode, parse::ParseError};
 /// # fn main() -> Result<(), ParseError> {
 /// // Parse the HTML text into a document
 /// let text = r#"<parent><child/><child/></parent>"#;
 /// let document = html::parse(text)?;
-/// 
+///
 /// // Get the children of the root node
 /// let parent_node: DocumentNode = document.root_node;
 /// let children: Vec<DocumentNode> = parent_node.children(&document).collect();
 /// assert_eq!(2, children.len());
-/// 
+///
 /// // Get the parent of both child nodes
 /// let parent_of_child0: DocumentNode = children[0].parent(&document).expect("parent of child 0 missing");
 /// let parent_of_child1: DocumentNode = children[1].parent(&document).expect("parent of child 1 missing");
-/// 
+///
 /// assert_eq!(parent_node, parent_of_child0);
 /// assert_eq!(parent_node, parent_of_child1);
 /// # Ok(())
@@ -282,22 +355,22 @@ impl DocumentNode {
     }
 
     /// Get the concatenated text of this node and all of its children.
-    /// 
+    ///
     /// Adds a space between elements for better readability.
-    /// 
+    ///
     /// # Example: get the text of a node
-    /// 
+    ///
     /// ```rust
     /// use skyscraper::html::{self, parse::ParseError};
     /// # fn main() -> Result<(), ParseError> {
     /// // Parse the text into a document.
     /// let text = r##"<parent>foo<child>bar</child>baz</parent>"##;
     /// let document = html::parse(text)?;
-    /// 
+    ///
     /// // Get all text of the root node.
     /// let doc_node = document.root_node;
     /// let text = doc_node.get_all_text(&document).expect("text missing");
-    /// 
+    ///
     /// assert_eq!("foo bar baz", text);
     /// # Ok(())
     /// # }
@@ -309,22 +382,22 @@ impl DocumentNode {
     }
 
     /// Get the concatenated text of this node.
-    /// 
+    ///
     /// Adds a space between elements for better readability.
-    /// 
+    ///
     /// # Example: get the text of a node
-    /// 
+    ///
     /// ```rust
     /// use skyscraper::html::{self, parse::ParseError};
     /// # fn main() -> Result<(), ParseError> {
     /// // Parse the text into a document.
     /// let html_text = r##"<parent>foo<child>bar</child>baz</parent>"##;
     /// let document = html::parse(html_text)?;
-    /// 
+    ///
     /// // Get all text of the root node.
     /// let doc_node = document.root_node;
     /// let text = doc_node.get_text(&document).expect("text missing");
-    /// 
+    ///
     /// assert_eq!("foo baz", text);
     /// # Ok(())
     /// # }
@@ -379,6 +452,8 @@ impl DocumentNode {
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use super::*;
 
     #[test]
@@ -561,5 +636,119 @@ mod tests {
 
         // assert
         assert!(attributes.is_none());
+    }
+
+    #[test]
+    fn html_document_display_should_output_same_text() {
+        // arrange
+        let text = indoc!(
+            r#"
+            <html>
+                <a>
+                    the
+                </a>
+                <b>
+                    quick
+                    <c>
+                        brown
+                    </c>
+                    fox
+                </b>
+                jumps
+                over
+                <d>
+                </d>
+                the lazy
+                <f>
+                    dog
+                </f>
+            </html>
+            "#,
+        );
+
+        let document = parse(&text).unwrap();
+
+        // act
+        let html_output = document.to_string();
+
+        // assert
+        assert_eq!(html_output, text);
+    }
+
+    #[test]
+    fn html_document_display_should_handle_attributes() {
+        // arrange
+        let text = indoc!(
+            r#"
+            <html @class="foo" @id="bar">
+            </html>
+            "#,
+        );
+
+        let document = parse(&text).unwrap();
+
+        // act
+        let html_output = document.to_string();
+
+        // assert
+        // the order of the attributes is undefined, so it must be deserialized and compared programatically
+        let result_document = parse(&html_output).unwrap();
+
+        let node = result_document
+            .get_html_node(&result_document.root_node)
+            .unwrap()
+            .unwrap_tag();
+
+        assert_eq!("html", node.name);
+        assert_eq!("foo", node.attributes["@class"]);
+        assert_eq!("bar", node.attributes["@id"]);
+    }
+
+    #[test]
+    fn html_document_display_should_expand_self_closing_tags() {
+        // arrange
+        let text = indoc!(
+            r#"
+            <html>
+                <a />
+            </html>
+            "#,
+        );
+
+        let document = parse(&text).unwrap();
+
+        // act
+        let html_output = document.to_string();
+
+        // assert
+        let expected_text = indoc!(
+            r#"
+            <html>
+                <a>
+                </a>
+            </html>
+            "#,
+        );
+        assert_eq!(html_output, expected_text);
+    }
+
+    #[test]
+    fn html_document_display_should_handle_void_tags() {
+        // arrange
+        let text = indoc!(
+            r#"
+            <html>
+                <br>
+            </html>
+            "#,
+        );
+
+        let document = parse(&text).unwrap();
+
+        // act
+        let html_output = document.to_string();
+
+        // assert
+        assert_eq!(html_output, text);
     }
 }
