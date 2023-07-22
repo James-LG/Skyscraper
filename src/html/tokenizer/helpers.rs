@@ -2,7 +2,7 @@ use crate::vecpointer::VecPointerRef;
 
 use super::Token;
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a StartTag [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a StartTag [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 ///
 /// StartTag is defined as `<{{String}}`
@@ -16,6 +16,7 @@ pub fn is_start_tag(pointer: &mut VecPointerRef<char>) -> Option<Token> {
             loop {
                 match pointer.next() {
                     Some(' ') | Some('>') | Some('/') => break,
+                    Some(c) if c.is_whitespace() => break,
                     Some(c) => {
                         name.push(*c);
                     }
@@ -32,7 +33,7 @@ pub fn is_start_tag(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to an EndTag [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to an EndTag [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 ///
 /// EndTag is defined as `</{{String}}`
@@ -44,6 +45,7 @@ pub fn is_end_tag(pointer: &mut VecPointerRef<char>) -> Option<Token> {
         loop {
             match pointer.next() {
                 Some(' ') | Some('>') => break,
+                Some(c) if c.is_whitespace() => break,
                 Some(c) => {
                     name.push(*c);
                 }
@@ -57,7 +59,7 @@ pub fn is_end_tag(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a Comment [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a Comment [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 ///
 /// Comment is defined as `<!--{{String}}-->`
@@ -83,7 +85,7 @@ pub fn is_comment(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to the end of a Comment [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to the end of a Comment [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 ///
 /// This is a helper method not used directly in the lexer.
@@ -100,7 +102,7 @@ pub fn is_end_comment(pointer: &mut VecPointerRef<char>) -> bool {
     false
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a TagClose [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a TagClose [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 ///
 /// TagClose is defined as `>`
@@ -112,7 +114,7 @@ pub fn is_tag_close(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a TagCloseAndEnd [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a TagCloseAndEnd [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 ///
 /// TagCloseAndEnd is defined as `/>`
@@ -124,7 +126,7 @@ pub fn is_tag_close_and_end(pointer: &mut VecPointerRef<char>) -> Option<Token> 
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a AssignmentSign [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a AssignmentSign [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 ///
 /// AssignmentSign is defined as `=`
@@ -136,7 +138,7 @@ pub fn is_assignment_sign(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a Literal [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a Literal [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 ///
 /// Literal is defined as `"{{String}}"` inside a tag definition.
@@ -180,25 +182,29 @@ pub fn is_literal(pointer: &mut VecPointerRef<char>, has_open_tag: bool) -> Opti
 }
 
 lazy_static! {
-    /// List of characters that end an Identifier [Symbol](Symbol).
-    static ref INAVLID_ID_CHARS: Vec<char> = vec![' ', '<', '>', '/', '=', '"'];
+    /// List of characters that end an Identifier [Token](Token).
+    static ref INAVLID_ID_CHARS: Vec<char> = vec!['<', '>', '/', '=', '"'];
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a Identifier [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a Identifier [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 ///
 /// Identifier is defined as any text inside a tag definition.
 pub fn is_identifier(pointer: &mut VecPointerRef<char>, has_open_tag: bool) -> Option<Token> {
+    fn valid_char(c: &char) -> bool {
+        !c.is_whitespace() && !INAVLID_ID_CHARS.contains(c)
+    }
+
     if !has_open_tag {
         return None;
     }
 
     if let Some(c) = pointer.current() {
-        if !INAVLID_ID_CHARS.contains(c) {
+        if valid_char(c) {
             let mut text: Vec<char> = vec![*c];
             loop {
                 match pointer.next() {
-                    Some(c) if INAVLID_ID_CHARS.contains(c) => break,
+                    Some(c) if !valid_char(c) => break,
                     Some(c) => {
                         text.push(*c);
                     }
@@ -214,11 +220,15 @@ pub fn is_identifier(pointer: &mut VecPointerRef<char>, has_open_tag: bool) -> O
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a Text [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a Text [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 ///
 /// Text is defined as any text outside a tag definition.
-pub fn is_text(pointer: &mut VecPointerRef<char>, has_open_tag: bool, in_script_tag: bool) -> Option<Token> {
+pub fn is_text(
+    pointer: &mut VecPointerRef<char>,
+    has_open_tag: bool,
+    in_script_tag: bool,
+) -> Option<Token> {
     if has_open_tag {
         return None;
     }
@@ -238,7 +248,6 @@ pub fn is_text(pointer: &mut VecPointerRef<char>, has_open_tag: bool, in_script_
 
                         // In a script tag the *only* thing that can end a text is an end script tag.
                         if in_script_tag {
-                            
                             if let Some(end_tag) = is_end_tag(pointer) {
                                 match end_tag {
                                     Token::EndTag(end_tag) => {
@@ -247,8 +256,11 @@ pub fn is_text(pointer: &mut VecPointerRef<char>, has_open_tag: bool, in_script_
                                             pointer.index = pointer_index;
                                             break;
                                         }
-                                    },
-                                    token => panic!("is_end_tag returned {:?} instead of Token::EndTag", token)
+                                    }
+                                    token => panic!(
+                                        "is_end_tag returned {:?} instead of Token::EndTag",
+                                        token
+                                    ),
                                 }
                             }
                         } else {
@@ -264,7 +276,7 @@ pub fn is_text(pointer: &mut VecPointerRef<char>, has_open_tag: bool, in_script_
                         // If the loop hasn't been broken at this point, add the '<' and move on.
                         pointer.index = pointer_index;
                         buffer.push('<');
-                    },
+                    }
                     Some(c) => {
                         if !c.is_whitespace() {
                             has_non_whitespace = true;
@@ -579,6 +591,19 @@ mod tests {
         // assert
         assert!(matches!(result, None));
         assert_eq!(0, pointer.index);
+    }
+
+    #[test]
+    fn is_identifier_should_not_match_newline() {
+        // arrange
+        let chars: Vec<char> = "\n".chars().collect();
+        let mut pointer = VecPointerRef::new(&chars);
+
+        // act
+        let result = is_identifier(&mut pointer, true);
+
+        // assert
+        assert!(matches!(result, None));
     }
 
     #[test]

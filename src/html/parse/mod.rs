@@ -488,6 +488,44 @@ mod tests {
     }
 
     #[test]
+    fn parse_should_trim_newlines_out_of_start_tag_names() {
+        // arrange
+        let text = r#"
+            <div
+                id="hi"
+                class="bye">
+            </div>
+            "#;
+
+        // act
+        let result = parse(text).unwrap();
+
+        // assert
+        // <div>
+        let mut attributes = HashMap::new();
+        attributes.insert("id", "hi");
+        attributes.insert("class", "bye");
+        assert_tag(&result, result.root_node, "div", Some(attributes));
+    }
+
+    #[test]
+    fn parse_should_trim_newlines_out_of_end_tag_names() {
+        // arrange
+        let text = r#"
+            <div>
+            </div
+            >
+            "#;
+
+        // act
+        let result = parse(text).unwrap();
+
+        // assert
+        // <div>
+        assert_tag(&result, result.root_node, "div", None);
+    }
+
+    #[test]
     fn parse_should_handle_attributes_without_value() {
         // arrange
         let html = r###"<script defer></script>"###;
