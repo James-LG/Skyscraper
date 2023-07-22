@@ -2,7 +2,7 @@ use crate::vecpointer::VecPointerRef;
 
 use super::Token;
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a DoubleSlash [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a DoubleSlash [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 pub fn is_double_slash(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     if let (Some('/'), Some('/')) = (pointer.current(), pointer.peek()) {
@@ -13,7 +13,7 @@ pub fn is_double_slash(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a Slash [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a Slash [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 pub fn is_slash(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     if let Some('/') = pointer.current() {
@@ -23,7 +23,7 @@ pub fn is_slash(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a OpenSquareBracket [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a OpenSquareBracket [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 pub fn is_open_square_bracket(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     if let Some('[') = pointer.current() {
@@ -33,7 +33,7 @@ pub fn is_open_square_bracket(pointer: &mut VecPointerRef<char>) -> Option<Token
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a CloseSquareBracket [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a CloseSquareBracket [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 pub fn is_close_square_bracket(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     if let Some(']') = pointer.current() {
@@ -43,7 +43,7 @@ pub fn is_close_square_bracket(pointer: &mut VecPointerRef<char>) -> Option<Toke
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a OpenBracket [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a OpenBracket [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 pub fn is_open_bracket(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     if let Some('(') = pointer.current() {
@@ -53,7 +53,7 @@ pub fn is_open_bracket(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a CloseBracket [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a CloseBracket [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 pub fn is_close_bracket(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     if let Some(')') = pointer.current() {
@@ -63,7 +63,7 @@ pub fn is_close_bracket(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a Wildcard [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a Wildcard [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 pub fn is_wildcard(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     if let Some('*') = pointer.current() {
@@ -73,7 +73,7 @@ pub fn is_wildcard(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a DoubleDot [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a DoubleDot [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 pub fn is_double_dot(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     if let (Some('.'), Some('.')) = (pointer.current(), pointer.peek()) {
@@ -84,7 +84,7 @@ pub fn is_double_dot(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a DoubleDot [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a DoubleDot [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 pub fn is_dot(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     if let Some('.') = pointer.current() {
@@ -94,7 +94,7 @@ pub fn is_dot(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a AssignmentSign [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a AssignmentSign [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 pub fn is_assignment_sign(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     if let Some('=') = pointer.current() {
@@ -104,7 +104,7 @@ pub fn is_assignment_sign(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a AtSign [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a AtSign [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 pub fn is_at_sign(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     if let Some('@') = pointer.current() {
@@ -114,7 +114,7 @@ pub fn is_at_sign(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a AddSign [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a AddSign [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 pub fn is_add_sign(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     if let Some('+') = pointer.current() {
@@ -124,7 +124,7 @@ pub fn is_add_sign(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a MinusSign [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a MinusSign [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 pub fn is_minus_sign(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     if let Some('-') = pointer.current() {
@@ -134,7 +134,7 @@ pub fn is_minus_sign(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a GreaterThanSign [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a GreaterThanSign [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 pub fn is_greater_than_sign(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     if let Some('>') = pointer.current() {
@@ -144,7 +144,7 @@ pub fn is_greater_than_sign(pointer: &mut VecPointerRef<char>) -> Option<Token> 
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a LessThanSign [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a LessThanSign [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 pub fn is_less_than_sign(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     if let Some('<') = pointer.current() {
@@ -154,7 +154,7 @@ pub fn is_less_than_sign(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a DoubleColon [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a DoubleColon [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 pub fn is_double_colon(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     if let (Some(':'), Some(':')) = (pointer.current(), pointer.peek()) {
@@ -164,7 +164,7 @@ pub fn is_double_colon(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a Number [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a Number [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 pub fn is_number(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     if let Some(c) = pointer.current() {
@@ -196,7 +196,7 @@ pub fn is_number(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to an Identifier [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to an Identifier [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 pub fn is_identifier(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     if let Some(c) = pointer.current() {
@@ -219,7 +219,7 @@ pub fn is_identifier(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     None
 }
 
-/// Checks if the [TextPointer](TextPointer) is currently pointing to a Text [Symbol](Symbol).
+/// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a Text [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.
 pub fn is_text(pointer: &mut VecPointerRef<char>) -> Option<Token> {
     if let Some(c) = pointer.current() {

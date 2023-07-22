@@ -2,6 +2,7 @@
 
 use std::iter::Peekable;
 
+use log::warn;
 use thiserror::Error;
 
 use crate::xpath::{
@@ -19,13 +20,14 @@ enum XpathElement {
     Query(XpathQuery),
     Index(usize),
     Axis(XpathAxes),
+    Wildcard,
 }
 
 /// An error occurring during XPath expression parsing.
 #[derive(Error, Debug)]
 pub enum ParseError {
     /// Closing bracket appeared before a corresponding open bracket.
-    /// 
+    ///
     /// ```text
     /// //div @class="node"]
     ///      ^
@@ -34,7 +36,7 @@ pub enum ParseError {
     LeadingCloseBracket,
 
     /// `@` symbol appear outside of square brackets.
-    /// 
+    ///
     /// ```text
     /// //div@[class="node"]/div
     ///      ^
@@ -44,9 +46,9 @@ pub enum ParseError {
     MisplacedAtSign,
 
     /// Predicate missing an operator sign.
-    /// 
+    ///
     /// **Note:** Currently only assignment signs are supported.
-    /// 
+    ///
     /// ```text
     /// //div[@class "node"]
     ///             ^
@@ -56,7 +58,7 @@ pub enum ParseError {
     PredicateMissingOperator,
 
     /// Predicate has no value to compare with.
-    /// 
+    ///
     /// ```text
     /// //div[@class= ]
     ///              ^
@@ -66,7 +68,7 @@ pub enum ParseError {
     PredicateMissingValue,
 
     /// Predicate has no attribute name.
-    /// 
+    ///
     /// ```text
     /// //div[@ ="node"]
     ///        ^
@@ -80,7 +82,7 @@ pub enum ParseError {
     LexError(#[from] LexError),
 
     /// Axis must be provided before `::` operator.
-    /// 
+    ///
     /// ```text
     /// //div/ ::div
     ///       ^
@@ -90,7 +92,7 @@ pub enum ParseError {
     MissingAxis,
 
     /// Tag name must be provided after `::` operator.
-    /// 
+    ///
     /// ```text
     /// //div/parent::
     ///               ^
@@ -100,9 +102,9 @@ pub enum ParseError {
     MissingAxisTag,
 
     /// Provided axis name was unknown.
-    /// 
+    ///
     /// See [XpathAxes] for currently supported options.
-    /// 
+    ///
     /// ```text
     /// //div/bogus::div
     ///       ^^^^^
@@ -122,7 +124,7 @@ pub enum ParseError {
 }
 
 /// Parse an Xpath expression into an Xpath object.
-/// 
+///
 /// # Example: parse an XPath expression
 /// ```rust
 /// use skyscraper::xpath::{self, parse::ParseError};
@@ -175,6 +177,9 @@ pub fn parse(text: &str) -> Result<Xpath, ParseError> {
             XpathElement::Axis(axis) => {
                 cur_search_item.axis = axis;
             }
+            XpathElement::Wildcard => {
+                cur_search_item.search_node_type = XpathSearchNodeType::Any;
+            }
         }
         is_first_element = false;
     }
@@ -214,7 +219,12 @@ fn inner_parse(text: &str) -> Result<Vec<XpathElement>, ParseError> {
             Token::DoubleColon => {
                 parse_axis_selector(&mut elements)?;
             }
-            _ => continue,
+            Token::Wildcard => {
+                elements.push(XpathElement::Wildcard);
+            }
+            t => {
+                warn!("XPath token {:?} is not yet supported. Raise an issue on https://github.com/James-LG/Skyscraper to get its implementation prioritized.", t);
+            }
         }
     }
 
@@ -223,7 +233,7 @@ fn inner_parse(text: &str) -> Result<Vec<XpathElement>, ParseError> {
 
 /// Parses tree selectors. Triggered when a DoubleColon (Symbol)[Symbol] is found and expects a tag to
 /// have preceded it which will now be converted to an axis.
-/// 
+///
 /// Example: `/div/parent::div`
 fn parse_axis_selector(elements: &mut Vec<XpathElement>) -> Result<(), ParseError> {
     let last_item = elements.pop().ok_or(ParseError::MissingAxis)?;
@@ -237,7 +247,7 @@ fn parse_axis_selector(elements: &mut Vec<XpathElement>) -> Result<(), ParseErro
 }
 
 /// Parses an index selector.
-/// 
+///
 /// Example: `[1]`
 fn parse_index(symbols: &mut Peekable<std::vec::IntoIter<Token>>) -> Option<usize> {
     if let Some(Token::Number(num)) =
@@ -252,9 +262,9 @@ fn parse_index(symbols: &mut Peekable<std::vec::IntoIter<Token>>) -> Option<usiz
 }
 
 /// Parses the inner section of square brackets in an Xpath expression.
-/// 
+///
 /// Assumes this set of square brackets has already been checked for an index value.
-/// 
+///
 /// Example: `[@name='hi']`
 fn parse_query(
     symbols: &mut Peekable<std::vec::IntoIter<Token>>,
@@ -375,10 +385,10 @@ mod tests {
     fn inner_parse_zero_index() {
         let text = r###"//a[0]"###;
         let result = inner_parse(text);
-	assert!(result.is_err());
-	let err = result.unwrap_err();
-	assert!(matches!(&err, ParseError::IndexValueIsZero));
-	assert_eq!(err.to_string(), "index value can not be zero");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(&err, ParseError::IndexValueIsZero));
+        assert_eq!(err.to_string(), "index value can not be zero");
     }
 
     #[test]
