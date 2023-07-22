@@ -212,3 +212,46 @@ fn xpath_github_root_search_all() {
     let tag = html_node.unwrap_tag();
     assert_eq!("html", tag.name);
 }
+
+#[test]
+fn xpath_github_root_wildcard() {
+    // arrange
+    let text: String = HTML.parse().unwrap();
+
+    let document = html::parse(&text).unwrap();
+    let xpath = xpath::parse("//body/*").unwrap();
+
+    // act
+    let nodes = xpath.apply(&document).unwrap();
+
+    // assert
+    assert_eq!(16, nodes.len());
+
+    // assert first node
+    let doc_node = nodes[0];
+    let html_node = document.get_html_node(&doc_node).unwrap();
+    let tag = html_node.unwrap_tag();
+
+    assert_eq!("div", tag.name);
+
+    let attributes = html_node.get_attributes().unwrap();
+    assert_eq!("position-relative js-header-wrapper ", attributes["class"]);
+
+    // assert random node 4
+    let doc_node = nodes[3];
+    let html_node = document.get_html_node(&doc_node).unwrap();
+    let tag = html_node.unwrap_tag();
+
+    assert_eq!("include-fragment", tag.name);
+
+    // assert last node
+    let doc_node = nodes[15];
+    let html_node = document.get_html_node(&doc_node).unwrap();
+    let tag = html_node.unwrap_tag();
+
+    assert_eq!("div", tag.name);
+
+    let attributes = html_node.get_attributes().unwrap();
+    assert_eq!("sr-only", attributes["class"]);
+    assert_eq!("polite", attributes["aria-live"])
+}
