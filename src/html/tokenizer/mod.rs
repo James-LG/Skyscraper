@@ -1,9 +1,10 @@
-mod tokens;
 mod helpers;
+mod tokens;
 
 use crate::vecpointer::VecPointerRef;
-pub use tokens::Token;
+use log::error;
 use thiserror::Error;
+pub use tokens::Token;
 
 #[derive(Error, Debug)]
 pub enum LexError {}
@@ -30,8 +31,11 @@ pub fn lex(text: &str) -> Result<Vec<Token>, LexError> {
                     if start_tag == "script" {
                         in_script_tag = true;
                     }
-                },
-                token => panic!("is_start_tag returned {:?} instead of Token::StartTag", token)
+                }
+                token => panic!(
+                    "is_start_tag returned {:?} instead of Token::StartTag",
+                    token
+                ),
             }
 
             symbols.push(s);
@@ -58,7 +62,7 @@ pub fn lex(text: &str) -> Result<Vec<Token>, LexError> {
             if let Some(c) = pointer.current() {
                 if !c.is_whitespace() {
                     // Unknown symbol, move on ¯\_(ツ)_/¯
-                    eprintln!("Unknown HTML symbol {}", c);
+                    error!("Unknown HTML symbol {}", c);
                 }
             }
             pointer.next();
@@ -127,6 +131,29 @@ mod tests {
             Token::Literal(String::from(r#"{"hello":"world"}"#)),
             Token::TagClose,
             Token::EndTag(String::from("script")),
+            Token::TagClose,
+        ];
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn lex_should_handle_end_tag_with_whitespace() {
+        // arrange
+        let text = r#"
+            <node>1</node
+            >
+            "#;
+
+        // act
+        let result = lex(text).unwrap();
+
+        // assert
+        let expected = vec![
+            Token::StartTag(String::from("node")),
+            Token::TagClose,
+            Token::Text(String::from("1")),
+            Token::EndTag(String::from("node")),
             Token::TagClose,
         ];
 
