@@ -94,6 +94,7 @@
 //! # }
 //! ```
 
+mod grammar;
 pub mod parse;
 mod search;
 mod tokenizer;

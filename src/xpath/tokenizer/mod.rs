@@ -2,8 +2,8 @@ mod helpers;
 mod tokens;
 
 use crate::vecpointer::VecPointerRef;
-pub use tokens::Token;
 use thiserror::Error;
+pub use tokens::Token;
 
 #[derive(Error, Debug)]
 pub enum LexError {}

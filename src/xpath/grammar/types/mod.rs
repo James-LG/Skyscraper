@@ -1,0 +1,303 @@
+//! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-types
+
+use nom::{
+    branch::alt, bytes::complete::tag, character::complete::char, combinator::opt, sequence::tuple,
+};
+
+use crate::xpath::grammar::{
+    terminal_symbols::{string_literal, uri_qualified_name},
+    xml_names::qname,
+};
+
+use self::{
+    attribute_test::AttributeTest,
+    common::{attribute_name, type_name, AttributeName, TypeName},
+    element_test::ElementTest,
+    schema_element_test::SchemaElementTest,
+};
+
+use super::{
+    recipes::Res,
+    terminal_symbols::UriQualifiedName,
+    xml_names::{nc_name, QName},
+};
+
+mod array_test;
+mod attribute_test;
+mod common;
+mod element_test;
+mod function_test;
+mod map_test;
+mod schema_element_test;
+pub mod sequence_type;
+
+pub fn kind_test(input: &str) -> Res<&str, KindTest> {
+    // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-KindTest
+
+    fn any_kind_test(input: &str) -> Res<&str, KindTest> {
+        // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-AnyKindTest
+
+        tuple((tag("node"), char('('), char(')')))(input)
+            .map(|(next_input, _res)| (next_input, KindTest::AnyKindTest))
+    }
+
+    fn text_test(input: &str) -> Res<&str, KindTest> {
+        // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-TextTest
+
+        tuple((tag("text"), char('('), char(')')))(input)
+            .map(|(next_input, _res)| (next_input, KindTest::TextTest))
+    }
+
+    fn comment_test(input: &str) -> Res<&str, KindTest> {
+        // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-CommentTest
+
+        tuple((tag("comment"), char('('), char(')')))(input)
+            .map(|(next_input, _res)| (next_input, KindTest::CommentTest))
+    }
+
+    fn namespace_node_test(input: &str) -> Res<&str, KindTest> {
+        // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-NamespaceNodeTest
+
+        tuple((tag("namespace-node"), char('('), char(')')))(input)
+            .map(|(next_input, _res)| (next_input, KindTest::NamespaceNodeTest))
+    }
+
+    fn document_test_map(input: &str) -> Res<&str, KindTest> {
+        document_test(input).map(|(next_input, res)| (next_input, KindTest::DocumentTest(res)))
+    }
+
+    fn element_test_map(input: &str) -> Res<&str, KindTest> {
+        element_test::element_test(input)
+            .map(|(next_input, res)| (next_input, KindTest::ElementTest(res)))
+    }
+
+    fn attribute_test_map(input: &str) -> Res<&str, KindTest> {
+        attribute_test::attribute_test(input)
+            .map(|(next_input, res)| (next_input, KindTest::AttributeTest(res)))
+    }
+
+    fn schema_element_test_map(input: &str) -> Res<&str, KindTest> {
+        schema_element_test::schema_element_test(input)
+            .map(|(next_input, res)| (next_input, KindTest::SchemaElementTest(res)))
+    }
+
+    fn schema_attribute_test_map(input: &str) -> Res<&str, KindTest> {
+        schema_attribute_test(input)
+            .map(|(next_input, res)| (next_input, KindTest::SchemaAttributeTest(res)))
+    }
+
+    fn pi_test_map(input: &str) -> Res<&str, KindTest> {
+        pi_test(input).map(|(next_input, res)| (next_input, KindTest::PITest(res)))
+    }
+
+    alt((
+        document_test_map,
+        element_test_map,
+        attribute_test_map,
+        schema_element_test_map,
+        schema_attribute_test_map,
+        pi_test_map,
+        comment_test,
+        text_test,
+        namespace_node_test,
+        any_kind_test,
+    ))(input)
+}
+
+#[derive(PartialEq, Debug)]
+pub enum KindTest {
+    AnyKindTest,
+    TextTest,
+    CommentTest,
+    NamespaceNodeTest,
+    DocumentTest(DocumentTest),
+    ElementTest(ElementTest),
+    AttributeTest(AttributeTest),
+    SchemaElementTest(SchemaElementTest),
+    SchemaAttributeTest(SchemaAttributeTest),
+    PITest(PITest),
+}
+
+pub fn document_test(input: &str) -> Res<&str, DocumentTest> {
+    // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-DocumentTest
+
+    fn element_test_map(input: &str) -> Res<&str, DocumentTestValue> {
+        element_test::element_test(input)
+            .map(|(next_input, res)| (next_input, DocumentTestValue::ElementTest(res)))
+    }
+
+    fn schema_element_test_map(input: &str) -> Res<&str, DocumentTestValue> {
+        schema_element_test::schema_element_test(input)
+            .map(|(next_input, res)| (next_input, DocumentTestValue::SchemaElementTest(res)))
+    }
+
+    tuple((
+        tag("document-node"),
+        char('('),
+        opt(alt((element_test_map, schema_element_test_map))),
+        char(')'),
+    ))(input)
+    .map(|(next_input, res)| (next_input, DocumentTest { value: res.2 }))
+}
+
+#[derive(PartialEq, Debug)]
+pub struct DocumentTest {
+    pub value: Option<DocumentTestValue>,
+}
+
+#[derive(PartialEq, Debug)]
+pub enum DocumentTestValue {
+    ElementTest(ElementTest),
+    SchemaElementTest(SchemaElementTest),
+}
+
+pub fn schema_attribute_test(input: &str) -> Res<&str, SchemaAttributeTest> {
+    // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-SchemaAttributeTest
+
+    tuple((
+        tag("schema-attribute"),
+        char('('),
+        attribute_declaration,
+        char(')'),
+    ))(input)
+    .map(|(next_input, res)| (next_input, SchemaAttributeTest(res.2)))
+}
+
+#[derive(PartialEq, Debug)]
+pub struct SchemaAttributeTest(pub AttributeDeclaration);
+
+pub fn attribute_declaration(input: &str) -> Res<&str, AttributeDeclaration> {
+    // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-AttributeDeclaration
+
+    attribute_name(input).map(|(next_input, res)| (next_input, AttributeDeclaration(res)))
+}
+
+#[derive(PartialEq, Debug)]
+pub struct AttributeDeclaration(pub AttributeName);
+
+pub fn pi_test(input: &str) -> Res<&str, PITest> {
+    // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-PITest
+
+    fn nc_name_map(input: &str) -> Res<&str, PITestValue> {
+        nc_name(input).map(|(next_input, res)| (next_input, PITestValue::NCName(res.to_string())))
+    }
+
+    fn string_literal_map(input: &str) -> Res<&str, PITestValue> {
+        string_literal(input)
+            .map(|(next_input, res)| (next_input, PITestValue::StringLiteral(res.to_string())))
+    }
+
+    tuple((
+        tag("processing-instruction"),
+        char('('),
+        opt(alt((nc_name_map, string_literal_map))),
+        char(')'),
+    ))(input)
+    .map(|(next_input, res)| (next_input, PITest { val: res.2 }))
+}
+
+#[derive(PartialEq, Debug)]
+pub struct PITest {
+    pub val: Option<PITestValue>,
+}
+
+#[derive(PartialEq, Debug)]
+pub enum PITestValue {
+    NCName(String),
+    StringLiteral(String),
+}
+
+#[derive(PartialEq, Debug)]
+pub struct AtomicOrUnionType(EQName);
+
+pub fn simple_type_name(input: &str) -> Res<&str, SimpleTypeName> {
+    // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-SimpleTypeName
+    type_name(input).map(|(next_input, res)| (next_input, SimpleTypeName(res)))
+}
+
+pub struct SimpleTypeName(TypeName);
+
+pub fn eq_name(input: &str) -> Res<&str, EQName> {
+    // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-EQName
+
+    fn qname_map(input: &str) -> Res<&str, EQName> {
+        qname(input).map(|(next_input, res)| (next_input, EQName::QName(res)))
+    }
+
+    fn uri_qualified_name_map(input: &str) -> Res<&str, EQName> {
+        uri_qualified_name(input)
+            .map(|(next_input, res)| (next_input, EQName::UriQualifiedName(res)))
+    }
+
+    alt((uri_qualified_name_map, qname_map))(input)
+}
+
+#[derive(PartialEq, Debug)]
+pub enum EQName {
+    QName(QName),
+    UriQualifiedName(UriQualifiedName),
+}
+
+#[cfg(test)]
+mod test {
+    use crate::xpath::grammar::xml_names::PrefixedName;
+
+    use super::*;
+
+    #[test]
+    fn eq_name_example1() {
+        // arrange
+        let input = "pi";
+
+        // act
+        let res = eq_name(input);
+
+        // assert
+        assert_eq!(
+            res,
+            Ok(("", EQName::QName(QName::UnprefixedName(String::from("pi")))))
+        )
+    }
+
+    #[test]
+    fn eq_name_example2() {
+        // arrange
+        let input = "math:pi";
+
+        // act
+        let res = eq_name(input);
+
+        // assert
+        assert_eq!(
+            res,
+            Ok((
+                "",
+                EQName::QName(QName::PrefixedName(PrefixedName {
+                    prefix: String::from("math"),
+                    local_part: String::from("pi")
+                }))
+            ))
+        )
+    }
+
+    #[test]
+    fn eq_name_example3() {
+        // arrange
+        let input = "Q{http://www.w3.org/2005/xpath-functions/math}pi";
+
+        // act
+        let res = eq_name(input);
+
+        // assert
+        assert_eq!(
+            res,
+            Ok((
+                "",
+                EQName::UriQualifiedName(UriQualifiedName {
+                    uri: String::from("http://www.w3.org/2005/xpath-functions/math"),
+                    name: String::from("pi")
+                })
+            ))
+        )
+    }
+}

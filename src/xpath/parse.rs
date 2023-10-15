@@ -3,6 +3,7 @@
 use std::iter::Peekable;
 
 use log::warn;
+use nom::error::VerboseError;
 use thiserror::Error;
 
 use crate::xpath::{
@@ -10,7 +11,11 @@ use crate::xpath::{
     Xpath, XpathPredicate, XpathQuery,
 };
 
-use super::{tokenizer::LexError, XpathAxes, XpathSearchItem, XpathSearchNodeType};
+use super::{
+    grammar::{xpath, XPath},
+    tokenizer::LexError,
+    XpathAxes, XpathSearchItem, XpathSearchNodeType,
+};
 
 #[derive(Debug, PartialEq)]
 enum XpathElement {
@@ -336,6 +341,11 @@ fn parse_equals_predicate(
     } else {
         Err(ParseError::PredicateMissingAttribute)
     }
+}
+
+pub fn om_nom(input: &str) -> Result<XPath, nom::Err<VerboseError<&str>>> {
+    let xpath_expr = xpath(input)?.1;
+    Ok(xpath_expr)
 }
 
 #[cfg(test)]
