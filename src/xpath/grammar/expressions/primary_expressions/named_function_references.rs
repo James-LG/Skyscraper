@@ -22,6 +22,7 @@ pub fn named_function_ref(input: &str) -> Res<&str, NamedFunctionRef> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct NamedFunctionRef {
     pub name: EQName,
     pub number: u32,

@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-map-test
 
+use std::fmt::Display;
+
 use nom::{branch::alt, bytes::complete::tag, character::complete::char, sequence::tuple};
 
 use crate::xpath::grammar::recipes::Res;
@@ -31,6 +33,12 @@ pub fn map_test(input: &str) -> Res<&str, MapTest> {
 pub enum MapTest {
     AnyMapTest,
     TypedMapTest(TypedMapTest),
+}
+
+impl Display for MapTest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!("fmt MapTest")
+    }
 }
 
 fn typed_map_test(input: &str) -> Res<&str, TypedMapTest> {

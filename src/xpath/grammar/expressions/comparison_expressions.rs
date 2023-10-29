@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-comparisons
 
+use std::fmt::Display;
+
 use nom::{branch::alt, bytes::complete::tag, combinator::opt, sequence::tuple};
 
 use crate::xpath::grammar::{
@@ -42,17 +44,48 @@ pub fn comparison_expr(input: &str) -> Res<&str, ComparisonExpr> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct ComparisonExpr {
     pub expr: StringConcatExpr,
     pub comparison: Option<ComparisonExprPair>,
 }
 
+impl Display for ComparisonExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.expr)?;
+
+        if let Some(x) = &self.comparison {
+            write!(f, "{}", x)?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(PartialEq, Debug)]
 pub struct ComparisonExprPair(pub ComparisonType, pub StringConcatExpr);
 
+impl Display for ComparisonExprPair {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", self.0, self.1)
+    }
+}
+
+#[derive(PartialEq, Debug)]
 pub enum ComparisonType {
     ValueComp(ValueComp),
     GeneralComp(GeneralComp),
     NodeComp(NodeComp),
+}
+
+impl Display for ComparisonType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ComparisonType::ValueComp(x) => write!(f, "{}", x),
+            ComparisonType::GeneralComp(x) => write!(f, "{}", x),
+            ComparisonType::NodeComp(x) => write!(f, "{}", x),
+        }
+    }
 }
 
 fn value_comp(input: &str) -> Res<&str, ValueComp> {
@@ -92,6 +125,7 @@ fn value_comp(input: &str) -> Res<&str, ValueComp> {
     ))(input)
 }
 
+#[derive(PartialEq, Debug)]
 pub enum ValueComp {
     Equal,
     NotEqual,
@@ -99,6 +133,19 @@ pub enum ValueComp {
     LessThanEqualTo,
     GreaterThan,
     GreaterThanEqualTo,
+}
+
+impl Display for ValueComp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ValueComp::Equal => write!(f, "eq"),
+            ValueComp::NotEqual => write!(f, "ne"),
+            ValueComp::LessThan => write!(f, "lt"),
+            ValueComp::LessThanEqualTo => write!(f, "le"),
+            ValueComp::GreaterThan => write!(f, "gt"),
+            ValueComp::GreaterThanEqualTo => write!(f, "ge"),
+        }
+    }
 }
 
 fn general_comp(input: &str) -> Res<&str, GeneralComp> {
@@ -138,6 +185,7 @@ fn general_comp(input: &str) -> Res<&str, GeneralComp> {
     ))(input)
 }
 
+#[derive(PartialEq, Debug)]
 pub enum GeneralComp {
     Equal,
     NotEqual,
@@ -145,6 +193,19 @@ pub enum GeneralComp {
     LessThanEqualTo,
     GreaterThan,
     GreaterThanEqualTo,
+}
+
+impl Display for GeneralComp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GeneralComp::Equal => write!(f, "="),
+            GeneralComp::NotEqual => write!(f, "!="),
+            GeneralComp::LessThan => write!(f, "<"),
+            GeneralComp::LessThanEqualTo => write!(f, "<="),
+            GeneralComp::GreaterThan => write!(f, ">"),
+            GeneralComp::GreaterThanEqualTo => write!(f, ">="),
+        }
+    }
 }
 
 fn node_comp(input: &str) -> Res<&str, NodeComp> {
@@ -165,8 +226,19 @@ fn node_comp(input: &str) -> Res<&str, NodeComp> {
     alt((is, precedes, follows))(input)
 }
 
+#[derive(PartialEq, Debug)]
 pub enum NodeComp {
     Is,
     Precedes,
     Follows,
+}
+
+impl Display for NodeComp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NodeComp::Is => write!(f, "is"),
+            NodeComp::Precedes => write!(f, "<<"),
+            NodeComp::Follows => write!(f, ">>"),
+        }
+    }
 }

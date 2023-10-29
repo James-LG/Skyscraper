@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#abbrev
 
+use std::fmt::Display;
+
 use nom::{character::complete::char, combinator::opt, sequence::tuple};
 
 use crate::xpath::grammar::recipes::Res;
@@ -19,7 +21,17 @@ pub fn abbrev_forward_step(input: &str) -> Res<&str, AbbrevForwardStep> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct AbbrevForwardStep {
     pub has_at: bool,
     pub node_test: NodeTest,
+}
+
+impl Display for AbbrevForwardStep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.has_at {
+            write!(f, "@")?;
+        }
+        write!(f, "{}", self.node_test)
+    }
 }

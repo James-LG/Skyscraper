@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#terminal-symbols
 
+use std::fmt::Display;
+
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -79,6 +81,12 @@ pub fn uri_qualified_name(input: &str) -> Res<&str, UriQualifiedName> {
 pub struct UriQualifiedName {
     pub uri: String,
     pub name: String,
+}
+
+impl Display for UriQualifiedName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", self.uri, self.name)
+    }
 }
 
 pub fn braced_uri_literal(input: &str) -> Res<&str, &str> {

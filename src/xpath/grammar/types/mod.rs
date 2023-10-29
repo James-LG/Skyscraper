@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-types
 
+use std::fmt::Display;
+
 use nom::{
     branch::alt, bytes::complete::tag, character::complete::char, combinator::opt, sequence::tuple,
 };
@@ -22,13 +24,13 @@ use super::{
     xml_names::{nc_name, QName},
 };
 
-mod array_test;
-mod attribute_test;
-mod common;
-mod element_test;
-mod function_test;
-mod map_test;
-mod schema_element_test;
+pub mod array_test;
+pub mod attribute_test;
+pub mod common;
+pub mod element_test;
+pub mod function_test;
+pub mod map_test;
+pub mod schema_element_test;
 pub mod sequence_type;
 
 pub fn kind_test(input: &str) -> Res<&str, KindTest> {
@@ -118,6 +120,23 @@ pub enum KindTest {
     PITest(PITest),
 }
 
+impl Display for KindTest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            KindTest::AnyKindTest => write!(f, "node()"),
+            KindTest::TextTest => write!(f, "text()"),
+            KindTest::CommentTest => write!(f, "comment()"),
+            KindTest::NamespaceNodeTest => write!(f, "namespace-node()"),
+            KindTest::DocumentTest(x) => write!(f, "{}", x),
+            KindTest::ElementTest(x) => write!(f, "{}", x),
+            KindTest::AttributeTest(x) => write!(f, "{}", x),
+            KindTest::SchemaElementTest(x) => write!(f, "{}", x),
+            KindTest::SchemaAttributeTest(x) => write!(f, "{}", x),
+            KindTest::PITest(x) => write!(f, "{}", x),
+        }
+    }
+}
+
 pub fn document_test(input: &str) -> Res<&str, DocumentTest> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-DocumentTest
 
@@ -145,6 +164,12 @@ pub struct DocumentTest {
     pub value: Option<DocumentTestValue>,
 }
 
+impl Display for DocumentTest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!("fmt DocumentTest")
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub enum DocumentTestValue {
     ElementTest(ElementTest),
@@ -165,6 +190,12 @@ pub fn schema_attribute_test(input: &str) -> Res<&str, SchemaAttributeTest> {
 
 #[derive(PartialEq, Debug)]
 pub struct SchemaAttributeTest(pub AttributeDeclaration);
+
+impl Display for SchemaAttributeTest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!("fmt SchemaAttributeTest")
+    }
+}
 
 pub fn attribute_declaration(input: &str) -> Res<&str, AttributeDeclaration> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-AttributeDeclaration
@@ -201,6 +232,12 @@ pub struct PITest {
     pub val: Option<PITestValue>,
 }
 
+impl Display for PITest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!("fmt PITest")
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub enum PITestValue {
     NCName(String),
@@ -210,11 +247,18 @@ pub enum PITestValue {
 #[derive(PartialEq, Debug)]
 pub struct AtomicOrUnionType(EQName);
 
+impl Display for AtomicOrUnionType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!("fmt AtomicOrUnionType")
+    }
+}
+
 pub fn simple_type_name(input: &str) -> Res<&str, SimpleTypeName> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-SimpleTypeName
     type_name(input).map(|(next_input, res)| (next_input, SimpleTypeName(res)))
 }
 
+#[derive(PartialEq, Debug)]
 pub struct SimpleTypeName(TypeName);
 
 pub fn eq_name(input: &str) -> Res<&str, EQName> {
@@ -236,6 +280,15 @@ pub fn eq_name(input: &str) -> Res<&str, EQName> {
 pub enum EQName {
     QName(QName),
     UriQualifiedName(UriQualifiedName),
+}
+
+impl Display for EQName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EQName::QName(x) => write!(f, "{}", x),
+            EQName::UriQualifiedName(x) => write!(f, "{}", x),
+        }
+    }
 }
 
 #[cfg(test)]

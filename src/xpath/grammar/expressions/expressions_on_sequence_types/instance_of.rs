@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-instance-of
 
+use std::fmt::Display;
+
 use nom::{bytes::complete::tag, combinator::opt, sequence::tuple};
 
 use crate::xpath::grammar::{
@@ -28,7 +30,19 @@ pub fn instanceof_expr(input: &str) -> Res<&str, InstanceofExpr> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct InstanceofExpr {
     pub expr: TreatExpr,
     pub instanceof_type: Option<SequenceType>,
+}
+
+impl Display for InstanceofExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.expr)?;
+        if let Some(x) = &self.instanceof_type {
+            write!(f, " instance of {}", x)?;
+        }
+
+        Ok(())
+    }
 }

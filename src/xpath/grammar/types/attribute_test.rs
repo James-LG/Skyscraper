@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-attribute-test
 
+use std::fmt::Display;
+
 use nom::{
     branch::alt, bytes::complete::tag, character::complete::char, combinator::opt, sequence::tuple,
 };
@@ -43,6 +45,12 @@ pub fn attribute_test(input: &str) -> Res<&str, AttributeTest> {
 pub struct AttributeTest {
     pub name_or_wildcard: Option<AttribNameOrWildcard>,
     pub type_name: Option<TypeName>,
+}
+
+impl Display for AttributeTest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!("fmt AttributeTest")
+    }
 }
 
 pub fn attrib_name_or_wildcard(input: &str) -> Res<&str, AttribNameOrWildcard> {

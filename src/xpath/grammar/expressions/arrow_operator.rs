@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-arrow-operator
 
+use std::fmt::Display;
+
 use nom::{branch::alt, bytes::complete::tag, multi::many0, sequence::tuple};
 
 use crate::xpath::grammar::{
@@ -39,14 +41,33 @@ pub fn arrow_expr(input: &str) -> Res<&str, ArrowExpr> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct ArrowExpr {
     pub expr: UnaryExpr,
     pub items: Vec<ArrowExprItem>,
 }
 
+impl Display for ArrowExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.expr)?;
+        for x in &self.items {
+            write!(f, " => {}", x)?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(PartialEq, Debug)]
 pub struct ArrowExprItem {
     pub function_specifier: ArrowFunctionSpecifier,
     pub arguments: ArgumentList,
+}
+
+impl Display for ArrowExprItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!("fmt ArrowExprItem")
+    }
 }
 
 fn arrow_function_specifier(input: &str) -> Res<&str, ArrowFunctionSpecifier> {
@@ -68,6 +89,7 @@ fn arrow_function_specifier(input: &str) -> Res<&str, ArrowFunctionSpecifier> {
     alt((name_map, var_ref_map, parenthesized_expr_map))(input)
 }
 
+#[derive(PartialEq, Debug)]
 pub enum ArrowFunctionSpecifier {
     Name(EQName),
     VarRef(VarRef),

@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-treat
 
+use std::fmt::Display;
+
 use nom::{bytes::complete::tag, combinator::opt, sequence::tuple};
 
 use crate::xpath::grammar::{
@@ -28,7 +30,19 @@ pub fn treat_expr(input: &str) -> Res<&str, TreatExpr> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct TreatExpr {
     pub expr: CastableExpr,
     pub treat_type: Option<SequenceType>,
+}
+
+impl Display for TreatExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.expr)?;
+        if let Some(x) = &self.treat_type {
+            write!(f, " treat as {}", x)?;
+        }
+
+        Ok(())
+    }
 }

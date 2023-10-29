@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#node-tests
 
+use std::fmt::Display;
+
 use nom::{branch::alt, bytes::complete::tag, character::complete::char, sequence::tuple};
 
 use crate::xpath::grammar::{
@@ -23,9 +25,19 @@ pub fn node_test(input: &str) -> Res<&str, NodeTest> {
     alt((kind_test_map, name_test_map))(input)
 }
 
+#[derive(PartialEq, Debug)]
 pub enum NodeTest {
     KindTest(KindTest),
     NameTest(NameTest),
+}
+
+impl Display for NodeTest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NodeTest::KindTest(x) => write!(f, "{}", x),
+            NodeTest::NameTest(x) => write!(f, "{}", x),
+        }
+    }
 }
 
 fn name_test(input: &str) -> Res<&str, NameTest> {
@@ -42,9 +54,19 @@ fn name_test(input: &str) -> Res<&str, NameTest> {
     alt((eq_name_map, wildcard_map))(input)
 }
 
+#[derive(PartialEq, Debug)]
 pub enum NameTest {
     Name(EQName),
     Wildcard(Wildcard),
+}
+
+impl Display for NameTest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NameTest::Name(x) => write!(f, "{}", x),
+            NameTest::Wildcard(x) => write!(f, "{}", x),
+        }
+    }
 }
 
 fn wildcard(input: &str) -> Res<&str, Wildcard> {
@@ -77,9 +99,21 @@ fn wildcard(input: &str) -> Res<&str, Wildcard> {
     ))(input)
 }
 
+#[derive(PartialEq, Debug)]
 pub enum Wildcard {
     Simple,
     PrefixedName(String),
     SuffixedName(String),
     BracedUri(String),
+}
+
+impl Display for Wildcard {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Wildcard::Simple => write!(f, "*"),
+            Wildcard::PrefixedName(x) => write!(f, "*:{}", x),
+            Wildcard::SuffixedName(x) => write!(f, "{}:*", x),
+            Wildcard::BracedUri(x) => write!(f, "{}*", x),
+        }
+    }
 }

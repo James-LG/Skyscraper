@@ -8,3 +8,22 @@ mod types;
 mod xml_names;
 
 pub use expressions::{xpath, XPath};
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn xpath_should_parse() {
+        // arrange
+        let input = "//div[@class='BorderGrid-cell']/div[@class=' text-small']/a";
+
+        // act
+        let (next_input, xpath) = xpath(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(format!("{}", xpath), input);
+    }
+}

@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-string-concat-expr
 
+use std::fmt::Display;
+
 use nom::{bytes::complete::tag, multi::many0, sequence::tuple};
 
 use crate::xpath::grammar::recipes::Res;
@@ -15,7 +17,19 @@ pub fn string_concat_expr(input: &str) -> Res<&str, StringConcatExpr> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct StringConcatExpr {
     pub expr: RangeExpr,
     pub items: Vec<RangeExpr>,
+}
+
+impl Display for StringConcatExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.expr)?;
+        for x in &self.items {
+            write!(f, " || {}", x)?;
+        }
+
+        Ok(())
+    }
 }

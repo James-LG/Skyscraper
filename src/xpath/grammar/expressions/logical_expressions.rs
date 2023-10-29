@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-logical-expressions
 
+use std::fmt::Display;
+
 use nom::{bytes::complete::tag, multi::many0, sequence::tuple};
 
 use crate::xpath::grammar::recipes::Res;
@@ -14,9 +16,21 @@ pub fn or_expr(input: &str) -> Res<&str, OrExpr> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct OrExpr {
     pub expr: AndExpr,
     pub items: Vec<AndExpr>,
+}
+
+impl Display for OrExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.expr)?;
+        for x in &self.items {
+            write!(f, " or {}", x)?;
+        }
+
+        Ok(())
+    }
 }
 
 fn and_expr(input: &str) -> Res<&str, AndExpr> {
@@ -30,7 +44,19 @@ fn and_expr(input: &str) -> Res<&str, AndExpr> {
     )
 }
 
+#[derive(PartialEq, Debug)]
 pub struct AndExpr {
     pub expr: ComparisonExpr,
     pub items: Vec<ComparisonExpr>,
+}
+
+impl Display for AndExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.expr)?;
+        for x in &self.items {
+            write!(f, " and {}", x)?;
+        }
+
+        Ok(())
+    }
 }

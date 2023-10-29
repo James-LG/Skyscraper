@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-postfix-expression
 
+use std::fmt::Display;
+
 use nom::{branch::alt, character::complete::char, multi::many0, sequence::tuple};
 
 use crate::xpath::grammar::{
@@ -46,15 +48,38 @@ pub fn postfix_expr(input: &str) -> Res<&str, PostfixExpr> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct PostfixExpr {
     pub expr: PrimaryExpr,
     pub items: Vec<PostfixExprItem>,
 }
 
+impl Display for PostfixExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.expr)?;
+        for x in &self.items {
+            write!(f, "{}", x)?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(PartialEq, Debug)]
 pub enum PostfixExprItem {
     Predicate(Predicate),
     ArgumentList(ArgumentList),
     Lookup(Lookup),
+}
+
+impl Display for PostfixExprItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PostfixExprItem::Predicate(x) => write!(f, "{}", x),
+            PostfixExprItem::ArgumentList(x) => write!(f, "{}", x),
+            PostfixExprItem::Lookup(x) => write!(f, "{}", x),
+        }
+    }
 }
 
 pub fn predicate(input: &str) -> Res<&str, Predicate> {
@@ -63,4 +88,11 @@ pub fn predicate(input: &str) -> Res<&str, Predicate> {
         .map(|(next_input, res)| (next_input, Predicate(res.1)))
 }
 
+#[derive(PartialEq, Debug)]
 pub struct Predicate(Expr);
+
+impl Display for Predicate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}]", self.0)
+    }
+}

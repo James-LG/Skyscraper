@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-sequencetype-syntax
 
+use std::fmt::Display;
+
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -48,6 +50,12 @@ pub fn sequence_type(input: &str) -> Res<&str, SequenceType> {
 pub enum SequenceType {
     EmptySequence,
     Sequence(SequenceTypeValue),
+}
+
+impl Display for SequenceType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!("fmt SequenceType")
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -105,6 +113,19 @@ pub enum ItemType {
     MapTest(Box<MapTest>),
     ArrayTest(Box<ArrayTest>),
     AtomicOrUnionType(AtomicOrUnionType),
+}
+
+impl Display for ItemType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ItemType::Item => write!(f, "item()"),
+            ItemType::KindTest(x) => write!(f, "{}", x),
+            ItemType::FunctionTest(x) => write!(f, "{}", x),
+            ItemType::MapTest(x) => write!(f, "{}", x),
+            ItemType::ArrayTest(x) => write!(f, "{}", x),
+            ItemType::AtomicOrUnionType(x) => write!(f, "{}", x),
+        }
+    }
 }
 
 pub fn parenthesized_item_type(input: &str) -> Res<&str, ItemType> {

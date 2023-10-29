@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-path-expressions
 
+use std::fmt::Display;
+
 use nom::{
     branch::alt, bytes::complete::tag, character::complete::char, combinator::opt, multi::many0,
     sequence::tuple,
@@ -9,8 +11,8 @@ use crate::xpath::grammar::{expressions::path_expressions::steps::step_expr, rec
 
 use self::steps::StepExpr;
 
-mod abbreviated_syntax;
-mod steps;
+pub mod abbreviated_syntax;
+pub mod steps;
 
 pub fn path_expr(input: &str) -> Res<&str, PathExpr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-PathExpr
@@ -32,10 +34,28 @@ pub fn path_expr(input: &str) -> Res<&str, PathExpr> {
     alt((leading_double_slash, leading_slash, plain))(input)
 }
 
+#[derive(PartialEq, Debug)]
 pub enum PathExpr {
     LeadingSlash(Option<RelativePathExpr>),
     LeadingDoubleSlash(RelativePathExpr),
     Plain(RelativePathExpr),
+}
+
+impl Display for PathExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PathExpr::LeadingSlash(x) => {
+                write!(f, "/")?;
+                if let Some(x) = x {
+                    write!(f, "{}", x)?;
+                }
+
+                Ok(())
+            }
+            PathExpr::LeadingDoubleSlash(x) => write!(f, "//{}", x),
+            PathExpr::Plain(x) => write!(f, "{}", x),
+        }
+    }
 }
 
 pub fn relative_path_expr(input: &str) -> Res<&str, RelativePathExpr> {
@@ -56,19 +76,52 @@ pub fn relative_path_expr(input: &str) -> Res<&str, RelativePathExpr> {
 
     tuple((step_expr, many0(step_pair)))(input).map(|(next_input, res)| {
         let pair = StepPair(None, res.0);
-        let extras = res.1;
-        (next_input, RelativePathExpr { pair, extras })
+        let items = res.1;
+        (next_input, RelativePathExpr { pair, items })
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct RelativePathExpr {
     pub pair: StepPair,
-    pub extras: Vec<StepPair>,
+    pub items: Vec<StepPair>,
 }
 
+impl Display for RelativePathExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.pair)?;
+        for x in &self.items {
+            write!(f, "{}", x)?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(PartialEq, Debug)]
 pub struct StepPair(pub Option<PathSeparator>, pub StepExpr);
 
+impl Display for StepPair {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(x) = self.0 {
+            write!(f, "{}", x)?;
+        }
+
+        write!(f, "{}", self.1)
+    }
+}
+
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum PathSeparator {
     Slash,
     DoubleSlash,
+}
+
+impl Display for PathSeparator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PathSeparator::Slash => write!(f, "/"),
+            PathSeparator::DoubleSlash => write!(f, "//"),
+        }
+    }
 }

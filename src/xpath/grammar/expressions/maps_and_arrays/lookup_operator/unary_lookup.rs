@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-unary-lookup
 
+use std::fmt::Display;
+
 use nom::{branch::alt, character::complete::char, sequence::tuple};
 
 use crate::xpath::grammar::{
@@ -17,7 +19,14 @@ pub fn unary_lookup(input: &str) -> Res<&str, UnaryLookup> {
         .map(|(next_input, res)| (next_input, UnaryLookup(res.1)))
 }
 
+#[derive(PartialEq, Debug)]
 pub struct UnaryLookup(pub KeySpecifier);
+
+impl Display for UnaryLookup {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!("fmt UnaryLookup")
+    }
+}
 
 pub fn key_specifier(input: &str) -> Res<&str, KeySpecifier> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-KeySpecifier
@@ -47,9 +56,21 @@ pub fn key_specifier(input: &str) -> Res<&str, KeySpecifier> {
     ))(input)
 }
 
+#[derive(PartialEq, Debug)]
 pub enum KeySpecifier {
     Name(String),
     Integer(u32),
     ParenthesizedExpr(ParenthesizedExpr),
     Wildcard,
+}
+
+impl Display for KeySpecifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            KeySpecifier::Name(x) => write!(f, "{}", x),
+            KeySpecifier::Integer(x) => write!(f, "{}", x),
+            KeySpecifier::ParenthesizedExpr(x) => write!(f, "{}", x),
+            KeySpecifier::Wildcard => write!(f, "*"),
+        }
+    }
 }

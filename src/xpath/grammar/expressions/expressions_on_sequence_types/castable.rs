@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-castable
 
+use std::fmt::Display;
+
 use nom::{bytes::complete::tag, combinator::opt, sequence::tuple};
 
 use crate::xpath::grammar::recipes::Res;
@@ -25,7 +27,19 @@ pub fn castable_expr(input: &str) -> Res<&str, CastableExpr> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct CastableExpr {
     pub expr: CastExpr,
     pub cast_type: Option<SingleType>,
+}
+
+impl Display for CastableExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.expr)?;
+        if let Some(x) = &self.cast_type {
+            write!(f, " castable as {}", x)?;
+        }
+
+        Ok(())
+    }
 }

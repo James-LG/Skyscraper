@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-let-expressions
 
+use std::fmt::Display;
+
 use nom::{bytes::complete::tag, character::complete::char, multi::many0, sequence::tuple};
 
 use crate::xpath::grammar::recipes::Res;
@@ -23,9 +25,16 @@ pub fn let_expr(input: &str) -> Res<&str, LetExpr> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct LetExpr {
     pub clause: SimpleLetClause,
     pub expr: ExprSingle,
+}
+
+impl Display for LetExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!("fmt LetExpr")
+    }
 }
 
 fn simple_let_clause(input: &str) -> Res<&str, SimpleLetClause> {
@@ -47,6 +56,7 @@ fn simple_let_clause(input: &str) -> Res<&str, SimpleLetClause> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct SimpleLetClause {
     pub binding: SimpleLetBinding,
     pub extras: Vec<SimpleLetBinding>,
@@ -65,6 +75,7 @@ fn simple_let_binding(input: &str) -> Res<&str, SimpleLetBinding> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct SimpleLetBinding {
     pub var: VarName,
     pub expr: ExprSingle,

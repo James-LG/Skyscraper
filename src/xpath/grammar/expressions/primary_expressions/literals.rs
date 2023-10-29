@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-literals
 
+use std::fmt::Display;
+
 use nom::branch::alt;
 
 use crate::xpath::grammar::{
@@ -22,9 +24,19 @@ pub fn literal(input: &str) -> Res<&str, Literal> {
     alt((numeric_literal_map, string_literal_map))(input)
 }
 
+#[derive(PartialEq, Debug)]
 pub enum Literal {
     NumericLiteral(NumericLiteral),
     StringLiteral(String),
+}
+
+impl Display for Literal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Literal::NumericLiteral(x) => write!(f, "{}", x),
+            Literal::StringLiteral(x) => write!(f, "'{}'", x),
+        }
+    }
 }
 
 pub fn numeric_literal(input: &str) -> Res<&str, NumericLiteral> {
@@ -45,8 +57,19 @@ pub fn numeric_literal(input: &str) -> Res<&str, NumericLiteral> {
     alt((integer_literal_map, decimal_literal_map, double_literal_map))(input)
 }
 
+#[derive(PartialEq, Debug)]
 pub enum NumericLiteral {
     Integer(u32),
     Decimal(f32),
     Double(f64),
+}
+
+impl Display for NumericLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NumericLiteral::Integer(x) => write!(f, "{}", x),
+            NumericLiteral::Decimal(x) => write!(f, "{}", x),
+            NumericLiteral::Double(x) => write!(f, "{}", x),
+        }
+    }
 }

@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use nom::{branch::alt, bytes::complete::tag, character::complete::char, sequence::tuple};
 
 use crate::xpath::grammar::recipes::Res;
@@ -26,6 +28,12 @@ pub fn array_test(input: &str) -> Res<&str, ArrayTest> {
 pub enum ArrayTest {
     AnyArrayTest,
     TypedArrayTest(TypedArrayTest),
+}
+
+impl Display for ArrayTest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!("fmt ArrayTest")
+    }
 }
 
 fn typed_array_test(input: &str) -> Res<&str, TypedArrayTest> {

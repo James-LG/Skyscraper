@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-quantified-expressions
 
+use std::fmt::Display;
+
 use nom::{
     branch::alt, bytes::complete::tag, character::complete::char, multi::many0, sequence::tuple,
 };
@@ -62,6 +64,7 @@ pub fn quantified_expr(input: &str) -> Res<&str, QuantifiedExpr> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct QuantifiedExpr {
     pub quantifier: Quantifier,
     pub item: QuantifiedExprItem,
@@ -69,11 +72,19 @@ pub struct QuantifiedExpr {
     pub satisfies: ExprSingle,
 }
 
+impl Display for QuantifiedExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!("fmt QuantifiedExpr")
+    }
+}
+
+#[derive(PartialEq, Debug)]
 pub enum Quantifier {
     Some,
     Every,
 }
 
+#[derive(PartialEq, Debug)]
 pub struct QuantifiedExprItem {
     pub var: VarName,
     pub expr: ExprSingle,

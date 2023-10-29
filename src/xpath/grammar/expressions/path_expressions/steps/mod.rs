@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-steps
 
+use std::fmt::Display;
+
 use nom::{branch::alt, bytes::complete::tag, multi::many0, sequence::tuple};
 
 use crate::xpath::grammar::{
@@ -23,7 +25,7 @@ use self::{
 
 use super::abbreviated_syntax::AbbrevForwardStep;
 
-mod axes;
+pub mod axes;
 pub mod node_tests;
 
 pub fn step_expr(input: &str) -> Res<&str, StepExpr> {
@@ -40,9 +42,19 @@ pub fn step_expr(input: &str) -> Res<&str, StepExpr> {
     alt((postfix_expr_map, axis_step_map))(input)
 }
 
+#[derive(PartialEq, Debug)]
 pub enum StepExpr {
     PostfixExpr(PostfixExpr),
     AxisStep(AxisStep),
+}
+
+impl Display for StepExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StepExpr::PostfixExpr(x) => write!(f, "{}", x),
+            StepExpr::AxisStep(x) => write!(f, "{}", x),
+        }
+    }
 }
 
 fn axis_step(input: &str) -> Res<&str, AxisStep> {
@@ -69,14 +81,36 @@ fn axis_step(input: &str) -> Res<&str, AxisStep> {
     )
 }
 
+#[derive(PartialEq, Debug)]
 pub struct AxisStep {
     pub step_type: AxisStepType,
     pub predicates: Vec<Predicate>,
 }
 
+impl Display for AxisStep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.step_type)?;
+        for x in &self.predicates {
+            write!(f, " {}", x)?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(PartialEq, Debug)]
 pub enum AxisStepType {
     ReverseStep(ReverseStep),
     ForwardStep(ForwardStep),
+}
+
+impl Display for AxisStepType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AxisStepType::ReverseStep(x) => write!(f, "{}", x),
+            AxisStepType::ForwardStep(x) => write!(f, "{}", x),
+        }
+    }
 }
 
 fn forward_step(input: &str) -> Res<&str, ForwardStep> {
@@ -95,9 +129,19 @@ fn forward_step(input: &str) -> Res<&str, ForwardStep> {
     alt((full_forward_step, abbrev_forward_step_map))(input)
 }
 
+#[derive(PartialEq, Debug)]
 pub enum ForwardStep {
     Full(ForwardAxis, NodeTest),
     Abbreviated(AbbrevForwardStep),
+}
+
+impl Display for ForwardStep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ForwardStep::Full(x, y) => write!(f, "{} {}", x, y),
+            ForwardStep::Abbreviated(x) => write!(f, "{}", x),
+        }
+    }
 }
 
 fn reverse_step(input: &str) -> Res<&str, ReverseStep> {
@@ -115,9 +159,19 @@ fn reverse_step(input: &str) -> Res<&str, ReverseStep> {
     alt((full_reverse_step, abbrev_reverse_step))(input)
 }
 
+#[derive(PartialEq, Debug)]
 pub enum ReverseStep {
     Full(ReverseAxis, NodeTest),
     Abbreviated,
+}
+
+impl Display for ReverseStep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ReverseStep::Full(x, y) => write!(f, "{} {}", x, y),
+            ReverseStep::Abbreviated => write!(f, ".."),
+        }
+    }
 }
 
 fn predicate_list(input: &str) -> Res<&str, Vec<Predicate>> {

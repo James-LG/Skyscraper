@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-arithmetic
 
+use std::fmt::Display;
+
 use nom::{
     branch::alt, bytes::complete::tag, character::complete::char, multi::many0, sequence::tuple,
 };
@@ -38,16 +40,45 @@ pub fn additive_expr(input: &str) -> Res<&str, AdditiveExpr> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct AdditiveExpr {
     pub expr: MultiplicativeExpr,
     pub items: Vec<AdditiveExprPair>,
 }
 
+impl Display for AdditiveExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.expr)?;
+        for x in &self.items {
+            write!(f, " {}", x)?
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(PartialEq, Debug)]
 pub struct AdditiveExprPair(pub AdditiveExprOperator, pub MultiplicativeExpr);
 
+impl Display for AdditiveExprPair {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", self.0, self.1)
+    }
+}
+
+#[derive(PartialEq, Debug)]
 pub enum AdditiveExprOperator {
     Plus,
     Minus,
+}
+
+impl Display for AdditiveExprOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AdditiveExprOperator::Minus => write!(f, "-"),
+            AdditiveExprOperator::Plus => write!(f, "+"),
+        }
+    }
 }
 
 fn multiplicative_expr(input: &str) -> Res<&str, MultiplicativeExpr> {
@@ -85,18 +116,49 @@ fn multiplicative_expr(input: &str) -> Res<&str, MultiplicativeExpr> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct MultiplicativeExpr {
     pub expr: UnionExpr,
     pub items: Vec<MultiplicativeExprPair>,
 }
 
+impl Display for MultiplicativeExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.expr)?;
+        for x in &self.items {
+            write!(f, " {}", x)?
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(PartialEq, Debug)]
 pub struct MultiplicativeExprPair(pub MultiplicativeExprOperator, pub UnionExpr);
 
+impl Display for MultiplicativeExprPair {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", self.0, self.1)
+    }
+}
+
+#[derive(PartialEq, Debug)]
 pub enum MultiplicativeExprOperator {
     Star,
     Div,
     IntegerDiv,
     Modulus,
+}
+
+impl Display for MultiplicativeExprOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MultiplicativeExprOperator::Star => write!(f, "*"),
+            MultiplicativeExprOperator::Div => write!(f, "div"),
+            MultiplicativeExprOperator::IntegerDiv => write!(f, "idiv"),
+            MultiplicativeExprOperator::Modulus => write!(f, "mod"),
+        }
+    }
 }
 
 pub fn unary_expr(input: &str) -> Res<&str, UnaryExpr> {
@@ -121,14 +183,35 @@ pub fn unary_expr(input: &str) -> Res<&str, UnaryExpr> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct UnaryExpr {
     pub leading_symbols: Vec<UnarySymbol>,
     pub expr: ValueExpr,
 }
 
+impl Display for UnaryExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for x in &self.leading_symbols {
+            write!(f, "{}", x)?;
+        }
+
+        write!(f, "{}", self.expr)
+    }
+}
+
+#[derive(PartialEq, Debug)]
 pub enum UnarySymbol {
     Plus,
     Minus,
+}
+
+impl Display for UnarySymbol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UnarySymbol::Plus => write!(f, "+"),
+            UnarySymbol::Minus => write!(f, "-"),
+        }
+    }
 }
 
 fn value_expr(input: &str) -> Res<&str, ValueExpr> {
@@ -137,4 +220,11 @@ fn value_expr(input: &str) -> Res<&str, ValueExpr> {
     simple_map_expr(input).map(|(next_input, res)| (next_input, ValueExpr(res)))
 }
 
+#[derive(PartialEq, Debug)]
 pub struct ValueExpr(pub SimpleMapExpr);
+
+impl Display for ValueExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}

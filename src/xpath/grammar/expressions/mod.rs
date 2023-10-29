@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-expressions
 
+use std::fmt::Display;
+
 use nom::{branch::alt, character::complete::char, multi::many0, sequence::tuple};
 
 use crate::xpath::grammar::expressions::{
@@ -14,23 +16,23 @@ use self::{
 
 use super::recipes::Res;
 
-mod arithmetic_expressions;
-mod arrow_operator;
-mod common;
-mod comparison_expressions;
-mod conditional_expressions;
-mod expressions_on_sequence_types;
-mod for_expressions;
-mod let_expressions;
-mod logical_expressions;
-mod maps_and_arrays;
-mod path_expressions;
-mod postfix_expressions;
-mod primary_expressions;
-mod quantified_expressions;
-mod sequence_expressions;
-mod simple_map_operator;
-mod string_concat_expressions;
+pub mod arithmetic_expressions;
+pub mod arrow_operator;
+pub mod common;
+pub mod comparison_expressions;
+pub mod conditional_expressions;
+pub mod expressions_on_sequence_types;
+pub mod for_expressions;
+pub mod let_expressions;
+pub mod logical_expressions;
+pub mod maps_and_arrays;
+pub mod path_expressions;
+pub mod postfix_expressions;
+pub mod primary_expressions;
+pub mod quantified_expressions;
+pub mod sequence_expressions;
+pub mod simple_map_operator;
+pub mod string_concat_expressions;
 
 pub fn xpath(input: &str) -> Res<&str, XPath> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-XPath
@@ -38,7 +40,14 @@ pub fn xpath(input: &str) -> Res<&str, XPath> {
     expr(input).map(|(next_input, res)| (next_input, XPath(res)))
 }
 
-pub struct XPath(Expr);
+#[derive(PartialEq, Debug)]
+pub struct XPath(pub Expr);
+
+impl Display for XPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 pub fn expr(input: &str) -> Res<&str, Expr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-Expr
@@ -49,9 +58,21 @@ pub fn expr(input: &str) -> Res<&str, Expr> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct Expr {
     pub expr: ExprSingle,
     pub items: Vec<ExprSingle>,
+}
+
+impl Display for Expr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.expr)?;
+        for x in &self.items {
+            write!(f, " {}", x)?;
+        }
+
+        Ok(())
+    }
 }
 
 pub fn expr_single(input: &str) -> Res<&str, ExprSingle> {
@@ -87,10 +108,23 @@ pub fn expr_single(input: &str) -> Res<&str, ExprSingle> {
     ))(input)
 }
 
+#[derive(PartialEq, Debug)]
 pub enum ExprSingle {
     ForExpr(Box<ForExpr>),
     LetExpr(Box<LetExpr>),
     QuantifiedExpr(Box<QuantifiedExpr>),
     IfExpr(Box<IfExpr>),
     OrExpr(Box<OrExpr>),
+}
+
+impl Display for ExprSingle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExprSingle::ForExpr(x) => write!(f, "{}", x),
+            ExprSingle::LetExpr(x) => write!(f, "{}", x),
+            ExprSingle::QuantifiedExpr(x) => write!(f, "{}", x),
+            ExprSingle::IfExpr(x) => write!(f, "{}", x),
+            ExprSingle::OrExpr(x) => write!(f, "{}", x),
+        }
+    }
 }

@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use nom::{branch::alt, character::complete::char, combinator::opt, multi::many0, sequence::tuple};
 
 use crate::xpath::grammar::{expressions::expr_single, recipes::Res};
@@ -23,7 +25,18 @@ pub fn argument_list(input: &str) -> Res<&str, ArgumentList> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct ArgumentList(pub Vec<Argument>);
+
+impl Display for ArgumentList {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for x in &self.0 {
+            write!(f, "{}", x)?;
+        }
+
+        Ok(())
+    }
+}
 
 pub fn argument(input: &str) -> Res<&str, Argument> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-Argument
@@ -40,7 +53,17 @@ pub fn argument(input: &str) -> Res<&str, Argument> {
     alt((expr_single_map, argument_placeholder))(input)
 }
 
+#[derive(PartialEq, Debug)]
 pub enum Argument {
     ExprSingle(ExprSingle),
     ArgumentPlaceHolder,
+}
+
+impl Display for Argument {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Argument::ExprSingle(x) => write!(f, "{}", x),
+            Argument::ArgumentPlaceHolder => write!(f, "?"),
+        }
+    }
 }

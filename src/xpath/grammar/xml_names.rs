@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use nom::{
     branch::alt,
     character::complete::char,
@@ -59,6 +61,12 @@ pub struct PrefixedName {
     pub local_part: String,
 }
 
+impl Display for PrefixedName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.prefix, self.local_part)
+    }
+}
+
 pub fn qname(input: &str) -> Res<&str, QName> {
     // https://www.w3.org/TR/REC-xml-names/#NT-QName
     fn prefixedname_map(input: &str) -> Res<&str, QName> {
@@ -77,6 +85,15 @@ pub fn qname(input: &str) -> Res<&str, QName> {
 pub enum QName {
     PrefixedName(PrefixedName),
     UnprefixedName(String),
+}
+
+impl Display for QName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            QName::PrefixedName(x) => write!(f, "{}", x),
+            QName::UnprefixedName(x) => write!(f, "{}", x),
+        }
+    }
 }
 
 #[cfg(test)]

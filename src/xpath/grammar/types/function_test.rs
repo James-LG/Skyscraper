@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-function-test
 
+use std::fmt::Display;
+
 use crate::xpath::grammar::recipes::Res;
 
 use super::sequence_type::{sequence_type, SequenceType};
@@ -31,6 +33,12 @@ pub fn function_test(input: &str) -> Res<&str, FunctionTest> {
 pub enum FunctionTest {
     AnyFunctionTest,
     TypedFunctionTest(TypedFunctionTest),
+}
+
+impl Display for FunctionTest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!("fmt FunctionTest")
+    }
 }
 
 pub fn typed_function_test(input: &str) -> Res<&str, TypedFunctionTest> {

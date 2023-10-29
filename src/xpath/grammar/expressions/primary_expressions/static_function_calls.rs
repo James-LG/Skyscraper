@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-context-item-expression
 
+use std::fmt::Display;
+
 use nom::sequence::tuple;
 
 use crate::xpath::grammar::{
@@ -22,7 +24,14 @@ pub fn function_call(input: &str) -> Res<&str, FunctionCall> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct FunctionCall {
     pub name: EQName,
     pub argument_list: ArgumentList,
+}
+
+impl Display for FunctionCall {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!("fmt FunctionCall")
+    }
 }

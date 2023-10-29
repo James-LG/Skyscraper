@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-schema-element-test
 
+use std::fmt::Display;
+
 use crate::xpath::grammar::{recipes::Res, types::common::element_name};
 
 use super::common::ElementName;
@@ -20,6 +22,12 @@ pub fn schema_element_test(input: &str) -> Res<&str, SchemaElementTest> {
 
 #[derive(PartialEq, Debug)]
 pub struct SchemaElementTest(pub ElementDeclaration);
+
+impl Display for SchemaElementTest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!("fmt SchemaElementTest")
+    }
+}
 
 fn element_declaration(input: &str) -> Res<&str, ElementDeclaration> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-ElementDeclaration

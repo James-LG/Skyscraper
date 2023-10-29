@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#axes
 
+use std::fmt::Display;
+
 use nom::{branch::alt, bytes::complete::tag, sequence::tuple};
 
 use crate::xpath::grammar::recipes::Res;
@@ -59,6 +61,7 @@ pub fn forward_axis(input: &str) -> Res<&str, ForwardAxis> {
     ))(input)
 }
 
+#[derive(PartialEq, Debug)]
 pub enum ForwardAxis {
     Child,
     Descendant,
@@ -68,6 +71,21 @@ pub enum ForwardAxis {
     FollowingSibling,
     Following,
     Namespace,
+}
+
+impl Display for ForwardAxis {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ForwardAxis::Child => write!(f, "child::"),
+            ForwardAxis::Descendant => write!(f, "descendant::"),
+            ForwardAxis::Attribute => write!(f, "attribute::"),
+            ForwardAxis::SelfAxis => write!(f, "self::"),
+            ForwardAxis::DescendantOrSelf => write!(f, "descendant-or-self::"),
+            ForwardAxis::FollowingSibling => write!(f, "following-sibling::"),
+            ForwardAxis::Following => write!(f, "following::"),
+            ForwardAxis::Namespace => write!(f, "namespace::"),
+        }
+    }
 }
 
 pub fn reverse_axis(input: &str) -> Res<&str, ReverseAxis> {
@@ -107,10 +125,23 @@ pub fn reverse_axis(input: &str) -> Res<&str, ReverseAxis> {
     ))(input)
 }
 
+#[derive(PartialEq, Debug)]
 pub enum ReverseAxis {
     Parent,
     Ancestor,
     PrecedingSibling,
     Preceding,
     AncestorOrSelf,
+}
+
+impl Display for ReverseAxis {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ReverseAxis::Parent => write!(f, "parent::"),
+            ReverseAxis::Ancestor => write!(f, "ancestor::"),
+            ReverseAxis::PrecedingSibling => write!(f, "preceding-sibling::"),
+            ReverseAxis::Preceding => write!(f, "preceding::"),
+            ReverseAxis::AncestorOrSelf => write!(f, "ancestor-or-self::"),
+        }
+    }
 }

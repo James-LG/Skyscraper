@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-primary-expressions
 
+use std::fmt::Display;
+
 use nom::{branch::alt, character::complete::char};
 
 use crate::xpath::grammar::{
@@ -93,6 +95,7 @@ pub fn primary_expr(input: &str) -> Res<&str, PrimaryExpr> {
     ))(input)
 }
 
+#[derive(PartialEq, Debug)]
 pub enum PrimaryExpr {
     Literal(Literal),
     VarRef(VarRef),
@@ -103,6 +106,22 @@ pub enum PrimaryExpr {
     MapConstructor(MapConstructor),
     ArrayConstructor(ArrayConstructor),
     UnaryLookup(UnaryLookup),
+}
+
+impl Display for PrimaryExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PrimaryExpr::Literal(x) => write!(f, "{}", x),
+            PrimaryExpr::VarRef(x) => write!(f, "{}", x),
+            PrimaryExpr::ParenthesizedItemType(x) => write!(f, "{}", x),
+            PrimaryExpr::ContextItemExpr => write!(f, "."),
+            PrimaryExpr::FunctionCall(x) => write!(f, "{}", x),
+            PrimaryExpr::FunctionItemExpr(x) => write!(f, "{}", x),
+            PrimaryExpr::MapConstructor(x) => write!(f, "{}", x),
+            PrimaryExpr::ArrayConstructor(x) => write!(f, "{}", x),
+            PrimaryExpr::UnaryLookup(x) => write!(f, "{}", x),
+        }
+    }
 }
 
 fn function_item_expr(input: &str) -> Res<&str, FunctionItemExpr> {
@@ -121,7 +140,14 @@ fn function_item_expr(input: &str) -> Res<&str, FunctionItemExpr> {
     alt((named_function_ref_map, inline_function_expr_map))(input)
 }
 
+#[derive(PartialEq, Debug)]
 pub enum FunctionItemExpr {
     NamedFunctionRef(NamedFunctionRef),
     InlineFunctionExpr(InlineFunctionExpr),
+}
+
+impl Display for FunctionItemExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!("fmt FunctionItemExpr")
+    }
 }

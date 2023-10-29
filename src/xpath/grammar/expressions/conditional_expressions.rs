@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-conditionals
 
+use std::fmt::Display;
+
 use nom::{bytes::complete::tag, character::complete::char, sequence::tuple};
 
 use crate::xpath::grammar::recipes::Res;
@@ -31,8 +33,15 @@ pub fn if_expr(input: &str) -> Res<&str, IfExpr> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct IfExpr {
     pub condition: Expr,
     pub then: ExprSingle,
     pub else_expr: ExprSingle,
+}
+
+impl Display for IfExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!("fmt IfExpr")
+    }
 }

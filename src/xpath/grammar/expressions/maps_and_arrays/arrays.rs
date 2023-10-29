@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-arrays
 
+use std::fmt::Display;
+
 use nom::{
     branch::alt, bytes::complete::tag, character::complete::char, combinator::opt, multi::many0,
     sequence::tuple,
@@ -30,9 +32,16 @@ pub fn array_constructor(input: &str) -> Res<&str, ArrayConstructor> {
     alt((square_array_constructor_map, curly_array_constructor_map))(input)
 }
 
+#[derive(PartialEq, Debug)]
 pub enum ArrayConstructor {
     SquareArrayConstructor(SquareArrayConstructor),
     CurlyArrayConstructor(CurlyArrayConstructor),
+}
+
+impl Display for ArrayConstructor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!("fmt ArrayConstructor")
+    }
 }
 
 fn square_array_constructor(input: &str) -> Res<&str, SquareArrayConstructor> {
@@ -52,6 +61,7 @@ fn square_array_constructor(input: &str) -> Res<&str, SquareArrayConstructor> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct SquareArrayConstructor {
     pub entries: Vec<ExprSingle>,
 }
@@ -62,4 +72,5 @@ fn curly_array_constructor(input: &str) -> Res<&str, CurlyArrayConstructor> {
         .map(|(next_input, res)| (next_input, CurlyArrayConstructor(res.1)))
 }
 
+#[derive(PartialEq, Debug)]
 pub struct CurlyArrayConstructor(EnclosedExpr);

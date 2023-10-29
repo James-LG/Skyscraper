@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-for-expressions
 
+use std::fmt::Display;
+
 use nom::{bytes::complete::tag, character::complete::char, multi::many0, sequence::tuple};
 
 use crate::xpath::grammar::recipes::Res;
@@ -23,9 +25,16 @@ pub fn for_expr(input: &str) -> Res<&str, ForExpr> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct ForExpr {
     pub clause: SimpleForClause,
     pub expr: ExprSingle,
+}
+
+impl Display for ForExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!("fmt ForExpr")
+    }
 }
 
 fn simple_for_clause(input: &str) -> Res<&str, SimpleForClause> {
@@ -47,6 +56,7 @@ fn simple_for_clause(input: &str) -> Res<&str, SimpleForClause> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct SimpleForClause {
     pub binding: SimpleForBinding,
     pub extras: Vec<SimpleForBinding>,
@@ -65,6 +75,7 @@ fn simple_for_binding(input: &str) -> Res<&str, SimpleForBinding> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct SimpleForBinding {
     pub var: VarName,
     pub expr: ExprSingle,

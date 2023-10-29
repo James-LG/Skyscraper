@@ -1,5 +1,7 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-maps
 
+use std::fmt::Display;
+
 use nom::{
     bytes::complete::tag, character::complete::char, combinator::opt, multi::many0, sequence::tuple,
 };
@@ -32,8 +34,15 @@ pub fn map_constructor(input: &str) -> Res<&str, MapConstructor> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct MapConstructor {
     pub entries: Vec<MapConstructorEntry>,
+}
+
+impl Display for MapConstructor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!("fmt MapConstructor")
+    }
 }
 
 fn map_constructor_entry(input: &str) -> Res<&str, MapConstructorEntry> {
@@ -49,6 +58,7 @@ fn map_constructor_entry(input: &str) -> Res<&str, MapConstructorEntry> {
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct MapConstructorEntry {
     pub key: ExprSingle,
     pub value: ExprSingle,
