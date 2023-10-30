@@ -7,7 +7,8 @@ use nom::{
     bytes::complete::tag,
     character::complete::{char, digit0, digit1},
     combinator::{map_res, recognize},
-    multi::many0,
+    error::context,
+    multi::{fold_many0, many0},
     sequence::tuple,
 };
 
@@ -45,22 +46,82 @@ pub fn double_literal(input: &str) -> Res<&str, f64> {
     )(input)
 }
 
-pub fn string_literal(input: &str) -> Res<&str, &str> {
+pub fn string_literal(input: &str) -> Res<&str, StringLiteral> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-StringLiteral
 
-    alt((
-        tuple((
-            char('"'),
-            recognize(alt((escape_quot, recognize(many0(not_quote()))))),
-            char('"'),
-        )),
-        tuple((
-            char('\''),
-            recognize(alt((escape_apos, recognize(many0(not_single_quote()))))),
-            char('\''),
-        )),
-    ))(input)
-    .map(|(next_input, res)| (next_input, res.1))
+    fn double_quoted_map(input: &str) -> Res<&str, StringLiteral> {
+        context(
+            "string_literal::double_quoted_map",
+            tuple((
+                char('"'),
+                fold_many0(
+                    alt((escape_quot, recognize(not_quote()))),
+                    || String::from(""),
+                    |acc, item| format!("{}{}", acc, item),
+                ),
+                char('"'),
+            )),
+        )(input)
+        .map(|(next_input, res)| {
+            (
+                next_input,
+                StringLiteral {
+                    value: res.1.to_string(),
+                    quotation_type: QuotationType::Double,
+                },
+            )
+        })
+    }
+
+    fn single_quoted_map(input: &str) -> Res<&str, StringLiteral> {
+        context(
+            "string_literal::single_quoted_map",
+            tuple((
+                char('\''),
+                fold_many0(
+                    alt((escape_apos, recognize(not_single_quote()))),
+                    || String::from(""),
+                    |acc, item| format!("{}{}", acc, item),
+                ),
+                char('\''),
+            )),
+        )(input)
+        .map(|(next_input, res)| {
+            (
+                next_input,
+                StringLiteral {
+                    value: res.1.to_string(),
+                    quotation_type: QuotationType::Single,
+                },
+            )
+        })
+    }
+
+    context(
+        "string_literal",
+        alt((single_quoted_map, double_quoted_map)),
+    )(input)
+}
+
+#[derive(PartialEq, Debug)]
+pub struct StringLiteral {
+    pub value: String,
+    quotation_type: QuotationType,
+}
+
+impl Display for StringLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.quotation_type {
+            QuotationType::Single => write!(f, "'{}'", self.value),
+            QuotationType::Double => write!(f, "\"{}\"", self.value),
+        }
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub enum QuotationType {
+    Single,
+    Double,
 }
 
 pub fn uri_qualified_name(input: &str) -> Res<&str, UriQualifiedName> {
@@ -104,13 +165,13 @@ pub fn braced_uri_literal(input: &str) -> Res<&str, &str> {
 fn escape_quot(input: &str) -> Res<&str, &str> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-EscapeQuot
 
-    tag("\"\"")(input)
+    tag("\"\"")(input).map(|(next_input, _)| (next_input, "\""))
 }
 
 fn escape_apos(input: &str) -> Res<&str, &str> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-EscapeApos
 
-    tag("''")(input)
+    tag("''")(input).map(|(next_input, _)| (next_input, "'"))
 }
 
 #[cfg(test)]
@@ -118,6 +179,44 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
+
+    #[test]
+    fn string_literal_should_allow_escaped_double_quotes() {
+        // arrange
+        let input = format!("\"{}\"", "He said, \"\"I don't like it.\"\"");
+
+        // act
+        let (next_input, res) = string_literal(&input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(
+            res,
+            StringLiteral {
+                value: String::from("He said, \"I don't like it.\""),
+                quotation_type: QuotationType::Double
+            }
+        )
+    }
+
+    #[test]
+    fn string_literal_should_allow_escaped_single_quotes() {
+        // arrange
+        let input = format!("'{}'", "He said, \"I don''t like it.\"");
+
+        // act
+        let (next_input, res) = string_literal(&input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(
+            res,
+            StringLiteral {
+                value: String::from("He said, \"I don't like it.\""),
+                quotation_type: QuotationType::Single
+            }
+        )
+    }
 
     proptest! {
         #[test]
@@ -153,7 +252,7 @@ mod tests {
             let res = string_literal(&quoted_str).unwrap();
 
             prop_assert_eq!("", res.0, "next input not empty");
-            prop_assert_eq!(s, res.1);
+            prop_assert_eq!(s, res.1.value);
         }
 
         #[test]
@@ -162,7 +261,7 @@ mod tests {
             let res = string_literal(&quoted_str).unwrap();
 
             prop_assert_eq!("", res.0, "next input not empty");
-            prop_assert_eq!(s, res.1);
+            prop_assert_eq!(s, res.1.value);
         }
 
         #[test]

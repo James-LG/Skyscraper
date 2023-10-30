@@ -12,18 +12,18 @@ use crate::xpath::grammar::{
         },
         primary_expressions::{
             inline_function_expressions::inline_function_expr, literals::literal,
-            named_function_references::named_function_ref, static_function_calls::function_call,
+            named_function_references::named_function_ref,
+            parenthesized_expressions::parenthesized_expr, static_function_calls::function_call,
             variable_references::var_ref,
         },
     },
-    recipes::Res,
-    types::sequence_type::{parenthesized_item_type, ItemType},
+    recipes::{max, Res},
 };
 
 use self::{
     inline_function_expressions::InlineFunctionExpr, literals::Literal,
-    named_function_references::NamedFunctionRef, static_function_calls::FunctionCall,
-    variable_references::VarRef,
+    named_function_references::NamedFunctionRef, parenthesized_expressions::ParenthesizedExpr,
+    static_function_calls::FunctionCall, variable_references::VarRef,
 };
 
 use super::maps_and_arrays::{
@@ -49,8 +49,8 @@ pub fn primary_expr(input: &str) -> Res<&str, PrimaryExpr> {
         var_ref(input).map(|(next_input, res)| (next_input, PrimaryExpr::VarRef(res)))
     }
 
-    fn parenthesized_item_type_map(input: &str) -> Res<&str, PrimaryExpr> {
-        parenthesized_item_type(input)
+    fn parenthesized_expr_map(input: &str) -> Res<&str, PrimaryExpr> {
+        parenthesized_expr(input)
             .map(|(next_input, res)| (next_input, PrimaryExpr::ParenthesizedItemType(res)))
     }
 
@@ -82,10 +82,10 @@ pub fn primary_expr(input: &str) -> Res<&str, PrimaryExpr> {
         unary_lookup(input).map(|(next_input, res)| (next_input, PrimaryExpr::UnaryLookup(res)))
     }
 
-    alt((
+    max((
         literal_map,
         var_ref_map,
-        parenthesized_item_type_map,
+        parenthesized_expr_map,
         context_item_expr,
         function_call_map,
         function_item_expr_map,
@@ -99,7 +99,7 @@ pub fn primary_expr(input: &str) -> Res<&str, PrimaryExpr> {
 pub enum PrimaryExpr {
     Literal(Literal),
     VarRef(VarRef),
-    ParenthesizedItemType(ItemType),
+    ParenthesizedItemType(ParenthesizedExpr),
     ContextItemExpr,
     FunctionCall(FunctionCall),
     FunctionItemExpr(FunctionItemExpr),

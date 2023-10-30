@@ -12,15 +12,27 @@ use crate::xpath::grammar::{
 pub fn union_expr(input: &str) -> Res<&str, UnionExpr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-UnionExpr
 
+    fn union_operator_map(input: &str) -> Res<&str, UnionExprOperatorType> {
+        tag("union")(input).map(|(next_input, _res)| (next_input, UnionExprOperatorType::Union))
+    }
+
+    fn bar_operator_map(input: &str) -> Res<&str, UnionExprOperatorType> {
+        tag("|")(input).map(|(next_input, _res)| (next_input, UnionExprOperatorType::Bar))
+    }
+
     tuple((
         intersect_except_expr,
         many0(tuple((
-            alt((tag("union"), tag("|"))),
+            alt((union_operator_map, bar_operator_map)),
             intersect_except_expr,
         ))),
     ))(input)
     .map(|(next_input, res)| {
-        let items = res.1.into_iter().map(|res| res.1).collect();
+        let items = res
+            .1
+            .into_iter()
+            .map(|res| UnionExprPair(res.0, res.1))
+            .collect();
         (next_input, UnionExpr { expr: res.0, items })
     })
 }
@@ -28,14 +40,38 @@ pub fn union_expr(input: &str) -> Res<&str, UnionExpr> {
 #[derive(PartialEq, Debug)]
 pub struct UnionExpr {
     pub expr: IntersectExceptExpr,
-    pub items: Vec<IntersectExceptExpr>,
+    pub items: Vec<UnionExprPair>,
+}
+
+#[derive(PartialEq, Debug)]
+pub struct UnionExprPair(UnionExprOperatorType, pub IntersectExceptExpr);
+
+impl Display for UnionExprPair {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", self.0, self.1)
+    }
+}
+
+#[derive(PartialEq, Debug)]
+enum UnionExprOperatorType {
+    Union,
+    Bar,
+}
+
+impl Display for UnionExprOperatorType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UnionExprOperatorType::Union => write!(f, "union"),
+            UnionExprOperatorType::Bar => write!(f, "|"),
+        }
+    }
 }
 
 impl Display for UnionExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.expr)?;
         for x in &self.items {
-            write!(f, " {}", x)?
+            write!(f, "{}", x)?
         }
 
         Ok(())
@@ -106,5 +142,23 @@ impl Display for IntersectExceptType {
             IntersectExceptType::Intersect => write!(f, "intersect"),
             IntersectExceptType::Except => write!(f, "except"),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn union_expr_should_parse1() {
+        // arrange
+        let input = "chapter|appendix";
+
+        // act
+        let (next_input, res) = union_expr(input).unwrap();
+
+        // assert
+        assert_eq!(res.to_string(), input);
+        assert_eq!(next_input, "");
     }
 }

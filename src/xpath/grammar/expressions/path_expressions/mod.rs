@@ -125,3 +125,21 @@ impl Display for PathSeparator {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn relative_path_expr_should_parse() {
+        // arrange
+        let input = r#"child::div1/child::para"#;
+
+        // act
+        let (next_input, res) = relative_path_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
+    }
+}

@@ -30,9 +30,14 @@ pub struct ArgumentList(pub Vec<Argument>);
 
 impl Display for ArgumentList {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for x in &self.0 {
+        write!(f, "(")?;
+        for (i, x) in self.0.iter().enumerate() {
+            if i > 0 {
+                write!(f, ",")?;
+            }
             write!(f, "{}", x)?;
         }
+        write!(f, ")")?;
 
         Ok(())
     }

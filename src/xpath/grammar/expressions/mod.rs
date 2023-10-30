@@ -4,9 +4,12 @@ use std::fmt::Display;
 
 use nom::{branch::alt, character::complete::char, multi::many0, sequence::tuple};
 
-use crate::xpath::grammar::expressions::{
-    conditional_expressions::if_expr, for_expressions::for_expr, let_expressions::let_expr,
-    logical_expressions::or_expr, quantified_expressions::quantified_expr,
+use crate::xpath::grammar::{
+    expressions::{
+        conditional_expressions::if_expr, for_expressions::for_expr, let_expressions::let_expr,
+        logical_expressions::or_expr, quantified_expressions::quantified_expr,
+    },
+    recipes::max,
 };
 
 use self::{
@@ -99,7 +102,7 @@ pub fn expr_single(input: &str) -> Res<&str, ExprSingle> {
         or_expr(input).map(|(next_input, res)| (next_input, ExprSingle::OrExpr(Box::new(res))))
     }
 
-    alt((
+    max((
         for_expr_map,
         let_expr_map,
         quantified_expr_map,
@@ -126,5 +129,23 @@ impl Display for ExprSingle {
             ExprSingle::IfExpr(x) => write!(f, "{}", x),
             ExprSingle::OrExpr(x) => write!(f, "{}", x),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn expr_should_parse1() {
+        // arrange
+        let input = "/(chapter|appendix)";
+
+        // act
+        let (next_input, res) = expr(input).unwrap();
+
+        // assert
+        assert_eq!(res.to_string(), input);
+        assert_eq!(next_input, "");
     }
 }

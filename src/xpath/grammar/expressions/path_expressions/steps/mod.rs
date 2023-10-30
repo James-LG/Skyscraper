@@ -15,7 +15,7 @@ use crate::xpath::grammar::{
         },
         postfix_expressions::{postfix_expr, predicate, PostfixExpr, Predicate},
     },
-    recipes::Res,
+    recipes::{max, Res},
 };
 
 use self::{
@@ -39,7 +39,7 @@ pub fn step_expr(input: &str) -> Res<&str, StepExpr> {
         axis_step(input).map(|(next_input, res)| (next_input, StepExpr::AxisStep(res)))
     }
 
-    alt((postfix_expr_map, axis_step_map))(input)
+    max((postfix_expr_map, axis_step_map))(input)
 }
 
 #[derive(PartialEq, Debug)]
@@ -91,7 +91,7 @@ impl Display for AxisStep {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.step_type)?;
         for x in &self.predicates {
-            write!(f, " {}", x)?;
+            write!(f, "{}", x)?;
         }
 
         Ok(())
@@ -138,7 +138,7 @@ pub enum ForwardStep {
 impl Display for ForwardStep {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ForwardStep::Full(x, y) => write!(f, "{} {}", x, y),
+            ForwardStep::Full(x, y) => write!(f, "{}{}", x, y),
             ForwardStep::Abbreviated(x) => write!(f, "{}", x),
         }
     }

@@ -27,3 +27,21 @@ impl Display for ParenthesizedExpr {
         write!(f, ")")
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn parenthesized_expr_should_parse1() {
+        // arrange
+        let input = "(chapter|appendix)";
+
+        // act
+        let (next_input, res) = parenthesized_expr(input).unwrap();
+
+        // assert
+        assert_eq!(res.to_string(), input);
+        assert_eq!(next_input, "");
+    }
+}

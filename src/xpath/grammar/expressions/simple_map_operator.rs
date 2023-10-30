@@ -28,9 +28,27 @@ impl Display for SimpleMapExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.expr)?;
         for x in &self.items {
-            write!(f, " ! {}", x)?;
+            write!(f, "!{}", x)?;
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn simple_map_expr_should_parse1() {
+        // arrange
+        let input = r#"child::div1/child::para/string()!concat("id-",.)"#;
+
+        // act
+        let (next_input, res) = simple_map_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
     }
 }
