@@ -67,4 +67,17 @@ mod tests {
         assert_eq!(next_input, "");
         assert_eq!(res.to_string(), input);
     }
+
+    #[test]
+    fn xpath_should_parse4() {
+        // arrange
+        let input = "$products[price gt 100]";
+
+        // act
+        let (next_input, res) = xpath(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
+    }
 }

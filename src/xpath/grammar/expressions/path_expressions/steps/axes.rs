@@ -2,7 +2,7 @@
 
 use std::fmt::Display;
 
-use nom::{branch::alt, bytes::complete::tag, sequence::tuple};
+use nom::{branch::alt, bytes::complete::tag, error::context, sequence::tuple};
 
 use crate::xpath::grammar::recipes::Res;
 
@@ -49,16 +49,19 @@ pub fn forward_axis(input: &str) -> Res<&str, ForwardAxis> {
             .map(|(next_input, _res)| (next_input, ForwardAxis::Namespace))
     }
 
-    alt((
-        child,
-        descendant,
-        attribute,
-        self_axis,
-        descendant_or_self,
-        following_sibling,
-        following,
-        namespace,
-    ))(input)
+    context(
+        "forward_axis",
+        alt((
+            child,
+            descendant,
+            attribute,
+            self_axis,
+            descendant_or_self,
+            following_sibling,
+            following,
+            namespace,
+        )),
+    )(input)
 }
 
 #[derive(PartialEq, Debug)]
@@ -116,13 +119,16 @@ pub fn reverse_axis(input: &str) -> Res<&str, ReverseAxis> {
             .map(|(next_input, _res)| (next_input, ReverseAxis::AncestorOrSelf))
     }
 
-    alt((
-        parent_map,
-        ancestor_map,
-        preceding_sibling_map,
-        preceding_map,
-        ancestor_or_self_map,
-    ))(input)
+    context(
+        "reverse_axis",
+        alt((
+            parent_map,
+            ancestor_map,
+            preceding_sibling_map,
+            preceding_map,
+            ancestor_or_self_map,
+        )),
+    )(input)
 }
 
 #[derive(PartialEq, Debug)]

@@ -3,7 +3,8 @@
 use std::fmt::Display;
 
 use nom::{
-    branch::alt, bytes::complete::tag, character::complete::char, multi::many0, sequence::tuple,
+    branch::alt, bytes::complete::tag, character::complete::char, error::context, multi::many0,
+    sequence::tuple,
 };
 
 use crate::xpath::grammar::{
@@ -24,22 +25,25 @@ pub fn quantified_expr(input: &str) -> Res<&str, QuantifiedExpr> {
         tag("every")(input).map(|(next_input, _res)| (next_input, Quantifier::Every))
     }
 
-    tuple((
-        alt((some_quantifier, every_quantifier)),
-        char('$'),
-        var_name,
-        tag("in"),
-        expr_single,
-        many0(tuple((
-            char(','),
+    context(
+        "quantified_expr",
+        tuple((
+            alt((some_quantifier, every_quantifier)),
             char('$'),
             var_name,
             tag("in"),
             expr_single,
-        ))),
-        tag("satisfies"),
-        expr_single,
-    ))(input)
+            many0(tuple((
+                char(','),
+                char('$'),
+                var_name,
+                tag("in"),
+                expr_single,
+            ))),
+            tag("satisfies"),
+            expr_single,
+        )),
+    )(input)
     .map(|(next_input, res)| {
         let extras = res
             .5

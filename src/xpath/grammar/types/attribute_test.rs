@@ -3,7 +3,8 @@
 use std::fmt::Display;
 
 use nom::{
-    branch::alt, bytes::complete::tag, character::complete::char, combinator::opt, sequence::tuple,
+    branch::alt, bytes::complete::tag, character::complete::char, combinator::opt, error::context,
+    sequence::tuple,
 };
 
 use crate::xpath::grammar::{recipes::Res, types::common::attribute_name};
@@ -13,14 +14,17 @@ use super::common::{type_name, AttributeName, TypeName};
 pub fn attribute_test(input: &str) -> Res<&str, AttributeTest> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-AttributeTest
 
-    tuple((
-        tag("attribute"),
-        char('('),
-        opt(tuple((
-            attrib_name_or_wildcard,
-            opt(tuple((char(','), type_name, opt(char('?'))))),
-        ))),
-    ))(input)
+    context(
+        "attribute_test",
+        tuple((
+            tag("attribute"),
+            char('('),
+            opt(tuple((
+                attrib_name_or_wildcard,
+                opt(tuple((char(','), type_name, opt(char('?'))))),
+            ))),
+        )),
+    )(input)
     .map(|(next_input, res)| {
         let res = res.2.map(|tup| (tup.0, tup.1.map(|tup2| tup2.1)));
         let element_test = match res {
@@ -65,7 +69,10 @@ pub fn attrib_name_or_wildcard(input: &str) -> Res<&str, AttribNameOrWildcard> {
         char('*')(input).map(|(next_input, _res)| (next_input, AttribNameOrWildcard::Wildcard))
     }
 
-    alt((attribute_name_map, wildcard_map))(input)
+    context(
+        "attrib_name_or_wildcard",
+        alt((attribute_name_map, wildcard_map)),
+    )(input)
 }
 
 #[derive(PartialEq, Debug)]

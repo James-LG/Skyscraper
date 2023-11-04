@@ -3,7 +3,8 @@
 use std::fmt::Display;
 
 use nom::{
-    branch::alt, bytes::complete::tag, character::complete::char, combinator::opt, sequence::tuple,
+    branch::alt, bytes::complete::tag, character::complete::char, combinator::opt, error::context,
+    sequence::tuple,
 };
 
 use crate::xpath::grammar::{
@@ -92,18 +93,21 @@ pub fn kind_test(input: &str) -> Res<&str, KindTest> {
         pi_test(input).map(|(next_input, res)| (next_input, KindTest::PITest(res)))
     }
 
-    alt((
-        document_test_map,
-        element_test_map,
-        attribute_test_map,
-        schema_element_test_map,
-        schema_attribute_test_map,
-        pi_test_map,
-        comment_test,
-        text_test,
-        namespace_node_test,
-        any_kind_test,
-    ))(input)
+    context(
+        "kind_test",
+        alt((
+            document_test_map,
+            element_test_map,
+            attribute_test_map,
+            schema_element_test_map,
+            schema_attribute_test_map,
+            pi_test_map,
+            comment_test,
+            text_test,
+            namespace_node_test,
+            any_kind_test,
+        )),
+    )(input)
 }
 
 #[derive(PartialEq, Debug)]
@@ -150,12 +154,15 @@ pub fn document_test(input: &str) -> Res<&str, DocumentTest> {
             .map(|(next_input, res)| (next_input, DocumentTestValue::SchemaElementTest(res)))
     }
 
-    tuple((
-        tag("document-node"),
-        char('('),
-        opt(alt((element_test_map, schema_element_test_map))),
-        char(')'),
-    ))(input)
+    context(
+        "document_test",
+        tuple((
+            tag("document-node"),
+            char('('),
+            opt(alt((element_test_map, schema_element_test_map))),
+            char(')'),
+        )),
+    )(input)
     .map(|(next_input, res)| (next_input, DocumentTest { value: res.2 }))
 }
 
@@ -179,12 +186,15 @@ pub enum DocumentTestValue {
 pub fn schema_attribute_test(input: &str) -> Res<&str, SchemaAttributeTest> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-SchemaAttributeTest
 
-    tuple((
-        tag("schema-attribute"),
-        char('('),
-        attribute_declaration,
-        char(')'),
-    ))(input)
+    context(
+        "schema_attribute_test",
+        tuple((
+            tag("schema-attribute"),
+            char('('),
+            attribute_declaration,
+            char(')'),
+        )),
+    )(input)
     .map(|(next_input, res)| (next_input, SchemaAttributeTest(res.2)))
 }
 
@@ -200,7 +210,8 @@ impl Display for SchemaAttributeTest {
 pub fn attribute_declaration(input: &str) -> Res<&str, AttributeDeclaration> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-AttributeDeclaration
 
-    attribute_name(input).map(|(next_input, res)| (next_input, AttributeDeclaration(res)))
+    context("attribute_declaration", attribute_name)(input)
+        .map(|(next_input, res)| (next_input, AttributeDeclaration(res)))
 }
 
 #[derive(PartialEq, Debug)]
@@ -218,12 +229,15 @@ pub fn pi_test(input: &str) -> Res<&str, PITest> {
             .map(|(next_input, res)| (next_input, PITestValue::StringLiteral(res.to_string())))
     }
 
-    tuple((
-        tag("processing-instruction"),
-        char('('),
-        opt(alt((nc_name_map, string_literal_map))),
-        char(')'),
-    ))(input)
+    context(
+        "pi_test",
+        tuple((
+            tag("processing-instruction"),
+            char('('),
+            opt(alt((nc_name_map, string_literal_map))),
+            char(')'),
+        )),
+    )(input)
     .map(|(next_input, res)| (next_input, PITest { val: res.2 }))
 }
 
@@ -255,7 +269,8 @@ impl Display for AtomicOrUnionType {
 
 pub fn simple_type_name(input: &str) -> Res<&str, SimpleTypeName> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-SimpleTypeName
-    type_name(input).map(|(next_input, res)| (next_input, SimpleTypeName(res)))
+    context("simple_type_name", type_name)(input)
+        .map(|(next_input, res)| (next_input, SimpleTypeName(res)))
 }
 
 #[derive(PartialEq, Debug)]
@@ -273,7 +288,7 @@ pub fn eq_name(input: &str) -> Res<&str, EQName> {
             .map(|(next_input, res)| (next_input, EQName::UriQualifiedName(res)))
     }
 
-    alt((uri_qualified_name_map, qname_map))(input)
+    context("eq_name", alt((uri_qualified_name_map, qname_map)))(input)
 }
 
 #[derive(PartialEq, Debug)]

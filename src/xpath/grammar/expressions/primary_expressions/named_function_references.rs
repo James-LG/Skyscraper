@@ -1,6 +1,6 @@
 //! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-named-function-ref
 
-use nom::{character::complete::char, sequence::tuple};
+use nom::{character::complete::char, error::context, sequence::tuple};
 
 use crate::xpath::grammar::{
     recipes::Res,
@@ -11,7 +11,11 @@ use crate::xpath::grammar::{
 pub fn named_function_ref(input: &str) -> Res<&str, NamedFunctionRef> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-NamedFunctionRef
 
-    tuple((eq_name, char('#'), integer_literal))(input).map(|(next_input, res)| {
+    context(
+        "named_function_ref",
+        tuple((eq_name, char('#'), integer_literal)),
+    )(input)
+    .map(|(next_input, res)| {
         (
             next_input,
             NamedFunctionRef {

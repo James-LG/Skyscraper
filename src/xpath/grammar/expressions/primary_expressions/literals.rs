@@ -2,7 +2,7 @@
 
 use std::fmt::Display;
 
-use nom::branch::alt;
+use nom::{branch::alt, error::context};
 
 use crate::xpath::grammar::{
     recipes::Res,
@@ -21,7 +21,7 @@ pub fn literal(input: &str) -> Res<&str, Literal> {
             .map(|(next_input, res)| (next_input, Literal::StringLiteral(res.to_string())))
     }
 
-    alt((numeric_literal_map, string_literal_map))(input)
+    context("literal", alt((numeric_literal_map, string_literal_map)))(input)
 }
 
 #[derive(PartialEq, Debug)]
@@ -54,7 +54,10 @@ pub fn numeric_literal(input: &str) -> Res<&str, NumericLiteral> {
         double_literal(input).map(|(next_input, res)| (next_input, NumericLiteral::Double(res)))
     }
 
-    alt((integer_literal_map, decimal_literal_map, double_literal_map))(input)
+    context(
+        "numeric_literal",
+        alt((integer_literal_map, decimal_literal_map, double_literal_map)),
+    )(input)
 }
 
 #[derive(PartialEq, Debug)]

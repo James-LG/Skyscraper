@@ -3,7 +3,8 @@
 use std::fmt::Display;
 
 use nom::{
-    bytes::complete::tag, character::complete::char, combinator::opt, multi::many0, sequence::tuple,
+    bytes::complete::tag, character::complete::char, combinator::opt, error::context, multi::many0,
+    sequence::tuple,
 };
 
 use crate::xpath::grammar::{
@@ -14,15 +15,18 @@ use crate::xpath::grammar::{
 pub fn map_constructor(input: &str) -> Res<&str, MapConstructor> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-MapConstructor
 
-    tuple((
-        tag("map"),
-        char('{'),
-        opt(tuple((
-            map_constructor_entry,
-            many0(tuple((char(','), map_constructor_entry))),
-        ))),
-        char('}'),
-    ))(input)
+    context(
+        "map_constructor",
+        tuple((
+            tag("map"),
+            char('{'),
+            opt(tuple((
+                map_constructor_entry,
+                many0(tuple((char(','), map_constructor_entry))),
+            ))),
+            char('}'),
+        )),
+    )(input)
     .map(|(next_input, res)| {
         let mut entries = Vec::new();
         if let Some(res) = res.2 {
@@ -47,7 +51,11 @@ impl Display for MapConstructor {
 
 fn map_constructor_entry(input: &str) -> Res<&str, MapConstructorEntry> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-MapConstructorEntry
-    tuple((map_key_expr, map_value_expr))(input).map(|(next_input, res)| {
+    context(
+        "map_constructor_entry",
+        tuple((map_key_expr, map_value_expr)),
+    )(input)
+    .map(|(next_input, res)| {
         (
             next_input,
             MapConstructorEntry {
@@ -66,10 +74,10 @@ pub struct MapConstructorEntry {
 
 fn map_key_expr(input: &str) -> Res<&str, ExprSingle> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-MapKeyExpr
-    expr_single(input)
+    context("map_key_expr", expr_single)(input)
 }
 
 fn map_value_expr(input: &str) -> Res<&str, ExprSingle> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-MapValueExpr
-    expr_single(input)
+    context("map_value_expr", expr_single)(input)
 }

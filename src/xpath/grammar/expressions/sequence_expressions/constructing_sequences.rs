@@ -2,7 +2,7 @@
 
 use std::fmt::Display;
 
-use nom::{bytes::complete::tag, combinator::opt, sequence::tuple};
+use nom::{bytes::complete::tag, combinator::opt, error::context, sequence::tuple};
 
 use crate::xpath::grammar::{
     expressions::arithmetic_expressions::{additive_expr, AdditiveExpr},
@@ -12,17 +12,19 @@ use crate::xpath::grammar::{
 pub fn range_expr(input: &str) -> Res<&str, RangeExpr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-RangeExpr
 
-    tuple((additive_expr, opt(tuple((tag("to"), additive_expr)))))(input).map(
-        |(next_input, res)| {
-            (
-                next_input,
-                RangeExpr {
-                    expr: res.0,
-                    to_expr: res.1.map(|res| res.1),
-                },
-            )
-        },
-    )
+    context(
+        "range_expr",
+        tuple((additive_expr, opt(tuple((tag("to"), additive_expr))))),
+    )(input)
+    .map(|(next_input, res)| {
+        (
+            next_input,
+            RangeExpr {
+                expr: res.0,
+                to_expr: res.1.map(|res| res.1),
+            },
+        )
+    })
 }
 
 #[derive(PartialEq, Debug)]

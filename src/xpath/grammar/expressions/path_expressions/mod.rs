@@ -3,8 +3,8 @@
 use std::fmt::Display;
 
 use nom::{
-    branch::alt, bytes::complete::tag, character::complete::char, combinator::opt, multi::many0,
-    sequence::tuple,
+    branch::alt, bytes::complete::tag, character::complete::char, combinator::opt, error::context,
+    multi::many0, sequence::tuple,
 };
 
 use crate::xpath::grammar::{expressions::path_expressions::steps::step_expr, recipes::Res};
@@ -31,7 +31,10 @@ pub fn path_expr(input: &str) -> Res<&str, PathExpr> {
         relative_path_expr(input).map(|(next_input, res)| (next_input, PathExpr::Plain(res)))
     }
 
-    alt((leading_double_slash, leading_slash, plain))(input)
+    context(
+        "path_expr",
+        alt((leading_double_slash, leading_slash, plain)),
+    )(input)
 }
 
 #[derive(PartialEq, Debug)]
@@ -74,11 +77,13 @@ pub fn relative_path_expr(input: &str) -> Res<&str, RelativePathExpr> {
             .map(|(next_input, res)| (next_input, StepPair(Some(res.0), res.1)))
     }
 
-    tuple((step_expr, many0(step_pair)))(input).map(|(next_input, res)| {
-        let pair = StepPair(None, res.0);
-        let items = res.1;
-        (next_input, RelativePathExpr { pair, items })
-    })
+    context("relative_path_expr", tuple((step_expr, many0(step_pair))))(input).map(
+        |(next_input, res)| {
+            let pair = StepPair(None, res.0);
+            let items = res.1;
+            (next_input, RelativePathExpr { pair, items })
+        },
+    )
 }
 
 #[derive(PartialEq, Debug)]

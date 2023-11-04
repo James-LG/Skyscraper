@@ -2,7 +2,7 @@
 
 use std::fmt::Display;
 
-use nom::{branch::alt, character::complete::char};
+use nom::{branch::alt, character::complete::char, error::context};
 
 use crate::xpath::grammar::{
     expressions::{
@@ -82,17 +82,20 @@ pub fn primary_expr(input: &str) -> Res<&str, PrimaryExpr> {
         unary_lookup(input).map(|(next_input, res)| (next_input, PrimaryExpr::UnaryLookup(res)))
     }
 
-    max((
-        literal_map,
-        var_ref_map,
-        parenthesized_expr_map,
-        context_item_expr,
-        function_call_map,
-        function_item_expr_map,
-        map_constructor_map,
-        array_constructor_map,
-        unary_lookup_map,
-    ))(input)
+    context(
+        "primary_expr",
+        max((
+            literal_map,
+            var_ref_map,
+            parenthesized_expr_map,
+            context_item_expr,
+            function_call_map,
+            function_item_expr_map,
+            map_constructor_map,
+            array_constructor_map,
+            unary_lookup_map,
+        )),
+    )(input)
 }
 
 #[derive(PartialEq, Debug)]
@@ -137,7 +140,10 @@ fn function_item_expr(input: &str) -> Res<&str, FunctionItemExpr> {
             .map(|(next_input, res)| (next_input, FunctionItemExpr::InlineFunctionExpr(res)))
     }
 
-    alt((named_function_ref_map, inline_function_expr_map))(input)
+    context(
+        "function_item_expr",
+        alt((named_function_ref_map, inline_function_expr_map)),
+    )(input)
 }
 
 #[derive(PartialEq, Debug)]

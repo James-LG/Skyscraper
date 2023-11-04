@@ -1,6 +1,8 @@
 use std::fmt::Display;
 
-use nom::{branch::alt, bytes::complete::tag, character::complete::char, sequence::tuple};
+use nom::{
+    branch::alt, bytes::complete::tag, character::complete::char, error::context, sequence::tuple,
+};
 
 use crate::xpath::grammar::recipes::Res;
 
@@ -21,7 +23,7 @@ pub fn array_test(input: &str) -> Res<&str, ArrayTest> {
             .map(|(next_input, res)| (next_input, ArrayTest::TypedArrayTest(res)))
     }
 
-    alt((any_array_test_, typed_array_test_map))(input)
+    context("array_test", alt((any_array_test_, typed_array_test_map)))(input)
 }
 
 #[derive(PartialEq, Debug)]
@@ -39,8 +41,11 @@ impl Display for ArrayTest {
 fn typed_array_test(input: &str) -> Res<&str, TypedArrayTest> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-TypedArrayTest
 
-    tuple((tag("array"), char('('), sequence_type, char(')')))(input)
-        .map(|(next_input, res)| (next_input, TypedArrayTest(res.2)))
+    context(
+        "typed_array_test",
+        tuple((tag("array"), char('('), sequence_type, char(')'))),
+    )(input)
+    .map(|(next_input, res)| (next_input, TypedArrayTest(res.2)))
 }
 
 #[derive(PartialEq, Debug)]

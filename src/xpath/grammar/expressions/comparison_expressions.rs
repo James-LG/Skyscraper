@@ -2,7 +2,7 @@
 
 use std::fmt::Display;
 
-use nom::{branch::alt, bytes::complete::tag, combinator::opt, sequence::tuple};
+use nom::{branch::alt, bytes::complete::tag, combinator::opt, error::context, sequence::tuple};
 
 use crate::xpath::grammar::{
     expressions::string_concat_expressions::string_concat_expr, recipes::Res,
@@ -25,13 +25,16 @@ pub fn comparison_expr(input: &str) -> Res<&str, ComparisonExpr> {
         node_comp(input).map(|(next_input, res)| (next_input, ComparisonType::NodeComp(res)))
     }
 
-    tuple((
-        string_concat_expr,
-        opt(tuple((
-            alt((value_comp_map, general_comp_map, node_comp_map)),
+    context(
+        "comparison_expr",
+        tuple((
             string_concat_expr,
-        ))),
-    ))(input)
+            opt(tuple((
+                alt((value_comp_map, general_comp_map, node_comp_map)),
+                string_concat_expr,
+            ))),
+        )),
+    )(input)
     .map(|(next_input, res)| {
         let comparison = res.1.map(|res| ComparisonExprPair(res.0, res.1));
         (
@@ -115,14 +118,17 @@ fn value_comp(input: &str) -> Res<&str, ValueComp> {
         tag("ge")(input).map(|(next_input, _res)| (next_input, ValueComp::GreaterThanEqualTo))
     }
 
-    alt((
-        equal,
-        not_equal,
-        less_than,
-        less_than_equal_to,
-        greater_than,
-        greater_than_equal_to,
-    ))(input)
+    context(
+        "value_comp",
+        alt((
+            equal,
+            not_equal,
+            less_than,
+            less_than_equal_to,
+            greater_than,
+            greater_than_equal_to,
+        )),
+    )(input)
 }
 
 #[derive(PartialEq, Debug)]
@@ -175,14 +181,17 @@ fn general_comp(input: &str) -> Res<&str, GeneralComp> {
         tag(">=")(input).map(|(next_input, _res)| (next_input, GeneralComp::GreaterThanEqualTo))
     }
 
-    alt((
-        equal,
-        not_equal,
-        less_than,
-        less_than_equal_to,
-        greater_than,
-        greater_than_equal_to,
-    ))(input)
+    context(
+        "general_comp",
+        alt((
+            equal,
+            not_equal,
+            less_than,
+            less_than_equal_to,
+            greater_than,
+            greater_than_equal_to,
+        )),
+    )(input)
 }
 
 #[derive(PartialEq, Debug)]
@@ -223,7 +232,7 @@ fn node_comp(input: &str) -> Res<&str, NodeComp> {
         tag(">>")(input).map(|(next_input, _res)| (next_input, NodeComp::Follows))
     }
 
-    alt((is, precedes, follows))(input)
+    context("node_comp", alt((is, precedes, follows)))(input)
 }
 
 #[derive(PartialEq, Debug)]

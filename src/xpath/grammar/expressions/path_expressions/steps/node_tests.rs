@@ -2,7 +2,9 @@
 
 use std::fmt::Display;
 
-use nom::{branch::alt, bytes::complete::tag, character::complete::char, sequence::tuple};
+use nom::{
+    branch::alt, bytes::complete::tag, character::complete::char, error::context, sequence::tuple,
+};
 
 use crate::xpath::grammar::{
     recipes::Res,
@@ -22,7 +24,7 @@ pub fn node_test(input: &str) -> Res<&str, NodeTest> {
         name_test(input).map(|(next_input, res)| (next_input, NodeTest::NameTest(res)))
     }
 
-    alt((kind_test_map, name_test_map))(input)
+    context("node_test", alt((kind_test_map, name_test_map)))(input)
 }
 
 #[derive(PartialEq, Debug)]
@@ -51,7 +53,7 @@ fn name_test(input: &str) -> Res<&str, NameTest> {
         wildcard(input).map(|(next_input, res)| (next_input, NameTest::Wildcard(res)))
     }
 
-    alt((eq_name_map, wildcard_map))(input)
+    context("name_test", alt((eq_name_map, wildcard_map)))(input)
 }
 
 #[derive(PartialEq, Debug)]
@@ -91,12 +93,15 @@ fn wildcard(input: &str) -> Res<&str, Wildcard> {
         char('*')(input).map(|(next_input, _res)| (next_input, Wildcard::Simple))
     }
 
-    alt((
-        prefixed_name_map,
-        suffixed_name_map,
-        braced_uri_map,
-        simple_map,
-    ))(input)
+    context(
+        "wildcard",
+        alt((
+            prefixed_name_map,
+            suffixed_name_map,
+            braced_uri_map,
+            simple_map,
+        )),
+    )(input)
 }
 
 #[derive(PartialEq, Debug)]

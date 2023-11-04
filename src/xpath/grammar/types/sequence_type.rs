@@ -7,6 +7,7 @@ use nom::{
     bytes::complete::tag,
     character::complete::char,
     combinator::{opt, recognize},
+    error::context,
     sequence::tuple,
 };
 
@@ -43,7 +44,10 @@ pub fn sequence_type(input: &str) -> Res<&str, SequenceType> {
         })
     }
 
-    alt((empty_sequence_map, sequence_value_map))(input)
+    context(
+        "sequence_type",
+        alt((empty_sequence_map, sequence_value_map)),
+    )(input)
 }
 
 #[derive(PartialEq, Debug)]
@@ -94,15 +98,18 @@ pub fn item_type(input: &str) -> Res<&str, ItemType> {
             .map(|(next_input, res)| (next_input, ItemType::AtomicOrUnionType(res)))
     }
 
-    alt((
-        kind_test_map,
-        item_map,
-        function_test_map,
-        map_test_map,
-        array_test_map,
-        atomic_or_union_type_map,
-        parenthesized_item_type,
-    ))(input)
+    context(
+        "item_type",
+        alt((
+            kind_test_map,
+            item_map,
+            function_test_map,
+            map_test_map,
+            array_test_map,
+            atomic_or_union_type_map,
+            parenthesized_item_type,
+        )),
+    )(input)
 }
 
 #[derive(PartialEq, Debug)]
@@ -130,7 +137,11 @@ impl Display for ItemType {
 
 pub fn parenthesized_item_type(input: &str) -> Res<&str, ItemType> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-ParenthesizedItemType
-    tuple((char('('), item_type, char(')')))(input).map(|(next_input, res)| (next_input, res.1))
+    context(
+        "parenthesized_item_type",
+        tuple((char('('), item_type, char(')'))),
+    )(input)
+    .map(|(next_input, res)| (next_input, res.1))
 }
 
 pub fn occurrence_indicator(input: &str) -> Res<&str, OccurrenceIndicator> {
@@ -148,7 +159,10 @@ pub fn occurrence_indicator(input: &str) -> Res<&str, OccurrenceIndicator> {
         char('+')(input).map(|(next_input, _res)| (next_input, OccurrenceIndicator::OneOrMore))
     }
 
-    alt((zero_or_one_map, zero_or_more_map, one_or_more_map))(input)
+    context(
+        "occurrence_indicator",
+        alt((zero_or_one_map, zero_or_more_map, one_or_more_map)),
+    )(input)
 }
 
 #[derive(PartialEq, Debug)]

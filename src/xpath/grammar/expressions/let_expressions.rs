@@ -2,7 +2,9 @@
 
 use std::fmt::Display;
 
-use nom::{bytes::complete::tag, character::complete::char, multi::many0, sequence::tuple};
+use nom::{
+    bytes::complete::tag, character::complete::char, error::context, multi::many0, sequence::tuple,
+};
 
 use crate::xpath::grammar::recipes::Res;
 
@@ -14,7 +16,12 @@ use super::{
 
 pub fn let_expr(input: &str) -> Res<&str, LetExpr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-LetExpr
-    tuple((simple_let_clause, tag("return"), expr_single))(input).map(|(next_input, res)| {
+
+    context(
+        "let_expr",
+        tuple((simple_let_clause, tag("return"), expr_single)),
+    )(input)
+    .map(|(next_input, res)| {
         (
             next_input,
             LetExpr {
@@ -39,11 +46,15 @@ impl Display for LetExpr {
 
 fn simple_let_clause(input: &str) -> Res<&str, SimpleLetClause> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-SimpleLetClause
-    tuple((
-        tag("let"),
-        simple_let_binding,
-        many0(tuple((char(','), simple_let_binding))),
-    ))(input)
+
+    context(
+        "simple_let_clause",
+        tuple((
+            tag("let"),
+            simple_let_binding,
+            many0(tuple((char(','), simple_let_binding))),
+        )),
+    )(input)
     .map(|(next_input, res)| {
         let extras = res.2.into_iter().map(|(_, binding)| binding).collect();
         (
@@ -64,7 +75,12 @@ pub struct SimpleLetClause {
 
 fn simple_let_binding(input: &str) -> Res<&str, SimpleLetBinding> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-SimpleLetBinding
-    tuple((char('$'), var_name, tag(":="), expr_single))(input).map(|(next_input, res)| {
+
+    context(
+        "simple_let_binding",
+        tuple((char('$'), var_name, tag(":="), expr_single)),
+    )(input)
+    .map(|(next_input, res)| {
         (
             next_input,
             SimpleLetBinding {

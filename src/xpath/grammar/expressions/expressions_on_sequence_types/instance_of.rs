@@ -2,7 +2,7 @@
 
 use std::fmt::Display;
 
-use nom::{bytes::complete::tag, combinator::opt, sequence::tuple};
+use nom::{bytes::complete::tag, combinator::opt, error::context, sequence::tuple};
 
 use crate::xpath::grammar::{
     recipes::Res,
@@ -14,10 +14,13 @@ use super::treat::{treat_expr, TreatExpr};
 pub fn instanceof_expr(input: &str) -> Res<&str, InstanceofExpr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-InstanceofExpr
 
-    tuple((
-        treat_expr,
-        opt(tuple((tag("instance"), tag("of"), sequence_type))),
-    ))(input)
+    context(
+        "instanceof_expr",
+        tuple((
+            treat_expr,
+            opt(tuple((tag("instance"), tag("of"), sequence_type))),
+        )),
+    )(input)
     .map(|(next_input, res)| {
         let instanceof_type = res.1.map(|res| res.2);
         (

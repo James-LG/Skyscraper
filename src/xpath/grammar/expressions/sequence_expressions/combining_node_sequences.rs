@@ -2,7 +2,7 @@
 
 use std::fmt::Display;
 
-use nom::{branch::alt, bytes::complete::tag, multi::many0, sequence::tuple};
+use nom::{branch::alt, bytes::complete::tag, error::context, multi::many0, sequence::tuple};
 
 use crate::xpath::grammar::{
     expressions::expressions_on_sequence_types::instance_of::{instanceof_expr, InstanceofExpr},
@@ -20,13 +20,16 @@ pub fn union_expr(input: &str) -> Res<&str, UnionExpr> {
         tag("|")(input).map(|(next_input, _res)| (next_input, UnionExprOperatorType::Bar))
     }
 
-    tuple((
-        intersect_except_expr,
-        many0(tuple((
-            alt((union_operator_map, bar_operator_map)),
+    context(
+        "union_expr",
+        tuple((
             intersect_except_expr,
-        ))),
-    ))(input)
+            many0(tuple((
+                alt((union_operator_map, bar_operator_map)),
+                intersect_except_expr,
+            ))),
+        )),
+    )(input)
     .map(|(next_input, res)| {
         let items = res
             .1
@@ -90,10 +93,13 @@ fn intersect_except_expr(input: &str) -> Res<&str, IntersectExceptExpr> {
         tag("except")(input).map(|(next_input, _res)| (next_input, IntersectExceptType::Except))
     }
 
-    tuple((
-        instanceof_expr,
-        many0(tuple((alt((intersect, except)), instanceof_expr))),
-    ))(input)
+    context(
+        "intersect_except_expr",
+        tuple((
+            instanceof_expr,
+            many0(tuple((alt((intersect, except)), instanceof_expr))),
+        )),
+    )(input)
     .map(|(next_input, res)| {
         let items = res
             .1

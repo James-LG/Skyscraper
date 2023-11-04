@@ -2,7 +2,9 @@
 
 use std::fmt::Display;
 
-use nom::{branch::alt, bytes::complete::tag, character::complete::char, sequence::tuple};
+use nom::{
+    branch::alt, bytes::complete::tag, character::complete::char, error::context, sequence::tuple,
+};
 
 use crate::xpath::grammar::recipes::Res;
 
@@ -26,7 +28,7 @@ pub fn map_test(input: &str) -> Res<&str, MapTest> {
         typed_map_test(input).map(|(next_input, res)| (next_input, MapTest::TypedMapTest(res)))
     }
 
-    alt((any_map_test, typed_map_test_map))(input)
+    context("map_test", alt((any_map_test, typed_map_test_map)))(input)
 }
 
 #[derive(PartialEq, Debug)]
@@ -44,14 +46,17 @@ impl Display for MapTest {
 fn typed_map_test(input: &str) -> Res<&str, TypedMapTest> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-TypedMapTest
 
-    tuple((
-        tag("map"),
-        char('('),
-        atomic_or_union_type,
-        char(','),
-        sequence_type,
-        char(')'),
-    ))(input)
+    context(
+        "typed_map_test",
+        tuple((
+            tag("map"),
+            char('('),
+            atomic_or_union_type,
+            char(','),
+            sequence_type,
+            char(')'),
+        )),
+    )(input)
     .map(|(next_input, res)| {
         (
             next_input,

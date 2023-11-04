@@ -2,7 +2,7 @@
 
 use std::fmt::Display;
 
-use nom::{branch::alt, character::complete::char, sequence::tuple};
+use nom::{branch::alt, character::complete::char, error::context, sequence::tuple};
 
 use crate::xpath::grammar::{
     expressions::primary_expressions::parenthesized_expressions::{
@@ -15,7 +15,7 @@ use crate::xpath::grammar::{
 
 pub fn unary_lookup(input: &str) -> Res<&str, UnaryLookup> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-UnaryLookup
-    tuple((char('?'), key_specifier))(input)
+    context("unary_lookup", tuple((char('?'), key_specifier)))(input)
         .map(|(next_input, res)| (next_input, UnaryLookup(res.1)))
 }
 
@@ -48,12 +48,15 @@ pub fn key_specifier(input: &str) -> Res<&str, KeySpecifier> {
         char('*')(input).map(|(next_input, _res)| (next_input, KeySpecifier::Wildcard))
     }
 
-    alt((
-        nc_name_map,
-        integer_literal_map,
-        parenthesized_expr_map,
-        wildcard_map,
-    ))(input)
+    context(
+        "key_specifier",
+        alt((
+            nc_name_map,
+            integer_literal_map,
+            parenthesized_expr_map,
+            wildcard_map,
+        )),
+    )(input)
 }
 
 #[derive(PartialEq, Debug)]

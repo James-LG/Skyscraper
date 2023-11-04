@@ -2,7 +2,7 @@
 
 use std::fmt::Display;
 
-use nom::{branch::alt, character::complete::char, multi::many0, sequence::tuple};
+use nom::{branch::alt, character::complete::char, error::context, multi::many0, sequence::tuple};
 
 use crate::xpath::grammar::{
     expressions::{
@@ -40,7 +40,7 @@ pub mod string_concat_expressions;
 pub fn xpath(input: &str) -> Res<&str, XPath> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-XPath
 
-    expr(input).map(|(next_input, res)| (next_input, XPath(res)))
+    context("xpath", expr)(input).map(|(next_input, res)| (next_input, XPath(res)))
 }
 
 #[derive(PartialEq, Debug)]
@@ -55,7 +55,11 @@ impl Display for XPath {
 pub fn expr(input: &str) -> Res<&str, Expr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-Expr
 
-    tuple((expr_single, many0(tuple((char(','), expr_single)))))(input).map(|(next_input, res)| {
+    context(
+        "expr",
+        tuple((expr_single, many0(tuple((char(','), expr_single))))),
+    )(input)
+    .map(|(next_input, res)| {
         let items = res.1.into_iter().map(|res| res.1).collect();
         (next_input, Expr { expr: res.0, items })
     })
@@ -102,13 +106,16 @@ pub fn expr_single(input: &str) -> Res<&str, ExprSingle> {
         or_expr(input).map(|(next_input, res)| (next_input, ExprSingle::OrExpr(Box::new(res))))
     }
 
-    max((
-        for_expr_map,
-        let_expr_map,
-        quantified_expr_map,
-        if_expr_map,
-        or_expr_map,
-    ))(input)
+    context(
+        "expr_single",
+        max((
+            for_expr_map,
+            let_expr_map,
+            quantified_expr_map,
+            if_expr_map,
+            or_expr_map,
+        )),
+    )(input)
 }
 
 #[derive(PartialEq, Debug)]

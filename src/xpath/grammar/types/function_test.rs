@@ -7,8 +7,8 @@ use crate::xpath::grammar::recipes::Res;
 use super::sequence_type::{sequence_type, SequenceType};
 
 use nom::{
-    branch::alt, bytes::complete::tag, character::complete::char, combinator::opt, multi::many0,
-    sequence::tuple,
+    branch::alt, bytes::complete::tag, character::complete::char, combinator::opt, error::context,
+    multi::many0, sequence::tuple,
 };
 
 pub fn function_test(input: &str) -> Res<&str, FunctionTest> {
@@ -26,7 +26,10 @@ pub fn function_test(input: &str) -> Res<&str, FunctionTest> {
             .map(|(next_input, res)| (next_input, FunctionTest::TypedFunctionTest(res)))
     }
 
-    alt((any_function_test, typed_function_test_map))(input)
+    context(
+        "function_test",
+        alt((any_function_test, typed_function_test_map)),
+    )(input)
 }
 
 #[derive(PartialEq, Debug)]
@@ -44,17 +47,20 @@ impl Display for FunctionTest {
 pub fn typed_function_test(input: &str) -> Res<&str, TypedFunctionTest> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-TypedFunctionTest
 
-    tuple((
-        tag("function"),
-        char('('),
-        opt(tuple((
+    context(
+        "typed_function_test",
+        tuple((
+            tag("function"),
+            char('('),
+            opt(tuple((
+                sequence_type,
+                many0(tuple((char(','), sequence_type))),
+            ))),
+            char(')'),
+            tag("as"),
             sequence_type,
-            many0(tuple((char(','), sequence_type))),
-        ))),
-        char(')'),
-        tag("as"),
-        sequence_type,
-    ))(input)
+        )),
+    )(input)
     .map(|(next_input, res)| {
         let mut params = Vec::new();
         if let Some(p) = res.2 {

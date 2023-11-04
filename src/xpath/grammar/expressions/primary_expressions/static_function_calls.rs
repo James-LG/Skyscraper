@@ -2,7 +2,7 @@
 
 use std::fmt::Display;
 
-use nom::sequence::tuple;
+use nom::{error::context, sequence::tuple};
 
 use crate::xpath::grammar::{
     expressions::common::{argument_list, ArgumentList},
@@ -13,7 +13,7 @@ use crate::xpath::grammar::{
 pub fn function_call(input: &str) -> Res<&str, FunctionCall> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-FunctionCall
 
-    tuple((eq_name, argument_list))(input).map(|(next_input, res)| {
+    context("function_call", tuple((eq_name, argument_list)))(input).map(|(next_input, res)| {
         (
             next_input,
             FunctionCall {

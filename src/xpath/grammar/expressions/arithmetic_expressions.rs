@@ -3,7 +3,8 @@
 use std::fmt::Display;
 
 use nom::{
-    branch::alt, bytes::complete::tag, character::complete::char, multi::many0, sequence::tuple,
+    branch::alt, bytes::complete::tag, character::complete::char, error::context, multi::many0,
+    sequence::tuple,
 };
 
 use crate::xpath::grammar::{
@@ -26,10 +27,13 @@ pub fn additive_expr(input: &str) -> Res<&str, AdditiveExpr> {
         char('-')(input).map(|(next_input, _res)| (next_input, AdditiveExprOperator::Minus))
     }
 
-    tuple((
-        multiplicative_expr,
-        many0(tuple((alt((plus, minus)), multiplicative_expr))),
-    ))(input)
+    context(
+        "additive_expr",
+        tuple((
+            multiplicative_expr,
+            many0(tuple((alt((plus, minus)), multiplicative_expr))),
+        )),
+    )(input)
     .map(|(next_input, res)| {
         let items = res
             .1
@@ -102,10 +106,13 @@ fn multiplicative_expr(input: &str) -> Res<&str, MultiplicativeExpr> {
             .map(|(next_input, _res)| (next_input, MultiplicativeExprOperator::Modulus))
     }
 
-    tuple((
-        union_expr,
-        many0(tuple((alt((star, div, integer_div, modulus)), union_expr))),
-    ))(input)
+    context(
+        "multiplicative_expr",
+        tuple((
+            union_expr,
+            many0(tuple((alt((star, div, integer_div, modulus)), union_expr))),
+        )),
+    )(input)
     .map(|(next_input, res)| {
         let items = res
             .1
@@ -172,15 +179,17 @@ pub fn unary_expr(input: &str) -> Res<&str, UnaryExpr> {
         char('-')(input).map(|(next_input, _res)| (next_input, UnarySymbol::Minus))
     }
 
-    tuple((many0(alt((plus, minus))), value_expr))(input).map(|(next_input, res)| {
-        (
-            next_input,
-            UnaryExpr {
-                leading_symbols: res.0,
-                expr: res.1,
-            },
-        )
-    })
+    context("unary_expr", tuple((many0(alt((plus, minus))), value_expr)))(input).map(
+        |(next_input, res)| {
+            (
+                next_input,
+                UnaryExpr {
+                    leading_symbols: res.0,
+                    expr: res.1,
+                },
+            )
+        },
+    )
 }
 
 #[derive(PartialEq, Debug)]
@@ -217,7 +226,8 @@ impl Display for UnarySymbol {
 fn value_expr(input: &str) -> Res<&str, ValueExpr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-ValueExpr
 
-    simple_map_expr(input).map(|(next_input, res)| (next_input, ValueExpr(res)))
+    context("value_expr", simple_map_expr)(input)
+        .map(|(next_input, res)| (next_input, ValueExpr(res)))
 }
 
 #[derive(PartialEq, Debug)]

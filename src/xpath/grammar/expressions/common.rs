@@ -1,6 +1,9 @@
 use std::fmt::Display;
 
-use nom::{branch::alt, character::complete::char, combinator::opt, multi::many0, sequence::tuple};
+use nom::{
+    branch::alt, character::complete::char, combinator::opt, error::context, multi::many0,
+    sequence::tuple,
+};
 
 use crate::xpath::grammar::{expressions::expr_single, recipes::Res};
 
@@ -9,11 +12,14 @@ use super::ExprSingle;
 pub fn argument_list(input: &str) -> Res<&str, ArgumentList> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-ArgumentList
 
-    tuple((
-        char('('),
-        opt(tuple((argument, many0(tuple((char(','), argument)))))),
-        char(')'),
-    ))(input)
+    context(
+        "argument_list",
+        tuple((
+            char('('),
+            opt(tuple((argument, many0(tuple((char(','), argument)))))),
+            char(')'),
+        )),
+    )(input)
     .map(|(next_input, res)| {
         let mut arguments = Vec::new();
         if let Some(res) = res.1 {
@@ -55,7 +61,7 @@ pub fn argument(input: &str) -> Res<&str, Argument> {
         expr_single(input).map(|(next_input, res)| (next_input, Argument::ExprSingle(res)))
     }
 
-    alt((expr_single_map, argument_placeholder))(input)
+    context("argument", alt((expr_single_map, argument_placeholder)))(input)
 }
 
 #[derive(PartialEq, Debug)]

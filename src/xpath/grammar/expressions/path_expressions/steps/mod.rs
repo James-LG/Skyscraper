@@ -2,7 +2,7 @@
 
 use std::fmt::Display;
 
-use nom::{branch::alt, bytes::complete::tag, multi::many0, sequence::tuple};
+use nom::{branch::alt, bytes::complete::tag, error::context, multi::many0, sequence::tuple};
 
 use crate::xpath::grammar::{
     expressions::{
@@ -39,7 +39,7 @@ pub fn step_expr(input: &str) -> Res<&str, StepExpr> {
         axis_step(input).map(|(next_input, res)| (next_input, StepExpr::AxisStep(res)))
     }
 
-    max((postfix_expr_map, axis_step_map))(input)
+    context("step_expr", max((postfix_expr_map, axis_step_map)))(input)
 }
 
 #[derive(PartialEq, Debug)]
@@ -68,17 +68,19 @@ fn axis_step(input: &str) -> Res<&str, AxisStep> {
         forward_step(input).map(|(next_input, res)| (next_input, AxisStepType::ForwardStep(res)))
     }
 
-    tuple((alt((reverse_step_map, forward_step_map)), predicate_list))(input).map(
-        |(next_input, res)| {
-            (
-                next_input,
-                AxisStep {
-                    step_type: res.0,
-                    predicates: res.1,
-                },
-            )
-        },
-    )
+    context(
+        "axis_step",
+        tuple((alt((reverse_step_map, forward_step_map)), predicate_list)),
+    )(input)
+    .map(|(next_input, res)| {
+        (
+            next_input,
+            AxisStep {
+                step_type: res.0,
+                predicates: res.1,
+            },
+        )
+    })
 }
 
 #[derive(PartialEq, Debug)]
@@ -126,7 +128,10 @@ fn forward_step(input: &str) -> Res<&str, ForwardStep> {
             .map(|(next_input, res)| (next_input, ForwardStep::Abbreviated(res)))
     }
 
-    alt((full_forward_step, abbrev_forward_step_map))(input)
+    context(
+        "forward_step",
+        alt((full_forward_step, abbrev_forward_step_map)),
+    )(input)
 }
 
 #[derive(PartialEq, Debug)]
@@ -156,7 +161,10 @@ fn reverse_step(input: &str) -> Res<&str, ReverseStep> {
         tag("..")(input).map(|(next_input, _res)| (next_input, ReverseStep::Abbreviated))
     }
 
-    alt((full_reverse_step, abbrev_reverse_step))(input)
+    context(
+        "reverse_step",
+        alt((full_reverse_step, abbrev_reverse_step)),
+    )(input)
 }
 
 #[derive(PartialEq, Debug)]
@@ -177,5 +185,5 @@ impl Display for ReverseStep {
 fn predicate_list(input: &str) -> Res<&str, Vec<Predicate>> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-PredicateList
 
-    many0(predicate)(input)
+    context("predicate_list", many0(predicate))(input)
 }
