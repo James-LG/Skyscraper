@@ -1,7 +1,9 @@
 use std::ops::RangeFrom;
 
 use nom::{
+    character::complete::multispace0,
     error::{ErrorKind, ParseError, VerboseError},
+    sequence::delimited,
     AsChar, Err as NomErr, IResult, InputIter, Offset, Parser, Slice,
 };
 
@@ -64,6 +66,15 @@ where
     char_if(|c| c != '{' && c != '}')
 }
 
+/// A combinator that takes a parser `inner` and produces a parser that also consumes both leading and
+/// trailing whitespace, returning the output of `inner`.
+pub fn ws<'a, F, O, E: ParseError<&'a str>>(inner: F) -> impl Parser<&'a str, O, E>
+where
+    F: Parser<&'a str, O, E>,
+{
+    delimited(multispace0, inner, multispace0)
+}
+
 pub fn max<I: Clone, O, E: ParseError<I>, List: Max<I, O, E>>(
     mut l: List,
 ) -> impl FnMut(I) -> IResult<I, O, E> {
@@ -87,11 +98,12 @@ impl<
         let res0 = self.0.parse(input.clone());
         let res1 = self.1.parse(input.clone());
 
-        fun_name(res0, res1, input)
+        find_max(res0, res1, input)
     }
 }
 
-fn fun_name<Input: Clone + Offset, Output, Error: ParseError<Input>>(
+/// Takes two parser results and returns the one that consumed more of the input.
+fn find_max<Input: Clone + Offset, Output, Error: ParseError<Input>>(
     res0: Result<(Input, Output), NomErr<Error>>,
     res1: Result<(Input, Output), NomErr<Error>>,
     input: Input,
@@ -138,16 +150,16 @@ impl<
         let res0 = self.0.parse(input.clone());
 
         let res1 = self.1.parse(input.clone());
-        let total_res = fun_name(res0, res1, input.clone());
+        let total_res = find_max(res0, res1, input.clone());
 
         let res2 = self.2.parse(input.clone());
-        let total_res = fun_name(total_res, res2, input.clone());
+        let total_res = find_max(total_res, res2, input.clone());
 
         let res3 = self.3.parse(input.clone());
-        let total_res = fun_name(total_res, res3, input.clone());
+        let total_res = find_max(total_res, res3, input.clone());
 
         let res4 = self.4.parse(input.clone());
-        let total_res = fun_name(total_res, res4, input.clone());
+        let total_res = find_max(total_res, res4, input.clone());
 
         total_res
     }
@@ -172,28 +184,28 @@ impl<
         let res0 = self.0.parse(input.clone());
 
         let res1 = self.1.parse(input.clone());
-        let total_res = fun_name(res0, res1, input.clone());
+        let total_res = find_max(res0, res1, input.clone());
 
         let res2 = self.2.parse(input.clone());
-        let total_res = fun_name(total_res, res2, input.clone());
+        let total_res = find_max(total_res, res2, input.clone());
 
         let res3 = self.3.parse(input.clone());
-        let total_res = fun_name(total_res, res3, input.clone());
+        let total_res = find_max(total_res, res3, input.clone());
 
         let res4 = self.4.parse(input.clone());
-        let total_res = fun_name(total_res, res4, input.clone());
+        let total_res = find_max(total_res, res4, input.clone());
 
         let res5 = self.5.parse(input.clone());
-        let total_res = fun_name(total_res, res5, input.clone());
+        let total_res = find_max(total_res, res5, input.clone());
 
         let res6 = self.6.parse(input.clone());
-        let total_res = fun_name(total_res, res6, input.clone());
+        let total_res = find_max(total_res, res6, input.clone());
 
         let res7 = self.7.parse(input.clone());
-        let total_res = fun_name(total_res, res7, input.clone());
+        let total_res = find_max(total_res, res7, input.clone());
 
         let res8 = self.8.parse(input.clone());
-        let total_res = fun_name(total_res, res8, input.clone());
+        let total_res = find_max(total_res, res8, input.clone());
 
         total_res
     }

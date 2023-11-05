@@ -5,7 +5,8 @@ use std::fmt::Display;
 use nom::{branch::alt, bytes::complete::tag, combinator::opt, error::context, sequence::tuple};
 
 use crate::xpath::grammar::{
-    expressions::string_concat_expressions::string_concat_expr, recipes::Res,
+    expressions::string_concat_expressions::string_concat_expr,
+    recipes::{ws, Res},
 };
 
 use super::string_concat_expressions::StringConcatExpr;
@@ -120,14 +121,14 @@ fn value_comp(input: &str) -> Res<&str, ValueComp> {
 
     context(
         "value_comp",
-        alt((
+        ws(alt((
             equal,
             not_equal,
             less_than,
             less_than_equal_to,
             greater_than,
             greater_than_equal_to,
-        )),
+        ))),
     )(input)
 }
 
@@ -144,12 +145,12 @@ pub enum ValueComp {
 impl Display for ValueComp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ValueComp::Equal => write!(f, "eq"),
-            ValueComp::NotEqual => write!(f, "ne"),
-            ValueComp::LessThan => write!(f, "lt"),
-            ValueComp::LessThanEqualTo => write!(f, "le"),
-            ValueComp::GreaterThan => write!(f, "gt"),
-            ValueComp::GreaterThanEqualTo => write!(f, "ge"),
+            ValueComp::Equal => write!(f, " eq "),
+            ValueComp::NotEqual => write!(f, " ne "),
+            ValueComp::LessThan => write!(f, " lt "),
+            ValueComp::LessThanEqualTo => write!(f, " le "),
+            ValueComp::GreaterThan => write!(f, " gt "),
+            ValueComp::GreaterThanEqualTo => write!(f, " ge "),
         }
     }
 }
