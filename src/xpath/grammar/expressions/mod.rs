@@ -17,7 +17,7 @@ use self::{
     logical_expressions::OrExpr, quantified_expressions::QuantifiedExpr,
 };
 
-use super::recipes::Res;
+use super::{recipes::Res, Expression};
 
 pub mod arithmetic_expressions;
 pub mod arrow_operator;

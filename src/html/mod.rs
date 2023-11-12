@@ -222,7 +222,7 @@ impl HtmlNode {
 /// Documents must have a single root node to be valid.
 #[derive(Clone)]
 pub struct HtmlDocument {
-    arena: Arena<HtmlNode>,
+    pub(crate) arena: Arena<HtmlNode>,
     /// The root node of the document.
     pub root_node: DocumentNode,
 }

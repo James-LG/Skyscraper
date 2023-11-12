@@ -7,15 +7,17 @@ use nom::{
     multi::many0, sequence::tuple,
 };
 
-use crate::xpath::grammar::{expressions::path_expressions::steps::step_expr, recipes::Res};
+use crate::xpath::grammar::{
+    expressions::path_expressions::steps::step_expr::step_expr, recipes::Res,
+};
 
-use self::steps::StepExpr;
+use self::steps::step_expr::StepExpr;
 
 pub mod abbreviated_syntax;
 pub mod steps;
 
 pub fn path_expr(input: &str) -> Res<&str, PathExpr> {
-    // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-PathExpr
+    // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-PathExpr
 
     fn leading_slash(input: &str) -> Res<&str, PathExpr> {
         tuple((char('/'), opt(relative_path_expr)))(input)
