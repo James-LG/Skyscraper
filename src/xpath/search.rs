@@ -148,7 +148,6 @@ pub fn search(
 
     // Apply indexing if required
     if let Some(i) = search_item.index {
-        
         if i < matches.len() {
             let indexed_node = matches[i - 1];
             matches.retain(|node| *node == indexed_node);
