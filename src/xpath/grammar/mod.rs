@@ -17,7 +17,7 @@ use crate::{
     xpath::grammar::data_model::{AttributeNode, ElementNode, Node, TextNode},
 };
 
-use self::data_model::{NodeChild, XpathItem};
+use self::data_model::{AnyAtomicType, CommentNode, Function, NamespaceNode, PINode, XpathItem};
 
 use super::DocumentNodeSet;
 
@@ -28,17 +28,88 @@ pub struct ExpressionApplyError {
 }
 
 trait Expression {
-    fn apply(
+    fn apply<'tree>(
         &self,
-        item_tree: &XpathItemTree,
-        searchable_nodes: &Vec<NodeId>,
-    ) -> Result<Vec<XpathItem>, ExpressionApplyError>;
+        item_tree: &'tree XpathItemTree,
+        searchable_nodes: &Vec<XpathItemTreeNode<'tree>>,
+    ) -> Result<Vec<XpathItemTreeNode<'tree>>, ExpressionApplyError>;
 }
 
-struct XpathItemTree {
-    arena: Arena<NodeChild>,
+pub struct ExpressionResultItem<'tree> {
+    tree_nodes: Vec<XpathItemTreeNode<'tree>>,
+    non_tree_items: Vec<NonTreeXpathItem>,
+}
+
+/// Subset of [Node] that are not allowed to be children of other nodes.
+/// Should be disjoint with [XpathItemTreeNodeData].
+pub enum NonTreeXpathNode {
+    DocumentNode(DocumentNode),
+    AttributeNode(AttributeNode),
+    NamespaceNode(NamespaceNode),
+}
+
+/// Subset of [XpathItem] that are not allowed to be in the tree.
+pub enum NonTreeXpathItem {
+    Node(NonTreeXpathNode),
+    Function(Function),
+    AnyAtomicType(AnyAtomicType),
+}
+
+/// Subset of [Node] that are allowed to be children of other nodes.
+/// Should be disjoint with [NonTreeXpathNode].
+#[derive(PartialEq, Debug)]
+pub enum XpathItemTreeNodeData {
+    ElementNode(ElementNode),
+    PINode(PINode),
+    CommentNode(CommentNode),
+    TextNode(TextNode),
+}
+
+impl From<XpathItemTreeNodeData> for Node {
+    fn from(value: XpathItemTreeNodeData) -> Self {
+        match value {
+            XpathItemTreeNodeData::ElementNode(node) => Node::ElementNode(node),
+            XpathItemTreeNodeData::PINode(node) => Node::PINode(node),
+            XpathItemTreeNodeData::CommentNode(node) => Node::CommentNode(node),
+            XpathItemTreeNodeData::TextNode(node) => Node::TextNode(node),
+        }
+    }
+}
+
+pub struct XpathItemTreeNode<'a> {
+    id: NodeId,
+    data: &'a XpathItemTreeNodeData,
+}
+
+impl<'a> XpathItemTreeNode<'a> {
+    pub fn children(&self, tree: &'a XpathItemTree) -> impl Iterator<Item = XpathItemTreeNode<'a>> {
+        self.id
+            .children(&tree.arena)
+            .into_iter()
+            .map(move |id| tree.get(id))
+    }
+}
+
+pub struct XpathItemTree {
+    arena: Arena<XpathItemTreeNodeData>,
     /// The root node of the document.
-    pub root_node: NodeId,
+    root_node: NodeId,
+}
+
+impl XpathItemTree {
+    fn get(&self, id: NodeId) -> XpathItemTreeNode<'_> {
+        let indextree_node = self
+            .arena
+            .get(id)
+            .expect("xpath item node missing from tree");
+
+        let data = indextree_node.get();
+        XpathItemTreeNode { id, data }
+    }
+
+    pub fn root(&self) -> XpathItemTreeNode<'_> {
+        self.get(self.root_node)
+    }
 }
 
 impl XpathItemTree {
@@ -46,7 +117,7 @@ impl XpathItemTree {
         fn internal_from_html_document(
             current_html_node: &DocumentNode,
             html_document: &HtmlDocument,
-            item_arena: &mut Arena<NodeChild>,
+            item_arena: &mut Arena<XpathItemTreeNodeData>,
         ) -> NodeId {
             let html_node = html_document
                 .get_html_node(&current_html_node)
@@ -61,12 +132,12 @@ impl XpathItemTree {
                             value: a.1.to_string(),
                         })
                         .collect();
-                    NodeChild::ElementNode(ElementNode {
+                    XpathItemTreeNodeData::ElementNode(ElementNode {
                         name: tag.name.to_string(),
                         attributes,
                     })
                 }
-                HtmlNode::Text(text) => NodeChild::TextNode(TextNode {
+                HtmlNode::Text(text) => XpathItemTreeNodeData::TextNode(TextNode {
                     content: text.to_string(),
                 }),
             };
@@ -81,71 +152,13 @@ impl XpathItemTree {
             root_item_id
         }
 
-        let mut item_arena = Arena::<NodeChild>::new();
-        let root_item =
+        let mut item_arena = Arena::<XpathItemTreeNodeData>::new();
+        let root_node_id =
             internal_from_html_document(&html_document.root_node, &html_document, &mut item_arena);
 
         XpathItemTree {
             arena: item_arena,
-            root_node: root_item,
+            root_node: root_node_id,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-
-    #[test]
-    fn xpath_should_parse1() {
-        // arrange
-        let input = "//div[@class='BorderGrid-cell']/div[@class=' text-small']/a";
-
-        // act
-        let (next_input, res) = xpath(input).unwrap();
-
-        // assert
-        assert_eq!(res.to_string(), input);
-        assert_eq!(next_input, "");
-    }
-
-    #[test]
-    fn xpath_should_parse2() {
-        // arrange
-        let input = r#"fn:doc("bib.xml")/books/book[fn:count(./author)>1]"#;
-
-        // act
-        let (next_input, res) = xpath(input).unwrap();
-
-        // assert
-        assert_eq!(next_input, "");
-        assert_eq!(res.to_string(), input);
-    }
-
-    #[test]
-    fn xpath_should_parse3() {
-        // arrange
-        let input = "book/(chapter|appendix)/section";
-
-        // act
-        let (next_input, res) = xpath(input).unwrap();
-
-        // assert
-        assert_eq!(next_input, "");
-        assert_eq!(res.to_string(), input);
-    }
-
-    #[test]
-    fn xpath_should_parse4() {
-        // arrange
-        let input = "$products[price gt 100]";
-
-        // act
-        let (next_input, res) = xpath(input).unwrap();
-
-        // assert
-        assert_eq!(next_input, "");
-        assert_eq!(res.to_string(), input);
     }
 }

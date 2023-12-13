@@ -34,31 +34,9 @@ pub enum Node {
     CommentNode(CommentNode),
 }
 
-/// Subset of [Node] that are allowed to be children of other nodes.
-#[derive(PartialEq, Debug)]
-pub enum NodeChild {
-    ElementNode(ElementNode),
-    PINode(PINode),
-    CommentNode(CommentNode),
-    TextNode(TextNode),
-}
-
-impl From<NodeChild> for Node {
-    fn from(value: NodeChild) -> Self {
-        match value {
-            NodeChild::ElementNode(node) => Node::ElementNode(node),
-            NodeChild::PINode(node) => Node::PINode(node),
-            NodeChild::CommentNode(node) => Node::CommentNode(node),
-            NodeChild::TextNode(node) => Node::TextNode(node),
-        }
-    }
-}
-
 /// https://www.w3.org/TR/xpath-datamodel-31/#DocumentNode
 #[derive(PartialEq, Debug)]
-pub struct DocumentNode {
-    pub children: Vec<NodeChild>,
-}
+pub struct DocumentNode {}
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#ElementNode
 #[derive(PartialEq, Debug)]

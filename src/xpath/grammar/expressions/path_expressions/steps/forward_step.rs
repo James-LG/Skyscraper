@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use crate::xpath::grammar::XpathItemTreeNode;
 use nom::{branch::alt, bytes::complete::tag, error::context, multi::many0, sequence::tuple};
 
 use crate::xpath::grammar::{
@@ -55,12 +56,18 @@ impl Display for ForwardStep {
 }
 
 impl Expression for ForwardStep {
-    fn apply(
+    fn apply<'tree>(
         &self,
-        item_tree: &XpathItemTree,
-        searchable_nodes: &Vec<indextree::NodeId>,
-    ) -> Result<Vec<XpathItem>, ExpressionApplyError> {
-        todo!()
+        item_tree: &'tree XpathItemTree,
+        searchable_nodes: &Vec<XpathItemTreeNode<'tree>>,
+    ) -> Result<Vec<XpathItemTreeNode<'tree>>, ExpressionApplyError> {
+        let mut result = Vec::new();
+
+        for node in searchable_nodes {
+            result.extend(node.children(&item_tree));
+        }
+
+        Ok(result)
     }
 }
 
@@ -70,7 +77,7 @@ mod tests {
         html,
         xpath::grammar::{
             data_model::{ElementNode, Node},
-            XPath,
+            XPath, XpathItemTreeNodeData,
         },
     };
 
@@ -90,7 +97,7 @@ mod tests {
         let html_doc = html::parse(text).unwrap();
 
         let xpath_item_tree = XpathItemTree::from_html_document(&html_doc);
-        let searchable_nodes = vec![xpath_item_tree.root_node];
+        let searchable_nodes = vec![xpath_item_tree.root()];
 
         let xpath_text = "child::*";
         let subject = forward_step(xpath_text).unwrap().1;
@@ -101,13 +108,31 @@ mod tests {
         // assert
         let mut items = result.into_iter();
 
-        let item = items.next().unwrap();
+        let item = items.next().unwrap().data;
         assert_eq!(
             item,
-            XpathItem::Node(Node::ElementNode(ElementNode {
+            &XpathItemTreeNodeData::ElementNode(ElementNode {
                 name: String::from("child1"),
                 attributes: Vec::new()
-            }))
+            })
+        );
+
+        let item = items.next().unwrap().data;
+        assert_eq!(
+            item,
+            &XpathItemTreeNodeData::ElementNode(ElementNode {
+                name: String::from("child2"),
+                attributes: Vec::new()
+            })
+        );
+
+        let item = items.next().unwrap().data;
+        assert_eq!(
+            item,
+            &XpathItemTreeNodeData::ElementNode(ElementNode {
+                name: String::from("child3"),
+                attributes: Vec::new()
+            })
         );
     }
 }
