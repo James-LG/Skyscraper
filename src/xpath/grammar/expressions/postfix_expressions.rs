@@ -4,12 +4,16 @@ use std::fmt::Display;
 
 use nom::{branch::alt, character::complete::char, error::context, multi::many0, sequence::tuple};
 
-use crate::xpath::grammar::{
-    expressions::{
-        common::argument_list, maps_and_arrays::lookup_operator::postfix_lookup::lookup,
-        primary_expressions::primary_expr,
+use crate::xpath::{
+    grammar::{
+        data_model::Node,
+        expressions::{
+            common::argument_list, maps_and_arrays::lookup_operator::postfix_lookup::lookup,
+            primary_expressions::primary_expr,
+        },
+        recipes::{ws, Res},
     },
-    recipes::{ws, Res},
+    ExpressionApplyError, XPathExpressionContext,
 };
 
 use super::{
@@ -65,6 +69,15 @@ impl Display for PostfixExpr {
         }
 
         Ok(())
+    }
+}
+
+impl PostfixExpr {
+    pub(crate) fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
+        todo!("PostfixExpr::eval")
     }
 }
 

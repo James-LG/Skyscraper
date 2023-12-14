@@ -4,9 +4,14 @@ use std::fmt::Display;
 
 use nom::{branch::alt, bytes::complete::tag, error::context, multi::many0, sequence::tuple};
 
-use crate::xpath::grammar::{
-    expressions::expressions_on_sequence_types::instance_of::{instanceof_expr, InstanceofExpr},
-    recipes::Res,
+use crate::xpath::{
+    grammar::{
+        expressions::expressions_on_sequence_types::instance_of::{
+            instanceof_expr, InstanceofExpr,
+        },
+        recipes::Res,
+    },
+    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 pub fn union_expr(input: &str) -> Res<&str, UnionExpr> {
@@ -52,6 +57,24 @@ pub struct UnionExprPair(UnionExprOperatorType, pub IntersectExceptExpr);
 impl Display for UnionExprPair {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}{}", self.0, self.1)
+    }
+}
+
+impl Expression for UnionExpr {
+    fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+        // Evaluate the first expression.
+        let result = self.expr.eval(context)?;
+
+        // If there's only one parameter, return it's eval.
+        if self.items.is_empty() {
+            return Ok(result);
+        }
+
+        // Otherwise, do the operation.
+        todo!("UnionExpr::eval union operator")
     }
 }
 
@@ -124,6 +147,24 @@ impl Display for IntersectExceptExpr {
         }
 
         Ok(())
+    }
+}
+
+impl Expression for IntersectExceptExpr {
+    fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+        // Evaluate the first expression.
+        let result = self.expr.eval(context)?;
+
+        // If there's only one parameter, return it's eval.
+        if self.items.is_empty() {
+            return Ok(result);
+        }
+
+        // Otherwise, do the operation.
+        todo!("IntersectExceptExpr::eval intersect or except operator")
     }
 }
 

@@ -4,7 +4,9 @@ use std::fmt::Display;
 
 use nom::{bytes::complete::tag, error::context, multi::many0, sequence::tuple};
 
-use crate::xpath::grammar::recipes::Res;
+use crate::xpath::{
+    grammar::recipes::Res, Expression, ExpressionApplyError, XPathExpressionContext, XPathResult,
+};
 
 use super::sequence_expressions::constructing_sequences::{range_expr, RangeExpr};
 
@@ -35,5 +37,23 @@ impl Display for StringConcatExpr {
         }
 
         Ok(())
+    }
+}
+
+impl Expression for StringConcatExpr {
+    fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+        // Evaluate the first expression.
+        let result = self.expr.eval(context)?;
+
+        // If there's only one parameter, return it's eval.
+        if self.items.is_empty() {
+            return Ok(result);
+        }
+
+        // Otherwise, do the operation.
+        todo!("StringConcatExpr::eval concat operator")
     }
 }

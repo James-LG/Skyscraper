@@ -2,19 +2,23 @@ use std::fmt::Display;
 
 use nom::{branch::alt, bytes::complete::tag, error::context, multi::many0, sequence::tuple};
 
-use crate::xpath::grammar::{
-    expressions::{
-        path_expressions::{
-            abbreviated_syntax::abbrev_forward_step,
-            steps::{
-                axes::{forward_axis::forward_axis, reverse_axis},
-                axis_step::axis_step,
-                node_tests::node_test,
+use crate::xpath::{
+    grammar::{
+        data_model::Node,
+        expressions::{
+            path_expressions::{
+                abbreviated_syntax::abbrev_forward_step,
+                steps::{
+                    axes::{forward_axis::forward_axis, reverse_axis},
+                    axis_step::axis_step,
+                    node_tests::node_test,
+                },
             },
+            postfix_expressions::{postfix_expr, predicate, PostfixExpr, Predicate},
         },
-        postfix_expressions::{postfix_expr, predicate, PostfixExpr, Predicate},
+        recipes::{max, Res},
     },
-    recipes::{max, Res},
+    ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 use super::axis_step::AxisStep;
@@ -44,6 +48,18 @@ impl Display for StepExpr {
         match self {
             StepExpr::PostfixExpr(x) => write!(f, "{}", x),
             StepExpr::AxisStep(x) => write!(f, "{}", x),
+        }
+    }
+}
+
+impl StepExpr {
+    pub(crate) fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
+        match self {
+            StepExpr::PostfixExpr(expr) => expr.eval(context),
+            StepExpr::AxisStep(step) => step.eval(context),
         }
     }
 }

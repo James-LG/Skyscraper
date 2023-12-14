@@ -75,7 +75,16 @@ impl Expression for ComparisonExpr {
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
-        todo!("ComparisonExpr")
+        // Evaluate the first expression.
+        let result = self.expr.eval(context)?;
+
+        // If there's only one parameter, return it's eval.
+        if self.comparison.is_none() {
+            return Ok(result);
+        }
+
+        // Otherwise, do the comparison op.
+        todo!("ComparisonExpr::eval comparison operator")
     }
 }
 

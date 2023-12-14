@@ -2,7 +2,7 @@
 name = "skyscraper"
 version = "0.5.1"
 authors = ["James La Novara-Gsell <james.lanovara.gsell@gmail.com>"]
-edition = "2018"
+edition = "2021"
 description = "XPath for HTML web scraping"
 license = "MIT"
 readme = "README.md"

@@ -35,7 +35,7 @@ trait Expression {
     ) -> Result<XPathResult<'tree>, ExpressionApplyError>;
 }
 
-struct XPathExpressionContext<'tree> {
+pub(crate) struct XPathExpressionContext<'tree> {
     item_tree: &'tree XpathItemTree,
     searchable_nodes: Vec<XpathItemTreeNode<'tree>>,
 }

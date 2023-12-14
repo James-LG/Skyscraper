@@ -2,18 +2,22 @@ use std::fmt::Display;
 
 use nom::{branch::alt, bytes::complete::tag, error::context, multi::many0, sequence::tuple};
 
-use crate::xpath::grammar::{
-    expressions::{
-        path_expressions::{
-            abbreviated_syntax::abbrev_forward_step,
-            steps::{
-                axes::{forward_axis::forward_axis, reverse_axis::reverse_axis},
-                node_tests::node_test,
+use crate::xpath::{
+    grammar::{
+        data_model::Node,
+        expressions::{
+            path_expressions::{
+                abbreviated_syntax::abbrev_forward_step,
+                steps::{
+                    axes::{forward_axis::forward_axis, reverse_axis::reverse_axis},
+                    node_tests::node_test,
+                },
             },
+            postfix_expressions::{postfix_expr, predicate, PostfixExpr, Predicate},
         },
-        postfix_expressions::{postfix_expr, predicate, PostfixExpr, Predicate},
+        recipes::{max, Res},
     },
-    recipes::{max, Res},
+    ExpressionApplyError, XPathExpressionContext,
 };
 
 use super::{axes::reverse_axis::ReverseAxis, node_tests::NodeTest};
@@ -48,5 +52,14 @@ impl Display for ReverseStep {
             ReverseStep::Full(x, y) => write!(f, "{} {}", x, y),
             ReverseStep::Abbreviated => write!(f, ".."),
         }
+    }
+}
+
+impl ReverseStep {
+    pub(crate) fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
+        todo!("ReverseStep::eval")
     }
 }

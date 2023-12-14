@@ -4,9 +4,12 @@ use std::fmt::Display;
 
 use nom::{bytes::complete::tag, combinator::opt, error::context, sequence::tuple};
 
-use crate::xpath::grammar::{
-    recipes::Res,
-    types::sequence_type::{sequence_type, SequenceType},
+use crate::xpath::{
+    grammar::{
+        recipes::Res,
+        types::sequence_type::{sequence_type, SequenceType},
+    },
+    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 use super::castable::{castable_expr, CastableExpr};
@@ -47,5 +50,23 @@ impl Display for TreatExpr {
         }
 
         Ok(())
+    }
+}
+
+impl Expression for TreatExpr {
+    fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+        // Evaluate the first expression.
+        let result = self.expr.eval(context)?;
+
+        // If there's only one parameter, return it's eval.
+        if self.treat_type.is_none() {
+            return Ok(result);
+        }
+
+        // Otherwise, do the operation.
+        todo!("TreatExpr::eval treat operator")
     }
 }

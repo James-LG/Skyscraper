@@ -4,9 +4,12 @@ use std::fmt::Display;
 
 use nom::{bytes::complete::tag, combinator::opt, error::context, sequence::tuple};
 
-use crate::xpath::grammar::{
-    recipes::Res,
-    types::sequence_type::{sequence_type, SequenceType},
+use crate::xpath::{
+    grammar::{
+        recipes::Res,
+        types::sequence_type::{sequence_type, SequenceType},
+    },
+    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 use super::treat::{treat_expr, TreatExpr};
@@ -47,5 +50,23 @@ impl Display for InstanceofExpr {
         }
 
         Ok(())
+    }
+}
+
+impl Expression for InstanceofExpr {
+    fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+        // Evaluate the first expression.
+        let result = self.expr.eval(context)?;
+
+        // If there's only one parameter, return it's eval.
+        if self.instanceof_type.is_none() {
+            return Ok(result);
+        }
+
+        // Otherwise, do the operation.
+        todo!("InstanceofExpr::eval instanceof operator")
     }
 }

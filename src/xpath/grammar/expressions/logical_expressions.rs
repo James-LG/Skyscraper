@@ -46,9 +46,16 @@ impl Expression for OrExpr {
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
-        // TODO: If there's only one parameter, return it's eval, otherwise do the boolean op.
+        // Evaluate the first expression.
+        let result = self.expr.eval(context)?;
 
-        todo!("OrExpr::eval")
+        // If there's only one parameter, return it's eval.
+        if self.items.is_empty() {
+            return Ok(result);
+        }
+
+        // Otherwise, do the boolean op.
+        todo!("OrExpr::eval or operator")
     }
 }
 
@@ -87,8 +94,15 @@ impl Expression for AndExpr {
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
-        // TODO: If there's only one parameter, return it's eval, otherwise do the boolean op.
+        // Evaluate the first expression.
+        let result = self.expr.eval(context)?;
 
-        todo!("AndExpr::eval")
+        // If there's only one parameter, return it's eval.
+        if self.items.is_empty() {
+            return Ok(result);
+        }
+
+        // Otherwise, do the boolean op.
+        todo!("AndExpr::eval and operator")
     }
 }

@@ -7,8 +7,11 @@ use nom::{
     sequence::tuple,
 };
 
-use crate::xpath::grammar::{
-    expressions::sequence_expressions::combining_node_sequences::union_expr, recipes::Res,
+use crate::xpath::{
+    grammar::{
+        expressions::sequence_expressions::combining_node_sequences::union_expr, recipes::Res,
+    },
+    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 use super::{
@@ -58,6 +61,24 @@ impl Display for AdditiveExpr {
         }
 
         Ok(())
+    }
+}
+
+impl Expression for AdditiveExpr {
+    fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+        // Evaluate the first expression.
+        let result = self.expr.eval(context)?;
+
+        // If there's only one parameter, return it's eval.
+        if self.items.is_empty() {
+            return Ok(result);
+        }
+
+        // Otherwise, do the operation.
+        todo!("AdditiveExpr::eval additive operator")
     }
 }
 
@@ -140,6 +161,24 @@ impl Display for MultiplicativeExpr {
     }
 }
 
+impl Expression for MultiplicativeExpr {
+    fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+        // Evaluate the first expression.
+        let result = self.expr.eval(context)?;
+
+        // If there's only one parameter, return it's eval.
+        if self.items.is_empty() {
+            return Ok(result);
+        }
+
+        // Otherwise, do the operation.
+        todo!("MultiplicativeExpr::eval multiplicative operator")
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub struct MultiplicativeExprPair(pub MultiplicativeExprOperator, pub UnionExpr);
 
@@ -208,6 +247,24 @@ impl Display for UnaryExpr {
     }
 }
 
+impl Expression for UnaryExpr {
+    fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+        // Evaluate the first expression.
+        let result = self.expr.eval(context)?;
+
+        // If there's only one parameter, return it's eval.
+        if self.leading_symbols.is_empty() {
+            return Ok(result);
+        }
+
+        // Otherwise, do the operation.
+        todo!("UnaryExpr::eval unary operator")
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub enum UnarySymbol {
     Plus,
@@ -236,5 +293,14 @@ pub struct ValueExpr(pub SimpleMapExpr);
 impl Display for ValueExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl Expression for ValueExpr {
+    fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+        self.0.eval(context)
     }
 }

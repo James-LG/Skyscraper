@@ -4,12 +4,15 @@ use std::fmt::Display;
 
 use nom::{branch::alt, bytes::complete::tag, error::context, multi::many0, sequence::tuple};
 
-use crate::xpath::grammar::{
-    expressions::primary_expressions::{
-        parenthesized_expressions::parenthesized_expr, variable_references::var_ref,
+use crate::xpath::{
+    grammar::{
+        expressions::primary_expressions::{
+            parenthesized_expressions::parenthesized_expr, variable_references::var_ref,
+        },
+        recipes::Res,
+        types::{eq_name, EQName},
     },
-    recipes::Res,
-    types::{eq_name, EQName},
+    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 use super::{
@@ -58,6 +61,24 @@ impl Display for ArrowExpr {
         }
 
         Ok(())
+    }
+}
+
+impl Expression for ArrowExpr {
+    fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+        // Evaluate the first expression.
+        let result = self.expr.eval(context)?;
+
+        // If there's only one parameter, return it's eval.
+        if self.items.is_empty() {
+            return Ok(result);
+        }
+
+        // Otherwise, do the operation.
+        todo!("ArrowExpr::eval operator")
     }
 }
 

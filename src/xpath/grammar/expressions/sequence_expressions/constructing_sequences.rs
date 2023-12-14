@@ -4,9 +4,12 @@ use std::fmt::Display;
 
 use nom::{bytes::complete::tag, combinator::opt, error::context, sequence::tuple};
 
-use crate::xpath::grammar::{
-    expressions::arithmetic_expressions::{additive_expr, AdditiveExpr},
-    recipes::Res,
+use crate::xpath::{
+    grammar::{
+        expressions::arithmetic_expressions::{additive_expr, AdditiveExpr},
+        recipes::Res,
+    },
+    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 pub fn range_expr(input: &str) -> Res<&str, RangeExpr> {
@@ -41,5 +44,23 @@ impl Display for RangeExpr {
         }
 
         Ok(())
+    }
+}
+
+impl Expression for RangeExpr {
+    fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+        // Evaluate the first expression.
+        let result = self.expr.eval(context)?;
+
+        // If there's only one parameter, return it's eval.
+        if self.to_expr.is_none() {
+            return Ok(result);
+        }
+
+        // Otherwise, do the operation.
+        todo!("RangeExpr::eval range operator")
     }
 }

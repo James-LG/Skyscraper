@@ -224,7 +224,7 @@ impl Expression for ExprSingle {
             ExprSingle::LetExpr(_) => todo!("ExprSingle::LetExpr"),
             ExprSingle::QuantifiedExpr(_) => todo!("ExprSingle::QuantifiedExpr"),
             ExprSingle::IfExpr(_) => todo!("ExprSingle::IfExpr"),
-            ExprSingle::OrExpr(e) => todo!("ExprSingle::OrExpr"),
+            ExprSingle::OrExpr(e) => e.eval(context),
         }
     }
 }

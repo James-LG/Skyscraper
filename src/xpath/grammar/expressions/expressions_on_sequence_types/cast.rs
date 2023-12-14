@@ -7,10 +7,13 @@ use nom::{
     sequence::tuple,
 };
 
-use crate::xpath::grammar::{
-    expressions::arrow_operator::{arrow_expr, ArrowExpr},
-    recipes::Res,
-    types::{simple_type_name, SimpleTypeName},
+use crate::xpath::{
+    grammar::{
+        expressions::arrow_operator::{arrow_expr, ArrowExpr},
+        recipes::Res,
+        types::{simple_type_name, SimpleTypeName},
+    },
+    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 pub fn cast_expr(input: &str) -> Res<&str, CastExpr> {
@@ -43,6 +46,24 @@ impl Display for CastExpr {
         }
 
         Ok(())
+    }
+}
+
+impl Expression for CastExpr {
+    fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+        // Evaluate the first expression.
+        let result = self.expr.eval(context)?;
+
+        // If there's only one parameter, return it's eval.
+        if self.cast.is_none() {
+            return Ok(result);
+        }
+
+        // Otherwise, do the operation.
+        todo!("CastExpr::eval operator")
     }
 }
 
