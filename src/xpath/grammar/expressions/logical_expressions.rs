@@ -44,17 +44,11 @@ impl Display for OrExpr {
 impl Expression for OrExpr {
     fn eval<'tree>(
         &self,
-        context: XPathExpressionContext<'tree>,
+        context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
         // TODO: If there's only one parameter, return it's eval, otherwise do the boolean op.
-        let mut nodes = self.expr.eval(context)?;
 
-        for item in self.items.iter() {
-            let mut more_nodes = item.eval(context)?;
-            nodes.append(&mut more_nodes);
-        }
-
-        Ok(nodes)
+        todo!("OrExpr::eval")
     }
 }
 
@@ -91,16 +85,10 @@ impl Display for AndExpr {
 impl Expression for AndExpr {
     fn eval<'tree>(
         &self,
-        context: XPathExpressionContext<'tree>,
+        context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
         // TODO: If there's only one parameter, return it's eval, otherwise do the boolean op.
-        let mut nodes = self.expr.eval(context)?;
 
-        for item in self.items.iter() {
-            let mut more_nodes = item.eval(context)?;
-            nodes.append(&mut more_nodes);
-        }
-
-        Ok(nodes)
+        todo!("AndExpr::eval")
     }
 }

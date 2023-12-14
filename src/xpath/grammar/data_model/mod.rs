@@ -12,6 +12,22 @@ pub enum XpathItem<'tree> {
     AnyAtomicType(AnyAtomicType),
 }
 
+impl<'tree> XpathItem<'tree> {
+    pub fn unwrap_node(self) -> Node<'tree> {
+        match self {
+            XpathItem::Node(node) => node,
+            _ => panic!("Expected XpathItem::Node"),
+        }
+    }
+
+    pub fn unwrap_node_ref(&self) -> &Node<'tree> {
+        match self {
+            XpathItem::Node(node) => node,
+            _ => panic!("Expected XpathItem::Node"),
+        }
+    }
+}
+
 /// https://www.w3.org/TR/xpath-datamodel-31/#types-hierarchy
 #[derive(PartialEq, Debug)]
 pub enum AnyAtomicType {
@@ -31,6 +47,29 @@ pub struct Function {
 pub enum Node<'tree> {
     TreeNode(XpathItemTreeNode<'tree>),
     NonTreeNode(NonTreeXpathNode),
+}
+
+impl<'tree> Node<'tree> {
+    pub fn unwrap_tree_node(self) -> XpathItemTreeNode<'tree> {
+        match self {
+            Node::TreeNode(node) => node,
+            _ => panic!("Expected Node::TreeNode"),
+        }
+    }
+
+    pub fn unwrap_tree_node_ref(&self) -> &XpathItemTreeNode<'tree> {
+        match self {
+            Node::TreeNode(node) => node,
+            _ => panic!("Expected Node::TreeNode"),
+        }
+    }
+
+    pub fn unwrap_non_tree_node(self) -> NonTreeXpathNode {
+        match self {
+            Node::NonTreeNode(node) => node,
+            _ => panic!("Expected Node::NonTreeNode"),
+        }
+    }
 }
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#DocumentNode

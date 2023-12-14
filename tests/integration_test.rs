@@ -15,13 +15,13 @@ fn xpath_github_sample1() {
     let xpath = xpath::parse("//main").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
 
     // assert
     assert_eq!(nodes.len(), 1);
     let mut nodes = nodes.into_iter();
 
-    let tree_node = nodes.next().unwrap();
+    let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
     match tree_node.data {
         XpathItemTreeNodeData::ElementNode(e) => assert_eq!(e.name, "main"),
         _ => panic!(""),
@@ -38,13 +38,13 @@ fn xpath_github_sample2() {
     let xpath = xpath::parse("//a[@class='Link--secondary']").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
 
     // assert
     assert_eq!(nodes.len(), 5);
     let mut nodes = nodes.into_iter();
 
-    let tree_node = nodes.next().unwrap();
+    let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
     match tree_node.data {
         XpathItemTreeNodeData::ElementNode(e) => {
             assert_eq!(e.name, "a");
@@ -75,13 +75,13 @@ fn xpath_github_sample3() {
         xpath::parse("//div[@class='BorderGrid-cell']/div[@class=' text-small']/a").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
 
     // assert
     assert_eq!(nodes.len(), 1);
     let mut nodes = nodes.into_iter();
 
-    let tree_node = nodes.next().unwrap();
+    let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
     match tree_node.data {
         XpathItemTreeNodeData::ElementNode(e) => {
             assert_eq!(e.name, "a");
@@ -111,7 +111,7 @@ fn xpath_github_get_text_sample() {
     let xpath = xpath::parse("//div[@class='flex-auto min-width-0 width-fit mr-3']").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
 
     // assert
     assert_eq!(1, nodes.len());
@@ -134,7 +134,7 @@ fn xpath_github_parent_axis() {
     let xpath = xpath::parse("//div[@role='gridcell']/parent::div").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
 
     // assert
     assert_eq!(5, nodes.len());
@@ -150,7 +150,7 @@ fn xpath_github_parent_axis_recursive() {
     let xpath = xpath::parse("//div[@role='gridcell']//parent::div").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
 
     // assert
     assert_eq!(20, nodes.len());
@@ -166,7 +166,7 @@ fn xpath_github_dashed_attribute() {
     let xpath = xpath::parse("//span[@data-view-component='true']").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
 
     // assert
     assert_eq!(19, nodes.len());
@@ -182,14 +182,14 @@ fn xpath_github_get_attributes_sample() {
     let xpath = xpath::parse("//div[@class='flex-auto min-width-0 width-fit mr-3']").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
 
     // assert
     assert_eq!(1, nodes.len());
     let mut nodes = nodes.into_iter();
 
-    let tree_node = nodes.next().unwrap();
-    let elem = tree_node.data.unwrap_element();
+    let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+    let elem = tree_node.data.unwrap_element_ref();
 
     assert_eq!(
         elem.get_attribute("class").unwrap(),
@@ -207,13 +207,13 @@ fn xpath_github_root_search() {
     let xpath = xpath::parse("/html").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
 
     // assert
     assert_eq!(nodes.len(), 1);
     let mut nodes = nodes.into_iter();
 
-    let tree_node = nodes.next().unwrap();
+    let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
 
     match tree_node.data {
         XpathItemTreeNodeData::ElementNode(e) => assert_eq!(e.name, "html"),
@@ -231,13 +231,13 @@ fn xpath_github_root_search_all() {
     let xpath = xpath::parse("//html").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
 
     // assert
     assert_eq!(1, nodes.len());
     let mut nodes = nodes.into_iter();
 
-    let tree_node = nodes.next().unwrap();
+    let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
 
     match tree_node.data {
         XpathItemTreeNodeData::ElementNode(e) => assert_eq!(e.name, "html"),
@@ -255,14 +255,14 @@ fn xpath_github_root_wildcard() {
     let xpath = xpath::parse("//body/*").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
 
     // assert
     assert_eq!(16, nodes.len());
 
     // assert first node
-    let tree_node = &nodes[0];
-    let elem = tree_node.data.unwrap_element();
+    let tree_node = &nodes[0].unwrap_node_ref().unwrap_tree_node_ref();
+    let elem = tree_node.data.unwrap_element_ref();
 
     assert_eq!(elem.name, "div");
 
@@ -272,14 +272,14 @@ fn xpath_github_root_wildcard() {
     );
 
     // assert random node 4
-    let tree_node = &nodes[3];
-    let elem = tree_node.data.unwrap_element();
+    let tree_node = &nodes[3].unwrap_node_ref().unwrap_tree_node_ref();
+    let elem = tree_node.data.unwrap_element_ref();
 
     assert_eq!(elem.name, "include-fragment");
 
     // assert last node
-    let tree_node = &nodes[15];
-    let elem = tree_node.data.unwrap_element();
+    let tree_node = &nodes[15].unwrap_node_ref().unwrap_tree_node_ref();
+    let elem = tree_node.data.unwrap_element_ref();
 
     assert_eq!(elem.name, "div");
 

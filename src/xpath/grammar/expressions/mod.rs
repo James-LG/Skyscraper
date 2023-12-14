@@ -63,7 +63,7 @@ impl Display for XPath {
 impl Expression for XPath {
     fn eval<'tree>(
         &self,
-        context: XPathExpressionContext<'tree>,
+        context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
         self.0.eval(context)
     }
@@ -79,7 +79,7 @@ impl XPath {
             item_tree,
             searchable_nodes,
         };
-        self.eval(context)
+        self.eval(&context)
     }
 }
 
@@ -116,7 +116,7 @@ impl Display for Expr {
 impl Expression for Expr {
     fn eval<'tree>(
         &self,
-        context: XPathExpressionContext<'tree>,
+        context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
         /// Add the result of an ExprSingle to the items vector.
         ///
@@ -126,12 +126,12 @@ impl Expression for Expr {
         /// * `items` - The vector to add the result to.
         /// * `expr_single` - The expression to evaluate.
         fn add_expr_single_item<'tree>(
-            context: XPathExpressionContext<'tree>,
-            items: &mut Vec<XpathItem>,
+            context: &XPathExpressionContext<'tree>,
+            items: &mut Vec<XpathItem<'tree>>,
             expr_single: &ExprSingle,
         ) -> Result<(), ExpressionApplyError> {
             // Evaluate the expression.
-            let mut result = expr_single.eval(context)?;
+            let result: XPathResult<'tree> = expr_single.eval(context)?;
 
             // Add the result to the items vector.
             match result {
@@ -217,7 +217,7 @@ impl Display for ExprSingle {
 impl Expression for ExprSingle {
     fn eval<'tree>(
         &self,
-        context: XPathExpressionContext<'tree>,
+        context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
         match self {
             ExprSingle::ForExpr(_) => todo!("ExprSingle::ForExpr"),

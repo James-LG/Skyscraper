@@ -42,7 +42,7 @@ pub enum XpathItemTreeNodeData {
 }
 
 impl XpathItemTreeNodeData {
-    pub fn unwrap_element(&self) -> &ElementNode {
+    pub fn unwrap_element_ref(&self) -> &ElementNode {
         match self {
             XpathItemTreeNodeData::ElementNode(node) => node,
             _ => panic!("tree item is not an element"),

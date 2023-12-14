@@ -73,7 +73,7 @@ impl Display for ComparisonExpr {
 impl Expression for ComparisonExpr {
     fn eval<'tree>(
         &self,
-        context: XPathExpressionContext<'tree>,
+        context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
         todo!("ComparisonExpr")
     }

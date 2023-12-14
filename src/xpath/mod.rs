@@ -31,7 +31,7 @@ pub struct ExpressionApplyError {
 trait Expression {
     fn eval<'tree>(
         &self,
-        context: XPathExpressionContext<'tree>,
+        context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError>;
 }
 
@@ -43,4 +43,20 @@ struct XPathExpressionContext<'tree> {
 pub enum XPathResult<'tree> {
     ItemSet(Vec<XpathItem<'tree>>),
     Item(XpathItem<'tree>),
+}
+
+impl<'tree> XPathResult<'tree> {
+    pub fn unwrap_item(self) -> XpathItem<'tree> {
+        match self {
+            XPathResult::Item(item) => item,
+            _ => panic!("Expected XPathResult::Item"),
+        }
+    }
+
+    pub fn unwrap_item_set(self) -> Vec<XpathItem<'tree>> {
+        match self {
+            XPathResult::ItemSet(items) => items,
+            _ => panic!("Expected XPathResult::ItemSet"),
+        }
+    }
 }

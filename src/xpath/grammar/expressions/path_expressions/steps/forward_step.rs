@@ -60,15 +60,9 @@ impl Display for ForwardStep {
 impl Expression for ForwardStep {
     fn eval<'tree>(
         &self,
-        context: XPathExpressionContext<'tree>,
+        context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
-        let mut result = Vec::new();
-
-        for node in searchable_nodes {
-            result.extend(node.children(&item_tree));
-        }
-
-        Ok(result)
+        todo!("ForwardStep::eval")
     }
 }
 
@@ -96,20 +90,30 @@ mod tests {
         "###;
 
         let html_doc = html::parse(text).unwrap();
+        let item_tree = XpathItemTree::from_html_document(&html_doc);
 
         let xpath_item_tree = XpathItemTree::from_html_document(&html_doc);
         let searchable_nodes = vec![xpath_item_tree.root()];
 
         let xpath_text = "child::*";
         let subject = forward_step(xpath_text).unwrap().1;
+        let context = XPathExpressionContext {
+            item_tree: &item_tree,
+            searchable_nodes,
+        };
 
         // act
-        let result = subject.eval(&xpath_item_tree, &searchable_nodes).unwrap();
+        let result = subject.eval(&context).unwrap();
 
         // assert
-        let mut items = result.into_iter();
+        let mut items = result.unwrap_item_set().into_iter();
 
-        let item = items.next().unwrap().data;
+        let item = items
+            .next()
+            .unwrap()
+            .unwrap_node_ref()
+            .unwrap_tree_node_ref()
+            .data;
         assert_eq!(
             item,
             &XpathItemTreeNodeData::ElementNode(ElementNode {
@@ -118,7 +122,12 @@ mod tests {
             })
         );
 
-        let item = items.next().unwrap().data;
+        let item = items
+            .next()
+            .unwrap()
+            .unwrap_node_ref()
+            .unwrap_tree_node_ref()
+            .data;
         assert_eq!(
             item,
             &XpathItemTreeNodeData::ElementNode(ElementNode {
@@ -127,7 +136,12 @@ mod tests {
             })
         );
 
-        let item = items.next().unwrap().data;
+        let item = items
+            .next()
+            .unwrap()
+            .unwrap_node_ref()
+            .unwrap_tree_node_ref()
+            .data;
         assert_eq!(
             item,
             &XpathItemTreeNodeData::ElementNode(ElementNode {
