@@ -1,9 +1,3 @@
-use crate::xpath::grammar::ExpressionApplyError;
-
-use crate::xpath::grammar::XpathItemTree;
-
-use crate::xpath::grammar::Expression;
-
 use std::fmt::Display;
 
 use nom::branch::alt;

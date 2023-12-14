@@ -4,9 +4,13 @@ use std::fmt::Display;
 
 use nom::{branch::alt, bytes::complete::tag, combinator::opt, error::context, sequence::tuple};
 
-use crate::xpath::grammar::{
-    expressions::string_concat_expressions::string_concat_expr,
-    recipes::{ws, Res},
+use crate::xpath::{
+    grammar::{
+        expressions::string_concat_expressions::string_concat_expr,
+        recipes::{ws, Res},
+        XpathItemTreeNode,
+    },
+    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemTree,
 };
 
 use super::string_concat_expressions::StringConcatExpr;
@@ -63,6 +67,15 @@ impl Display for ComparisonExpr {
         }
 
         Ok(())
+    }
+}
+
+impl Expression for ComparisonExpr {
+    fn eval<'tree>(
+        &self,
+        context: XPathExpressionContext<'tree>,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+        todo!("ComparisonExpr")
     }
 }
 

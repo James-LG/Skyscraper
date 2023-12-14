@@ -1,4 +1,6 @@
 use skyscraper::html::{DocumentNode, HtmlNode};
+use skyscraper::xpath::grammar::data_model::ElementNode;
+use skyscraper::xpath::grammar::{XpathItemTreeNode, XpathItemTreeNodeData};
 use skyscraper::{html, xpath};
 
 static HTML: &'static str = include_str!("samples/James-LG_Skyscraper.html");
@@ -9,18 +11,20 @@ fn xpath_github_sample1() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
-    let xpath = skyscraper::xpath::parse::parse("//main").unwrap();
+    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
+    let xpath = xpath::parse("//main").unwrap();
 
     // act
-    let nodes = xpath.apply(&document).unwrap();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
-    assert_eq!(1, nodes.len());
+    assert_eq!(nodes.len(), 1);
+    let mut nodes = nodes.into_iter();
 
-    let doc_node = nodes[0];
-    match document.get_html_node(&doc_node).unwrap() {
-        HtmlNode::Tag(t) => assert_eq!("main", t.name),
-        HtmlNode::Text(_) => panic!("expected tag, got text instead"),
+    let tree_node = nodes.next().unwrap();
+    match tree_node.data {
+        XpathItemTreeNodeData::ElementNode(e) => assert_eq!(e.name, "main"),
+        _ => panic!(""),
     }
 }
 
@@ -30,28 +34,33 @@ fn xpath_github_sample2() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
-    let xpath = xpath::parse::parse("//a[@class='Link--secondary']").unwrap();
+    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
+    let xpath = xpath::parse("//a[@class='Link--secondary']").unwrap();
 
     // act
-    let nodes = xpath.apply(&document).unwrap();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
-    assert_eq!(5, nodes.len());
+    assert_eq!(nodes.len(), 5);
+    let mut nodes = nodes.into_iter();
 
-    let doc_node = nodes[0];
-    match document.get_html_node(&doc_node).unwrap() {
-        HtmlNode::Tag(t) => {
-            assert_eq!("a", t.name);
+    let tree_node = nodes.next().unwrap();
+    match tree_node.data {
+        XpathItemTreeNodeData::ElementNode(e) => {
+            assert_eq!(e.name, "a");
 
-            let children: Vec<DocumentNode> = doc_node.children(&document).collect();
+            let children: Vec<XpathItemTreeNode> = tree_node.children(&xpath_item_tree).collect();
             assert_eq!(1, children.len());
+            let mut children = children.into_iter();
 
-            match document.get_html_node(&children[0]).unwrap() {
-                HtmlNode::Tag(_) => panic!("expected text, got tag instead"),
-                HtmlNode::Text(text) => assert_eq!("refactor: Reorganize into workspace", text),
+            match children.next().unwrap().data {
+                _ => panic!("expected text"),
+                XpathItemTreeNodeData::TextNode(text) => {
+                    assert_eq!(text.content, "refactor: Reorganize into workspace")
+                }
             }
         }
-        HtmlNode::Text(_) => panic!("expected tag, got text instead"),
+        _ => panic!("expected element"),
     }
 }
 
@@ -61,29 +70,34 @@ fn xpath_github_sample3() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
+    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
     let xpath =
         xpath::parse("//div[@class='BorderGrid-cell']/div[@class=' text-small']/a").unwrap();
 
     // act
-    let nodes = xpath.apply(&document).unwrap();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
-    assert_eq!(1, nodes.len());
+    assert_eq!(nodes.len(), 1);
+    let mut nodes = nodes.into_iter();
 
-    let doc_node = nodes[0];
-    match document.get_html_node(&doc_node).unwrap() {
-        HtmlNode::Tag(t) => {
-            assert_eq!("a", t.name);
+    let tree_node = nodes.next().unwrap();
+    match tree_node.data {
+        XpathItemTreeNodeData::ElementNode(e) => {
+            assert_eq!(e.name, "a");
 
-            let children: Vec<DocumentNode> = doc_node.children(&document).collect();
-            assert_eq!(1, children.len());
+            let children: Vec<XpathItemTreeNode> = tree_node.children(&xpath_item_tree).collect();
+            assert_eq!(children.len(), 1);
+            let mut children = children.into_iter();
 
-            match document.get_html_node(&children[0]).unwrap() {
-                HtmlNode::Tag(_) => panic!("expected text, got tag instead"),
-                HtmlNode::Text(text) => assert_eq!("Create a new release", text),
+            match children.next().unwrap().data {
+                _ => panic!("expected text"),
+                XpathItemTreeNodeData::TextNode(text) => {
+                    assert_eq!(text.content, "Create a new release")
+                }
             }
         }
-        HtmlNode::Text(_) => panic!("expected tag, got text instead"),
+        _ => panic!("expected tag"),
     }
 }
 
@@ -93,19 +107,21 @@ fn xpath_github_get_text_sample() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
+    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
     let xpath = xpath::parse("//div[@class='flex-auto min-width-0 width-fit mr-3']").unwrap();
 
     // act
-    let nodes = xpath.apply(&document).unwrap();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(1, nodes.len());
+    let mut nodes = nodes.into_iter();
 
-    let doc_node = nodes[0];
-    let html_node = document.get_html_node(&doc_node).unwrap();
-    let text = html_node.get_all_text(&doc_node, &document).unwrap();
+    // TODO: Use Html nodes in the xpath item tree to allow the reuse of these methods
+    // let html_node = document.get_html_node(&doc_node).unwrap();
+    // let text = html_node.get_all_text(&doc_node, &document).unwrap();
 
-    assert_eq!("James-LG / Skyscraper Public", text);
+    // assert_eq!("James-LG / Skyscraper Public", text);
 }
 
 #[test]
@@ -114,10 +130,11 @@ fn xpath_github_parent_axis() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
+    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
     let xpath = xpath::parse("//div[@role='gridcell']/parent::div").unwrap();
 
     // act
-    let nodes = xpath.apply(&document).unwrap();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(5, nodes.len());
@@ -129,10 +146,11 @@ fn xpath_github_parent_axis_recursive() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
+    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
     let xpath = xpath::parse("//div[@role='gridcell']//parent::div").unwrap();
 
     // act
-    let nodes = xpath.apply(&document).unwrap();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(20, nodes.len());
@@ -144,10 +162,11 @@ fn xpath_github_dashed_attribute() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
+    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
     let xpath = xpath::parse("//span[@data-view-component='true']").unwrap();
 
     // act
-    let nodes = xpath.apply(&document).unwrap();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(19, nodes.len());
@@ -159,18 +178,23 @@ fn xpath_github_get_attributes_sample() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
+    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
     let xpath = xpath::parse("//div[@class='flex-auto min-width-0 width-fit mr-3']").unwrap();
 
     // act
-    let nodes = xpath.apply(&document).unwrap();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(1, nodes.len());
+    let mut nodes = nodes.into_iter();
 
-    let doc_node = nodes[0];
-    let html_node = document.get_html_node(&doc_node).unwrap();
-    let attributes = html_node.get_attributes().unwrap();
-    assert_eq!("flex-auto min-width-0 width-fit mr-3", attributes["class"]);
+    let tree_node = nodes.next().unwrap();
+    let elem = tree_node.data.unwrap_element();
+
+    assert_eq!(
+        elem.get_attribute("class").unwrap(),
+        "flex-auto min-width-0 width-fit mr-3"
+    );
 }
 
 #[test]
@@ -179,18 +203,22 @@ fn xpath_github_root_search() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
+    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
     let xpath = xpath::parse("/html").unwrap();
 
     // act
-    let nodes = xpath.apply(&document).unwrap();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
-    assert_eq!(1, nodes.len());
+    assert_eq!(nodes.len(), 1);
+    let mut nodes = nodes.into_iter();
 
-    let doc_node = nodes[0];
-    let html_node = document.get_html_node(&doc_node).unwrap();
-    let tag = html_node.unwrap_tag();
-    assert_eq!("html", tag.name);
+    let tree_node = nodes.next().unwrap();
+
+    match tree_node.data {
+        XpathItemTreeNodeData::ElementNode(e) => assert_eq!(e.name, "html"),
+        _ => panic!(""),
+    }
 }
 
 #[test]
@@ -199,18 +227,22 @@ fn xpath_github_root_search_all() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
+    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
     let xpath = xpath::parse("//html").unwrap();
 
     // act
-    let nodes = xpath.apply(&document).unwrap();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(1, nodes.len());
+    let mut nodes = nodes.into_iter();
 
-    let doc_node = nodes[0];
-    let html_node = document.get_html_node(&doc_node).unwrap();
-    let tag = html_node.unwrap_tag();
-    assert_eq!("html", tag.name);
+    let tree_node = nodes.next().unwrap();
+
+    match tree_node.data {
+        XpathItemTreeNodeData::ElementNode(e) => assert_eq!(e.name, "html"),
+        _ => panic!(""),
+    }
 }
 
 #[test]
@@ -219,39 +251,38 @@ fn xpath_github_root_wildcard() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
+    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
     let xpath = xpath::parse("//body/*").unwrap();
 
     // act
-    let nodes = xpath.apply(&document).unwrap();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(16, nodes.len());
 
     // assert first node
-    let doc_node = nodes[0];
-    let html_node = document.get_html_node(&doc_node).unwrap();
-    let tag = html_node.unwrap_tag();
+    let tree_node = &nodes[0];
+    let elem = tree_node.data.unwrap_element();
 
-    assert_eq!("div", tag.name);
+    assert_eq!(elem.name, "div");
 
-    let attributes = html_node.get_attributes().unwrap();
-    assert_eq!("position-relative js-header-wrapper ", attributes["class"]);
+    assert_eq!(
+        elem.get_attribute("class").unwrap(),
+        "position-relative js-header-wrapper "
+    );
 
     // assert random node 4
-    let doc_node = nodes[3];
-    let html_node = document.get_html_node(&doc_node).unwrap();
-    let tag = html_node.unwrap_tag();
+    let tree_node = &nodes[3];
+    let elem = tree_node.data.unwrap_element();
 
-    assert_eq!("include-fragment", tag.name);
+    assert_eq!(elem.name, "include-fragment");
 
     // assert last node
-    let doc_node = nodes[15];
-    let html_node = document.get_html_node(&doc_node).unwrap();
-    let tag = html_node.unwrap_tag();
+    let tree_node = &nodes[15];
+    let elem = tree_node.data.unwrap_element();
 
-    assert_eq!("div", tag.name);
+    assert_eq!(elem.name, "div");
 
-    let attributes = html_node.get_attributes().unwrap();
-    assert_eq!("sr-only", attributes["class"]);
-    assert_eq!("polite", attributes["aria-live"])
+    assert_eq!(elem.get_attribute("class").unwrap(), "sr-only");
+    assert_eq!(elem.get_attribute("aria-live").unwrap(), "polite")
 }

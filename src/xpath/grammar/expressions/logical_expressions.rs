@@ -4,7 +4,10 @@ use std::fmt::Display;
 
 use nom::{bytes::complete::tag, error::context, multi::many0, sequence::tuple};
 
-use crate::xpath::grammar::recipes::Res;
+use crate::xpath::{
+    grammar::{recipes::Res, XpathItemTreeNode},
+    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemTree,
+};
 
 use super::comparison_expressions::{comparison_expr, ComparisonExpr};
 
@@ -38,6 +41,23 @@ impl Display for OrExpr {
     }
 }
 
+impl Expression for OrExpr {
+    fn eval<'tree>(
+        &self,
+        context: XPathExpressionContext<'tree>,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+        // TODO: If there's only one parameter, return it's eval, otherwise do the boolean op.
+        let mut nodes = self.expr.eval(context)?;
+
+        for item in self.items.iter() {
+            let mut more_nodes = item.eval(context)?;
+            nodes.append(&mut more_nodes);
+        }
+
+        Ok(nodes)
+    }
+}
+
 fn and_expr(input: &str) -> Res<&str, AndExpr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-AndExpr
 
@@ -65,5 +85,22 @@ impl Display for AndExpr {
         }
 
         Ok(())
+    }
+}
+
+impl Expression for AndExpr {
+    fn eval<'tree>(
+        &self,
+        context: XPathExpressionContext<'tree>,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+        // TODO: If there's only one parameter, return it's eval, otherwise do the boolean op.
+        let mut nodes = self.expr.eval(context)?;
+
+        for item in self.items.iter() {
+            let mut more_nodes = item.eval(context)?;
+            nodes.append(&mut more_nodes);
+        }
+
+        Ok(nodes)
     }
 }

@@ -1,7 +1,7 @@
 // https://github.com/rust-bakery/nom/blob/main/doc/making_a_new_parser_from_scratch.md
 // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-grammar
 
-mod data_model;
+pub mod data_model;
 mod expressions;
 mod recipes;
 mod terminal_symbols;
@@ -9,53 +9,29 @@ mod types;
 mod xml_names;
 
 pub use expressions::{xpath, XPath};
+
 use indextree::{Arena, NodeId};
+use nom::error::VerboseError;
 use thiserror::Error;
 
 use crate::{
     html::{DocumentNode, HtmlDocument, HtmlNode},
-    xpath::grammar::data_model::{AttributeNode, ElementNode, Node, TextNode},
+    xpath::grammar::data_model::{
+        AnyAtomicType, AttributeNode, CommentNode, ElementNode, Function, NamespaceNode, Node,
+        PINode, TextNode,
+    },
 };
 
-use self::data_model::{AnyAtomicType, CommentNode, Function, NamespaceNode, PINode, XpathItem};
-
-use super::DocumentNodeSet;
-
-#[derive(PartialEq, Debug, Error)]
-#[error("Error applying expression {msg}")]
-pub struct ExpressionApplyError {
-    msg: String,
-}
-
-trait Expression {
-    fn apply<'tree>(
-        &self,
-        item_tree: &'tree XpathItemTree,
-        searchable_nodes: &Vec<XpathItemTreeNode<'tree>>,
-    ) -> Result<Vec<XpathItemTreeNode<'tree>>, ExpressionApplyError>;
-}
-
-pub struct ExpressionResultItem<'tree> {
-    tree_nodes: Vec<XpathItemTreeNode<'tree>>,
-    non_tree_items: Vec<NonTreeXpathItem>,
-}
-
-/// Subset of [Node] that are not allowed to be children of other nodes.
+/// Subset of [Node] that are not allowed to have child nodes.
 /// Should be disjoint with [XpathItemTreeNodeData].
+#[derive(PartialEq, Debug)]
 pub enum NonTreeXpathNode {
     DocumentNode(DocumentNode),
     AttributeNode(AttributeNode),
     NamespaceNode(NamespaceNode),
 }
 
-/// Subset of [XpathItem] that are not allowed to be in the tree.
-pub enum NonTreeXpathItem {
-    Node(NonTreeXpathNode),
-    Function(Function),
-    AnyAtomicType(AnyAtomicType),
-}
-
-/// Subset of [Node] that are allowed to be children of other nodes.
+/// Subset of [Node] that are allowed to have child nodes.
 /// Should be disjoint with [NonTreeXpathNode].
 #[derive(PartialEq, Debug)]
 pub enum XpathItemTreeNodeData {
@@ -65,20 +41,19 @@ pub enum XpathItemTreeNodeData {
     TextNode(TextNode),
 }
 
-impl From<XpathItemTreeNodeData> for Node {
-    fn from(value: XpathItemTreeNodeData) -> Self {
-        match value {
-            XpathItemTreeNodeData::ElementNode(node) => Node::ElementNode(node),
-            XpathItemTreeNodeData::PINode(node) => Node::PINode(node),
-            XpathItemTreeNodeData::CommentNode(node) => Node::CommentNode(node),
-            XpathItemTreeNodeData::TextNode(node) => Node::TextNode(node),
+impl XpathItemTreeNodeData {
+    pub fn unwrap_element(&self) -> &ElementNode {
+        match self {
+            XpathItemTreeNodeData::ElementNode(node) => node,
+            _ => panic!("tree item is not an element"),
         }
     }
 }
 
+#[derive(PartialEq, Debug)]
 pub struct XpathItemTreeNode<'a> {
     id: NodeId,
-    data: &'a XpathItemTreeNodeData,
+    pub data: &'a XpathItemTreeNodeData,
 }
 
 impl<'a> XpathItemTreeNode<'a> {
@@ -97,7 +72,7 @@ pub struct XpathItemTree {
 }
 
 impl XpathItemTree {
-    fn get(&self, id: NodeId) -> XpathItemTreeNode<'_> {
+    pub fn get(&self, id: NodeId) -> XpathItemTreeNode<'_> {
         let indextree_node = self
             .arena
             .get(id)
@@ -113,7 +88,7 @@ impl XpathItemTree {
 }
 
 impl XpathItemTree {
-    fn from_html_document(html_document: &HtmlDocument) -> Self {
+    pub fn from_html_document(html_document: &HtmlDocument) -> Self {
         fn internal_from_html_document(
             current_html_node: &DocumentNode,
             html_document: &HtmlDocument,

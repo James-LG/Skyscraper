@@ -4,12 +4,20 @@ use std::fmt::Display;
 
 use nom::{branch::alt, character::complete::char, error::context, multi::many0, sequence::tuple};
 
-use crate::xpath::grammar::{
-    expressions::{
-        conditional_expressions::if_expr, for_expressions::for_expr, let_expressions::let_expr,
-        logical_expressions::or_expr, quantified_expressions::quantified_expr,
+use crate::{
+    html::HtmlDocument,
+    xpath::{
+        grammar::{
+            expressions::{
+                conditional_expressions::if_expr, for_expressions::for_expr,
+                let_expressions::let_expr, logical_expressions::or_expr,
+                quantified_expressions::quantified_expr,
+            },
+            recipes::max,
+        },
+        Expression, ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemTree,
+        XpathItemTreeNode,
     },
-    recipes::max,
 };
 
 use self::{
@@ -17,7 +25,7 @@ use self::{
     logical_expressions::OrExpr, quantified_expressions::QuantifiedExpr,
 };
 
-use super::{recipes::Res, Expression};
+use super::{data_model::XpathItem, recipes::Res};
 
 pub mod arithmetic_expressions;
 pub mod arrow_operator;
@@ -52,6 +60,29 @@ impl Display for XPath {
     }
 }
 
+impl Expression for XPath {
+    fn eval<'tree>(
+        &self,
+        context: XPathExpressionContext<'tree>,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+        self.0.eval(context)
+    }
+}
+
+impl XPath {
+    pub fn apply<'tree>(
+        &self,
+        item_tree: &'tree XpathItemTree,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+        let searchable_nodes = vec![item_tree.root()];
+        let context = XPathExpressionContext {
+            item_tree,
+            searchable_nodes,
+        };
+        self.eval(context)
+    }
+}
+
 pub fn expr(input: &str) -> Res<&str, Expr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-Expr
 
@@ -79,6 +110,50 @@ impl Display for Expr {
         }
 
         Ok(())
+    }
+}
+
+impl Expression for Expr {
+    fn eval<'tree>(
+        &self,
+        context: XPathExpressionContext<'tree>,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+        /// Add the result of an ExprSingle to the items vector.
+        ///
+        /// # Arguments
+        ///
+        /// * `context` - The context to evaluate the expression in.
+        /// * `items` - The vector to add the result to.
+        /// * `expr_single` - The expression to evaluate.
+        fn add_expr_single_item<'tree>(
+            context: XPathExpressionContext<'tree>,
+            items: &mut Vec<XpathItem>,
+            expr_single: &ExprSingle,
+        ) -> Result<(), ExpressionApplyError> {
+            // Evaluate the expression.
+            let mut result = expr_single.eval(context)?;
+
+            // Add the result to the items vector.
+            match result {
+                XPathResult::ItemSet(nodes) => items.extend(nodes),
+                XPathResult::Item(node) => items.push(node),
+            }
+
+            Ok(())
+        }
+
+        // Expr items are separated by the comma operator, which concatenates results into a sequence.
+        let mut items: Vec<XpathItem> = Vec::new();
+
+        // Get first item
+        add_expr_single_item(context, &mut items, &self.expr)?;
+
+        // Get remaining items
+        for item in self.items.iter() {
+            add_expr_single_item(context, &mut items, item)?;
+        }
+
+        Ok(XPathResult::ItemSet(items))
     }
 }
 
@@ -135,6 +210,21 @@ impl Display for ExprSingle {
             ExprSingle::QuantifiedExpr(x) => write!(f, "{}", x),
             ExprSingle::IfExpr(x) => write!(f, "{}", x),
             ExprSingle::OrExpr(x) => write!(f, "{}", x),
+        }
+    }
+}
+
+impl Expression for ExprSingle {
+    fn eval<'tree>(
+        &self,
+        context: XPathExpressionContext<'tree>,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+        match self {
+            ExprSingle::ForExpr(_) => todo!("ExprSingle::ForExpr"),
+            ExprSingle::LetExpr(_) => todo!("ExprSingle::LetExpr"),
+            ExprSingle::QuantifiedExpr(_) => todo!("ExprSingle::QuantifiedExpr"),
+            ExprSingle::IfExpr(_) => todo!("ExprSingle::IfExpr"),
+            ExprSingle::OrExpr(e) => todo!("ExprSingle::OrExpr"),
         }
     }
 }

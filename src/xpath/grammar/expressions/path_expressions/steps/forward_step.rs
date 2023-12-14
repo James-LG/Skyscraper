@@ -1,22 +1,24 @@
 use std::fmt::Display;
 
-use crate::xpath::grammar::XpathItemTreeNode;
 use nom::{branch::alt, bytes::complete::tag, error::context, multi::many0, sequence::tuple};
 
-use crate::xpath::grammar::{
-    data_model::XpathItem,
-    expressions::{
-        path_expressions::{
-            abbreviated_syntax::{abbrev_forward_step, AbbrevForwardStep},
-            steps::{
-                axes::{forward_axis::forward_axis, reverse_axis::reverse_axis},
-                node_tests::node_test,
+use crate::xpath::{
+    grammar::{
+        data_model::XpathItem,
+        expressions::{
+            path_expressions::{
+                abbreviated_syntax::{abbrev_forward_step, AbbrevForwardStep},
+                steps::{
+                    axes::{forward_axis::forward_axis, reverse_axis::reverse_axis},
+                    node_tests::node_test,
+                },
             },
+            postfix_expressions::{postfix_expr, predicate, PostfixExpr, Predicate},
         },
-        postfix_expressions::{postfix_expr, predicate, PostfixExpr, Predicate},
+        recipes::{max, Res},
     },
-    recipes::{max, Res},
-    Expression, ExpressionApplyError, XpathItemTree,
+    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemTree,
+    XpathItemTreeNode,
 };
 
 use super::{axes::forward_axis::ForwardAxis, node_tests::NodeTest};
@@ -56,11 +58,10 @@ impl Display for ForwardStep {
 }
 
 impl Expression for ForwardStep {
-    fn apply<'tree>(
+    fn eval<'tree>(
         &self,
-        item_tree: &'tree XpathItemTree,
-        searchable_nodes: &Vec<XpathItemTreeNode<'tree>>,
-    ) -> Result<Vec<XpathItemTreeNode<'tree>>, ExpressionApplyError> {
+        context: XPathExpressionContext<'tree>,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
         let mut result = Vec::new();
 
         for node in searchable_nodes {
@@ -103,7 +104,7 @@ mod tests {
         let subject = forward_step(xpath_text).unwrap().1;
 
         // act
-        let result = subject.apply(&xpath_item_tree, &searchable_nodes).unwrap();
+        let result = subject.eval(&xpath_item_tree, &searchable_nodes).unwrap();
 
         // assert
         let mut items = result.into_iter();
