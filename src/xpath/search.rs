@@ -148,9 +148,11 @@ pub fn search(
 
     // Apply indexing if required
     if let Some(i) = search_item.index {
-        if i < matches.len() {
+        if i <= matches.len() { // XPath index is 1-based
             let indexed_node = matches[i - 1];
             matches.retain(|node| *node == indexed_node);
+        } else {
+            return Ok(DocumentNodeSet::new(searchable_nodes.has_super_root));
         }
     }
 
