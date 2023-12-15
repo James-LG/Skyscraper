@@ -25,7 +25,10 @@ use self::{
     logical_expressions::OrExpr, quantified_expressions::QuantifiedExpr,
 };
 
-use super::{data_model::XpathItem, recipes::Res};
+use super::{
+    data_model::{Node, XpathItem},
+    recipes::Res,
+};
 
 pub mod arithmetic_expressions;
 pub mod arrow_operator;
@@ -74,7 +77,7 @@ impl XPath {
         &self,
         item_tree: &'tree XpathItemTree,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
-        let searchable_nodes = vec![item_tree.root()];
+        let searchable_nodes = vec![Node::TreeNode(item_tree.root())];
         let context = XPathExpressionContext {
             item_tree,
             searchable_nodes,
@@ -113,8 +116,8 @@ impl Display for Expr {
     }
 }
 
-impl Expression for Expr {
-    fn eval<'tree>(
+impl Expr {
+    pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
@@ -289,6 +292,19 @@ mod tests {
     fn xpath_should_parse4() {
         // arrange
         let input = "$products[price gt 100]";
+
+        // act
+        let (next_input, res) = xpath(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
+    }
+
+    #[test]
+    fn xpath_should_parse5() {
+        // arrange
+        let input = r#"(fn:root(self::node()) treat as document-node())"#; // /descendant-or-self::node()/"#;;
 
         // act
         let (next_input, res) = xpath(input).unwrap();

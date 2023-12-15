@@ -6,7 +6,7 @@ use nom::{bytes::complete::tag, combinator::opt, error::context, sequence::tuple
 
 use crate::xpath::{
     grammar::{
-        recipes::Res,
+        recipes::{ws, Res},
         types::sequence_type::{sequence_type, SequenceType},
     },
     Expression, ExpressionApplyError, XPathExpressionContext, XPathResult,
@@ -21,7 +21,7 @@ pub fn treat_expr(input: &str) -> Res<&str, TreatExpr> {
         "treat_expr",
         tuple((
             castable_expr,
-            opt(tuple((tag("treat"), tag("as"), sequence_type))),
+            opt(tuple((ws(tag("treat")), ws(tag("as")), sequence_type))),
         )),
     )(input)
     .map(|(next_input, res)| {

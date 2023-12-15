@@ -43,7 +43,7 @@ pub struct Function {
 }
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#dt-node
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Node<'tree> {
     TreeNode(XpathItemTreeNode<'tree>),
     NonTreeNode(NonTreeXpathNode),
@@ -93,14 +93,14 @@ impl ElementNode {
 }
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#AttributeNode
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct AttributeNode {
     pub name: String,
     pub value: String,
 }
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#NamespaceNode
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct NamespaceNode {
     pub prefix: String,
     pub uri: String,

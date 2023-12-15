@@ -68,7 +68,7 @@ pub fn forward_axis(input: &str) -> Res<&str, ForwardAxis> {
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum ForwardAxis {
     Child,
     Descendant,

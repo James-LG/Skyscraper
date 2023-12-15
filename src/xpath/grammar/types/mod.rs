@@ -23,6 +23,7 @@ use super::{
     recipes::Res,
     terminal_symbols::UriQualifiedName,
     xml_names::{nc_name, QName},
+    XpathItemTreeNodeData,
 };
 
 pub mod array_test;
@@ -141,6 +142,23 @@ impl Display for KindTest {
     }
 }
 
+impl KindTest {
+    pub(crate) fn matches(&self, node_data: &XpathItemTreeNodeData) -> bool {
+        match self {
+            KindTest::AnyKindTest => todo!(),
+            KindTest::TextTest => todo!(),
+            KindTest::CommentTest => todo!(),
+            KindTest::NamespaceNodeTest => todo!(),
+            KindTest::DocumentTest(_) => todo!(),
+            KindTest::ElementTest(_) => todo!(),
+            KindTest::AttributeTest(_) => todo!(),
+            KindTest::SchemaElementTest(_) => todo!(),
+            KindTest::SchemaAttributeTest(_) => todo!(),
+            KindTest::PITest(_) => todo!(),
+        }
+    }
+}
+
 pub fn document_test(input: &str) -> Res<&str, DocumentTest> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-DocumentTest
 
@@ -173,7 +191,11 @@ pub struct DocumentTest {
 
 impl Display for DocumentTest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!("fmt DocumentTest")
+        write!(f, "document-node(")?;
+        if let Some(x) = &self.value {
+            write!(f, "{}", x)?;
+        }
+        write!(f, ")")
     }
 }
 
@@ -181,6 +203,15 @@ impl Display for DocumentTest {
 pub enum DocumentTestValue {
     ElementTest(ElementTest),
     SchemaElementTest(SchemaElementTest),
+}
+
+impl Display for DocumentTestValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DocumentTestValue::ElementTest(x) => write!(f, "{}", x),
+            DocumentTestValue::SchemaElementTest(x) => write!(f, "{}", x),
+        }
+    }
 }
 
 pub fn schema_attribute_test(input: &str) -> Res<&str, SchemaAttributeTest> {

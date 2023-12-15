@@ -24,7 +24,7 @@ use crate::{
 
 /// Subset of [Node] that are not allowed to have child nodes.
 /// Should be disjoint with [XpathItemTreeNodeData].
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum NonTreeXpathNode {
     DocumentNode(DocumentNode),
     AttributeNode(AttributeNode),
@@ -50,7 +50,7 @@ impl XpathItemTreeNodeData {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct XpathItemTreeNode<'a> {
     id: NodeId,
     pub data: &'a XpathItemTreeNodeData,

@@ -4,7 +4,7 @@ use nom::{branch::alt, bytes::complete::tag, error::context, multi::many0, seque
 
 use crate::xpath::{
     grammar::{
-        data_model::XpathItem,
+        data_model::{Node, XpathItem},
         expressions::{
             path_expressions::{
                 abbreviated_syntax::{abbrev_forward_step, AbbrevForwardStep},
@@ -57,11 +57,55 @@ impl Display for ForwardStep {
     }
 }
 
-impl Expression for ForwardStep {
-    fn eval<'tree>(
+impl ForwardStep {
+    pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
-        todo!("ForwardStep::eval")
+    ) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
+        match self {
+            ForwardStep::Full(axis, node_test) => eval_forward_axis(context, *axis, node_test),
+            ForwardStep::Abbreviated(step) => {
+                // Abbreviated forward step axis is attribute if it has @, otherwise it's child
+                let axis = if step.has_at {
+                    ForwardAxis::Attribute
+                } else {
+                    ForwardAxis::Child
+                };
+
+                eval_forward_axis(context, axis, &step.node_test)
+            }
+        }
+    }
+}
+
+fn eval_forward_axis<'tree>(
+    context: &XPathExpressionContext<'tree>,
+    axis: ForwardAxis,
+    node_test: &NodeTest,
+) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
+    match axis {
+        ForwardAxis::Child => {
+            let mut nodes: Vec<Node<'tree>> = Vec::new();
+
+            for node in context.searchable_nodes.iter() {
+                // Only elements have children
+                if let Node::TreeNode(node) = node {
+                    for child in node.children(context.item_tree) {
+                        if node_test.matches(&child.data) {
+                            nodes.push(Node::TreeNode(child));
+                        }
+                    }
+                }
+            }
+
+            Ok(nodes)
+        }
+        ForwardAxis::Descendant => todo!(),
+        ForwardAxis::Attribute => todo!(),
+        ForwardAxis::SelfAxis => todo!(),
+        ForwardAxis::DescendantOrSelf => todo!(),
+        ForwardAxis::FollowingSibling => todo!(),
+        ForwardAxis::Following => todo!(),
+        ForwardAxis::Namespace => todo!(),
     }
 }

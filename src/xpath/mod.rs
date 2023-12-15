@@ -37,7 +37,7 @@ trait Expression {
 
 pub(crate) struct XPathExpressionContext<'tree> {
     item_tree: &'tree XpathItemTree,
-    searchable_nodes: Vec<XpathItemTreeNode<'tree>>,
+    searchable_nodes: Vec<Node<'tree>>,
 }
 
 pub enum XPathResult<'tree> {
@@ -46,6 +46,24 @@ pub enum XPathResult<'tree> {
 }
 
 impl<'tree> XPathResult<'tree> {
+    /// Return the effective boolean value of the result.
+    ///
+    /// https://www.w3.org/TR/2017/REC-xpath-31-20170321/#dt-ebv
+    pub fn boolean(self) -> bool {
+        match self {
+            XPathResult::ItemSet(items) => !items.is_empty(),
+            XPathResult::Item(item) => match item {
+                XpathItem::Node(_) => true,
+                XpathItem::Function(_) => true,
+                XpathItem::AnyAtomicType(atomic_type) => match atomic_type {
+                    AnyAtomicType::Boolean(b) => b,
+                    AnyAtomicType::Number(n) => n != 0,
+                    AnyAtomicType::String(s) => !s.is_empty(),
+                },
+            },
+        }
+    }
+
     pub fn unwrap_item(self) -> XpathItem<'tree> {
         match self {
             XPathResult::Item(item) => item,

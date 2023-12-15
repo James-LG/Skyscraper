@@ -58,7 +58,10 @@ pub enum SequenceType {
 
 impl Display for SequenceType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!("fmt SequenceType")
+        match self {
+            SequenceType::EmptySequence => write!(f, "empty-sequence()"),
+            SequenceType::Sequence(x) => write!(f, "{}", x),
+        }
     }
 }
 
@@ -66,6 +69,17 @@ impl Display for SequenceType {
 pub struct SequenceTypeValue {
     pub item_type: ItemType,
     pub occurrence: Option<OccurrenceIndicator>,
+}
+
+impl Display for SequenceTypeValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.item_type)?;
+        if let Some(x) = &self.occurrence {
+            write!(f, "{}", x)?;
+        }
+
+        Ok(())
+    }
 }
 
 pub fn item_type(input: &str) -> Res<&str, ItemType> {
@@ -170,6 +184,16 @@ pub enum OccurrenceIndicator {
     ZeroOrOne,
     ZeroOrMore,
     OneOrMore,
+}
+
+impl Display for OccurrenceIndicator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OccurrenceIndicator::ZeroOrOne => write!(f, "?"),
+            OccurrenceIndicator::ZeroOrMore => write!(f, "*"),
+            OccurrenceIndicator::OneOrMore => write!(f, "+"),
+        }
+    }
 }
 
 #[cfg(test)]

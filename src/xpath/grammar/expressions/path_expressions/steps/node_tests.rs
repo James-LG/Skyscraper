@@ -10,7 +10,8 @@ use crate::xpath::grammar::{
     recipes::Res,
     terminal_symbols::braced_uri_literal,
     types::{eq_name, kind_test, EQName, KindTest},
-    xml_names::nc_name,
+    xml_names::{nc_name, QName},
+    XpathItemTreeNodeData,
 };
 
 pub fn node_test(input: &str) -> Res<&str, NodeTest> {
@@ -42,6 +43,15 @@ impl Display for NodeTest {
     }
 }
 
+impl NodeTest {
+    pub(crate) fn matches(&self, node_data: &XpathItemTreeNodeData) -> bool {
+        match self {
+            NodeTest::KindTest(test) => test.matches(node_data),
+            NodeTest::NameTest(test) => test.matches(node_data),
+        }
+    }
+}
+
 fn name_test(input: &str) -> Res<&str, NameTest> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-NameTest
 
@@ -67,6 +77,28 @@ impl Display for NameTest {
         match self {
             NameTest::Name(x) => write!(f, "{}", x),
             NameTest::Wildcard(x) => write!(f, "{}", x),
+        }
+    }
+}
+
+impl NameTest {
+    pub(crate) fn matches(&self, node_data: &XpathItemTreeNodeData) -> bool {
+        // Name test only works on element nodes
+        let element = if let XpathItemTreeNodeData::ElementNode(element) = node_data {
+            element
+        } else {
+            return false;
+        };
+
+        match self {
+            NameTest::Name(name) => match name {
+                EQName::QName(qname) => match qname {
+                    QName::PrefixedName(_) => todo!(),
+                    QName::UnprefixedName(unprefixed_name) => unprefixed_name == &element.name,
+                },
+                EQName::UriQualifiedName(_) => todo!(),
+            },
+            NameTest::Wildcard(_) => todo!(),
         }
     }
 }

@@ -4,9 +4,15 @@ use std::fmt::Display;
 
 use nom::{character::complete::char, combinator::opt, error::context, sequence::tuple};
 
-use crate::xpath::grammar::recipes::Res;
+use crate::xpath::{
+    grammar::{data_model::Node, recipes::Res},
+    ExpressionApplyError, XPathExpressionContext,
+};
 
-use super::steps::node_tests::{node_test, NodeTest};
+use super::steps::{
+    axes::forward_axis::ForwardAxis,
+    node_tests::{node_test, NodeTest},
+};
 
 pub fn abbrev_forward_step(input: &str) -> Res<&str, AbbrevForwardStep> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-AbbrevForwardStep
