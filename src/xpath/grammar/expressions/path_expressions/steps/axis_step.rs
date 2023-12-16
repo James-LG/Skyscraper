@@ -51,7 +51,7 @@ pub fn axis_step(input: &str) -> Res<&str, AxisStep> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct AxisStep {
     pub step_type: AxisStepType,
     pub predicates: Vec<Predicate>,
@@ -83,7 +83,7 @@ impl AxisStep {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum AxisStepType {
     ReverseStep(ReverseStep),
     ForwardStep(ForwardStep),

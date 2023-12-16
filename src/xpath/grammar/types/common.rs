@@ -10,7 +10,7 @@ pub fn element_name(input: &str) -> Res<&str, ElementName> {
     context("element_name", eq_name)(input).map(|(next_input, res)| (next_input, ElementName(res)))
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct ElementName(pub EQName);
 
 pub fn type_name(input: &str) -> Res<&str, TypeName> {
@@ -19,7 +19,7 @@ pub fn type_name(input: &str) -> Res<&str, TypeName> {
     context("type_name", eq_name)(input).map(|(next_input, res)| (next_input, TypeName(res)))
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct TypeName(pub EQName);
 
 pub fn attribute_name(input: &str) -> Res<&str, AttributeName> {
@@ -29,7 +29,7 @@ pub fn attribute_name(input: &str) -> Res<&str, AttributeName> {
         .map(|(next_input, res)| (next_input, AttributeName(res)))
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct AttributeName(pub EQName);
 
 pub fn atomic_or_union_type(input: &str) -> Res<&str, AtomicOrUnionType> {

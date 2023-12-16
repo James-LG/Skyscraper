@@ -44,7 +44,7 @@ pub fn reverse_axis(input: &str) -> Res<&str, ReverseAxis> {
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum ReverseAxis {
     Parent,
     Ancestor,

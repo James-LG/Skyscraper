@@ -99,7 +99,7 @@ pub fn expr(input: &str) -> Res<&str, Expr> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Expr {
     pub expr: ExprSingle,
     pub items: Vec<ExprSingle>,
@@ -196,7 +196,7 @@ pub fn expr_single(input: &str) -> Res<&str, ExprSingle> {
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum ExprSingle {
     ForExpr(Box<ForExpr>),
     LetExpr(Box<LetExpr>),
@@ -304,7 +304,8 @@ mod tests {
     #[test]
     fn xpath_should_parse5() {
         // arrange
-        let input = r#"(fn:root(self::node()) treat as document-node())"#; // /descendant-or-self::node()/"#;;
+        let input =
+            r#"(fn:root(self::node()) treat as document-node())/descendant-or-self::node()"#;
 
         // act
         let (next_input, res) = xpath(input).unwrap();

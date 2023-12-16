@@ -32,7 +32,7 @@ pub fn let_expr(input: &str) -> Res<&str, LetExpr> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct LetExpr {
     pub clause: SimpleLetClause,
     pub expr: ExprSingle,
@@ -67,7 +67,7 @@ fn simple_let_clause(input: &str) -> Res<&str, SimpleLetClause> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct SimpleLetClause {
     pub binding: SimpleLetBinding,
     pub extras: Vec<SimpleLetBinding>,
@@ -91,7 +91,7 @@ fn simple_let_binding(input: &str) -> Res<&str, SimpleLetBinding> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct SimpleLetBinding {
     pub var: VarName,
     pub expr: ExprSingle,

@@ -55,7 +55,7 @@ fn prefixed_name(input: &str) -> Res<&str, PrefixedName> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct PrefixedName {
     pub prefix: String,
     pub local_part: String,
@@ -81,7 +81,7 @@ pub fn qname(input: &str) -> Res<&str, QName> {
     alt((prefixedname_map, unprefixed_name_map))(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum QName {
     PrefixedName(PrefixedName),
     UnprefixedName(String),

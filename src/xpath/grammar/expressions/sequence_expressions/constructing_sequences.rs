@@ -30,7 +30,7 @@ pub fn range_expr(input: &str) -> Res<&str, RangeExpr> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct RangeExpr {
     pub expr: AdditiveExpr,
     pub to_expr: Option<AdditiveExpr>,

@@ -19,7 +19,7 @@ pub fn unary_lookup(input: &str) -> Res<&str, UnaryLookup> {
         .map(|(next_input, res)| (next_input, UnaryLookup(res.1)))
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct UnaryLookup(pub KeySpecifier);
 
 impl Display for UnaryLookup {
@@ -59,7 +59,7 @@ pub fn key_specifier(input: &str) -> Res<&str, KeySpecifier> {
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum KeySpecifier {
     Name(String),
     Integer(u32),

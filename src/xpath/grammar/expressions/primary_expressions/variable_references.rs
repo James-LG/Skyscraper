@@ -15,7 +15,7 @@ pub fn var_ref(input: &str) -> Res<&str, VarRef> {
         .map(|(next_input, res)| (next_input, VarRef(res.1)))
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct VarRef(VarName);
 
 impl Display for VarRef {
@@ -29,7 +29,7 @@ pub fn var_name(input: &str) -> Res<&str, VarName> {
     context("var_name", eq_name)(input).map(|(next_input, res)| (next_input, VarName(res)))
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct VarName(EQName);
 
 impl Display for VarName {

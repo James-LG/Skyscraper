@@ -31,7 +31,7 @@ pub fn argument_list(input: &str) -> Res<&str, ArgumentList> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct ArgumentList(pub Vec<Argument>);
 
 impl Display for ArgumentList {
@@ -64,7 +64,7 @@ pub fn argument(input: &str) -> Res<&str, Argument> {
     context("argument", alt((expr_single_map, argument_placeholder)))(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Argument {
     ExprSingle(ExprSingle),
     ArgumentPlaceHolder,

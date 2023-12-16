@@ -45,13 +45,13 @@ pub fn union_expr(input: &str) -> Res<&str, UnionExpr> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct UnionExpr {
     pub expr: IntersectExceptExpr,
     pub items: Vec<UnionExprPair>,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct UnionExprPair(UnionExprOperatorType, pub IntersectExceptExpr);
 
 impl Display for UnionExprPair {
@@ -78,7 +78,7 @@ impl Expression for UnionExpr {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 enum UnionExprOperatorType {
     Union,
     Bar,
@@ -133,7 +133,7 @@ fn intersect_except_expr(input: &str) -> Res<&str, IntersectExceptExpr> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct IntersectExceptExpr {
     pub expr: InstanceofExpr,
     pub items: Vec<IntersectExceptPair>,
@@ -168,7 +168,7 @@ impl Expression for IntersectExceptExpr {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct IntersectExceptPair(pub IntersectExceptType, pub InstanceofExpr);
 
 impl Display for IntersectExceptPair {
@@ -177,7 +177,7 @@ impl Display for IntersectExceptPair {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum IntersectExceptType {
     Intersect,
     Except,

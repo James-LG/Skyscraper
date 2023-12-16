@@ -28,7 +28,7 @@ pub fn node_test(input: &str) -> Res<&str, NodeTest> {
     context("node_test", alt((kind_test_map, name_test_map)))(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum NodeTest {
     KindTest(KindTest),
     NameTest(NameTest),
@@ -66,7 +66,7 @@ fn name_test(input: &str) -> Res<&str, NameTest> {
     context("name_test", alt((eq_name_map, wildcard_map)))(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum NameTest {
     Name(EQName),
     Wildcard(Wildcard),
@@ -136,7 +136,7 @@ fn wildcard(input: &str) -> Res<&str, Wildcard> {
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Wildcard {
     Simple,
     PrefixedName(String),

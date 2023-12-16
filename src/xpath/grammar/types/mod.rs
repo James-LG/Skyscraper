@@ -111,7 +111,7 @@ pub fn kind_test(input: &str) -> Res<&str, KindTest> {
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum KindTest {
     AnyKindTest,
     TextTest,
@@ -184,7 +184,7 @@ pub fn document_test(input: &str) -> Res<&str, DocumentTest> {
     .map(|(next_input, res)| (next_input, DocumentTest { value: res.2 }))
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct DocumentTest {
     pub value: Option<DocumentTestValue>,
 }
@@ -199,7 +199,7 @@ impl Display for DocumentTest {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum DocumentTestValue {
     ElementTest(ElementTest),
     SchemaElementTest(SchemaElementTest),
@@ -229,7 +229,7 @@ pub fn schema_attribute_test(input: &str) -> Res<&str, SchemaAttributeTest> {
     .map(|(next_input, res)| (next_input, SchemaAttributeTest(res.2)))
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct SchemaAttributeTest(pub AttributeDeclaration);
 
 impl Display for SchemaAttributeTest {
@@ -245,7 +245,7 @@ pub fn attribute_declaration(input: &str) -> Res<&str, AttributeDeclaration> {
         .map(|(next_input, res)| (next_input, AttributeDeclaration(res)))
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct AttributeDeclaration(pub AttributeName);
 
 pub fn pi_test(input: &str) -> Res<&str, PITest> {
@@ -272,7 +272,7 @@ pub fn pi_test(input: &str) -> Res<&str, PITest> {
     .map(|(next_input, res)| (next_input, PITest { val: res.2 }))
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct PITest {
     pub val: Option<PITestValue>,
 }
@@ -283,13 +283,13 @@ impl Display for PITest {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum PITestValue {
     NCName(String),
     StringLiteral(String),
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct AtomicOrUnionType(EQName);
 
 impl Display for AtomicOrUnionType {
@@ -304,7 +304,7 @@ pub fn simple_type_name(input: &str) -> Res<&str, SimpleTypeName> {
         .map(|(next_input, res)| (next_input, SimpleTypeName(res)))
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct SimpleTypeName(TypeName);
 
 pub fn eq_name(input: &str) -> Res<&str, EQName> {
@@ -322,7 +322,7 @@ pub fn eq_name(input: &str) -> Res<&str, EQName> {
     context("eq_name", alt((uri_qualified_name_map, qname_map)))(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum EQName {
     QName(QName),
     UriQualifiedName(UriQualifiedName),

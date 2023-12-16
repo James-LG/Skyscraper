@@ -35,7 +35,7 @@ pub fn array_constructor(input: &str) -> Res<&str, ArrayConstructor> {
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum ArrayConstructor {
     SquareArrayConstructor(SquareArrayConstructor),
     CurlyArrayConstructor(CurlyArrayConstructor),
@@ -67,7 +67,7 @@ fn square_array_constructor(input: &str) -> Res<&str, SquareArrayConstructor> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct SquareArrayConstructor {
     pub entries: Vec<ExprSingle>,
 }
@@ -81,5 +81,5 @@ fn curly_array_constructor(input: &str) -> Res<&str, CurlyArrayConstructor> {
     .map(|(next_input, res)| (next_input, CurlyArrayConstructor(res.1)))
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct CurlyArrayConstructor(EnclosedExpr);

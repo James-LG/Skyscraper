@@ -14,7 +14,7 @@ pub fn lookup(input: &str) -> Res<&str, Lookup> {
         .map(|(next_input, res)| (next_input, Lookup(res.1)))
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Lookup(pub KeySpecifier);
 
 impl Display for Lookup {

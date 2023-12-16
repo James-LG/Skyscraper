@@ -24,7 +24,7 @@ pub fn literal(input: &str) -> Res<&str, Literal> {
     context("literal", alt((numeric_literal_map, string_literal_map)))(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Literal {
     NumericLiteral(NumericLiteral),
     StringLiteral(String),
@@ -60,7 +60,7 @@ pub fn numeric_literal(input: &str) -> Res<&str, NumericLiteral> {
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum NumericLiteral {
     Integer(u32),
     Decimal(f32),

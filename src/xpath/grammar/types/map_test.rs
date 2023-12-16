@@ -31,7 +31,7 @@ pub fn map_test(input: &str) -> Res<&str, MapTest> {
     context("map_test", alt((any_map_test, typed_map_test_map)))(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum MapTest {
     AnyMapTest,
     TypedMapTest(TypedMapTest),
@@ -68,7 +68,7 @@ fn typed_map_test(input: &str) -> Res<&str, TypedMapTest> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct TypedMapTest {
     pub atomic_or_union_type: AtomicOrUnionType,
     pub sequence_type: SequenceType,

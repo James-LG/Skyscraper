@@ -42,7 +42,7 @@ pub fn forward_step(input: &str) -> Res<&str, ForwardStep> {
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum ForwardStep {
     Full(ForwardAxis, NodeTest),
     Abbreviated(AbbrevForwardStep),

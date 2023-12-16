@@ -7,16 +7,41 @@ use nom::{
     multi::many0, sequence::tuple,
 };
 
+use crate::xpath::grammar::expressions::primary_expressions::PrimaryExpr::FunctionCall;
+use crate::xpath::parse;
 use crate::xpath::{
     grammar::{
-        data_model::Node, expressions::path_expressions::steps::step_expr::step_expr, recipes::Res,
+        data_model::Node,
+        expressions::path_expressions::steps::step_expr::step_expr,
+        recipes::Res,
+        xml_names::{PrefixedName, QName},
     },
     Expression, ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
+use self::steps::axis_step::AxisStep;
 use self::steps::step_expr::StepExpr;
 
-use super::Expr;
+use super::common::ArgumentList;
+use super::expr;
+use super::{
+    arithmetic_expressions::{AdditiveExpr, MultiplicativeExpr, UnaryExpr, ValueExpr},
+    arrow_operator::ArrowExpr,
+    comparison_expressions::ComparisonExpr,
+    expressions_on_sequence_types::{
+        cast::CastExpr, castable::CastableExpr, instance_of::InstanceofExpr, treat::TreatExpr,
+    },
+    logical_expressions::{AndExpr, OrExpr},
+    postfix_expressions::PostfixExpr,
+    primary_expressions::{parenthesized_expressions::ParenthesizedExpr, PrimaryExpr},
+    sequence_expressions::{
+        combining_node_sequences::{IntersectExceptExpr, UnionExpr},
+        constructing_sequences::RangeExpr,
+    },
+    simple_map_operator::SimpleMapExpr,
+    string_concat_expressions::StringConcatExpr,
+    Expr, ExprSingle,
+};
 
 pub mod abbreviated_syntax;
 pub mod steps;
@@ -44,7 +69,7 @@ pub fn path_expr(input: &str) -> Res<&str, PathExpr> {
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum PathExpr {
     LeadingSlash(Option<RelativePathExpr>),
     LeadingDoubleSlash(RelativePathExpr),
@@ -78,23 +103,33 @@ impl Expression for PathExpr {
         match self {
             PathExpr::LeadingSlash(_) => todo!("PathExpr::LeadingSlash"),
             PathExpr::LeadingDoubleSlash(expr) => {
-                let nodes = vec![Node::TreeNode(context.item_tree.root())];
-                let initial_expr = initial_double_slash_expansion();
-                let context = XPathExpressionContext {
-                    item_tree: context.item_tree,
-                    searchable_nodes: nodes,
-                };
-                expr.eval(&context)
+                let expanded_expr = initial_double_slash_expansion(expr);
+                expanded_expr.eval(&context)
             }
             PathExpr::Plain(_) => todo!("PathExpr::Plain"),
         }
     }
 }
 
-fn initial_double_slash_expansion() -> Expr {
+fn initial_double_slash_expansion(unexpanded_expr: &RelativePathExpr) -> RelativePathExpr {
     // A leading double slash is expanded to `(fn:root(self::node()) treat as document-node())/descendant-or-self::node()/`
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-path-expressions
-    todo!("initial_double_slash_expansion")
+    let first_step = step_expr("(fn:root(self::node()) treat as document-node())")
+        .expect("double slash expansion step 1 failed")
+        .1;
+
+    let second_step = step_expr("descendant-or-self::node()")
+        .expect("double slash expansion step 2 failed")
+        .1;
+
+    let mut items = vec![StepPair(PathSeparator::Slash, second_step)];
+    items.push(StepPair(PathSeparator::Slash, unexpanded_expr.expr.clone()));
+    items.extend(unexpanded_expr.items.iter().map(|x| x.clone()));
+
+    RelativePathExpr {
+        expr: first_step,
+        items,
+    }
 }
 
 pub fn relative_path_expr(input: &str) -> Res<&str, RelativePathExpr> {
@@ -126,7 +161,7 @@ pub fn relative_path_expr(input: &str) -> Res<&str, RelativePathExpr> {
     )
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct RelativePathExpr {
     pub expr: StepExpr,
     pub items: Vec<StepPair>,
@@ -160,7 +195,7 @@ impl Expression for RelativePathExpr {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct StepPair(pub PathSeparator, pub StepExpr);
 
 impl Display for StepPair {
@@ -207,14 +242,15 @@ mod tests {
     #[test]
     fn initial_double_slash_expansion_should_be_as_documented() {
         // arrange
-        let expected_expr_text = r#"(fn:root(self::node()) treat as document-node())"#; // /descendant-or-self::node()/"#;
-
-        let parsed_expected_expr = parse(expected_expr_text).unwrap();
+        let given_expr = relative_path_expr("hi").unwrap().1;
 
         // act
-        let expr = initial_double_slash_expansion();
+        let expr = initial_double_slash_expansion(&given_expr);
 
         // assert
+        let expected_expr_text =
+            r#"(fn:root(self::node()) treat as document-node())/descendant-or-self::node()/hi"#;
+
         assert_eq!(expr.to_string(), expected_expr_text);
     }
 }

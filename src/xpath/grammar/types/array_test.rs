@@ -26,7 +26,7 @@ pub fn array_test(input: &str) -> Res<&str, ArrayTest> {
     context("array_test", alt((any_array_test_, typed_array_test_map)))(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum ArrayTest {
     AnyArrayTest,
     TypedArrayTest(TypedArrayTest),
@@ -48,5 +48,5 @@ fn typed_array_test(input: &str) -> Res<&str, TypedArrayTest> {
     .map(|(next_input, res)| (next_input, TypedArrayTest(res.2)))
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct TypedArrayTest(pub SequenceType);

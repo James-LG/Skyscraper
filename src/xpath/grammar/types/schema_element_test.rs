@@ -23,7 +23,7 @@ pub fn schema_element_test(input: &str) -> Res<&str, SchemaElementTest> {
     .map(|(next_input, res)| (next_input, SchemaElementTest(res.2)))
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct SchemaElementTest(pub ElementDeclaration);
 
 impl Display for SchemaElementTest {
@@ -39,5 +39,5 @@ fn element_declaration(input: &str) -> Res<&str, ElementDeclaration> {
         .map(|(next_input, res)| (next_input, ElementDeclaration(res)))
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct ElementDeclaration(pub ElementName);

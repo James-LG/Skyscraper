@@ -32,7 +32,7 @@ pub fn cast_expr(input: &str) -> Res<&str, CastExpr> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct CastExpr {
     pub expr: ArrowExpr,
     pub cast: Option<SingleType>,
@@ -82,7 +82,7 @@ pub fn single_type(input: &str) -> Res<&str, SingleType> {
     )
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct SingleType {
     pub type_name: SimpleTypeName,
     pub has_question_mark: bool,

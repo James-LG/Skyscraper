@@ -38,7 +38,7 @@ pub fn map_constructor(input: &str) -> Res<&str, MapConstructor> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct MapConstructor {
     pub entries: Vec<MapConstructorEntry>,
 }
@@ -66,7 +66,7 @@ fn map_constructor_entry(input: &str) -> Res<&str, MapConstructorEntry> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct MapConstructorEntry {
     pub key: ExprSingle,
     pub value: ExprSingle,

@@ -32,7 +32,7 @@ pub fn function_test(input: &str) -> Res<&str, FunctionTest> {
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum FunctionTest {
     AnyFunctionTest,
     TypedFunctionTest(TypedFunctionTest),
@@ -79,7 +79,7 @@ pub fn typed_function_test(input: &str) -> Res<&str, TypedFunctionTest> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct TypedFunctionTest {
     pub params: Vec<SequenceType>,
     pub ret_val: SequenceType,

@@ -24,7 +24,7 @@ pub fn or_expr(input: &str) -> Res<&str, OrExpr> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct OrExpr {
     pub expr: AndExpr,
     pub items: Vec<AndExpr>,
@@ -72,7 +72,7 @@ fn and_expr(input: &str) -> Res<&str, AndExpr> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct AndExpr {
     pub expr: ComparisonExpr,
     pub items: Vec<ComparisonExpr>,

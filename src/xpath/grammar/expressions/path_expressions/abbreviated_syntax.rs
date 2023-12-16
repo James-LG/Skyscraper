@@ -29,7 +29,7 @@ pub fn abbrev_forward_step(input: &str) -> Res<&str, AbbrevForwardStep> {
     )
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct AbbrevForwardStep {
     pub has_at: bool,
     pub node_test: NodeTest,

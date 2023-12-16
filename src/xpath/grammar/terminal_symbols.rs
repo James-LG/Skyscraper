@@ -138,7 +138,7 @@ pub fn uri_qualified_name(input: &str) -> Res<&str, UriQualifiedName> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct UriQualifiedName {
     pub uri: String,
     pub name: String,

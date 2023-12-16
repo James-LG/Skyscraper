@@ -47,7 +47,7 @@ pub fn additive_expr(input: &str) -> Res<&str, AdditiveExpr> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct AdditiveExpr {
     pub expr: MultiplicativeExpr,
     pub items: Vec<AdditiveExprPair>,
@@ -82,7 +82,7 @@ impl Expression for AdditiveExpr {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct AdditiveExprPair(pub AdditiveExprOperator, pub MultiplicativeExpr);
 
 impl Display for AdditiveExprPair {
@@ -91,7 +91,7 @@ impl Display for AdditiveExprPair {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum AdditiveExprOperator {
     Plus,
     Minus,
@@ -144,7 +144,7 @@ fn multiplicative_expr(input: &str) -> Res<&str, MultiplicativeExpr> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct MultiplicativeExpr {
     pub expr: UnionExpr,
     pub items: Vec<MultiplicativeExprPair>,
@@ -179,7 +179,7 @@ impl Expression for MultiplicativeExpr {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct MultiplicativeExprPair(pub MultiplicativeExprOperator, pub UnionExpr);
 
 impl Display for MultiplicativeExprPair {
@@ -188,7 +188,7 @@ impl Display for MultiplicativeExprPair {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum MultiplicativeExprOperator {
     Star,
     Div,
@@ -231,7 +231,7 @@ pub fn unary_expr(input: &str) -> Res<&str, UnaryExpr> {
     )
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct UnaryExpr {
     pub leading_symbols: Vec<UnarySymbol>,
     pub expr: ValueExpr,
@@ -265,7 +265,7 @@ impl Expression for UnaryExpr {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum UnarySymbol {
     Plus,
     Minus,
@@ -287,7 +287,7 @@ fn value_expr(input: &str) -> Res<&str, ValueExpr> {
         .map(|(next_input, res)| (next_input, ValueExpr(res)))
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct ValueExpr(pub SimpleMapExpr);
 
 impl Display for ValueExpr {

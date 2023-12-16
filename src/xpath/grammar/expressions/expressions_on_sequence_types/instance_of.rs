@@ -36,7 +36,7 @@ pub fn instanceof_expr(input: &str) -> Res<&str, InstanceofExpr> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct InstanceofExpr {
     pub expr: TreatExpr,
     pub instanceof_type: Option<SequenceType>,

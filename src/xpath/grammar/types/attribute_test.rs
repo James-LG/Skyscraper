@@ -45,7 +45,7 @@ pub fn attribute_test(input: &str) -> Res<&str, AttributeTest> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct AttributeTest {
     pub name_or_wildcard: Option<AttribNameOrWildcard>,
     pub type_name: Option<TypeName>,
@@ -75,7 +75,7 @@ pub fn attrib_name_or_wildcard(input: &str) -> Res<&str, AttribNameOrWildcard> {
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum AttribNameOrWildcard {
     AttributeName(AttributeName),
     Wildcard,

@@ -36,7 +36,7 @@ pub fn treat_expr(input: &str) -> Res<&str, TreatExpr> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct TreatExpr {
     pub expr: CastableExpr,
     pub treat_type: Option<SequenceType>,

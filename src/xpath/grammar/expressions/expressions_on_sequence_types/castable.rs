@@ -32,7 +32,7 @@ pub fn castable_expr(input: &str) -> Res<&str, CastableExpr> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct CastableExpr {
     pub expr: CastExpr,
     pub cast_type: Option<SingleType>,

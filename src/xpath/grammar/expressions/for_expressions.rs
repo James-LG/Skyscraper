@@ -32,7 +32,7 @@ pub fn for_expr(input: &str) -> Res<&str, ForExpr> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct ForExpr {
     pub clause: SimpleForClause,
     pub expr: ExprSingle,
@@ -67,7 +67,7 @@ fn simple_for_clause(input: &str) -> Res<&str, SimpleForClause> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct SimpleForClause {
     pub binding: SimpleForBinding,
     pub extras: Vec<SimpleForBinding>,
@@ -91,7 +91,7 @@ fn simple_for_binding(input: &str) -> Res<&str, SimpleForBinding> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct SimpleForBinding {
     pub var: VarName,
     pub expr: ExprSingle,

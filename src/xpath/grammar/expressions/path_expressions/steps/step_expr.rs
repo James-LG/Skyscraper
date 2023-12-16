@@ -4,7 +4,7 @@ use nom::{branch::alt, bytes::complete::tag, error::context, multi::many0, seque
 
 use crate::xpath::{
     grammar::{
-        data_model::Node,
+        data_model::{Node, XpathItem},
         expressions::{
             path_expressions::{
                 abbreviated_syntax::abbrev_forward_step,
@@ -37,7 +37,7 @@ pub fn step_expr(input: &str) -> Res<&str, StepExpr> {
     context("step_expr", max((postfix_expr_map, axis_step_map)))(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum StepExpr {
     PostfixExpr(PostfixExpr),
     AxisStep(AxisStep),
@@ -56,10 +56,14 @@ impl StepExpr {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
+    ) -> Result<Vec<XpathItem<'tree>>, ExpressionApplyError> {
         match self {
             StepExpr::PostfixExpr(expr) => expr.eval(context),
-            StepExpr::AxisStep(step) => step.eval(context),
+            StepExpr::AxisStep(step) => {
+                let nodes = step.eval(context)?;
+                let items = nodes.into_iter().map(|x| XpathItem::Node(x)).collect();
+                Ok(items)
+            }
         }
     }
 }

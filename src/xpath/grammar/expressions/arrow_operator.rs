@@ -47,7 +47,7 @@ pub fn arrow_expr(input: &str) -> Res<&str, ArrowExpr> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct ArrowExpr {
     pub expr: UnaryExpr,
     pub items: Vec<ArrowExprItem>,
@@ -82,7 +82,7 @@ impl Expression for ArrowExpr {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct ArrowExprItem {
     pub function_specifier: ArrowFunctionSpecifier,
     pub arguments: ArgumentList,
@@ -116,7 +116,7 @@ fn arrow_function_specifier(input: &str) -> Res<&str, ArrowFunctionSpecifier> {
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum ArrowFunctionSpecifier {
     Name(EQName),
     VarRef(VarRef),

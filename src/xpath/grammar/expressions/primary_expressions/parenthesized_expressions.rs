@@ -4,9 +4,12 @@ use std::fmt::Display;
 
 use nom::{character::complete::char, combinator::opt, error::context, sequence::tuple};
 
-use crate::xpath::grammar::{
-    expressions::{expr, Expr},
-    recipes::Res,
+use crate::xpath::{
+    grammar::{
+        expressions::{expr, Expr},
+        recipes::Res,
+    },
+    ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 pub fn parenthesized_expr(input: &str) -> Res<&str, ParenthesizedExpr> {
@@ -18,7 +21,7 @@ pub fn parenthesized_expr(input: &str) -> Res<&str, ParenthesizedExpr> {
     .map(|(next_input, res)| (next_input, ParenthesizedExpr(res.1)))
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct ParenthesizedExpr(pub Option<Expr>);
 
 impl Display for ParenthesizedExpr {
@@ -28,6 +31,19 @@ impl Display for ParenthesizedExpr {
             write!(f, "{}", x)?;
         }
         write!(f, ")")
+    }
+}
+
+impl ParenthesizedExpr {
+    pub(crate) fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+        if let Some(expr) = &self.0 {
+            expr.eval(context)
+        } else {
+            Ok(XPathResult::ItemSet(Vec::new()))
+        }
     }
 }
 

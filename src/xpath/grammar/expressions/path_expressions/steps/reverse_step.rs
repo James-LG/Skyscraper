@@ -40,7 +40,7 @@ pub fn reverse_step(input: &str) -> Res<&str, ReverseStep> {
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum ReverseStep {
     Full(ReverseAxis, NodeTest),
     Abbreviated,

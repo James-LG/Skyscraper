@@ -24,7 +24,7 @@ pub fn function_call(input: &str) -> Res<&str, FunctionCall> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct FunctionCall {
     pub name: EQName,
     pub argument_list: ArgumentList,

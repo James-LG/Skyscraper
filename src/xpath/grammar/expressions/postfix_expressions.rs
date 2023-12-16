@@ -6,14 +6,14 @@ use nom::{branch::alt, character::complete::char, error::context, multi::many0, 
 
 use crate::xpath::{
     grammar::{
-        data_model::Node,
+        data_model::{Node, XpathItem},
         expressions::{
             common::argument_list, maps_and_arrays::lookup_operator::postfix_lookup::lookup,
             primary_expressions::primary_expr,
         },
         recipes::{ws, Res},
     },
-    ExpressionApplyError, XPathExpressionContext,
+    ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 use super::{
@@ -55,7 +55,7 @@ pub fn postfix_expr(input: &str) -> Res<&str, PostfixExpr> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct PostfixExpr {
     pub expr: PrimaryExpr,
     pub items: Vec<PostfixExprItem>,
@@ -76,12 +76,25 @@ impl PostfixExpr {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
-        todo!("PostfixExpr::eval")
+    ) -> Result<Vec<XpathItem<'tree>>, ExpressionApplyError> {
+        let res = self.expr.eval(context)?;
+
+        let items = match res {
+            XPathResult::ItemSet(x) => x,
+            XPathResult::Item(_) => {
+                panic!("PostfixExpr eval: Result of inner expression most be an item set.")
+            }
+        };
+
+        if !self.items.is_empty() {
+            todo!("PostfixExpr eval items")
+        }
+
+        Ok(items)
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum PostfixExprItem {
     Predicate(Predicate),
     ArgumentList(ArgumentList),
@@ -104,7 +117,7 @@ pub fn predicate(input: &str) -> Res<&str, Predicate> {
         .map(|(next_input, res)| (next_input, Predicate(res.1)))
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Predicate(Expr);
 
 impl Display for Predicate {

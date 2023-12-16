@@ -24,7 +24,7 @@ pub fn simple_map_expr(input: &str) -> Res<&str, SimpleMapExpr> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct SimpleMapExpr {
     pub expr: PathExpr,
     pub items: Vec<PathExpr>,

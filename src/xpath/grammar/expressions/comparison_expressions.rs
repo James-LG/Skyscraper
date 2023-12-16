@@ -52,7 +52,7 @@ pub fn comparison_expr(input: &str) -> Res<&str, ComparisonExpr> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct ComparisonExpr {
     pub expr: StringConcatExpr,
     pub comparison: Option<ComparisonExprPair>,
@@ -88,7 +88,7 @@ impl Expression for ComparisonExpr {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct ComparisonExprPair(pub ComparisonType, pub StringConcatExpr);
 
 impl Display for ComparisonExprPair {
@@ -97,7 +97,7 @@ impl Display for ComparisonExprPair {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum ComparisonType {
     ValueComp(ValueComp),
     GeneralComp(GeneralComp),
@@ -154,7 +154,7 @@ fn value_comp(input: &str) -> Res<&str, ValueComp> {
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum ValueComp {
     Equal,
     NotEqual,
@@ -217,7 +217,7 @@ fn general_comp(input: &str) -> Res<&str, GeneralComp> {
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum GeneralComp {
     Equal,
     NotEqual,
@@ -258,7 +258,7 @@ fn node_comp(input: &str) -> Res<&str, NodeComp> {
     context("node_comp", alt((is, precedes, follows)))(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum NodeComp {
     Is,
     Precedes,

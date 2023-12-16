@@ -50,7 +50,7 @@ pub fn sequence_type(input: &str) -> Res<&str, SequenceType> {
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum SequenceType {
     EmptySequence,
     Sequence(SequenceTypeValue),
@@ -65,7 +65,7 @@ impl Display for SequenceType {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct SequenceTypeValue {
     pub item_type: ItemType,
     pub occurrence: Option<OccurrenceIndicator>,
@@ -126,7 +126,7 @@ pub fn item_type(input: &str) -> Res<&str, ItemType> {
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum ItemType {
     Item,
     KindTest(KindTest),
@@ -179,7 +179,7 @@ pub fn occurrence_indicator(input: &str) -> Res<&str, OccurrenceIndicator> {
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum OccurrenceIndicator {
     ZeroOrOne,
     ZeroOrMore,

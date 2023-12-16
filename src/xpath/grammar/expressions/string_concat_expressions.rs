@@ -23,7 +23,7 @@ pub fn string_concat_expr(input: &str) -> Res<&str, StringConcatExpr> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct StringConcatExpr {
     pub expr: RangeExpr,
     pub items: Vec<RangeExpr>,

@@ -13,5 +13,5 @@ pub fn enclosed_expr(input: &str) -> Res<&str, EnclosedExpr> {
         .map(|(next_input, res)| (next_input, EnclosedExpr(res.1)))
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct EnclosedExpr(Option<Expr>);

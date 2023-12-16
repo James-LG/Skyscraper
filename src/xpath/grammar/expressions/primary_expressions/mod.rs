@@ -4,20 +4,24 @@ use std::fmt::Display;
 
 use nom::{branch::alt, character::complete::char, error::context};
 
-use crate::xpath::grammar::{
-    expressions::{
-        maps_and_arrays::{
-            arrays::array_constructor, lookup_operator::unary_lookup::unary_lookup,
-            maps::map_constructor,
+use crate::xpath::{
+    grammar::{
+        data_model::Node,
+        expressions::{
+            maps_and_arrays::{
+                arrays::array_constructor, lookup_operator::unary_lookup::unary_lookup,
+                maps::map_constructor,
+            },
+            primary_expressions::{
+                inline_function_expressions::inline_function_expr, literals::literal,
+                named_function_references::named_function_ref,
+                parenthesized_expressions::parenthesized_expr,
+                static_function_calls::function_call, variable_references::var_ref,
+            },
         },
-        primary_expressions::{
-            inline_function_expressions::inline_function_expr, literals::literal,
-            named_function_references::named_function_ref,
-            parenthesized_expressions::parenthesized_expr, static_function_calls::function_call,
-            variable_references::var_ref,
-        },
+        recipes::{max, Res},
     },
-    recipes::{max, Res},
+    ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 use self::{
@@ -51,7 +55,7 @@ pub fn primary_expr(input: &str) -> Res<&str, PrimaryExpr> {
 
     fn parenthesized_expr_map(input: &str) -> Res<&str, PrimaryExpr> {
         parenthesized_expr(input)
-            .map(|(next_input, res)| (next_input, PrimaryExpr::ParenthesizedItemType(res)))
+            .map(|(next_input, res)| (next_input, PrimaryExpr::ParenthesizedExpr(res)))
     }
 
     fn context_item_expr(input: &str) -> Res<&str, PrimaryExpr> {
@@ -98,11 +102,11 @@ pub fn primary_expr(input: &str) -> Res<&str, PrimaryExpr> {
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum PrimaryExpr {
     Literal(Literal),
     VarRef(VarRef),
-    ParenthesizedItemType(ParenthesizedExpr),
+    ParenthesizedExpr(ParenthesizedExpr),
     ContextItemExpr,
     FunctionCall(FunctionCall),
     FunctionItemExpr(FunctionItemExpr),
@@ -116,13 +120,32 @@ impl Display for PrimaryExpr {
         match self {
             PrimaryExpr::Literal(x) => write!(f, "{}", x),
             PrimaryExpr::VarRef(x) => write!(f, "{}", x),
-            PrimaryExpr::ParenthesizedItemType(x) => write!(f, "{}", x),
+            PrimaryExpr::ParenthesizedExpr(x) => write!(f, "{}", x),
             PrimaryExpr::ContextItemExpr => write!(f, "."),
             PrimaryExpr::FunctionCall(x) => write!(f, "{}", x),
             PrimaryExpr::FunctionItemExpr(x) => write!(f, "{}", x),
             PrimaryExpr::MapConstructor(x) => write!(f, "{}", x),
             PrimaryExpr::ArrayConstructor(x) => write!(f, "{}", x),
             PrimaryExpr::UnaryLookup(x) => write!(f, "{}", x),
+        }
+    }
+}
+
+impl PrimaryExpr {
+    pub(crate) fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+        match self {
+            PrimaryExpr::Literal(_) => todo!("PrimaryExpr::Literal eval"),
+            PrimaryExpr::VarRef(_) => todo!("PrimaryExpr::VarRef eval"),
+            PrimaryExpr::ParenthesizedExpr(expr) => expr.eval(context),
+            PrimaryExpr::ContextItemExpr => todo!("PrimaryExpr::LiteContextItemExprral eval"),
+            PrimaryExpr::FunctionCall(_) => todo!("PrimaryExpr::FunctionCall eval"),
+            PrimaryExpr::FunctionItemExpr(_) => todo!("PrimaryExpr::FunctionItemExpr eval"),
+            PrimaryExpr::MapConstructor(_) => todo!("PrimaryExpr::MapConstructor eval"),
+            PrimaryExpr::ArrayConstructor(_) => todo!("PrimaryExpr::ArrayConstructor eval"),
+            PrimaryExpr::UnaryLookup(_) => todo!("PrimaryExpr::UnaryLookup eval"),
         }
     }
 }
@@ -146,7 +169,7 @@ fn function_item_expr(input: &str) -> Res<&str, FunctionItemExpr> {
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum FunctionItemExpr {
     NamedFunctionRef(NamedFunctionRef),
     InlineFunctionExpr(InlineFunctionExpr),

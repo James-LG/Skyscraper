@@ -36,7 +36,7 @@ pub fn if_expr(input: &str) -> Res<&str, IfExpr> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct IfExpr {
     pub condition: Expr,
     pub then: ExprSingle,

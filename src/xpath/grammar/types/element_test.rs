@@ -46,7 +46,7 @@ pub fn element_test(input: &str) -> Res<&str, ElementTest> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct ElementTest {
     pub name_or_wildcard: Option<ElementNameOrWildcard>,
     pub type_name: Option<TypeName>,
@@ -76,7 +76,7 @@ pub fn element_name_or_wildcard(input: &str) -> Res<&str, ElementNameOrWildcard>
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum ElementNameOrWildcard {
     ElementName(ElementName),
     Wildcard,

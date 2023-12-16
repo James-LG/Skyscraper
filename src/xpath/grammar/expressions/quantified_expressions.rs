@@ -68,7 +68,7 @@ pub fn quantified_expr(input: &str) -> Res<&str, QuantifiedExpr> {
     })
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct QuantifiedExpr {
     pub quantifier: Quantifier,
     pub item: QuantifiedExprItem,
@@ -82,13 +82,13 @@ impl Display for QuantifiedExpr {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum Quantifier {
     Some,
     Every,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct QuantifiedExprItem {
     pub var: VarName,
     pub expr: ExprSingle,
