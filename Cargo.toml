@@ -1,6 +1,6 @@
 [package]
 name = "skyscraper"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["James La Novara-Gsell <james.lanovara.gsell@gmail.com>"]
 edition = "2018"
 description = "XPath for HTML web scraping"
@@ -21,7 +21,7 @@ log = "0.4.19"
 
 [dev-dependencies]
 criterion = "0.5.1"
-mockall = "0.11.4"
+mockall = "0.12.0"
 indoc = "2"
 
 [[bench]]
