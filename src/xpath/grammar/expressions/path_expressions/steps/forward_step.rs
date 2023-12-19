@@ -16,6 +16,7 @@ use crate::xpath::{
             postfix_expressions::{postfix_expr, predicate, PostfixExpr, Predicate},
         },
         recipes::{max, Res},
+        NonTreeXpathNode, XpathItemTreeNodeData,
     },
     Expression, ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemTree,
     XpathItemTreeNode,
@@ -84,28 +85,100 @@ fn eval_forward_axis<'tree>(
     node_test: &NodeTest,
 ) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
     match axis {
-        ForwardAxis::Child => {
-            let mut nodes: Vec<Node<'tree>> = Vec::new();
+        ForwardAxis::Child => eval_forward_axis_child(context, node_test),
+        ForwardAxis::Descendant => eval_forward_axis_descendant(context, node_test),
+        ForwardAxis::Attribute => eval_forward_axis_attribute(context, node_test),
+        ForwardAxis::SelfAxis => todo!("eval_forward_axis ForwardAxis::SelfAxis"),
+        ForwardAxis::DescendantOrSelf => eval_forward_axis_self_or_descendant(context, node_test),
+        ForwardAxis::FollowingSibling => todo!("eval_forward_axis ForwardAxis::FollowingSibling"),
+        ForwardAxis::Following => todo!("eval_forward_axis ForwardAxis::Following"),
+        ForwardAxis::Namespace => todo!("eval_forward_axis ForwardAxis::Namespace"),
+    }
+}
 
-            for node in context.searchable_nodes.iter() {
-                // Only elements have children
-                if let Node::TreeNode(node) = node {
-                    for child in node.children(context.item_tree) {
-                        if node_test.matches(&child.data) {
-                            nodes.push(Node::TreeNode(child));
-                        }
+/// Direct children of the context nodes.
+fn eval_forward_axis_child<'tree>(
+    context: &XPathExpressionContext<'tree>,
+    node_test: &NodeTest,
+) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
+    let mut nodes: Vec<Node<'tree>> = Vec::new();
+
+    for node in context.searchable_nodes.iter() {
+        // Only elements have children
+        if let Node::TreeNode(node) = node {
+            for child in node.children(context.item_tree) {
+                let child = Node::TreeNode(child);
+                if node_test.is_match(&child) {
+                    nodes.push(child);
+                }
+            }
+        }
+    }
+
+    Ok(nodes)
+}
+
+/// All descendants of the context nodes.
+fn eval_forward_axis_descendant<'tree>(
+    context: &XPathExpressionContext<'tree>,
+    node_test: &NodeTest,
+) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
+    let mut nodes: Vec<Node<'tree>> = Vec::new();
+
+    for node in context.searchable_nodes.iter() {
+        // Only elements have children
+        if let Node::TreeNode(node) = node {
+            for child in node.children(context.item_tree) {
+                let child = Node::TreeNode(child);
+                if node_test.is_match(&child) {
+                    nodes.push(child.clone());
+                }
+
+                let child_eval_context = XPathExpressionContext {
+                    item_tree: context.item_tree,
+                    searchable_nodes: vec![child],
+                };
+                let child_descendants =
+                    eval_forward_axis_descendant(&child_eval_context, node_test)?;
+                nodes.extend(child_descendants);
+            }
+        }
+    }
+
+    Ok(nodes)
+}
+
+/// All descendants of the context nodes including the context nodes.
+fn eval_forward_axis_self_or_descendant<'tree>(
+    context: &XPathExpressionContext<'tree>,
+    node_test: &NodeTest,
+) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
+    let mut nodes = eval_forward_axis_descendant(context, node_test)?;
+    nodes.extend(context.searchable_nodes.clone());
+    Ok(nodes)
+}
+
+// All attributes of the context nodes.
+fn eval_forward_axis_attribute<'tree>(
+    context: &XPathExpressionContext<'tree>,
+    node_test: &NodeTest,
+) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
+    let mut attributes = Vec::new();
+
+    for node in context.searchable_nodes.iter() {
+        // Only elements have attributes
+        if let Node::TreeNode(node) = node {
+            if let XpathItemTreeNodeData::ElementNode(element) = &node.data {
+                for attribute in element.attributes.iter() {
+                    let attribute =
+                        Node::NonTreeNode(NonTreeXpathNode::AttributeNode(attribute.clone()));
+                    if node_test.is_match(&attribute) {
+                        attributes.push(attribute);
                     }
                 }
             }
-
-            Ok(nodes)
         }
-        ForwardAxis::Descendant => todo!(),
-        ForwardAxis::Attribute => todo!(),
-        ForwardAxis::SelfAxis => todo!(),
-        ForwardAxis::DescendantOrSelf => todo!(),
-        ForwardAxis::FollowingSibling => todo!(),
-        ForwardAxis::Following => todo!(),
-        ForwardAxis::Namespace => todo!(),
     }
+
+    Ok(attributes)
 }

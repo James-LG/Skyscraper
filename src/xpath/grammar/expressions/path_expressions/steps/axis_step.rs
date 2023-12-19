@@ -73,10 +73,15 @@ impl AxisStep {
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
-        let nodes = self.step_type.eval(context)?;
+        let mut nodes = self.step_type.eval(context)?;
 
-        if !self.predicates.is_empty() {
-            todo!("AxisStep::eval predicates")
+        for predicate in self.predicates.iter() {
+            let context = XPathExpressionContext {
+                searchable_nodes: nodes,
+                item_tree: context.item_tree,
+            };
+
+            nodes = predicate.filter(&context)?;
         }
 
         Ok(nodes)

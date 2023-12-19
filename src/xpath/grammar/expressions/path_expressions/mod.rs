@@ -7,6 +7,7 @@ use nom::{
     multi::many0, sequence::tuple,
 };
 
+use crate::xpath::grammar::data_model::XpathItem;
 use crate::xpath::grammar::expressions::primary_expressions::PrimaryExpr::FunctionCall;
 use crate::xpath::parse;
 use crate::xpath::{
@@ -106,7 +107,7 @@ impl Expression for PathExpr {
                 let expanded_expr = initial_double_slash_expansion(expr);
                 expanded_expr.eval(&context)
             }
-            PathExpr::Plain(_) => todo!("PathExpr::Plain"),
+            PathExpr::Plain(expr) => expr.eval(context),
         }
     }
 }
@@ -183,15 +184,49 @@ impl Expression for RelativePathExpr {
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
-        let nodes = self.expr.eval(context)?;
+        /// Unwraps a vector of XpathItems into a vector of Nodes,
+        /// and panics if any of the items are not nodes.
+        ///
+        /// TODO: Don't panic, return an error instead.
+        fn unwrap_items<'tree>(items: Vec<XpathItem<'tree>>) -> Vec<Node<'tree>> {
+            items
+                .into_iter()
+                .map(|item| match item {
+                    XpathItem::Node(x) => x,
+                    _ => panic!("Path operator expected node, got {:?}", item),
+                })
+                .collect()
+        }
+
+        let items = self.expr.eval(context)?;
+
+        // If there are no items, return the result of the expression
+        if self.items.is_empty() {
+            return Ok(XPathResult::ItemSet(items));
+        }
+
+        let mut nodes = unwrap_items(items);
 
         for pair in self.items.iter() {
-            // TODO: Double slash is expanded to `/descendant-or-self::node/`
-            if let PathSeparator::DoubleSlash = pair.0 {
-                todo!("RelativePathExpr::eval double slash")
+            match pair.0 {
+                PathSeparator::Slash => {
+                    let context = XPathExpressionContext {
+                        item_tree: context.item_tree,
+                        searchable_nodes: nodes,
+                    };
+
+                    nodes = unwrap_items(pair.1.eval(&context)?)
+                }
+                PathSeparator::DoubleSlash => {
+                    // TODO: Double slash is expanded to `/descendant-or-self::node/`
+                    todo!("RelativePathExpr::eval double slash")
+                }
             }
         }
-        todo!("RelativePathExpr::eval")
+
+        Ok(XPathResult::ItemSet(
+            nodes.into_iter().map(XpathItem::Node).collect(),
+        ))
     }
 }
 

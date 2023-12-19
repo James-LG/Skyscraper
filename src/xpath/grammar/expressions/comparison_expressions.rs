@@ -6,6 +6,7 @@ use nom::{branch::alt, bytes::complete::tag, combinator::opt, error::context, se
 
 use crate::xpath::{
     grammar::{
+        data_model::{AnyAtomicType, XpathItem},
         expressions::string_concat_expressions::string_concat_expr,
         recipes::{ws, Res},
         XpathItemTreeNode,
@@ -79,12 +80,25 @@ impl Expression for ComparisonExpr {
         let result = self.expr.eval(context)?;
 
         // If there's only one parameter, return it's eval.
-        if self.comparison.is_none() {
+        let comparison = if let Some(comparison) = &self.comparison {
+            comparison
+        } else {
             return Ok(result);
-        }
+        };
 
         // Otherwise, do the comparison op.
-        todo!("ComparisonExpr::eval comparison operator")
+
+        // Get the second expression result.
+        let second_result = comparison.1.eval(context)?;
+        let bool_value = match comparison.0 {
+            ComparisonType::ValueComp(_) => todo!("ComparisonType::ValueComp"),
+            ComparisonType::GeneralComp(comp) => comp.is_match(&result, &second_result),
+            ComparisonType::NodeComp(_) => todo!("ComparisonType::NodeComp"),
+        };
+
+        Ok(XPathResult::Item(XpathItem::AnyAtomicType(
+            AnyAtomicType::Boolean(bool_value),
+        )))
     }
 }
 
@@ -236,6 +250,23 @@ impl Display for GeneralComp {
             GeneralComp::LessThanEqualTo => write!(f, "<="),
             GeneralComp::GreaterThan => write!(f, ">"),
             GeneralComp::GreaterThanEqualTo => write!(f, ">="),
+        }
+    }
+}
+
+impl GeneralComp {
+    pub(crate) fn is_match<'tree>(
+        &self,
+        first: &XPathResult<'tree>,
+        second: &XPathResult<'tree>,
+    ) -> bool {
+        match self {
+            GeneralComp::Equal => first == second,
+            GeneralComp::NotEqual => first != second,
+            GeneralComp::LessThan => first < second,
+            GeneralComp::LessThanEqualTo => first <= second,
+            GeneralComp::GreaterThan => first > second,
+            GeneralComp::GreaterThanEqualTo => first >= second,
         }
     }
 }

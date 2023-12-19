@@ -7,6 +7,7 @@ use nom::{
 };
 
 use crate::xpath::grammar::{
+    data_model::{Node, XpathItem},
     recipes::Res,
     terminal_symbols::braced_uri_literal,
     types::{eq_name, kind_test, EQName, KindTest},
@@ -44,10 +45,10 @@ impl Display for NodeTest {
 }
 
 impl NodeTest {
-    pub(crate) fn matches(&self, node_data: &XpathItemTreeNodeData) -> bool {
+    pub(crate) fn is_match(&self, node: &Node) -> bool {
         match self {
-            NodeTest::KindTest(test) => test.matches(node_data),
-            NodeTest::NameTest(test) => test.matches(node_data),
+            NodeTest::KindTest(test) => test.is_match(&XpathItem::Node(node.clone())),
+            NodeTest::NameTest(test) => test.is_match(node),
         }
     }
 }
@@ -82,10 +83,14 @@ impl Display for NameTest {
 }
 
 impl NameTest {
-    pub(crate) fn matches(&self, node_data: &XpathItemTreeNodeData) -> bool {
+    pub(crate) fn is_match(&self, node: &Node) -> bool {
         // Name test only works on element nodes
-        let element = if let XpathItemTreeNodeData::ElementNode(element) = node_data {
-            element
+        let element = if let Node::TreeNode(tree_node) = node {
+            if let XpathItemTreeNodeData::ElementNode(element) = &tree_node.data {
+                element
+            } else {
+                return false;
+            }
         } else {
             return false;
         };
@@ -93,12 +98,12 @@ impl NameTest {
         match self {
             NameTest::Name(name) => match name {
                 EQName::QName(qname) => match qname {
-                    QName::PrefixedName(_) => todo!(),
+                    QName::PrefixedName(_) => todo!("NameTest::is_match PrefixedName"),
                     QName::UnprefixedName(unprefixed_name) => unprefixed_name == &element.name,
                 },
-                EQName::UriQualifiedName(_) => todo!(),
+                EQName::UriQualifiedName(_) => todo!("NameTest::is_match UriQualifiedName"),
             },
-            NameTest::Wildcard(_) => todo!(),
+            NameTest::Wildcard(wildcard) => wildcard.is_match(node),
         }
     }
 }
@@ -151,6 +156,17 @@ impl Display for Wildcard {
             Wildcard::PrefixedName(x) => write!(f, "*:{}", x),
             Wildcard::SuffixedName(x) => write!(f, "{}:*", x),
             Wildcard::BracedUri(x) => write!(f, "{}*", x),
+        }
+    }
+}
+
+impl Wildcard {
+    pub(crate) fn is_match(&self, node: &Node) -> bool {
+        match self {
+            Wildcard::Simple => true,
+            Wildcard::PrefixedName(_) => todo!("Wildcard::is_match PrefixedName"),
+            Wildcard::SuffixedName(_) => todo!("Wildcard::is_match SuffixedName"),
+            Wildcard::BracedUri(_) => todo!("Wildcard::is_match BracedUri"),
         }
     }
 }

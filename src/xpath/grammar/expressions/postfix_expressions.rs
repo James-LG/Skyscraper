@@ -81,9 +81,7 @@ impl PostfixExpr {
 
         let items = match res {
             XPathResult::ItemSet(x) => x,
-            XPathResult::Item(_) => {
-                panic!("PostfixExpr eval: Result of inner expression most be an item set.")
-            }
+            XPathResult::Item(x) => vec![x],
         };
 
         if !self.items.is_empty() {

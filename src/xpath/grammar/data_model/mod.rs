@@ -1,15 +1,27 @@
 //! https://www.w3.org/TR/xpath-datamodel-31/#intro
 
+use std::fmt::Display;
+
 use super::{
     types::function_test::FunctionTest, xml_names::QName, NonTreeXpathNode, XpathItemTreeNode,
 };
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#dt-item
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, PartialOrd, Debug)]
 pub enum XpathItem<'tree> {
     Node(Node<'tree>),
     Function(Function),
     AnyAtomicType(AnyAtomicType),
+}
+
+impl Display for XpathItem<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            XpathItem::Node(node) => write!(f, "{}", node),
+            XpathItem::Function(function) => write!(f, "{}", function),
+            XpathItem::AnyAtomicType(atomic_type) => write!(f, "{}", atomic_type),
+        }
+    }
 }
 
 impl<'tree> XpathItem<'tree> {
@@ -29,24 +41,53 @@ impl<'tree> XpathItem<'tree> {
 }
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#types-hierarchy
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, PartialOrd, Debug)]
 pub enum AnyAtomicType {
     Boolean(bool),
-    Number(i32), // TODO: Other types of numbers?
+    Integer(i64),
+    Float(f32),
+    Double(f64),
     String(String),
 }
 
+impl Display for AnyAtomicType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AnyAtomicType::Boolean(b) => write!(f, "{}", b),
+            AnyAtomicType::Integer(i) => write!(f, "{}", i),
+            AnyAtomicType::Float(fl) => write!(f, "{}", fl),
+            AnyAtomicType::Double(d) => write!(f, "{}", d),
+            AnyAtomicType::String(s) => write!(f, "{}", s),
+        }
+    }
+}
+
 /// https://www.w3.org/TR/xpath-datamodel-31/#dt-function-item
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, PartialOrd, Debug)]
 pub struct Function {
     // TODO
 }
 
+impl Display for Function {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!("Function::fmt")
+    }
+}
+
 /// https://www.w3.org/TR/xpath-datamodel-31/#dt-node
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, PartialOrd, Debug, Clone)]
 pub enum Node<'tree> {
     TreeNode(XpathItemTreeNode<'tree>),
     NonTreeNode(NonTreeXpathNode),
+}
+
+impl Display for Node<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Node::TreeNode(node) => write!(f, "{}", node),
+            Node::NonTreeNode(node) => write!(f, "{}", node),
+        }
+    }
 }
 
 impl<'tree> Node<'tree> {
@@ -73,14 +114,30 @@ impl<'tree> Node<'tree> {
 }
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#DocumentNode
-#[derive(PartialEq, Debug)]
-pub struct DocumentNode {}
+#[derive(PartialEq, PartialOrd, Debug)]
+pub struct XpathDocumentNode {}
+
+impl Display for XpathDocumentNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DocumentNode()")
+    }
+}
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#ElementNode
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, PartialOrd, Debug)]
 pub struct ElementNode {
     pub name: String,
     pub attributes: Vec<AttributeNode>,
+}
+
+impl Display for ElementNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<{}", self.name)?;
+        for attribute in &self.attributes {
+            write!(f, " {}", attribute)?;
+        }
+        write!(f, "/>")
+    }
 }
 
 impl ElementNode {
@@ -93,33 +150,63 @@ impl ElementNode {
 }
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#AttributeNode
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, PartialOrd, Debug, Clone)]
 pub struct AttributeNode {
     pub name: String,
     pub value: String,
 }
 
+impl Display for AttributeNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}=\"{}\"", self.name, self.value)
+    }
+}
+
 /// https://www.w3.org/TR/xpath-datamodel-31/#NamespaceNode
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, PartialOrd, Debug, Clone)]
 pub struct NamespaceNode {
     pub prefix: String,
     pub uri: String,
 }
 
+impl Display for NamespaceNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "NamespaceNode({}:{})", self.prefix, self.uri)
+    }
+}
+
 /// https://www.w3.org/TR/xpath-datamodel-31/#ProcessingInstructionNode
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, PartialOrd, Debug)]
 pub struct PINode {
     // TODO
 }
 
+impl Display for PINode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!("PINode::fmt")
+    }
+}
+
 /// https://www.w3.org/TR/xpath-datamodel-31/#CommentNode
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, PartialOrd, Debug)]
 pub struct CommentNode {
     pub content: String,
 }
 
+impl Display for CommentNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<!--{}-->", self.content)
+    }
+}
+
 /// https://www.w3.org/TR/xpath-datamodel-31/#TextNode
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, PartialOrd, Debug)]
 pub struct TextNode {
     pub content: String,
+}
+
+impl Display for TextNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "\"{}\"", self.content)
+    }
 }

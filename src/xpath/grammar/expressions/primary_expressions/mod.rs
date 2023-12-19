@@ -6,7 +6,7 @@ use nom::{branch::alt, character::complete::char, error::context};
 
 use crate::xpath::{
     grammar::{
-        data_model::Node,
+        data_model::{Node, XpathItem},
         expressions::{
             maps_and_arrays::{
                 arrays::array_constructor, lookup_operator::unary_lookup::unary_lookup,
@@ -137,11 +137,13 @@ impl PrimaryExpr {
         context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
         match self {
-            PrimaryExpr::Literal(_) => todo!("PrimaryExpr::Literal eval"),
+            PrimaryExpr::Literal(literal) => {
+                Ok(XPathResult::Item(XpathItem::AnyAtomicType(literal.value())))
+            }
             PrimaryExpr::VarRef(_) => todo!("PrimaryExpr::VarRef eval"),
             PrimaryExpr::ParenthesizedExpr(expr) => expr.eval(context),
             PrimaryExpr::ContextItemExpr => todo!("PrimaryExpr::LiteContextItemExprral eval"),
-            PrimaryExpr::FunctionCall(_) => todo!("PrimaryExpr::FunctionCall eval"),
+            PrimaryExpr::FunctionCall(expr) => expr.eval(context),
             PrimaryExpr::FunctionItemExpr(_) => todo!("PrimaryExpr::FunctionItemExpr eval"),
             PrimaryExpr::MapConstructor(_) => todo!("PrimaryExpr::MapConstructor eval"),
             PrimaryExpr::ArrayConstructor(_) => todo!("PrimaryExpr::ArrayConstructor eval"),

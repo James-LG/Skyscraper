@@ -8,6 +8,8 @@ mod terminal_symbols;
 mod types;
 mod xml_names;
 
+use std::fmt::Display;
+
 pub use expressions::{xpath, XPath};
 
 use indextree::{Arena, NodeId};
@@ -18,23 +20,32 @@ use crate::{
     html::{DocumentNode, HtmlDocument, HtmlNode},
     xpath::grammar::data_model::{
         AnyAtomicType, AttributeNode, CommentNode, ElementNode, Function, NamespaceNode, Node,
-        PINode, TextNode,
+        PINode, TextNode, XpathDocumentNode,
     },
 };
 
 /// Subset of [Node] that are not allowed to have child nodes.
 /// Should be disjoint with [XpathItemTreeNodeData].
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, PartialOrd, Debug, Clone)]
 pub enum NonTreeXpathNode {
-    DocumentNode(DocumentNode),
     AttributeNode(AttributeNode),
     NamespaceNode(NamespaceNode),
 }
 
+impl Display for NonTreeXpathNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NonTreeXpathNode::AttributeNode(node) => write!(f, "{}", node),
+            NonTreeXpathNode::NamespaceNode(node) => write!(f, "{}", node),
+        }
+    }
+}
+
 /// Subset of [Node] that are allowed to have child nodes.
 /// Should be disjoint with [NonTreeXpathNode].
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, PartialOrd, Debug)]
 pub enum XpathItemTreeNodeData {
+    DocumentNode(XpathDocumentNode),
     ElementNode(ElementNode),
     PINode(PINode),
     CommentNode(CommentNode),
@@ -50,10 +61,22 @@ impl XpathItemTreeNodeData {
     }
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, PartialOrd, Debug, Clone)]
 pub struct XpathItemTreeNode<'a> {
     id: NodeId,
     pub data: &'a XpathItemTreeNodeData,
+}
+
+impl Display for XpathItemTreeNode<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.data {
+            XpathItemTreeNodeData::DocumentNode(node) => write!(f, "{}", node),
+            XpathItemTreeNodeData::ElementNode(node) => write!(f, "{}", node),
+            XpathItemTreeNodeData::PINode(node) => write!(f, "{}", node),
+            XpathItemTreeNodeData::CommentNode(node) => write!(f, "{}", node),
+            XpathItemTreeNodeData::TextNode(node) => write!(f, "{}", node),
+        }
+    }
 }
 
 impl<'a> XpathItemTreeNode<'a> {
@@ -129,7 +152,10 @@ impl XpathItemTree {
 
         let mut item_arena = Arena::<XpathItemTreeNodeData>::new();
         let root_node_id =
+            item_arena.new_node(XpathItemTreeNodeData::DocumentNode(XpathDocumentNode {}));
+        let first_child =
             internal_from_html_document(&html_document.root_node, &html_document, &mut item_arena);
+        root_node_id.append(first_child, &mut item_arena);
 
         XpathItemTree {
             arena: item_arena,

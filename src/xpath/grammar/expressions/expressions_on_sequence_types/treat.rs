@@ -61,12 +61,23 @@ impl Expression for TreatExpr {
         // Evaluate the first expression.
         let result = self.expr.eval(context)?;
 
-        // If there's only one parameter, return it's eval.
-        if self.treat_type.is_none() {
-            return Ok(result);
+        let treat_type = match &self.treat_type {
+            // If there's only one parameter, return it's eval.
+            None => return Ok(result),
+            // Otherwise, do the operation.
+            Some(treat_type) => treat_type,
+        };
+
+        if !treat_type.is_match(&result) {
+            return Err(ExpressionApplyError {
+                msg: format!(
+                    "err:XPDY0050 Cannot treat {:?} as {}",
+                    result,
+                    treat_type.to_string()
+                ),
+            });
         }
 
-        // Otherwise, do the operation.
-        todo!("TreatExpr::eval treat operator")
+        Ok(result)
     }
 }

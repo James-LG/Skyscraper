@@ -5,6 +5,7 @@ use std::fmt::Display;
 use nom::{branch::alt, error::context};
 
 use crate::xpath::grammar::{
+    data_model::AnyAtomicType,
     recipes::Res,
     terminal_symbols::{decimal_literal, double_literal, integer_literal, string_literal},
 };
@@ -35,6 +36,15 @@ impl Display for Literal {
         match self {
             Literal::NumericLiteral(x) => write!(f, "{}", x),
             Literal::StringLiteral(x) => write!(f, "{}", x),
+        }
+    }
+}
+
+impl Literal {
+    pub(crate) fn value(&self) -> AnyAtomicType {
+        match self {
+            Literal::NumericLiteral(numeric) => numeric.value(),
+            Literal::StringLiteral(x) => AnyAtomicType::String(x.clone()),
         }
     }
 }
@@ -73,6 +83,16 @@ impl Display for NumericLiteral {
             NumericLiteral::Integer(x) => write!(f, "{}", x),
             NumericLiteral::Decimal(x) => write!(f, "{}", x),
             NumericLiteral::Double(x) => write!(f, "{}", x),
+        }
+    }
+}
+
+impl NumericLiteral {
+    pub(crate) fn value(&self) -> AnyAtomicType {
+        match self {
+            NumericLiteral::Integer(x) => AnyAtomicType::Integer((*x).into()),
+            NumericLiteral::Decimal(x) => AnyAtomicType::Float(*x),
+            NumericLiteral::Double(x) => AnyAtomicType::Double(*x),
         }
     }
 }

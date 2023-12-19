@@ -1,11 +1,13 @@
 //! Parse and apply XPath expressions to HTML documents.
 
+use std::fmt::Display;
+
 use indextree::{Arena, NodeId};
 use nom::error::VerboseError;
 use thiserror::Error;
 
 use crate::{
-    html::{DocumentNode, HtmlDocument, HtmlNode},
+    html::{HtmlDocument, HtmlNode},
     xpath::grammar::data_model::{
         AnyAtomicType, AttributeNode, CommentNode, ElementNode, Function, NamespaceNode, Node,
         PINode, TextNode,
@@ -40,9 +42,25 @@ pub(crate) struct XPathExpressionContext<'tree> {
     searchable_nodes: Vec<Node<'tree>>,
 }
 
+#[derive(PartialEq, PartialOrd, Debug)]
 pub enum XPathResult<'tree> {
     ItemSet(Vec<XpathItem<'tree>>),
     Item(XpathItem<'tree>),
+}
+
+impl Display for XPathResult<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            XPathResult::ItemSet(items) => {
+                write!(f, "[")?;
+                for item in items {
+                    write!(f, "{}", item)?;
+                }
+                write!(f, "]")
+            }
+            XPathResult::Item(item) => write!(f, "{}", item),
+        }
+    }
 }
 
 impl<'tree> XPathResult<'tree> {
@@ -57,7 +75,9 @@ impl<'tree> XPathResult<'tree> {
                 XpathItem::Function(_) => true,
                 XpathItem::AnyAtomicType(atomic_type) => match atomic_type {
                     AnyAtomicType::Boolean(b) => b,
-                    AnyAtomicType::Number(n) => n != 0,
+                    AnyAtomicType::Integer(n) => n != 0,
+                    AnyAtomicType::Float(n) => n != 0.0,
+                    AnyAtomicType::Double(n) => n != 0.0,
                     AnyAtomicType::String(s) => !s.is_empty(),
                 },
             },

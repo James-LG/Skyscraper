@@ -4,10 +4,15 @@ use std::fmt::Display;
 
 use nom::{error::context, sequence::tuple};
 
-use crate::xpath::grammar::{
-    expressions::common::{argument_list, ArgumentList},
-    recipes::Res,
-    types::{eq_name, EQName},
+use crate::xpath::{
+    grammar::{
+        data_model::{Node, XpathItem},
+        expressions::common::{argument_list, ArgumentList},
+        recipes::Res,
+        types::{eq_name, EQName},
+        xml_names::QName,
+    },
+    ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 pub fn function_call(input: &str) -> Res<&str, FunctionCall> {
@@ -33,5 +38,30 @@ pub struct FunctionCall {
 impl Display for FunctionCall {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}{}", self.name, self.argument_list)
+    }
+}
+
+impl FunctionCall {
+    pub(crate) fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+        match &self.name {
+            EQName::QName(qname) => match qname {
+                QName::PrefixedName(prefixed_name) => {
+                    if prefixed_name.prefix == "fn" {
+                        if prefixed_name.local_part == "root" {
+                            return Ok(XPathResult::Item(XpathItem::Node(Node::TreeNode(
+                                context.item_tree.root(),
+                            ))));
+                        }
+                    }
+
+                    panic!("unknown function: {}", prefixed_name)
+                }
+                QName::UnprefixedName(_) => todo!("FunctionCall::eval UnprefixedName"),
+            },
+            EQName::UriQualifiedName(_) => todo!("FunctionCall::eval UriQualifiedName"),
+        }
     }
 }

@@ -7,9 +7,12 @@ use nom::{
     sequence::tuple,
 };
 
-use crate::xpath::grammar::{
-    terminal_symbols::{string_literal, uri_qualified_name},
-    xml_names::qname,
+use crate::xpath::{
+    grammar::{
+        terminal_symbols::{string_literal, uri_qualified_name},
+        xml_names::qname,
+    },
+    XPathResult,
 };
 
 use self::{
@@ -20,10 +23,11 @@ use self::{
 };
 
 use super::{
+    data_model::{Node, XpathItem},
     recipes::Res,
     terminal_symbols::UriQualifiedName,
     xml_names::{nc_name, QName},
-    XpathItemTreeNodeData,
+    NonTreeXpathNode, XpathItemTreeNode, XpathItemTreeNodeData,
 };
 
 pub mod array_test;
@@ -125,6 +129,23 @@ pub enum KindTest {
     PITest(PITest),
 }
 
+impl KindTest {
+    pub(crate) fn is_match(&self, item: &XpathItem) -> bool {
+        match self {
+            KindTest::AnyKindTest => matches!(item, XpathItem::Node(_)),
+            KindTest::TextTest => todo!("KindTest::TextTest::is_match"),
+            KindTest::CommentTest => todo!("KindTest::CommentTest::is_match"),
+            KindTest::NamespaceNodeTest => todo!("KindTest::NamespaceNodeTest::is_match"),
+            KindTest::DocumentTest(x) => x.is_match(item),
+            KindTest::ElementTest(_) => todo!("KindTest::ElementTest::is_match"),
+            KindTest::AttributeTest(_) => todo!("KindTest::AttributeTest::is_match"),
+            KindTest::SchemaElementTest(_) => todo!("KindTest::SchemaElementTest::is_match"),
+            KindTest::SchemaAttributeTest(_) => todo!("KindTest::SchemaAttributeTest::is_match"),
+            KindTest::PITest(_) => todo!("KindTest::PITest::is_match"),
+        }
+    }
+}
+
 impl Display for KindTest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -138,23 +159,6 @@ impl Display for KindTest {
             KindTest::SchemaElementTest(x) => write!(f, "{}", x),
             KindTest::SchemaAttributeTest(x) => write!(f, "{}", x),
             KindTest::PITest(x) => write!(f, "{}", x),
-        }
-    }
-}
-
-impl KindTest {
-    pub(crate) fn matches(&self, node_data: &XpathItemTreeNodeData) -> bool {
-        match self {
-            KindTest::AnyKindTest => todo!(),
-            KindTest::TextTest => todo!(),
-            KindTest::CommentTest => todo!(),
-            KindTest::NamespaceNodeTest => todo!(),
-            KindTest::DocumentTest(_) => todo!(),
-            KindTest::ElementTest(_) => todo!(),
-            KindTest::AttributeTest(_) => todo!(),
-            KindTest::SchemaElementTest(_) => todo!(),
-            KindTest::SchemaAttributeTest(_) => todo!(),
-            KindTest::PITest(_) => todo!(),
         }
     }
 }
@@ -196,6 +200,25 @@ impl Display for DocumentTest {
             write!(f, "{}", x)?;
         }
         write!(f, ")")
+    }
+}
+
+impl DocumentTest {
+    pub(crate) fn is_match(&self, item: &XpathItem) -> bool {
+        match &self.value {
+            // document-node() matches any document node.
+            None => matches!(
+                item,
+                XpathItem::Node(Node::TreeNode(XpathItemTreeNode {
+                    data: XpathItemTreeNodeData::DocumentNode(_),
+                    ..
+                }))
+            ),
+            // document-node( E ) matches any document node that contains exactly one element node,
+            // optionally accompanied by one or more comment and processing instruction nodes,
+            // if E is an ElementTest or SchemaElementTest that matches the element node.
+            Some(_) => todo!("DocumentTest::is_match value"),
+        }
     }
 }
 
