@@ -124,3 +124,20 @@ impl<'tree> XPathResult<'tree> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_should_handle_multiple_double_slashes() {
+        // arrange
+        let xpath_text = r###"//hello//world"###;
+
+        // act
+        let xpath = parse(xpath_text).unwrap();
+
+        // assert
+        assert_eq!(xpath.to_string(), xpath_text);
+    }
+}

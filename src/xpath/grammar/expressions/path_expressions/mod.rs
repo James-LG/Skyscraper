@@ -170,7 +170,7 @@ pub fn relative_path_expr(input: &str) -> Res<&str, RelativePathExpr> {
     }
 
     fn step_pair(input: &str) -> Res<&str, StepPair> {
-        tuple((alt((slash, double_slash)), step_expr))(input)
+        tuple((alt((double_slash, slash)), step_expr))(input)
             .map(|(next_input, res)| (next_input, StepPair(res.0, res.1)))
     }
 
