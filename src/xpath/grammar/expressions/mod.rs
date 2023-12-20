@@ -77,11 +77,10 @@ impl XPath {
         &self,
         item_tree: &'tree XpathItemTree,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
-        let searchable_nodes = vec![Node::TreeNode(item_tree.root())];
-        let context = XPathExpressionContext {
+        let context = XPathExpressionContext::new_single(
             item_tree,
-            searchable_nodes,
-        };
+            XpathItem::Node(Node::TreeNode(item_tree.root())),
+        );
         self.eval(&context)
     }
 }
@@ -145,6 +144,12 @@ impl Expr {
             Ok(())
         }
 
+        // If there's only one parameter, return it's eval.
+        if self.items.is_empty() {
+            return self.expr.eval(context);
+        }
+
+        // Otherwise concatenate the results of all the expressions.
         // Expr items are separated by the comma operator, which concatenates results into a sequence.
         let mut items: Vec<XpathItem> = Vec::new();
 

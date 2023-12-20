@@ -91,10 +91,10 @@ fn xpath_github_sample3() {
             let mut children = children.into_iter();
 
             match children.next().unwrap().data {
-                _ => panic!("expected text"),
                 XpathItemTreeNodeData::TextNode(text) => {
                     assert_eq!(text.content, "Create a new release")
                 }
+                _ => panic!("expected text"),
             }
         }
         _ => panic!("expected tag"),

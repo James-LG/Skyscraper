@@ -6,13 +6,16 @@ use nom::{
     branch::alt, bytes::complete::tag, character::complete::char, error::context, sequence::tuple,
 };
 
-use crate::xpath::grammar::{
-    data_model::{Node, XpathItem},
-    recipes::Res,
-    terminal_symbols::braced_uri_literal,
-    types::{eq_name, kind_test, EQName, KindTest},
-    xml_names::{nc_name, QName},
-    XpathItemTreeNodeData,
+use crate::xpath::{
+    grammar::{
+        data_model::{Node, XpathItem},
+        recipes::Res,
+        terminal_symbols::braced_uri_literal,
+        types::{eq_name, kind_test, EQName, KindTest},
+        xml_names::{nc_name, QName},
+        NonTreeXpathNode, XpathItemTreeNodeData,
+    },
+    ExpressionApplyError, XPathExpressionContext,
 };
 
 pub fn node_test(input: &str) -> Res<&str, NodeTest> {
@@ -45,10 +48,13 @@ impl Display for NodeTest {
 }
 
 impl NodeTest {
-    pub(crate) fn is_match(&self, node: &Node) -> bool {
+    pub(crate) fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
         match self {
-            NodeTest::KindTest(test) => test.is_match(&XpathItem::Node(node.clone())),
-            NodeTest::NameTest(test) => test.is_match(node),
+            NodeTest::KindTest(test) => test.eval(context),
+            NodeTest::NameTest(test) => test.eval(context),
         }
     }
 }
@@ -83,28 +89,49 @@ impl Display for NameTest {
 }
 
 impl NameTest {
-    pub(crate) fn is_match(&self, node: &Node) -> bool {
-        // Name test only works on element nodes
-        let element = if let Node::TreeNode(tree_node) = node {
-            if let XpathItemTreeNodeData::ElementNode(element) = &tree_node.data {
-                element
-            } else {
-                return false;
-            }
+    pub(crate) fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
+        // For each searchable node, if the node matches the NameTest, then the node is added to the result.
+        let mut nodes = Vec::new();
+
+        let node = if let XpathItem::Node(node) = &context.item {
+            node
         } else {
-            return false;
+            todo!("NameTest::eval non-node");
         };
 
-        match self {
+        let node_name = match node {
+            Node::TreeNode(tree_node) => match tree_node.data {
+                XpathItemTreeNodeData::DocumentNode(_) => todo!(),
+                XpathItemTreeNodeData::ElementNode(e) => &e.name,
+                XpathItemTreeNodeData::PINode(_) => todo!(),
+                XpathItemTreeNodeData::CommentNode(_) => todo!(),
+                XpathItemTreeNodeData::TextNode(_) => todo!(),
+            },
+            Node::NonTreeNode(non_tree_node) => match non_tree_node {
+                NonTreeXpathNode::AttributeNode(a) => &a.name,
+                NonTreeXpathNode::NamespaceNode(_) => todo!(),
+            },
+        };
+
+        let is_match = match self {
             NameTest::Name(name) => match name {
                 EQName::QName(qname) => match qname {
                     QName::PrefixedName(_) => todo!("NameTest::is_match PrefixedName"),
-                    QName::UnprefixedName(unprefixed_name) => unprefixed_name == &element.name,
+                    QName::UnprefixedName(unprefixed_name) => unprefixed_name == node_name,
                 },
                 EQName::UriQualifiedName(_) => todo!("NameTest::is_match UriQualifiedName"),
             },
-            NameTest::Wildcard(wildcard) => wildcard.is_match(node),
+            NameTest::Wildcard(wildcard) => wildcard.is_match(&node_name),
+        };
+
+        if is_match {
+            nodes.push(node.clone());
         }
+
+        Ok(nodes)
     }
 }
 
@@ -161,7 +188,7 @@ impl Display for Wildcard {
 }
 
 impl Wildcard {
-    pub(crate) fn is_match(&self, node: &Node) -> bool {
+    pub(crate) fn is_match(&self, name: &str) -> bool {
         match self {
             Wildcard::Simple => true,
             Wildcard::PrefixedName(_) => todo!("Wildcard::is_match PrefixedName"),

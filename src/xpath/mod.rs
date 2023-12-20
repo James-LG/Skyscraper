@@ -1,6 +1,6 @@
 //! Parse and apply XPath expressions to HTML documents.
 
-use std::fmt::Display;
+use std::{fmt::Display, vec};
 
 use indextree::{Arena, NodeId};
 use nom::error::VerboseError;
@@ -39,7 +39,33 @@ trait Expression {
 
 pub(crate) struct XPathExpressionContext<'tree> {
     item_tree: &'tree XpathItemTree,
-    searchable_nodes: Vec<Node<'tree>>,
+    item: XpathItem<'tree>,
+    position: usize,
+    size: usize,
+}
+
+impl<'tree> XPathExpressionContext<'tree> {
+    pub fn new(
+        item_tree: &'tree XpathItemTree,
+        items: &Vec<XpathItem<'tree>>,
+        position: usize,
+    ) -> Self {
+        Self {
+            item_tree,
+            item: items[position - 1].clone(), // Position is 1-based
+            position: position,
+            size: items.len(),
+        }
+    }
+
+    pub fn new_single(item_tree: &'tree XpathItemTree, item: XpathItem<'tree>) -> Self {
+        Self {
+            item_tree,
+            item,
+            position: 1,
+            size: 1,
+        }
+    }
 }
 
 #[derive(PartialEq, PartialOrd, Debug)]

@@ -59,11 +59,7 @@ impl StepExpr {
     ) -> Result<Vec<XpathItem<'tree>>, ExpressionApplyError> {
         match self {
             StepExpr::PostfixExpr(expr) => expr.eval(context),
-            StepExpr::AxisStep(step) => {
-                let nodes = step.eval(context)?;
-                let items = nodes.into_iter().map(|x| XpathItem::Node(x)).collect();
-                Ok(items)
-            }
+            StepExpr::AxisStep(step) => step.eval(context),
         }
     }
 }

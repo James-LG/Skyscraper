@@ -13,14 +13,14 @@ use nom::{
 
 use crate::xpath::{
     grammar::{
-        data_model::XpathItem,
+        data_model::{Node, XpathItem},
         recipes::Res,
         types::{
             array_test::array_test, common::atomic_or_union_type, function_test::function_test,
             kind_test, map_test::map_test,
         },
     },
-    XPathResult,
+    ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 use super::{
@@ -70,22 +70,26 @@ impl Display for SequenceType {
 }
 
 impl SequenceType {
-    pub(crate) fn is_match(&self, result: &XPathResult) -> bool {
+    pub(crate) fn eval<'tree>(
+        &self,
+        result: &XPathResult,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<bool, ExpressionApplyError> {
         match self {
             SequenceType::EmptySequence => match result {
                 // The sequence type empty-sequence() matches a value that is the empty sequence.
-                XPathResult::ItemSet(set) => set.is_empty(),
-                XPathResult::Item(_) => false,
+                XPathResult::ItemSet(set) => Ok(set.is_empty()),
+                XPathResult::Item(_) => Ok(false),
             },
             SequenceType::Sequence(x) => match x.occurrence {
                 Some(_) => todo!("SequenceType::Sequence::is_match occurrence"),
                 None => {
                     // An ItemType with no OccurrenceIndicator matches any value that contains exactly one item if the ItemType matches that item.
+
+                    let item_type_result = x.item_type.eval(context)?;
                     match result {
-                        XPathResult::ItemSet(set) => {
-                            set.len() == 1 && x.item_type.is_match(&set[0])
-                        }
-                        XPathResult::Item(item) => x.item_type.is_match(item),
+                        XPathResult::ItemSet(set) => Ok(set.len() == 1 && item_type_result),
+                        XPathResult::Item(item) => Ok(item_type_result),
                     }
                 }
             },
@@ -178,11 +182,17 @@ impl Display for ItemType {
 }
 
 impl ItemType {
-    pub(crate) fn is_match(&self, item: &XpathItem) -> bool {
+    pub(crate) fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<bool, ExpressionApplyError> {
         match self {
             // item() matches any single item.
-            ItemType::Item => true,
-            ItemType::KindTest(x) => x.is_match(item),
+            ItemType::Item => Ok(true),
+            ItemType::KindTest(x) => {
+                let result = x.eval(context)?;
+                Ok(!result.is_empty())
+            }
             ItemType::FunctionTest(x) => todo!("ItemType::FunctionTest::is_match"),
             ItemType::MapTest(x) => todo!("ItemType::MapTest::is_match"),
             ItemType::ArrayTest(x) => todo!("ItemType::ArrayTest::is_match"),

@@ -7,7 +7,9 @@ use nom::{branch::alt, error::context};
 use crate::xpath::grammar::{
     data_model::AnyAtomicType,
     recipes::Res,
-    terminal_symbols::{decimal_literal, double_literal, integer_literal, string_literal},
+    terminal_symbols::{
+        decimal_literal, double_literal, integer_literal, string_literal, StringLiteral,
+    },
 };
 
 pub fn literal(input: &str) -> Res<&str, Literal> {
@@ -18,8 +20,7 @@ pub fn literal(input: &str) -> Res<&str, Literal> {
     }
 
     fn string_literal_map(input: &str) -> Res<&str, Literal> {
-        string_literal(input)
-            .map(|(next_input, res)| (next_input, Literal::StringLiteral(res.to_string())))
+        string_literal(input).map(|(next_input, res)| (next_input, Literal::StringLiteral(res)))
     }
 
     context("literal", alt((numeric_literal_map, string_literal_map)))(input)
@@ -28,7 +29,7 @@ pub fn literal(input: &str) -> Res<&str, Literal> {
 #[derive(PartialEq, Debug, Clone)]
 pub enum Literal {
     NumericLiteral(NumericLiteral),
-    StringLiteral(String),
+    StringLiteral(StringLiteral),
 }
 
 impl Display for Literal {
@@ -44,7 +45,7 @@ impl Literal {
     pub(crate) fn value(&self) -> AnyAtomicType {
         match self {
             Literal::NumericLiteral(numeric) => numeric.value(),
-            Literal::StringLiteral(x) => AnyAtomicType::String(x.clone()),
+            Literal::StringLiteral(x) => AnyAtomicType::String(x.value.clone()),
         }
     }
 }

@@ -4,7 +4,7 @@ use nom::{branch::alt, bytes::complete::tag, error::context, multi::many0, seque
 
 use crate::xpath::{
     grammar::{
-        data_model::Node,
+        data_model::{Node, XpathItem},
         expressions::{
             path_expressions::{
                 abbreviated_syntax::abbrev_forward_step,
@@ -72,19 +72,17 @@ impl AxisStep {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
-        let mut nodes = self.step_type.eval(context)?;
+    ) -> Result<Vec<XpathItem<'tree>>, ExpressionApplyError> {
+        let nodes = self.step_type.eval(context)?;
+        let mut items: Vec<XpathItem<'tree>> = nodes.into_iter().map(XpathItem::Node).collect();
 
         for predicate in self.predicates.iter() {
-            let context = XPathExpressionContext {
-                searchable_nodes: nodes,
-                item_tree: context.item_tree,
-            };
-
-            nodes = predicate.filter(&context)?;
+            if predicate.is_match(&context)? {
+                items.push(context.item.clone());
+            }
         }
 
-        Ok(nodes)
+        Ok(items)
     }
 }
 

@@ -68,7 +68,7 @@ impl Expression for TreatExpr {
             Some(treat_type) => treat_type,
         };
 
-        if !treat_type.is_match(&result) {
+        if !treat_type.eval(&result, context)? {
             return Err(ExpressionApplyError {
                 msg: format!(
                     "err:XPDY0050 Cannot treat {:?} as {}",

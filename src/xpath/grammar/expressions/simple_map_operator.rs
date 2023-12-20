@@ -51,7 +51,7 @@ impl Expression for SimpleMapExpr {
 
         // If there's only one parameter, return it's eval.
         if self.items.is_empty() {
-            return Ok(result);
+            return Ok(XPathResult::ItemSet(result));
         }
 
         // Otherwise, do the operation.

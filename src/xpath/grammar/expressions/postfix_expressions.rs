@@ -125,22 +125,13 @@ impl Display for Predicate {
 }
 
 impl Predicate {
-    pub(crate) fn filter<'tree>(
+    pub(crate) fn is_match<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
-        let mut nodes: Vec<Node<'tree>> = Vec::new();
+    ) -> Result<bool, ExpressionApplyError> {
+        let res = self.0.eval(&context)?;
 
-        for node in context.searchable_nodes.iter() {
-            let res = self.0.eval(context)?;
-            if res.boolean() {
-                // TODO: Can we avoid cloning here?
-                //       Maybe by returning a Vec<&Node> from eval, and using `.remove()` here?
-                nodes.push(node.clone());
-            }
-        }
-
-        Ok(nodes)
+        Ok(res.boolean())
     }
 }
 

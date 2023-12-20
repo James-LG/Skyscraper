@@ -13,6 +13,7 @@ use nom::{
 };
 
 use super::{
+    data_model::AnyAtomicType,
     recipes::{not_brace, not_quote, not_single_quote, Res},
     xml_names::nc_name,
 };
@@ -103,7 +104,7 @@ pub fn string_literal(input: &str) -> Res<&str, StringLiteral> {
     )(input)
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct StringLiteral {
     pub value: String,
     quotation_type: QuotationType,
@@ -118,7 +119,7 @@ impl Display for StringLiteral {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum QuotationType {
     Single,
     Double,

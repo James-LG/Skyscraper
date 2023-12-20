@@ -12,7 +12,7 @@ use crate::xpath::{
         terminal_symbols::{string_literal, uri_qualified_name},
         xml_names::qname,
     },
-    XPathResult,
+    ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 use self::{
@@ -130,13 +130,24 @@ pub enum KindTest {
 }
 
 impl KindTest {
-    pub(crate) fn is_match(&self, item: &XpathItem) -> bool {
+    pub(crate) fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
         match self {
-            KindTest::AnyKindTest => matches!(item, XpathItem::Node(_)),
+            KindTest::AnyKindTest => {
+                // AnyKindTest is `node()`.
+                // Select all node types.
+                if let XpathItem::Node(node) = &context.item {
+                    Ok(vec![node.clone()])
+                } else {
+                    Ok(vec![])
+                }
+            }
             KindTest::TextTest => todo!("KindTest::TextTest::is_match"),
             KindTest::CommentTest => todo!("KindTest::CommentTest::is_match"),
             KindTest::NamespaceNodeTest => todo!("KindTest::NamespaceNodeTest::is_match"),
-            KindTest::DocumentTest(x) => x.is_match(item),
+            KindTest::DocumentTest(x) => x.eval(context),
             KindTest::ElementTest(_) => todo!("KindTest::ElementTest::is_match"),
             KindTest::AttributeTest(_) => todo!("KindTest::AttributeTest::is_match"),
             KindTest::SchemaElementTest(_) => todo!("KindTest::SchemaElementTest::is_match"),
@@ -204,16 +215,27 @@ impl Display for DocumentTest {
 }
 
 impl DocumentTest {
-    pub(crate) fn is_match(&self, item: &XpathItem) -> bool {
+    pub(crate) fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
         match &self.value {
             // document-node() matches any document node.
-            None => matches!(
-                item,
-                XpathItem::Node(Node::TreeNode(XpathItemTreeNode {
-                    data: XpathItemTreeNodeData::DocumentNode(_),
-                    ..
-                }))
-            ),
+            None => {
+                if let XpathItem::Node(node) = &context.item {
+                    if matches!(
+                        node,
+                        Node::TreeNode(XpathItemTreeNode {
+                            data: XpathItemTreeNodeData::DocumentNode(_),
+                            ..
+                        })
+                    ) {
+                        return Ok(vec![node.clone()]);
+                    }
+                }
+
+                Ok(vec![])
+            }
             // document-node( E ) matches any document node that contains exactly one element node,
             // optionally accompanied by one or more comment and processing instruction nodes,
             // if E is an ElementTest or SchemaElementTest that matches the element node.

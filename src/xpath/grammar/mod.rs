@@ -86,6 +86,25 @@ impl<'a> XpathItemTreeNode<'a> {
             .into_iter()
             .map(move |id| tree.get(id))
     }
+
+    pub fn text(&self, tree: &'a XpathItemTree) -> String {
+        let text = self
+            // Get all children.
+            .children(tree)
+            // Filter to only text nodes.
+            .filter_map(|x| match x.data {
+                XpathItemTreeNodeData::TextNode(text) => Some(text),
+                _ => None,
+            })
+            // Merge all text into a single string.
+            // Space delimited.
+            .fold(String::new(), |mut acc, x| {
+                acc.push_str(&x.content);
+                acc
+            });
+
+        text
+    }
 }
 
 pub struct XpathItemTree {

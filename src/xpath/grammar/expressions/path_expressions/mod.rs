@@ -94,21 +94,46 @@ impl Display for PathExpr {
     }
 }
 
-impl Expression for PathExpr {
-    fn eval<'tree>(
+impl PathExpr {
+    pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+    ) -> Result<Vec<XpathItem<'tree>>, ExpressionApplyError> {
         // Leading slashes mean different things than slashes in the middle of a path expression
         // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-path-expressions
         match self {
-            PathExpr::LeadingSlash(_) => todo!("PathExpr::LeadingSlash"),
+            PathExpr::LeadingSlash(expr) => {
+                let expanded_expr = initial_slash_expansion(expr);
+                expanded_expr.eval(context)
+            }
             PathExpr::LeadingDoubleSlash(expr) => {
                 let expanded_expr = initial_double_slash_expansion(expr);
-                expanded_expr.eval(&context)
+                expanded_expr.eval(context)
             }
             PathExpr::Plain(expr) => expr.eval(context),
         }
+    }
+}
+
+fn initial_slash_expansion(unexpanded_expr: &Option<RelativePathExpr>) -> RelativePathExpr {
+    // A leading slash is expanded to `(fn:root(self::node()) treat as document-node())/`
+    // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-path-expressions
+    let first_step = step_expr("(fn:root(self::node()) treat as document-node())")
+        .expect("slash expansion step 1 failed")
+        .1;
+
+    let items = match unexpanded_expr {
+        Some(x) => {
+            let mut items = vec![StepPair(PathSeparator::Slash, x.expr.clone())];
+            items.extend(x.items.iter().map(|x| x.clone()));
+            items
+        }
+        None => vec![],
+    };
+
+    RelativePathExpr {
+        expr: first_step,
+        items,
     }
 }
 
@@ -179,54 +204,69 @@ impl Display for RelativePathExpr {
     }
 }
 
-impl Expression for RelativePathExpr {
-    fn eval<'tree>(
+impl RelativePathExpr {
+    pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
-        /// Unwraps a vector of XpathItems into a vector of Nodes,
-        /// and panics if any of the items are not nodes.
-        ///
-        /// TODO: Don't panic, return an error instead.
-        fn unwrap_items<'tree>(items: Vec<XpathItem<'tree>>) -> Vec<Node<'tree>> {
-            items
-                .into_iter()
-                .map(|item| match item {
-                    XpathItem::Node(x) => x,
-                    _ => panic!("Path operator expected node, got {:?}", item),
-                })
-                .collect()
-        }
+    ) -> Result<Vec<XpathItem<'tree>>, ExpressionApplyError> {
+        let e1_result = self.expr.eval(context)?;
 
-        let items = self.expr.eval(context)?;
-
-        // If there are no items, return the result of the expression
+        // If there are no items, return the result of the expression.
         if self.items.is_empty() {
-            return Ok(XPathResult::ItemSet(items));
+            return Ok(e1_result);
         }
 
-        let mut nodes = unwrap_items(items);
+        // Otherwise, evaluate each step in the path expression.
+        // E2 is evaluated with a context item for each item returned by E1.
+        let e2 = &self.items[0];
 
-        for pair in self.items.iter() {
-            match pair.0 {
-                PathSeparator::Slash => {
-                    let context = XPathExpressionContext {
-                        item_tree: context.item_tree,
-                        searchable_nodes: nodes,
-                    };
-
-                    nodes = unwrap_items(pair.1.eval(&context)?)
-                }
+        let mut items = vec![];
+        for (i, item) in e1_result.iter().enumerate() {
+            let e2_context = XPathExpressionContext::new(context.item_tree, &e1_result, i + 1);
+            let e2_result = match e2.0 {
+                PathSeparator::Slash => e2.1.eval(&e2_context)?,
                 PathSeparator::DoubleSlash => {
                     // TODO: Double slash is expanded to `/descendant-or-self::node/`
                     todo!("RelativePathExpr::eval double slash")
                 }
+            };
+
+            // First and second expression were just evaluated,
+            // if there are more, recursively evaluate the remaining steps.
+            if self.items.len() > 1 {
+                let expr = &self.items[1].1; // Third expression becomes first, since the first two were already evaluated.
+
+                let e3 = RelativePathExpr {
+                    expr: expr.clone(),
+                    items: self.items[2..].to_vec(),
+                };
+
+                // The path separator between E2 and E3 must be evaluated now since it will be dropped.
+                // E1 /1 E2     /2 E3 /3 E4
+                // <evaluated>  <not evaluated>
+                match self.items[1].0 {
+                    PathSeparator::Slash => {
+                        // For each item in the result of E2, evaluate E3.
+                        for (i, item) in e2_result.iter().enumerate() {
+                            let e3_context = XPathExpressionContext::new(
+                                e2_context.item_tree,
+                                &e2_result,
+                                i + 1,
+                            );
+                            let e3_result = e3.eval(&e3_context)?;
+                            items.extend(e3_result);
+                        }
+                    }
+                    PathSeparator::DoubleSlash => todo!("RelativePathExpr::eval double slash"),
+                }
+            }
+            // Otherwise, if there were only two expressions, return E2's items.
+            else {
+                items.extend(e2_result);
             }
         }
 
-        Ok(XPathResult::ItemSet(
-            nodes.into_iter().map(XpathItem::Node).collect(),
-        ))
+        Ok(items)
     }
 }
 

@@ -3,11 +3,12 @@
 use std::fmt::Display;
 
 use super::{
-    types::function_test::FunctionTest, xml_names::QName, NonTreeXpathNode, XpathItemTreeNode,
+    types::function_test::FunctionTest, xml_names::QName, NonTreeXpathNode, XpathItemTree,
+    XpathItemTreeNode,
 };
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#dt-item
-#[derive(PartialEq, PartialOrd, Debug)]
+#[derive(PartialEq, PartialOrd, Debug, Clone)]
 pub enum XpathItem<'tree> {
     Node(Node<'tree>),
     Function(Function),
@@ -40,8 +41,14 @@ impl<'tree> XpathItem<'tree> {
     }
 }
 
+impl<'tree> From<Node<'tree>> for XpathItem<'tree> {
+    fn from(node: Node<'tree>) -> Self {
+        XpathItem::Node(node)
+    }
+}
+
 /// https://www.w3.org/TR/xpath-datamodel-31/#types-hierarchy
-#[derive(PartialEq, PartialOrd, Debug)]
+#[derive(PartialEq, PartialOrd, Debug, Clone)]
 pub enum AnyAtomicType {
     Boolean(bool),
     Integer(i64),
@@ -63,7 +70,7 @@ impl Display for AnyAtomicType {
 }
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#dt-function-item
-#[derive(PartialEq, PartialOrd, Debug)]
+#[derive(PartialEq, PartialOrd, Debug, Clone)]
 pub struct Function {
     // TODO
 }

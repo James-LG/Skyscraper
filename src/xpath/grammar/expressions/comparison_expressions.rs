@@ -4,14 +4,19 @@ use std::fmt::Display;
 
 use nom::{branch::alt, bytes::complete::tag, combinator::opt, error::context, sequence::tuple};
 
-use crate::xpath::{
-    grammar::{
-        data_model::{AnyAtomicType, XpathItem},
-        expressions::string_concat_expressions::string_concat_expr,
-        recipes::{ws, Res},
-        XpathItemTreeNode,
+use crate::{
+    html::DocumentNode,
+    xpath::{
+        grammar::{
+            data_model::{
+                AnyAtomicType, CommentNode, ElementNode, Node, PINode, TextNode, XpathItem,
+            },
+            expressions::string_concat_expressions::string_concat_expr,
+            recipes::{ws, Res},
+            NonTreeXpathNode, XpathItemTreeNode, XpathItemTreeNodeData,
+        },
+        Expression, ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemTree,
     },
-    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemTree,
 };
 
 use super::string_concat_expressions::StringConcatExpr;
@@ -87,18 +92,77 @@ impl Expression for ComparisonExpr {
         };
 
         // Otherwise, do the comparison op.
-
         // Get the second expression result.
         let second_result = comparison.1.eval(context)?;
+
+        // Atomize both results.
+        let atomized1 = func_data(&result, &context.item_tree);
+        let atomized2 = func_data(&second_result, &context.item_tree);
+
+        // Do some type checking first.
+
+        // If the either atomized set is an empty sequence,
+        // the result of the value comparison is an empty sequence.
+        if atomized1.is_empty() || atomized2.is_empty() {
+            return Ok(XPathResult::ItemSet(Vec::new()));
+        }
+
+        // If the either atomized set is a sequence of length greater than one,
+        // a type error is raised.
+        if atomized1.len() > 1 || atomized2.len() > 1 {
+            return Err(ExpressionApplyError {
+                msg: String::from("err:XPTY0004 The first operand of a value comparison is a sequence of length greater than one")
+            });
+        }
+
         let bool_value = match comparison.0 {
             ComparisonType::ValueComp(_) => todo!("ComparisonType::ValueComp"),
-            ComparisonType::GeneralComp(comp) => comp.is_match(&result, &second_result),
+            ComparisonType::GeneralComp(comp) => comp.is_match(&atomized1[0], &atomized2[0]),
             ComparisonType::NodeComp(_) => todo!("ComparisonType::NodeComp"),
         };
 
         Ok(XPathResult::Item(XpathItem::AnyAtomicType(
             AnyAtomicType::Boolean(bool_value),
         )))
+    }
+}
+
+/// https://www.w3.org/TR/2017/REC-xpath-31-20170321/#dt-atomization
+fn func_data<'tree>(
+    result: &XPathResult<'tree>,
+    item_tree: &'tree XpathItemTree,
+) -> Vec<AnyAtomicType> {
+    fn atomize<'tree>(item: &XpathItem, item_tree: &'tree XpathItemTree) -> AnyAtomicType {
+        match item {
+            XpathItem::Node(node) => match node {
+                Node::TreeNode(tree_node) => match tree_node.data {
+                    XpathItemTreeNodeData::DocumentNode(_) => {
+                        AnyAtomicType::String(tree_node.text(item_tree))
+                    }
+                    XpathItemTreeNodeData::ElementNode(_) => {
+                        AnyAtomicType::String(tree_node.text(item_tree))
+                    }
+                    XpathItemTreeNodeData::PINode(_) => todo!("func_data PINode"),
+                    XpathItemTreeNodeData::CommentNode(_) => todo!("func_data CommentNode"),
+                    XpathItemTreeNodeData::TextNode(text) => {
+                        AnyAtomicType::String(text.content.clone())
+                    }
+                },
+                Node::NonTreeNode(non_tree_node) => match non_tree_node {
+                    NonTreeXpathNode::AttributeNode(attribute) => {
+                        AnyAtomicType::String(attribute.value.clone())
+                    }
+                    NonTreeXpathNode::NamespaceNode(_) => todo!("func_data NamespaceNode"),
+                },
+            },
+            XpathItem::Function(_) => todo!("func_data Function"),
+            XpathItem::AnyAtomicType(atomic) => atomic.clone(),
+        }
+    }
+
+    match result {
+        XPathResult::ItemSet(set) => set.iter().map(|item| atomize(item, item_tree)).collect(),
+        XPathResult::Item(item) => vec![atomize(item, item_tree)],
     }
 }
 
@@ -255,11 +319,7 @@ impl Display for GeneralComp {
 }
 
 impl GeneralComp {
-    pub(crate) fn is_match<'tree>(
-        &self,
-        first: &XPathResult<'tree>,
-        second: &XPathResult<'tree>,
-    ) -> bool {
+    pub(crate) fn is_match<'tree>(&self, first: &AnyAtomicType, second: &AnyAtomicType) -> bool {
         match self {
             GeneralComp::Equal => first == second,
             GeneralComp::NotEqual => first != second,
