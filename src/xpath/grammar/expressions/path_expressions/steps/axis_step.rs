@@ -74,15 +74,32 @@ impl AxisStep {
         context: &XPathExpressionContext<'tree>,
     ) -> Result<Vec<XpathItem<'tree>>, ExpressionApplyError> {
         let nodes = self.step_type.eval(context)?;
-        let mut items: Vec<XpathItem<'tree>> = nodes.into_iter().map(XpathItem::Node).collect();
+        let items: Vec<XpathItem<'tree>> = nodes.into_iter().map(XpathItem::Node).collect();
 
-        for predicate in self.predicates.iter() {
-            if predicate.is_match(&context)? {
-                items.push(context.item.clone());
+        // If there are no predicates, return expression result.
+        if self.predicates.is_empty() {
+            return Ok(items);
+        }
+
+        // Otherwise, filter using predicates.
+        let mut filtered_items = Vec::new();
+        for (i, item) in items.iter().enumerate() {
+            // All predicates must match for a node to be selected.
+            let mut is_match = true;
+
+            let predicate_context = XPathExpressionContext::new(context.item_tree, &items, i + 1);
+            for predicate in self.predicates.iter() {
+                if !predicate.is_match(&predicate_context)? {
+                    is_match = false;
+                }
+            }
+
+            if is_match {
+                filtered_items.push(item.clone());
             }
         }
 
-        Ok(items)
+        Ok(filtered_items)
     }
 }
 
