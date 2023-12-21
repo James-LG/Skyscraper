@@ -140,4 +140,16 @@ mod tests {
         // assert
         assert_eq!(xpath.to_string(), xpath_text);
     }
+
+    #[test]
+    fn parse_should_handle_reverse_step_after_double_slash() {
+        // arrange
+        let xpath_text = r###"//hello//parent::world"###;
+
+        // act
+        let xpath = parse(xpath_text).unwrap();
+
+        // assert
+        assert_eq!(xpath.to_string(), xpath_text);
+    }
 }

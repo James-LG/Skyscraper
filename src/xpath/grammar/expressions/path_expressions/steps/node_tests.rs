@@ -102,29 +102,36 @@ impl NameTest {
             todo!("NameTest::eval non-node");
         };
 
+        // Get the name of the node, if available for the node type.
         let node_name = match node {
             Node::TreeNode(tree_node) => match tree_node.data {
                 XpathItemTreeNodeData::DocumentNode(_) => todo!(),
-                XpathItemTreeNodeData::ElementNode(e) => &e.name,
+                XpathItemTreeNodeData::ElementNode(e) => Some(&e.name),
                 XpathItemTreeNodeData::PINode(_) => todo!(),
                 XpathItemTreeNodeData::CommentNode(_) => todo!(),
-                XpathItemTreeNodeData::TextNode(_) => todo!(),
+                XpathItemTreeNodeData::TextNode(_) => None, // Text nodes do not have a name.
             },
             Node::NonTreeNode(non_tree_node) => match non_tree_node {
-                NonTreeXpathNode::AttributeNode(a) => &a.name,
+                NonTreeXpathNode::AttributeNode(a) => Some(&a.name),
                 NonTreeXpathNode::NamespaceNode(_) => todo!(),
             },
         };
 
         let is_match = match self {
-            NameTest::Name(name) => match name {
-                EQName::QName(qname) => match qname {
-                    QName::PrefixedName(_) => todo!("NameTest::is_match PrefixedName"),
-                    QName::UnprefixedName(unprefixed_name) => unprefixed_name == node_name,
+            NameTest::Name(name) => match node_name {
+                Some(node_name) => match name {
+                    EQName::QName(qname) => match qname {
+                        QName::PrefixedName(_) => todo!("NameTest::is_match PrefixedName"),
+                        QName::UnprefixedName(unprefixed_name) => unprefixed_name == node_name,
+                    },
+                    EQName::UriQualifiedName(_) => todo!("NameTest::is_match UriQualifiedName"),
                 },
-                EQName::UriQualifiedName(_) => todo!("NameTest::is_match UriQualifiedName"),
+
+                // Name tests need a name to match.
+                // If the node does not have a name, it cannot match.
+                None => false,
             },
-            NameTest::Wildcard(wildcard) => wildcard.is_match(&node_name),
+            NameTest::Wildcard(wildcard) => wildcard.is_match(node_name),
         };
 
         if is_match {
@@ -188,7 +195,7 @@ impl Display for Wildcard {
 }
 
 impl Wildcard {
-    pub(crate) fn is_match(&self, name: &str) -> bool {
+    pub(crate) fn is_match(&self, name: Option<&String>) -> bool {
         match self {
             Wildcard::Simple => true,
             Wildcard::PrefixedName(_) => todo!("Wildcard::is_match PrefixedName"),

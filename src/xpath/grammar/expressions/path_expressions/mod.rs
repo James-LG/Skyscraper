@@ -226,8 +226,8 @@ impl RelativePathExpr {
             let e2_result = match e2.0 {
                 PathSeparator::Slash => e2.1.eval(&e2_context)?,
                 PathSeparator::DoubleSlash => {
-                    // TODO: Double slash is expanded to `/descendant-or-self::node/`
-                    todo!("RelativePathExpr::eval double slash")
+                    let expanded_e2 = double_slash_expansion(&e2.1);
+                    expanded_e2.eval(&e2_context)?
                 }
             };
 
@@ -267,6 +267,24 @@ impl RelativePathExpr {
         }
 
         Ok(items)
+    }
+}
+
+/// Double slash is expanded to `/descendant-or-self::node/`
+///
+/// # Arguments
+///
+/// `expr` - The step _after_ the double slash.
+fn double_slash_expansion(expr: &StepExpr) -> RelativePathExpr {
+    let expanded_double_slash = step_expr("descendant-or-self::node()")
+        .expect("double slash expansion step 1 failed")
+        .1;
+
+    let items = vec![StepPair(PathSeparator::Slash, expr.clone())];
+
+    RelativePathExpr {
+        expr: expanded_double_slash,
+        items,
     }
 }
 
@@ -325,6 +343,48 @@ mod tests {
         // assert
         let expected_expr_text =
             r#"(fn:root(self::node()) treat as document-node())/descendant-or-self::node()/hi"#;
+
+        assert_eq!(expr.to_string(), expected_expr_text);
+    }
+
+    #[test]
+    fn initial_slash_expansion_should_be_as_documented() {
+        // arrange
+        let given_expr = relative_path_expr("hi").unwrap().1;
+
+        // act
+        let expr = initial_slash_expansion(&Some(given_expr));
+
+        // assert
+        let expected_expr_text = r#"(fn:root(self::node()) treat as document-node())/hi"#;
+
+        assert_eq!(expr.to_string(), expected_expr_text);
+    }
+
+    #[test]
+    fn initial_slash_expansion_no_expr_should_be_as_documented() {
+        // arrange
+        let given_expr: Option<RelativePathExpr> = None;
+
+        // act
+        let expr = initial_slash_expansion(&given_expr);
+
+        // assert
+        let expected_expr_text = r#"(fn:root(self::node()) treat as document-node())"#;
+
+        assert_eq!(expr.to_string(), expected_expr_text);
+    }
+
+    #[test]
+    fn double_slash_expansion_should_be_as_documented() {
+        // arrange
+        let given_expr = step_expr("hello").unwrap().1;
+
+        // act
+        let expr = double_slash_expansion(&given_expr);
+
+        // assert
+        let expected_expr_text = r#"descendant-or-self::node()/hello"#;
 
         assert_eq!(expr.to_string(), expected_expr_text);
     }

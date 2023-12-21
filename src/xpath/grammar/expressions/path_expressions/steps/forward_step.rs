@@ -99,13 +99,6 @@ fn eval_forward_axis<'tree>(
     let mut nodes = Vec::new();
 
     for (i, item) in items.iter().enumerate() {
-        if let XpathItem::Node(Node::TreeNode(XpathItemTreeNode {
-            data: XpathItemTreeNodeData::TextNode(text),
-            ..
-        })) = item
-        {
-            panic!("Why is there a text node in here? {:?}", text);
-        }
         let node_test_context = XPathExpressionContext::new(context.item_tree, &items, i + 1);
 
         let result = node_test.eval(&node_test_context)?;
@@ -121,14 +114,11 @@ fn eval_forward_axis_child<'tree>(
 ) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
     let mut nodes: Vec<Node<'tree>> = Vec::new();
 
-    // Only elements have children
+    // Only tree nodes have children
     if let XpathItem::Node(Node::TreeNode(node)) = &context.item {
         for child in node.children(context.item_tree) {
-            // Only select elements
-            if matches!(child.data, XpathItemTreeNodeData::ElementNode(_)) {
-                let child = Node::TreeNode(child);
-                nodes.push(child);
-            }
+            let child = Node::TreeNode(child);
+            nodes.push(child);
         }
     }
 
@@ -141,19 +131,18 @@ fn eval_forward_axis_descendant<'tree>(
 ) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
     let mut nodes: Vec<Node<'tree>> = Vec::new();
 
-    // Only elements have children
+    // Only tree nodes have children.
     if let XpathItem::Node(Node::TreeNode(node)) = &context.item {
         for child in node.children(context.item_tree) {
-            // Only select elements
-            if matches!(child.data, XpathItemTreeNodeData::ElementNode(_)) {
-                let child = Node::TreeNode(child);
-                nodes.push(child.clone());
+            // Add the child.
+            let child = Node::TreeNode(child);
+            nodes.push(child.clone());
 
-                let child_eval_context =
-                    XPathExpressionContext::new_single(context.item_tree, child.into());
-                let child_descendants = eval_forward_axis_descendant(&child_eval_context)?;
-                nodes.extend(child_descendants);
-            }
+            // Add the child's descendants.
+            let child_eval_context =
+                XPathExpressionContext::new_single(context.item_tree, child.into());
+            let child_descendants = eval_forward_axis_descendant(&child_eval_context)?;
+            nodes.extend(child_descendants);
         }
     }
 
@@ -165,17 +154,15 @@ fn eval_forward_axis_self_or_descendant<'tree>(
     context: &XPathExpressionContext<'tree>,
 ) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
     let mut nodes = eval_forward_axis_descendant(context)?;
-    let mut self_nodes: Vec<Node<'tree>> = Vec::new();
 
     if let XpathItem::Node(node) = &context.item {
-        self_nodes.push(node.clone());
+        nodes.push(node.clone());
     } else {
         return Err(ExpressionApplyError {
             msg: String::from("err:XPTY0020 context item for axis step is not a node"),
         });
     }
 
-    nodes.extend(self_nodes);
     Ok(nodes)
 }
 

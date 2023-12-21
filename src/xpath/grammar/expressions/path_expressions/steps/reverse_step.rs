@@ -4,7 +4,7 @@ use nom::{branch::alt, bytes::complete::tag, error::context, multi::many0, seque
 
 use crate::xpath::{
     grammar::{
-        data_model::Node,
+        data_model::{Node, XpathItem},
         expressions::{
             path_expressions::{
                 abbreviated_syntax::abbrev_forward_step,
@@ -16,6 +16,7 @@ use crate::xpath::{
             postfix_expressions::{postfix_expr, predicate, PostfixExpr, Predicate},
         },
         recipes::{max, Res},
+        types::KindTest,
     },
     ExpressionApplyError, XPathExpressionContext,
 };
@@ -49,7 +50,7 @@ pub enum ReverseStep {
 impl Display for ReverseStep {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ReverseStep::Full(x, y) => write!(f, "{} {}", x, y),
+            ReverseStep::Full(x, y) => write!(f, "{}{}", x, y),
             ReverseStep::Abbreviated => write!(f, ".."),
         }
     }
@@ -60,6 +61,59 @@ impl ReverseStep {
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
-        todo!("ReverseStep::eval")
+        match self {
+            ReverseStep::Full(axis, node_test) => eval_reverse_axis(context, *axis, node_test),
+            ReverseStep::Abbreviated => {
+                // `..` is short for `parent::node()`.
+                eval_reverse_axis(
+                    context,
+                    ReverseAxis::Parent,
+                    &NodeTest::KindTest(KindTest::AnyKindTest),
+                )
+            }
+        }
     }
+}
+
+fn eval_reverse_axis<'tree>(
+    context: &XPathExpressionContext<'tree>,
+    axis: ReverseAxis,
+    node_test: &NodeTest,
+) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
+    let axis_nodes: Vec<Node> = match axis {
+        ReverseAxis::Parent => eval_reverse_axis_parent(context),
+        ReverseAxis::Ancestor => todo!("eval_reverse_axis ReverseAxis::Ancestor"),
+        ReverseAxis::PrecedingSibling => todo!("eval_reverse_axis ReverseAxis::PrecedingSibling"),
+        ReverseAxis::Preceding => todo!("eval_reverse_axis ReverseAxis::Preceding"),
+        ReverseAxis::AncestorOrSelf => todo!("eval_reverse_axis ReverseAxis::AncestorOrSelf"),
+    }?;
+
+    let items: Vec<XpathItem<'tree>> = axis_nodes.into_iter().map(XpathItem::Node).collect();
+    let mut nodes = Vec::new();
+
+    for (i, node) in items.iter().enumerate() {
+        let node_test_context = XPathExpressionContext::new(context.item_tree, &items, i + 1);
+
+        let result = node_test.eval(&node_test_context)?;
+        nodes.extend(result);
+    }
+
+    Ok(nodes)
+}
+
+/// Direct parent of the context node.
+fn eval_reverse_axis_parent<'tree>(
+    context: &XPathExpressionContext<'tree>,
+) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
+    let mut nodes: Vec<Node<'tree>> = Vec::new();
+
+    // Only tree items have parents
+    // TODO: Technically an attribute's parent is an element, but there is no link to that ATM.
+    if let XpathItem::Node(Node::TreeNode(node)) = &context.item {
+        if let Some(parent) = &node.parent(context.item_tree) {
+            nodes.push(Node::TreeNode(parent.clone()));
+        }
+    }
+
+    Ok(nodes)
 }

@@ -87,6 +87,10 @@ impl<'a> XpathItemTreeNode<'a> {
             .map(move |id| tree.get(id))
     }
 
+    pub fn parent(&self, tree: &'a XpathItemTree) -> Option<XpathItemTreeNode<'a>> {
+        tree.get_index_node(self.id).parent().map(|id| tree.get(id))
+    }
+
     pub fn text(&self, tree: &'a XpathItemTree) -> String {
         let text = self
             // Get all children.
@@ -114,11 +118,14 @@ pub struct XpathItemTree {
 }
 
 impl XpathItemTree {
-    pub fn get(&self, id: NodeId) -> XpathItemTreeNode<'_> {
-        let indextree_node = self
-            .arena
+    fn get_index_node(&self, id: NodeId) -> &indextree::Node<XpathItemTreeNodeData> {
+        self.arena
             .get(id)
-            .expect("xpath item node missing from tree");
+            .expect("xpath item node missing from tree")
+    }
+
+    pub fn get(&self, id: NodeId) -> XpathItemTreeNode<'_> {
+        let indextree_node = self.get_index_node(id);
 
         let data = indextree_node.get();
         XpathItemTreeNode { id, data }

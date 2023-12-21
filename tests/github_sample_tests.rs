@@ -54,10 +54,10 @@ fn xpath_github_sample2() {
             let mut children = children.into_iter();
 
             match children.next().unwrap().data {
-                _ => panic!("expected text"),
                 XpathItemTreeNodeData::TextNode(text) => {
                     assert_eq!(text.content, "refactor: Reorganize into workspace")
                 }
+                x => panic!("expected text, got {:?}", x),
             }
         }
         _ => panic!("expected element"),
@@ -102,6 +102,22 @@ fn xpath_github_sample3() {
 }
 
 #[test]
+fn xpath_github_sample4() {
+    // arrange
+    let text: String = HTML.parse().unwrap();
+
+    let document = html::parse(&text).unwrap();
+    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
+    let xpath = xpath::parse("//div[@role='gridcell']/descendant-or-self::node()").unwrap();
+
+    // act
+    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
+
+    // assert
+    assert_eq!(nodes.len(), 100);
+}
+
+#[test]
 fn xpath_github_get_text_sample() {
     // arrange
     let text: String = HTML.parse().unwrap();
@@ -114,7 +130,7 @@ fn xpath_github_get_text_sample() {
     let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
 
     // assert
-    assert_eq!(1, nodes.len());
+    assert_eq!(nodes.len(), 1);
     let mut nodes = nodes.into_iter();
 
     // TODO: Use Html nodes in the xpath item tree to allow the reuse of these methods
@@ -153,7 +169,7 @@ fn xpath_github_parent_axis_recursive() {
     let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
 
     // assert
-    assert_eq!(20, nodes.len());
+    assert_eq!(nodes.len(), 20);
 }
 
 #[test]
@@ -169,7 +185,7 @@ fn xpath_github_dashed_attribute() {
     let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
 
     // assert
-    assert_eq!(19, nodes.len());
+    assert_eq!(nodes.len(), 19);
 }
 
 #[test]
@@ -185,7 +201,7 @@ fn xpath_github_get_attributes_sample() {
     let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
 
     // assert
-    assert_eq!(1, nodes.len());
+    assert_eq!(nodes.len(), 1);
     let mut nodes = nodes.into_iter();
 
     let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
@@ -234,7 +250,7 @@ fn xpath_github_root_search_all() {
     let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
 
     // assert
-    assert_eq!(1, nodes.len());
+    assert_eq!(nodes.len(), 1);
     let mut nodes = nodes.into_iter();
 
     let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
@@ -258,7 +274,7 @@ fn xpath_github_root_wildcard() {
     let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
 
     // assert
-    assert_eq!(16, nodes.len());
+    assert_eq!(nodes.len(), 16);
 
     // assert first node
     let tree_node = &nodes[0].unwrap_node_ref().unwrap_tree_node_ref();
