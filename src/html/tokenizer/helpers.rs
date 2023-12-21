@@ -238,8 +238,6 @@ pub fn is_text(
         let start_index = pointer.index;
         // If character is not '<', or if it is, make sure its not a start or end tag.
         if c != '<' || (is_end_tag(pointer).is_none() && is_start_tag(pointer).is_none()) {
-            let mut has_non_whitespace = !c.is_whitespace();
-
             let mut buffer: Vec<char> = vec![c];
             loop {
                 match pointer.next() {
@@ -277,25 +275,19 @@ pub fn is_text(
                         pointer.index = pointer_index;
                         buffer.push('<');
                     }
+                    Some('\n') => {
+                        // Text is allowed to start with a new line, but not allowed to contain one mid-sequence.
+                        break;
+                    }
                     Some(c) => {
-                        if !c.is_whitespace() {
-                            has_non_whitespace = true;
-                        }
-
                         buffer.push(*c);
                     }
                     None => break,
                 };
             }
 
-            if has_non_whitespace {
-                let text: String = buffer.into_iter().collect();
-                return Some(Token::Text(text));
-            } else {
-                // roll back pointer
-                pointer.index = start_index;
-                return None;
-            }
+            let text: String = buffer.into_iter().collect();
+            return Some(Token::Text(text));
         } else {
             // Start or end tag was matched meaning we've moved the pointer up;
             // reset it now so it can be matched in the main tokenizer loop.
@@ -320,8 +312,8 @@ mod tests {
         let result = is_start_tag(&mut pointer).unwrap();
 
         // assert
-        assert_eq!(Token::StartTag(String::from("a")), result);
-        assert_eq!(2, pointer.index);
+        assert_eq!(result, Token::StartTag(String::from("a")));
+        assert_eq!(pointer.index, 2);
     }
 
     #[test]
@@ -334,8 +326,8 @@ mod tests {
         let result = is_start_tag(&mut pointer);
 
         // assert
-        assert!(matches!(result, None));
-        assert_eq!(0, pointer.index);
+        assert_eq!(result, None);
+        assert_eq!(pointer.index, 0);
     }
 
     #[test]
@@ -348,8 +340,8 @@ mod tests {
         let result = is_end_tag(&mut pointer).unwrap();
 
         // assert
-        assert_eq!(Token::EndTag(String::from("c")), result);
-        assert_eq!(3, pointer.index);
+        assert_eq!(result, Token::EndTag(String::from("c")));
+        assert_eq!(pointer.index, 3);
     }
 
     #[test]
@@ -362,8 +354,8 @@ mod tests {
         let result = is_end_tag(&mut pointer);
 
         // assert
-        assert!(matches!(result, None));
-        assert_eq!(0, pointer.index);
+        assert_eq!(result, None);
+        assert_eq!(pointer.index, 0);
     }
 
     #[test]
@@ -376,8 +368,8 @@ mod tests {
         let result = is_comment(&mut pointer).unwrap();
 
         // assert
-        assert_eq!(Token::Comment(String::from("bean is-nice ")), result);
-        assert_eq!(20, pointer.index);
+        assert_eq!(result, Token::Comment(String::from("bean is-nice ")));
+        assert_eq!(pointer.index, 20);
     }
 
     #[test]
@@ -390,8 +382,8 @@ mod tests {
         let result = is_comment(&mut pointer);
 
         // assert
-        assert_eq!(None, result);
-        assert_eq!(0, pointer.index);
+        assert_eq!(result, None);
+        assert_eq!(pointer.index, 0);
     }
 
     #[test]
@@ -404,8 +396,8 @@ mod tests {
         let result = is_end_comment(&mut pointer);
 
         // assert
-        assert_eq!(true, result);
-        assert_eq!(3, pointer.index);
+        assert_eq!(result, true);
+        assert_eq!(pointer.index, 3);
     }
 
     #[test]
@@ -418,8 +410,8 @@ mod tests {
         let result = is_end_comment(&mut pointer);
 
         // assert
-        assert_eq!(false, result);
-        assert_eq!(0, pointer.index);
+        assert_eq!(result, false);
+        assert_eq!(pointer.index, 0);
     }
 
     #[test]
@@ -432,8 +424,8 @@ mod tests {
         let result = is_tag_close(&mut pointer).unwrap();
 
         // assert
-        assert_eq!(Token::TagClose, result);
-        assert_eq!(1, pointer.index);
+        assert_eq!(result, Token::TagClose);
+        assert_eq!(pointer.index, 1);
     }
 
     #[test]
@@ -446,8 +438,8 @@ mod tests {
         let result = is_tag_close(&mut pointer);
 
         // assert
-        assert_eq!(None, result);
-        assert_eq!(0, pointer.index);
+        assert_eq!(result, None);
+        assert_eq!(pointer.index, 0);
     }
 
     #[test]
@@ -460,8 +452,8 @@ mod tests {
         let result = is_tag_close_and_end(&mut pointer).unwrap();
 
         // assert
-        assert_eq!(Token::TagCloseAndEnd, result);
-        assert_eq!(2, pointer.index);
+        assert_eq!(result, Token::TagCloseAndEnd);
+        assert_eq!(pointer.index, 2);
     }
 
     #[test]
@@ -474,8 +466,8 @@ mod tests {
         let result = is_tag_close_and_end(&mut pointer);
 
         // assert
-        assert_eq!(None, result);
-        assert_eq!(0, pointer.index);
+        assert_eq!(result, None);
+        assert_eq!(pointer.index, 0);
     }
 
     #[test]
@@ -488,8 +480,8 @@ mod tests {
         let result = is_assignment_sign(&mut pointer).unwrap();
 
         // assert
-        assert_eq!(Token::AssignmentSign, result);
-        assert_eq!(1, pointer.index);
+        assert_eq!(result, Token::AssignmentSign);
+        assert_eq!(pointer.index, 1);
     }
 
     #[test]
@@ -502,8 +494,8 @@ mod tests {
         let result = is_assignment_sign(&mut pointer);
 
         // assert
-        assert_eq!(None, result);
-        assert_eq!(0, pointer.index);
+        assert_eq!(result, None);
+        assert_eq!(pointer.index, 0);
     }
 
     #[test]
@@ -516,8 +508,8 @@ mod tests {
         let result = is_literal(&mut pointer, true).unwrap();
 
         // assert
-        assert_eq!(Token::Literal(String::from("yo")), result);
-        assert_eq!(4, pointer.index);
+        assert_eq!(result, Token::Literal(String::from("yo")));
+        assert_eq!(pointer.index, 4);
     }
 
     #[test]
@@ -531,10 +523,10 @@ mod tests {
 
         // assert
         assert_eq!(
-            Token::Literal(String::from(r#"the cow says "moo"."#)),
-            result
+            result,
+            Token::Literal(String::from(r#"the cow says "moo"."#))
         );
-        assert_eq!(23, pointer.index);
+        assert_eq!(pointer.index, 23);
     }
 
     #[test]
@@ -547,8 +539,8 @@ mod tests {
         let result = is_literal(&mut pointer, true).unwrap();
 
         // assert
-        assert_eq!(Token::Literal(String::from("yo")), result);
-        assert_eq!(4, pointer.index);
+        assert_eq!(result, Token::Literal(String::from("yo")));
+        assert_eq!(pointer.index, 4);
     }
 
     #[test]
@@ -561,8 +553,8 @@ mod tests {
         let result = is_literal(&mut pointer, true);
 
         // assert
-        assert!(matches!(result, None));
-        assert_eq!(0, pointer.index);
+        assert_eq!(result, None);
+        assert_eq!(pointer.index, 0);
     }
 
     #[test]
@@ -575,8 +567,8 @@ mod tests {
         let result = is_identifier(&mut pointer, true).unwrap();
 
         // assert
-        assert_eq!(Token::Identifier(String::from("foo")), result);
-        assert_eq!(3, pointer.index);
+        assert_eq!(result, Token::Identifier(String::from("foo")));
+        assert_eq!(pointer.index, 3);
     }
 
     #[test]
@@ -589,8 +581,8 @@ mod tests {
         let result = is_identifier(&mut pointer, true);
 
         // assert
-        assert!(matches!(result, None));
-        assert_eq!(0, pointer.index);
+        assert_eq!(result, None);
+        assert_eq!(pointer.index, 0);
     }
 
     #[test]
@@ -603,7 +595,7 @@ mod tests {
         let result = is_identifier(&mut pointer, true);
 
         // assert
-        assert!(matches!(result, None));
+        assert_eq!(result, None);
     }
 
     #[test]
@@ -616,8 +608,8 @@ mod tests {
         let result = is_text(&mut pointer, false, false).unwrap();
 
         // assert
-        assert_eq!(Token::Text(String::from("foo bar")), result);
-        assert_eq!(7, pointer.index);
+        assert_eq!(result, Token::Text(String::from("foo bar")));
+        assert_eq!(pointer.index, 7);
     }
 
     #[test]
@@ -630,8 +622,8 @@ mod tests {
         let result = is_text(&mut pointer, false, false);
 
         // assert
-        assert_eq!(None, result);
-        assert_eq!(0, pointer.index);
+        assert_eq!(result, None);
+        assert_eq!(pointer.index, 0);
     }
 
     #[test]
@@ -644,8 +636,8 @@ mod tests {
         let result = is_text(&mut pointer, false, false);
 
         // assert
-        assert_eq!(None, result);
-        assert_eq!(0, pointer.index);
+        assert_eq!(result, None);
+        assert_eq!(pointer.index, 0);
     }
 
     #[test]
@@ -658,8 +650,8 @@ mod tests {
         let result = is_text(&mut pointer, false, false).unwrap();
 
         // assert
-        assert_eq!(Token::Text(String::from("foo > bar < baz")), result);
-        assert_eq!(15, pointer.index);
+        assert_eq!(result, Token::Text(String::from("foo > bar < baz")));
+        assert_eq!(pointer.index, 15);
     }
 
     #[test]
@@ -672,8 +664,8 @@ mod tests {
         let result = is_text(&mut pointer, false, false).unwrap();
 
         // assert
-        assert_eq!(Token::Text(String::from("foo > bar ")), result);
-        assert_eq!(10, pointer.index);
+        assert_eq!(result, Token::Text(String::from("foo > bar ")));
+        assert_eq!(pointer.index, 10);
     }
 
     #[test]
@@ -686,7 +678,35 @@ mod tests {
         let result = is_text(&mut pointer, false, true).unwrap();
 
         // assert
-        assert_eq!(Token::Text(String::from("foo<bar></baz>")), result);
-        assert_eq!(14, pointer.index);
+        assert_eq!(result, Token::Text(String::from("foo<bar></baz>")));
+        assert_eq!(pointer.index, 14);
+    }
+
+    #[test]
+    fn is_text_should_terminate_on_newline() {
+        // arrange
+        let chars: Vec<char> = "foo\nbar".chars().collect();
+        let mut pointer = VecPointerRef::new(&chars);
+
+        // act
+        let result = is_text(&mut pointer, false, true).unwrap();
+
+        // assert
+        assert_eq!(result, Token::Text(String::from("foo")));
+        assert_eq!(pointer.index, 3);
+    }
+
+    #[test]
+    fn is_text_should_capture_starting_new_line_and_whitespace() {
+        // arrange
+        let chars: Vec<char> = "\n\t\t".chars().collect();
+        let mut pointer = VecPointerRef::new(&chars);
+
+        // act
+        let result = is_text(&mut pointer, false, true).unwrap();
+
+        // assert
+        assert_eq!(result, Token::Text(String::from("\n\t\t")));
+        assert_eq!(pointer.index, 3);
     }
 }

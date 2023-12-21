@@ -245,7 +245,10 @@ mod tests {
     use indoc::indoc;
 
     use super::*;
-    use crate::html::parse::{parse_options::ParseOptionsBuilder, Parser};
+    use crate::html::{
+        parse::{parse_options::ParseOptionsBuilder, Parser},
+        DocumentFormatType,
+    };
 
     const HTML_MISMATCHED_END_TAG: &'static str = r#"
         <html>
@@ -342,7 +345,7 @@ mod tests {
         let result = parser.parse(HTML_MISSING_END_TAG).unwrap();
 
         // assert
-        let output = result.to_string();
+        let output = result.to_formatted_string(DocumentFormatType::Indented);
         let expected_output = indoc!(
             r#"
             <html>
@@ -378,7 +381,7 @@ mod tests {
         let result = parser.parse(HTML_MISMATCHED_END_TAG).unwrap();
 
         // assert
-        let output = result.to_string();
+        let output = result.to_formatted_string(DocumentFormatType::Indented);
         let expected_output = indoc!(
             r#"
             <html>
@@ -414,7 +417,7 @@ mod tests {
         let result = parser.parse(HTML_MISSING_END_TAG).unwrap();
 
         // assert
-        let output = result.to_string();
+        let output = result.to_formatted_string(DocumentFormatType::Indented);
         let expected_output = indoc!(
             r#"
             <html>
@@ -450,7 +453,7 @@ mod tests {
         let result = parser.parse(HTML_MISMATCHED_END_TAG).unwrap();
 
         // assert
-        let output = result.to_string();
+        let output = result.to_formatted_string(DocumentFormatType::Indented);
         let expected_output = indoc!(
             r#"
             <html>

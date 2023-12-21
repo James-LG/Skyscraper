@@ -162,7 +162,7 @@ impl XpathItemTree {
                     })
                 }
                 HtmlNode::Text(text) => XpathItemTreeNodeData::TextNode(TextNode {
-                    content: text.to_string(),
+                    content: text.value.to_string(),
                 }),
             };
 
