@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use indexmap::IndexSet;
 use nom::{branch::alt, bytes::complete::tag, error::context, multi::many0, sequence::tuple};
 
 use crate::xpath::{
@@ -20,7 +21,7 @@ use crate::xpath::{
         },
         recipes::{max, Res},
     },
-    ExpressionApplyError, XPathExpressionContext,
+    ExpressionApplyError, XPathExpressionContext, XpathItemSet,
 };
 
 use super::forward_step::ForwardStep;
@@ -72,9 +73,9 @@ impl AxisStep {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<Vec<XpathItem<'tree>>, ExpressionApplyError> {
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         let nodes = self.step_type.eval(context)?;
-        let items: Vec<XpathItem<'tree>> = nodes.into_iter().map(XpathItem::Node).collect();
+        let items: XpathItemSet<'tree> = nodes.into_iter().map(XpathItem::Node).collect();
 
         // If there are no predicates, return expression result.
         if self.predicates.is_empty() {
@@ -82,7 +83,7 @@ impl AxisStep {
         }
 
         // Otherwise, filter using predicates.
-        let mut filtered_items = Vec::new();
+        let mut filtered_items = XpathItemSet::new();
         for (i, item) in items.iter().enumerate() {
             // All predicates must match for a node to be selected.
             let mut is_match = true;
@@ -95,7 +96,7 @@ impl AxisStep {
             }
 
             if is_match {
-                filtered_items.push(item.clone());
+                filtered_items.insert(item.clone());
             }
         }
 
@@ -113,7 +114,7 @@ impl AxisStepType {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
+    ) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
         match self {
             AxisStepType::ReverseStep(step) => step.eval(context),
             AxisStepType::ForwardStep(step) => step.eval(context),

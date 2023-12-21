@@ -2,6 +2,7 @@
 
 use std::{fmt::Display, vec};
 
+use indexmap::{set::IntoIter, IndexSet};
 use indextree::{Arena, NodeId};
 use nom::error::VerboseError;
 use thiserror::Error;
@@ -14,9 +15,13 @@ use crate::{
     },
 };
 
-use self::grammar::{data_model::XpathItem, xpath, XPath, XpathItemTreeNode};
+use self::{
+    grammar::{data_model::XpathItem, xpath, XPath, XpathItemTreeNode},
+    xpath_item_set::XpathItemSet,
+};
 
 pub mod grammar;
+pub mod xpath_item_set;
 
 pub use self::grammar::XpathItemTree;
 
@@ -47,7 +52,7 @@ pub(crate) struct XPathExpressionContext<'tree> {
 impl<'tree> XPathExpressionContext<'tree> {
     pub fn new(
         item_tree: &'tree XpathItemTree,
-        items: &Vec<XpathItem<'tree>>,
+        items: &XpathItemSet<'tree>,
         position: usize,
     ) -> Self {
         Self {
@@ -70,7 +75,7 @@ impl<'tree> XPathExpressionContext<'tree> {
 
 #[derive(PartialEq, PartialOrd, Debug)]
 pub enum XPathResult<'tree> {
-    ItemSet(Vec<XpathItem<'tree>>),
+    ItemSet(XpathItemSet<'tree>),
     Item(XpathItem<'tree>),
 }
 
@@ -117,7 +122,7 @@ impl<'tree> XPathResult<'tree> {
         }
     }
 
-    pub fn unwrap_item_set(self) -> Vec<XpathItem<'tree>> {
+    pub fn unwrap_item_set(self) -> XpathItemSet<'tree> {
         match self {
             XPathResult::ItemSet(items) => items,
             _ => panic!("Expected XPathResult::ItemSet"),

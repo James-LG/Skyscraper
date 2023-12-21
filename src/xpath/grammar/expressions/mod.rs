@@ -2,6 +2,7 @@
 
 use std::fmt::Display;
 
+use indexmap::IndexSet;
 use nom::{branch::alt, character::complete::char, error::context, multi::many0, sequence::tuple};
 
 use crate::{
@@ -15,8 +16,8 @@ use crate::{
             },
             recipes::max,
         },
-        Expression, ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemTree,
-        XpathItemTreeNode,
+        Expression, ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemSet,
+        XpathItemTree, XpathItemTreeNode,
     },
 };
 
@@ -129,7 +130,7 @@ impl Expr {
         /// * `expr_single` - The expression to evaluate.
         fn add_expr_single_item<'tree>(
             context: &XPathExpressionContext<'tree>,
-            items: &mut Vec<XpathItem<'tree>>,
+            items: &mut XpathItemSet<'tree>,
             expr_single: &ExprSingle,
         ) -> Result<(), ExpressionApplyError> {
             // Evaluate the expression.
@@ -137,8 +138,8 @@ impl Expr {
 
             // Add the result to the items vector.
             match result {
-                XPathResult::ItemSet(nodes) => items.extend(nodes),
-                XPathResult::Item(node) => items.push(node),
+                XPathResult::ItemSet(item_set) => items.extend(item_set),
+                XPathResult::Item(item) => items.insert(item),
             }
 
             Ok(())
@@ -151,7 +152,7 @@ impl Expr {
 
         // Otherwise concatenate the results of all the expressions.
         // Expr items are separated by the comma operator, which concatenates results into a sequence.
-        let mut items: Vec<XpathItem> = Vec::new();
+        let mut items: XpathItemSet = XpathItemSet::new();
 
         // Get first item
         add_expr_single_item(context, &mut items, &self.expr)?;

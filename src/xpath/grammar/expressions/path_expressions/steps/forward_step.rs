@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use indexmap::IndexSet;
 use nom::{branch::alt, bytes::complete::tag, error::context, multi::many0, sequence::tuple, Err};
 
 use crate::xpath::{
@@ -18,6 +19,7 @@ use crate::xpath::{
         recipes::{max, Res},
         NonTreeXpathNode, XpathItemTreeNodeData,
     },
+    xpath_item_set::XpathItemSet,
     Expression, ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemTree,
     XpathItemTreeNode,
 };
@@ -65,7 +67,7 @@ impl ForwardStep {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
+    ) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
         match self {
             ForwardStep::Full(axis, node_test) => eval_forward_axis(context, *axis, node_test),
             ForwardStep::Abbreviated(step) => {
@@ -86,7 +88,7 @@ fn eval_forward_axis<'tree>(
     context: &XPathExpressionContext<'tree>,
     axis: ForwardAxis,
     node_test: &NodeTest,
-) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
+) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
     let axis_nodes = match axis {
         ForwardAxis::Child => eval_forward_axis_child(context),
         ForwardAxis::Descendant => eval_forward_axis_descendant(context),
@@ -98,14 +100,17 @@ fn eval_forward_axis<'tree>(
         ForwardAxis::Namespace => todo!("eval_forward_axis ForwardAxis::Namespace"),
     }?;
 
-    let items: Vec<XpathItem<'tree>> = axis_nodes.into_iter().map(XpathItem::Node).collect();
-    let mut nodes = Vec::new();
+    let items: XpathItemSet<'tree> = axis_nodes.into_iter().map(XpathItem::Node).collect();
+    let mut nodes = IndexSet::new();
 
     for (i, item) in items.iter().enumerate() {
         let node_test_context = XPathExpressionContext::new(context.item_tree, &items, i + 1);
 
-        let result = node_test.eval(BiDirectionalAxis::ForwardAxis(axis), &node_test_context)?;
-        nodes.extend(result);
+        if let Some(result) =
+            node_test.eval(BiDirectionalAxis::ForwardAxis(axis), &node_test_context)?
+        {
+            nodes.insert(result);
+        }
     }
 
     Ok(nodes)
@@ -114,14 +119,14 @@ fn eval_forward_axis<'tree>(
 /// Direct children of the context nodes.
 fn eval_forward_axis_child<'tree>(
     context: &XPathExpressionContext<'tree>,
-) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
-    let mut nodes: Vec<Node<'tree>> = Vec::new();
+) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
+    let mut nodes: IndexSet<Node<'tree>> = IndexSet::new();
 
     // Only tree nodes have children
     if let XpathItem::Node(Node::TreeNode(node)) = &context.item {
         for child in node.children(context.item_tree) {
             let child = Node::TreeNode(child);
-            nodes.push(child);
+            nodes.insert(child);
         }
     }
 
@@ -131,15 +136,15 @@ fn eval_forward_axis_child<'tree>(
 /// All descendants of the context nodes.
 fn eval_forward_axis_descendant<'tree>(
     context: &XPathExpressionContext<'tree>,
-) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
-    let mut nodes: Vec<Node<'tree>> = Vec::new();
+) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
+    let mut nodes: IndexSet<Node<'tree>> = IndexSet::new();
 
     // Only tree nodes have children.
     if let XpathItem::Node(Node::TreeNode(node)) = &context.item {
         for child in node.children(context.item_tree) {
             // Add the child.
             let child = Node::TreeNode(child);
-            nodes.push(child.clone());
+            nodes.insert(child.clone());
 
             // Add the child's descendants.
             let child_eval_context =
@@ -155,11 +160,11 @@ fn eval_forward_axis_descendant<'tree>(
 /// All descendants of the context nodes including the context nodes.
 fn eval_forward_axis_self_or_descendant<'tree>(
     context: &XPathExpressionContext<'tree>,
-) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
+) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
     let mut nodes = eval_forward_axis_descendant(context)?;
 
     if let XpathItem::Node(node) = &context.item {
-        nodes.push(node.clone());
+        nodes.insert(node.clone());
     } else {
         return Err(ExpressionApplyError {
             msg: String::from("err:XPTY0020 context item for axis step is not a node"),
@@ -172,8 +177,8 @@ fn eval_forward_axis_self_or_descendant<'tree>(
 // All attributes of the context nodes.
 fn eval_forward_axis_attribute<'tree>(
     context: &XPathExpressionContext<'tree>,
-) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
-    let mut attributes = Vec::new();
+) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
+    let mut attributes = IndexSet::new();
 
     // Only elements have attributes.
     if let XpathItem::Node(Node::TreeNode(XpathItemTreeNode {
@@ -184,7 +189,7 @@ fn eval_forward_axis_attribute<'tree>(
         for attribute in element.attributes.iter() {
             let attribute = Node::NonTreeNode(NonTreeXpathNode::AttributeNode(attribute.clone()));
 
-            attributes.push(attribute);
+            attributes.insert(attribute);
         }
     }
 

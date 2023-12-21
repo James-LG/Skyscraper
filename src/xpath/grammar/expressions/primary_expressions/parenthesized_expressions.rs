@@ -9,6 +9,7 @@ use crate::xpath::{
         expressions::{expr, Expr},
         recipes::Res,
     },
+    xpath_item_set::XpathItemSet,
     ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
@@ -42,7 +43,7 @@ impl ParenthesizedExpr {
         if let Some(expr) = &self.0 {
             expr.eval(context)
         } else {
-            Ok(XPathResult::ItemSet(Vec::new()))
+            Ok(XPathResult::ItemSet(XpathItemSet::new()))
         }
     }
 }

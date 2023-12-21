@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use indexmap::IndexSet;
 use nom::{branch::alt, bytes::complete::tag, error::context, multi::many0, sequence::tuple};
 
 use crate::xpath::{
@@ -18,6 +19,7 @@ use crate::xpath::{
         },
         recipes::{max, Res},
     },
+    xpath_item_set::XpathItemSet,
     ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
@@ -56,7 +58,7 @@ impl StepExpr {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<Vec<XpathItem<'tree>>, ExpressionApplyError> {
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         match self {
             StepExpr::PostfixExpr(expr) => expr.eval(context),
             StepExpr::AxisStep(step) => step.eval(context),

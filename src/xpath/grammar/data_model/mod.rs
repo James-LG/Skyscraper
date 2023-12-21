@@ -2,13 +2,15 @@
 
 use std::fmt::Display;
 
+use ordered_float::OrderedFloat;
+
 use super::{
     types::function_test::FunctionTest, xml_names::QName, NonTreeXpathNode, XpathItemTree,
     XpathItemTreeNode,
 };
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#dt-item
-#[derive(PartialEq, PartialOrd, Debug, Clone)]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash)]
 pub enum XpathItem<'tree> {
     Node(Node<'tree>),
     Function(Function),
@@ -48,12 +50,12 @@ impl<'tree> From<Node<'tree>> for XpathItem<'tree> {
 }
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#types-hierarchy
-#[derive(PartialEq, PartialOrd, Debug, Clone)]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash)]
 pub enum AnyAtomicType {
     Boolean(bool),
     Integer(i64),
-    Float(f32),
-    Double(f64),
+    Float(OrderedFloat<f32>),
+    Double(OrderedFloat<f64>),
     String(String),
 }
 
@@ -70,7 +72,7 @@ impl Display for AnyAtomicType {
 }
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#dt-function-item
-#[derive(PartialEq, PartialOrd, Debug, Clone)]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash)]
 pub struct Function {
     // TODO
 }
@@ -82,7 +84,7 @@ impl Display for Function {
 }
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#dt-node
-#[derive(PartialEq, PartialOrd, Debug, Clone)]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash)]
 pub enum Node<'tree> {
     TreeNode(XpathItemTreeNode<'tree>),
     NonTreeNode(NonTreeXpathNode),
@@ -121,7 +123,7 @@ impl<'tree> Node<'tree> {
 }
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#DocumentNode
-#[derive(PartialEq, PartialOrd, Debug)]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
 pub struct XpathDocumentNode {}
 
 impl Display for XpathDocumentNode {
@@ -131,7 +133,7 @@ impl Display for XpathDocumentNode {
 }
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#ElementNode
-#[derive(PartialEq, PartialOrd, Debug)]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
 pub struct ElementNode {
     pub name: String,
     pub attributes: Vec<AttributeNode>,
@@ -157,7 +159,7 @@ impl ElementNode {
 }
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#AttributeNode
-#[derive(PartialEq, PartialOrd, Debug, Clone)]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash)]
 pub struct AttributeNode {
     pub name: String,
     pub value: String,
@@ -170,7 +172,7 @@ impl Display for AttributeNode {
 }
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#NamespaceNode
-#[derive(PartialEq, PartialOrd, Debug, Clone)]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash)]
 pub struct NamespaceNode {
     pub prefix: String,
     pub uri: String,
@@ -183,7 +185,7 @@ impl Display for NamespaceNode {
 }
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#ProcessingInstructionNode
-#[derive(PartialEq, PartialOrd, Debug)]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
 pub struct PINode {
     // TODO
 }
@@ -195,7 +197,7 @@ impl Display for PINode {
 }
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#CommentNode
-#[derive(PartialEq, PartialOrd, Debug)]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
 pub struct CommentNode {
     pub content: String,
 }
@@ -207,7 +209,7 @@ impl Display for CommentNode {
 }
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#TextNode
-#[derive(PartialEq, PartialOrd, Debug)]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
 pub struct TextNode {
     pub content: String,
 }

@@ -10,6 +10,7 @@ use nom::{
 use crate::xpath::grammar::data_model::XpathItem;
 use crate::xpath::grammar::expressions::primary_expressions::PrimaryExpr::FunctionCall;
 use crate::xpath::parse;
+use crate::xpath::xpath_item_set::XpathItemSet;
 use crate::xpath::{
     grammar::{
         data_model::Node,
@@ -98,7 +99,7 @@ impl PathExpr {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<Vec<XpathItem<'tree>>, ExpressionApplyError> {
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         // Leading slashes mean different things than slashes in the middle of a path expression
         // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-path-expressions
         match self {
@@ -208,7 +209,7 @@ impl RelativePathExpr {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<Vec<XpathItem<'tree>>, ExpressionApplyError> {
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         let e1_result = self.expr.eval(context)?;
 
         // If there are no items, return the result of the expression.
@@ -220,7 +221,7 @@ impl RelativePathExpr {
         // E2 is evaluated with a context item for each item returned by E1.
         let e2 = &self.items[0];
 
-        let mut items = vec![];
+        let mut items = XpathItemSet::new();
         for (i, item) in e1_result.iter().enumerate() {
             let e2_context = XPathExpressionContext::new(context.item_tree, &e1_result, i + 1);
             let e2_result = match e2.0 {

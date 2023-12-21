@@ -92,8 +92,8 @@ impl NumericLiteral {
     pub(crate) fn value(&self) -> AnyAtomicType {
         match self {
             NumericLiteral::Integer(x) => AnyAtomicType::Integer((*x).into()),
-            NumericLiteral::Decimal(x) => AnyAtomicType::Float(*x),
-            NumericLiteral::Double(x) => AnyAtomicType::Double(*x),
+            NumericLiteral::Decimal(x) => AnyAtomicType::Float(ordered_float::OrderedFloat(*x)),
+            NumericLiteral::Double(x) => AnyAtomicType::Double(ordered_float::OrderedFloat(*x)),
         }
     }
 }

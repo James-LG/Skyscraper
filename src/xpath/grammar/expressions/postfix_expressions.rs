@@ -2,6 +2,7 @@
 
 use std::fmt::Display;
 
+use indexmap::{indexset, IndexSet};
 use nom::{branch::alt, character::complete::char, error::context, multi::many0, sequence::tuple};
 
 use crate::xpath::{
@@ -13,8 +14,10 @@ use crate::xpath::{
         },
         recipes::{ws, Res},
     },
-    ExpressionApplyError, XPathExpressionContext, XPathResult,
+    xpath_item_set, ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemSet,
 };
+
+use crate::xpath_item_set;
 
 use super::{
     common::ArgumentList, expr, maps_and_arrays::lookup_operator::postfix_lookup::Lookup,
@@ -76,12 +79,12 @@ impl PostfixExpr {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<Vec<XpathItem<'tree>>, ExpressionApplyError> {
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         let res = self.expr.eval(context)?;
 
         let items = match res {
             XPathResult::ItemSet(x) => x,
-            XPathResult::Item(x) => vec![x],
+            XPathResult::Item(x) => xpath_item_set![x],
         };
 
         if !self.items.is_empty() {

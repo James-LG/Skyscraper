@@ -153,7 +153,7 @@ fn xpath_github_parent_axis() {
     let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
 
     // assert
-    assert_eq!(5, nodes.len());
+    assert_eq!(nodes.len(), 5);
 }
 
 #[test]

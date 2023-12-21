@@ -15,6 +15,7 @@ use crate::{
             recipes::{ws, Res},
             NonTreeXpathNode, XpathItemTreeNode, XpathItemTreeNodeData,
         },
+        xpath_item_set::XpathItemSet,
         Expression, ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemTree,
     },
 };
@@ -104,7 +105,7 @@ impl Expression for ComparisonExpr {
         // If the either atomized set is an empty sequence,
         // the result of the value comparison is an empty sequence.
         if atomized1.is_empty() || atomized2.is_empty() {
-            return Ok(XPathResult::ItemSet(Vec::new()));
+            return Ok(XPathResult::ItemSet(XpathItemSet::new()));
         }
 
         // If the either atomized set is a sequence of length greater than one,
