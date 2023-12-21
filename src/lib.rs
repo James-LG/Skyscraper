@@ -7,7 +7,7 @@
 //! # use std::error::Error;
 //! # fn main() -> Result<(), Box<dyn Error>> {
 //! use skyscraper::html;
-//! use skyscraper::xpath;
+//! use skyscraper::xpath::{self, XpathItemTree};
 //!
 //! let text = r##"
 //! <html>
@@ -25,61 +25,66 @@
 //!
 //! // Parse the HTML text
 //! let document = html::parse(text)?;
+//! let xpath_item_tree = XpathItemTree::from_html_document(&document);
 //!
 //! // Assuming your XPath string is static, it is safe to use `expect` during parsing
 //! let xpath = xpath::parse("//div[@class='yes']/parent::div/div[@class='duplicate']")
 //!     .expect("xpath is invalid");
 //!
 //! // Apply the XPath expression to our HTML document
-//! let nodes = xpath.apply(&document)?;
+//! let result = xpath.apply(&xpath_item_tree)?;
 //!
-//! assert_eq!(1, nodes.len());
+//! // The xpath expression that was used always returns an item set.
+//! let items = result.unwrap_item_set();
+//!
+//! assert_eq!(items.len(), 1);
 //!
 //! // Compare the text of the first and only node returned by the XPath expression
-//! let text = nodes[0].get_text(&document)
-//!     .ok_or_else(|| "text is missing")?;
+//! let node = items[0].unwrap_node_ref().unwrap_tree_node_ref();
+//! let text = node.text(&xpath_item_tree);
 //!
-//! assert_eq!("Good info", text);
+//! assert_eq!(text, "Good info");
 //!
 //! // Assert that node class attribute is "duplicate" string.
-//! let attributes = nodes[0].get_attributes(&document).unwrap();
-//! assert_eq!("duplicate", attributes["class"]);
+//! let element = node.data.unwrap_element_ref();
+//! let attribute = element.get_attribute("class").unwrap();
+//! assert_eq!(attribute, "duplicate");
 //!
 //! # Ok(())
 //! # }
 //! ```
 //!
-//! # Example: use lazy_static if Xpath expressions are static
+//! # Example: use once_cell if Xpath expressions are static
 //!
 //! If your Xpath expressions are static, and you have a function that
 //! parses and applies the expression every time the function is called,
-//! consider using [mod@lazy_static] to prevent the expression from being
+//! consider using [mod@once_cell] to prevent the expression from being
 //! repeatedly parsed.
 //!
 //! ```rust
-//! #[macro_use]
-//! extern crate lazy_static;
-//!
 //! use std::error::Error;
-//! use skyscraper::{html::{self, HtmlDocument}, xpath::{self, Xpath}};
+//! use skyscraper::{html::{self, HtmlDocument}, xpath::{self, XPath, XpathItemTree}};
+//! use once_cell::sync::Lazy;
 //!
-//! lazy_static! {
-//!     static ref SPAN_XPATH: Xpath = xpath::parse("/div/span").unwrap();
-//! }
+//! static SPAN_XPATH: Lazy<XPath> = Lazy::new(|| xpath::parse("/div/span").unwrap());
 //!
-//! fn my_func(document: &HtmlDocument) -> Result<Option<String>, Box<dyn Error>> {
-//!     let xpath_results = SPAN_XPATH.apply(document)?;
-//!     Ok(xpath_results[0].get_text(document))
+//! fn my_func(document: &HtmlDocument) -> Result<String, Box<dyn Error>> {
+//!     let xpath_item_tree = XpathItemTree::from_html_document(document);
+//!     let result = SPAN_XPATH.apply(&xpath_item_tree)?;
+//!
+//!     let items = result.unwrap_item_set();
+//!     let node = items[0].unwrap_node_ref().unwrap_tree_node_ref();
+//!     Ok(node.text(&xpath_item_tree))
 //! }
 //!
 //! fn main() -> Result<(), Box<dyn Error>> {
 //!     let doc1 = html::parse("<div><span>foo</span></div>")?;
-//!     let text1 = my_func(&doc1)?.expect("text missing");
-//!     assert_eq!("foo", text1);
+//!     let text1 = my_func(&doc1)?;
+//!     assert_eq!(text1, "foo");
 //!
 //!     let doc2 = html::parse("<div><span>bar</span></div>")?;
-//!     let text2 = my_func(&doc2)?.expect("text missing");
-//!     assert_eq!("bar", text2);
+//!     let text2 = my_func(&doc2)?;
+//!     assert_eq!(text2, "bar");
 //!
 //!     Ok(())
 //! }
@@ -91,9 +96,6 @@
 //! For more information on XPath expressions, see the [xpath] module documentation.
 
 #![warn(missing_docs)]
-
-#[macro_use]
-extern crate lazy_static;
 
 pub mod html;
 mod vecpointer;

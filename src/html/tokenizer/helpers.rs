@@ -1,3 +1,5 @@
+use once_cell::sync::Lazy;
+
 use crate::vecpointer::VecPointerRef;
 
 use super::Token;
@@ -181,10 +183,8 @@ pub fn is_literal(pointer: &mut VecPointerRef<char>, has_open_tag: bool) -> Opti
     None
 }
 
-lazy_static! {
-    /// List of characters that end an Identifier [Token](Token).
-    static ref INAVLID_ID_CHARS: Vec<char> = vec!['<', '>', '/', '=', '"'];
-}
+/// List of characters that end an Identifier [Token](Token).
+static INAVLID_ID_CHARS: Lazy<Vec<char>> = Lazy::new(|| vec!['<', '>', '/', '=', '"']);
 
 /// Checks if the [VecPointerRef](VecPointerRef) is currently pointing to a Identifier [Token](Token).
 /// If true it will move the text pointer to the next symbol, otherwise it will not change the pointer.

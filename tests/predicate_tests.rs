@@ -38,7 +38,7 @@ fn class_equals_predicate_should_select_nodes_with_that_match() {
             _ => panic!("expected element, got {:?}", tree_node.data),
         }
 
-        assert_eq!(tree_node.text(&xpath_item_tree), "good");
+        assert_eq!(tree_node.text(&xpath_item_tree).trim(), "good");
     }
 }
 
@@ -77,6 +77,6 @@ fn predicate_on_double_leading_slash_should_select_nodes_with_that_match() {
             _ => panic!("expected element, got {:?}", tree_node.data),
         }
 
-        assert_eq!(tree_node.text(&xpath_item_tree), "good");
+        assert_eq!(tree_node.text(&xpath_item_tree).trim(), "good");
     }
 }

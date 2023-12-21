@@ -16,14 +16,14 @@ use crate::{
 };
 
 use self::{
-    grammar::{data_model::XpathItem, xpath, XPath, XpathItemTreeNode},
+    grammar::{data_model::XpathItem, xpath, XpathItemTreeNode},
     xpath_item_set::XpathItemSet,
 };
 
 pub mod grammar;
 pub mod xpath_item_set;
 
-pub use self::grammar::XpathItemTree;
+pub use self::grammar::{XPath, XpathItemTree};
 
 pub fn parse(input: &str) -> Result<XPath, nom::Err<VerboseError<&str>>> {
     xpath(input).map(|x| x.1)
