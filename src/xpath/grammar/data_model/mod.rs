@@ -209,9 +209,10 @@ impl Display for CommentNode {
 }
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#TextNode
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash, Clone)]
 pub struct TextNode {
     pub content: String,
+    pub only_whitespace: bool,
 }
 
 impl Display for TextNode {

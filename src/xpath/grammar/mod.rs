@@ -92,20 +92,41 @@ impl<'a> XpathItemTreeNode<'a> {
     }
 
     pub fn text(&self, tree: &'a XpathItemTree) -> String {
-        let text = self
+        fn get_all_text_nodes(tree: &XpathItemTree, node: &XpathItemTreeNode) -> Vec<TextNode> {
+            node
+                // Get all children of the given node.
+                .children(tree)
+                // Combine all the direct and indirect children into a Vec.
+                .fold(Vec::new(), |mut v, child| {
+                    // If this child is a text node, push it to the Vec.
+                    if let XpathItemTreeNodeData::TextNode(text) = child.data {
+                        v.push(text.clone());
+                    }
+                    // Otherwise, get all the text nodes descending from this child.
+                    else {
+                        v.extend(get_all_text_nodes(tree, &child));
+                    }
+                    v
+                })
+        }
+
+        let strings: Vec<String> =
             // Get all children.
-            .children(tree)
-            // Filter to only text nodes.
-            .filter_map(|x| match x.data {
-                XpathItemTreeNodeData::TextNode(text) => Some(text),
-                _ => None,
+            get_all_text_nodes(tree, self)
+            .into_iter()
+            // Filter out all whitespace-only text nodes
+            .filter_map(|x| {
+                if x.only_whitespace {
+                    None
+                } else {
+                    Some(x.content)
+                }
             })
-            // Merge all text into a single string.
-            // Space delimited.
-            .fold(String::new(), |mut acc, x| {
-                acc.push_str(&x.content);
-                acc
-            });
+            .collect();
+
+        // Merge all text into a single string.
+        // Space delimited.
+        let text = strings.join(" ");
 
         text
     }
@@ -163,6 +184,7 @@ impl XpathItemTree {
                 }
                 HtmlNode::Text(text) => XpathItemTreeNodeData::TextNode(TextNode {
                     content: text.value.to_string(),
+                    only_whitespace: text.only_whitespace,
                 }),
             };
 

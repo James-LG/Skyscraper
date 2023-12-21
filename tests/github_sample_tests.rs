@@ -133,11 +133,11 @@ fn xpath_github_get_text_sample() {
     assert_eq!(nodes.len(), 1);
     let mut nodes = nodes.into_iter();
 
-    // TODO: Use Html nodes in the xpath item tree to allow the reuse of these methods
-    // let html_node = document.get_html_node(&doc_node).unwrap();
-    // let text = html_node.get_all_text(&doc_node, &document).unwrap();
+    let element = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
 
-    // assert_eq!("James-LG / Skyscraper Public", text);
+    let text = element.text(&xpath_item_tree).trim().to_string();
+
+    assert_eq!(text, "James-LG / Skyscraper Public");
 }
 
 #[test]
