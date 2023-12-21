@@ -133,15 +133,15 @@ impl KindTest {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
+    ) -> Result<Option<Node<'tree>>, ExpressionApplyError> {
         match self {
             KindTest::AnyKindTest => {
                 // AnyKindTest is `node()`.
                 // Select all node types.
                 if let XpathItem::Node(node) = &context.item {
-                    Ok(vec![node.clone()])
+                    Ok(Some(node.clone()))
                 } else {
-                    Ok(vec![])
+                    Ok(None)
                 }
             }
             KindTest::TextTest => todo!("KindTest::TextTest::is_match"),
@@ -218,7 +218,7 @@ impl DocumentTest {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<Vec<Node<'tree>>, ExpressionApplyError> {
+    ) -> Result<Option<Node<'tree>>, ExpressionApplyError> {
         match &self.value {
             // document-node() matches any document node.
             None => {
@@ -230,11 +230,11 @@ impl DocumentTest {
                             ..
                         })
                     ) {
-                        return Ok(vec![node.clone()]);
+                        return Ok(Some(node.clone()));
                     }
                 }
 
-                Ok(vec![])
+                Ok(None)
             }
             // document-node( E ) matches any document node that contains exactly one element node,
             // optionally accompanied by one or more comment and processing instruction nodes,

@@ -22,7 +22,10 @@ use crate::xpath::{
     XpathItemTreeNode,
 };
 
-use super::{axes::forward_axis::ForwardAxis, node_tests::NodeTest};
+use super::{
+    axes::forward_axis::ForwardAxis,
+    node_tests::{BiDirectionalAxis, NodeTest},
+};
 
 pub fn forward_step(input: &str) -> Res<&str, ForwardStep> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-ForwardStep
@@ -101,7 +104,7 @@ fn eval_forward_axis<'tree>(
     for (i, item) in items.iter().enumerate() {
         let node_test_context = XPathExpressionContext::new(context.item_tree, &items, i + 1);
 
-        let result = node_test.eval(&node_test_context)?;
+        let result = node_test.eval(BiDirectionalAxis::ForwardAxis(axis), &node_test_context)?;
         nodes.extend(result);
     }
 

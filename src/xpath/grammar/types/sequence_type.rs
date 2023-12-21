@@ -191,7 +191,7 @@ impl ItemType {
             ItemType::Item => Ok(true),
             ItemType::KindTest(x) => {
                 let result = x.eval(context)?;
-                Ok(!result.is_empty())
+                Ok(!result.is_none())
             }
             ItemType::FunctionTest(x) => todo!("ItemType::FunctionTest::is_match"),
             ItemType::MapTest(x) => todo!("ItemType::MapTest::is_match"),

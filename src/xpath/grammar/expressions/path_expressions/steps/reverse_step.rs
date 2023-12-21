@@ -21,7 +21,10 @@ use crate::xpath::{
     ExpressionApplyError, XPathExpressionContext,
 };
 
-use super::{axes::reverse_axis::ReverseAxis, node_tests::NodeTest};
+use super::{
+    axes::reverse_axis::ReverseAxis,
+    node_tests::{BiDirectionalAxis, NodeTest},
+};
 
 pub fn reverse_step(input: &str) -> Res<&str, ReverseStep> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-ReverseStep
@@ -94,7 +97,7 @@ fn eval_reverse_axis<'tree>(
     for (i, node) in items.iter().enumerate() {
         let node_test_context = XPathExpressionContext::new(context.item_tree, &items, i + 1);
 
-        let result = node_test.eval(&node_test_context)?;
+        let result = node_test.eval(BiDirectionalAxis::ReverseAxis(axis), &node_test_context)?;
         nodes.extend(result);
     }
 
