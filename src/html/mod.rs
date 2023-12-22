@@ -20,8 +20,7 @@ mod tokenizer;
 
 use std::{
     collections::HashMap,
-    fmt::{self, Error, Write},
-    io,
+    fmt::{self, Write},
 };
 
 use indextree::{Arena, NodeId};

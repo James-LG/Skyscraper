@@ -44,7 +44,7 @@ pub struct IfExpr {
 }
 
 impl Display for IfExpr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!("fmt IfExpr")
     }
 }

@@ -1,19 +1,11 @@
 //! Parse and apply XPath expressions to HTML documents.
 
-use std::{fmt::Display, vec};
+use std::fmt::Display;
 
-use indexmap::{set::IntoIter, IndexSet};
-use indextree::{Arena, NodeId};
 use nom::error::VerboseError;
 use thiserror::Error;
 
-use crate::{
-    html::{HtmlDocument, HtmlNode},
-    xpath::grammar::data_model::{
-        AnyAtomicType, AttributeNode, CommentNode, ElementNode, Function, NamespaceNode, Node,
-        PINode, TextNode,
-    },
-};
+use crate::xpath::grammar::data_model::AnyAtomicType;
 
 use self::{
     grammar::{data_model::XpathItem, xpath, XpathItemTreeNode},

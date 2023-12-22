@@ -6,7 +6,7 @@ use nom::{branch::alt, character::complete::char, error::context};
 
 use crate::xpath::{
     grammar::{
-        data_model::{Node, XpathItem},
+        data_model::XpathItem,
         expressions::{
             maps_and_arrays::{
                 arrays::array_constructor, lookup_operator::unary_lookup::unary_lookup,
@@ -178,7 +178,7 @@ pub enum FunctionItemExpr {
 }
 
 impl Display for FunctionItemExpr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!("fmt FunctionItemExpr")
     }
 }

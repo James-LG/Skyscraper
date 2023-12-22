@@ -2,19 +2,18 @@
 
 use std::fmt::Display;
 
-use indexmap::{indexset, IndexSet};
+use indexmap::indexset;
 use nom::{branch::alt, character::complete::char, error::context, multi::many0, sequence::tuple};
 
 use crate::xpath::{
     grammar::{
-        data_model::{Node, XpathItem},
         expressions::{
             common::argument_list, maps_and_arrays::lookup_operator::postfix_lookup::lookup,
             primary_expressions::primary_expr,
         },
         recipes::{ws, Res},
     },
-    xpath_item_set, ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemSet,
+    ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemSet,
 };
 
 use crate::xpath_item_set;

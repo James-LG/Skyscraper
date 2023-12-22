@@ -1,22 +1,15 @@
 use std::fmt::Display;
 
 use indexmap::IndexSet;
-use nom::{branch::alt, bytes::complete::tag, error::context, multi::many0, sequence::tuple};
+use nom::{branch::alt, bytes::complete::tag, error::context, sequence::tuple};
 
 use crate::xpath::{
     grammar::{
         data_model::{Node, XpathItem},
-        expressions::{
-            path_expressions::{
-                abbreviated_syntax::abbrev_forward_step,
-                steps::{
-                    axes::{forward_axis::forward_axis, reverse_axis::reverse_axis},
-                    node_tests::node_test,
-                },
-            },
-            postfix_expressions::{postfix_expr, predicate, PostfixExpr, Predicate},
+        expressions::path_expressions::steps::{
+            axes::reverse_axis::reverse_axis, node_tests::node_test,
         },
-        recipes::{max, Res},
+        recipes::Res,
         types::KindTest,
     },
     xpath_item_set::XpathItemSet,
@@ -96,7 +89,7 @@ fn eval_reverse_axis<'tree>(
     let items: XpathItemSet<'tree> = axis_nodes.into_iter().map(XpathItem::Node).collect();
     let mut nodes = IndexSet::new();
 
-    for (i, node) in items.iter().enumerate() {
+    for (i, _node) in items.iter().enumerate() {
         let node_test_context = XPathExpressionContext::new(context.item_tree, &items, i + 1);
 
         if let Some(result) =

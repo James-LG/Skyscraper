@@ -13,14 +13,11 @@ use std::fmt::Display;
 pub use expressions::{xpath, XPath};
 
 use indextree::{Arena, NodeId};
-use nom::error::VerboseError;
-use thiserror::Error;
 
 use crate::{
     html::{DocumentNode, HtmlDocument, HtmlNode},
     xpath::grammar::data_model::{
-        AnyAtomicType, AttributeNode, CommentNode, ElementNode, Function, NamespaceNode, Node,
-        PINode, TextNode, XpathDocumentNode,
+        AttributeNode, CommentNode, ElementNode, NamespaceNode, PINode, TextNode, XpathDocumentNode,
     },
 };
 

@@ -4,20 +4,15 @@ use std::fmt::Display;
 
 use nom::{branch::alt, bytes::complete::tag, combinator::opt, error::context, sequence::tuple};
 
-use crate::{
-    html::DocumentNode,
-    xpath::{
-        grammar::{
-            data_model::{
-                AnyAtomicType, CommentNode, ElementNode, Node, PINode, TextNode, XpathItem,
-            },
-            expressions::string_concat_expressions::string_concat_expr,
-            recipes::{ws, Res},
-            NonTreeXpathNode, XpathItemTreeNode, XpathItemTreeNodeData,
-        },
-        xpath_item_set::XpathItemSet,
-        Expression, ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemTree,
+use crate::xpath::{
+    grammar::{
+        data_model::{AnyAtomicType, Node, XpathItem},
+        expressions::string_concat_expressions::string_concat_expr,
+        recipes::{ws, Res},
+        NonTreeXpathNode, XpathItemTreeNodeData,
     },
+    xpath_item_set::XpathItemSet,
+    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemTree,
 };
 
 use super::string_concat_expressions::StringConcatExpr;

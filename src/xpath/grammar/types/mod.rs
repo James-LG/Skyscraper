@@ -12,7 +12,7 @@ use crate::xpath::{
         terminal_symbols::{string_literal, uri_qualified_name},
         xml_names::qname,
     },
-    ExpressionApplyError, XPathExpressionContext, XPathResult,
+    ExpressionApplyError, XPathExpressionContext,
 };
 
 use self::{
@@ -27,7 +27,7 @@ use super::{
     recipes::Res,
     terminal_symbols::UriQualifiedName,
     xml_names::{nc_name, QName},
-    NonTreeXpathNode, XpathItemTreeNode, XpathItemTreeNodeData,
+    XpathItemTreeNode, XpathItemTreeNodeData,
 };
 
 pub mod array_test;
@@ -278,7 +278,7 @@ pub fn schema_attribute_test(input: &str) -> Res<&str, SchemaAttributeTest> {
 pub struct SchemaAttributeTest(pub AttributeDeclaration);
 
 impl Display for SchemaAttributeTest {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!("fmt SchemaAttributeTest")
     }
 }
@@ -323,7 +323,7 @@ pub struct PITest {
 }
 
 impl Display for PITest {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!("fmt PITest")
     }
 }
@@ -338,7 +338,7 @@ pub enum PITestValue {
 pub struct AtomicOrUnionType(EQName);
 
 impl Display for AtomicOrUnionType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!("fmt AtomicOrUnionType")
     }
 }

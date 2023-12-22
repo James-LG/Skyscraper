@@ -1,27 +1,20 @@
 use std::fmt::Display;
 
 use indexmap::IndexSet;
-use nom::{branch::alt, bytes::complete::tag, error::context, multi::many0, sequence::tuple, Err};
+use nom::{branch::alt, error::context, sequence::tuple};
 
 use crate::xpath::{
     grammar::{
         data_model::{Node, XpathItem},
-        expressions::{
-            path_expressions::{
-                abbreviated_syntax::{abbrev_forward_step, AbbrevForwardStep},
-                steps::{
-                    axes::{forward_axis::forward_axis, reverse_axis::reverse_axis},
-                    node_tests::node_test,
-                },
-            },
-            postfix_expressions::{postfix_expr, predicate, PostfixExpr, Predicate},
+        expressions::path_expressions::{
+            abbreviated_syntax::{abbrev_forward_step, AbbrevForwardStep},
+            steps::{axes::forward_axis::forward_axis, node_tests::node_test},
         },
-        recipes::{max, Res},
+        recipes::Res,
         NonTreeXpathNode, XpathItemTreeNodeData,
     },
     xpath_item_set::XpathItemSet,
-    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemTree,
-    XpathItemTreeNode,
+    Expression, ExpressionApplyError, XPathExpressionContext, XpathItemTreeNode,
 };
 
 use super::{
@@ -103,7 +96,7 @@ fn eval_forward_axis<'tree>(
     let items: XpathItemSet<'tree> = axis_nodes.into_iter().map(XpathItem::Node).collect();
     let mut nodes = IndexSet::new();
 
-    for (i, item) in items.iter().enumerate() {
+    for (i, _item) in items.iter().enumerate() {
         let node_test_context = XPathExpressionContext::new(context.item_tree, &items, i + 1);
 
         if let Some(result) =

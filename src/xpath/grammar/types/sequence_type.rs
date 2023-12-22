@@ -13,7 +13,6 @@ use nom::{
 
 use crate::xpath::{
     grammar::{
-        data_model::{Node, XpathItem},
         recipes::Res,
         types::{
             array_test::array_test, common::atomic_or_union_type, function_test::function_test,
@@ -89,7 +88,7 @@ impl SequenceType {
                     let item_type_result = x.item_type.eval(context)?;
                     match result {
                         XPathResult::ItemSet(set) => Ok(set.len() == 1 && item_type_result),
-                        XPathResult::Item(item) => Ok(item_type_result),
+                        XPathResult::Item(_item) => Ok(item_type_result),
                     }
                 }
             },
@@ -193,10 +192,10 @@ impl ItemType {
                 let result = x.eval(context)?;
                 Ok(!result.is_none())
             }
-            ItemType::FunctionTest(x) => todo!("ItemType::FunctionTest::is_match"),
-            ItemType::MapTest(x) => todo!("ItemType::MapTest::is_match"),
-            ItemType::ArrayTest(x) => todo!("ItemType::ArrayTest::is_match"),
-            ItemType::AtomicOrUnionType(x) => todo!("ItemType::AtomicOrUnionType::is_match"),
+            ItemType::FunctionTest(_x) => todo!("ItemType::FunctionTest::is_match"),
+            ItemType::MapTest(_x) => todo!("ItemType::MapTest::is_match"),
+            ItemType::ArrayTest(_x) => todo!("ItemType::ArrayTest::is_match"),
+            ItemType::AtomicOrUnionType(_x) => todo!("ItemType::AtomicOrUnionType::is_match"),
         }
     }
 }

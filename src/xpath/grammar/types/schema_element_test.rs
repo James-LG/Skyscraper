@@ -27,7 +27,7 @@ pub fn schema_element_test(input: &str) -> Res<&str, SchemaElementTest> {
 pub struct SchemaElementTest(pub ElementDeclaration);
 
 impl Display for SchemaElementTest {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!("fmt SchemaElementTest")
     }
 }

@@ -42,7 +42,7 @@ pub enum ArrayConstructor {
 }
 
 impl Display for ArrayConstructor {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!("fmt ArrayConstructor")
     }
 }

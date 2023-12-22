@@ -1,5 +1,3 @@
-use skyscraper::html::HtmlNode;
-use skyscraper::xpath::grammar::data_model::ElementNode;
 use skyscraper::xpath::grammar::{XpathItemTreeNode, XpathItemTreeNodeData};
 use skyscraper::{html, xpath};
 

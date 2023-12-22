@@ -5,8 +5,7 @@ use std::fmt::Display;
 use nom::{bytes::complete::tag, error::context, multi::many0, sequence::tuple};
 
 use crate::xpath::{
-    grammar::{recipes::Res, XpathItemTreeNode},
-    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemTree,
+    grammar::recipes::Res, Expression, ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 use super::comparison_expressions::{comparison_expr, ComparisonExpr};

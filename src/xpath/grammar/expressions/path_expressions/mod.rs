@@ -7,43 +7,13 @@ use nom::{
     multi::many0, sequence::tuple,
 };
 
-use crate::xpath::grammar::data_model::XpathItem;
-use crate::xpath::grammar::expressions::primary_expressions::PrimaryExpr::FunctionCall;
-use crate::xpath::parse;
 use crate::xpath::xpath_item_set::XpathItemSet;
 use crate::xpath::{
-    grammar::{
-        data_model::Node,
-        expressions::path_expressions::steps::step_expr::step_expr,
-        recipes::Res,
-        xml_names::{PrefixedName, QName},
-    },
-    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult,
+    grammar::{expressions::path_expressions::steps::step_expr::step_expr, recipes::Res},
+    Expression, ExpressionApplyError, XPathExpressionContext,
 };
 
-use self::steps::axis_step::AxisStep;
 use self::steps::step_expr::StepExpr;
-
-use super::common::ArgumentList;
-use super::expr;
-use super::{
-    arithmetic_expressions::{AdditiveExpr, MultiplicativeExpr, UnaryExpr, ValueExpr},
-    arrow_operator::ArrowExpr,
-    comparison_expressions::ComparisonExpr,
-    expressions_on_sequence_types::{
-        cast::CastExpr, castable::CastableExpr, instance_of::InstanceofExpr, treat::TreatExpr,
-    },
-    logical_expressions::{AndExpr, OrExpr},
-    postfix_expressions::PostfixExpr,
-    primary_expressions::{parenthesized_expressions::ParenthesizedExpr, PrimaryExpr},
-    sequence_expressions::{
-        combining_node_sequences::{IntersectExceptExpr, UnionExpr},
-        constructing_sequences::RangeExpr,
-    },
-    simple_map_operator::SimpleMapExpr,
-    string_concat_expressions::StringConcatExpr,
-    Expr, ExprSingle,
-};
 
 pub mod abbreviated_syntax;
 pub mod steps;
@@ -222,7 +192,7 @@ impl RelativePathExpr {
         let e2 = &self.items[0];
 
         let mut items = XpathItemSet::new();
-        for (i, item) in e1_result.iter().enumerate() {
+        for (i, _item) in e1_result.iter().enumerate() {
             let e2_context = XPathExpressionContext::new(context.item_tree, &e1_result, i + 1);
             let e2_result = match e2.0 {
                 PathSeparator::Slash => e2.1.eval(&e2_context)?,
@@ -248,7 +218,7 @@ impl RelativePathExpr {
                 match self.items[1].0 {
                     PathSeparator::Slash => {
                         // For each item in the result of E2, evaluate E3.
-                        for (i, item) in e2_result.iter().enumerate() {
+                        for (i, _item) in e2_result.iter().enumerate() {
                             let e3_context = XPathExpressionContext::new(
                                 e2_context.item_tree,
                                 &e2_result,
@@ -316,7 +286,6 @@ impl Display for PathSeparator {
 
 #[cfg(test)]
 mod tests {
-    use crate::xpath::parse;
 
     use super::*;
 

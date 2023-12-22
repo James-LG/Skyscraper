@@ -2,23 +2,18 @@
 
 use std::fmt::Display;
 
-use indexmap::IndexSet;
-use nom::{branch::alt, character::complete::char, error::context, multi::many0, sequence::tuple};
+use nom::{character::complete::char, error::context, multi::many0, sequence::tuple};
 
-use crate::{
-    html::HtmlDocument,
-    xpath::{
-        grammar::{
-            expressions::{
-                conditional_expressions::if_expr, for_expressions::for_expr,
-                let_expressions::let_expr, logical_expressions::or_expr,
-                quantified_expressions::quantified_expr,
-            },
-            recipes::max,
+use crate::xpath::{
+    grammar::{
+        expressions::{
+            conditional_expressions::if_expr, for_expressions::for_expr, let_expressions::let_expr,
+            logical_expressions::or_expr, quantified_expressions::quantified_expr,
         },
-        Expression, ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemSet,
-        XpathItemTree, XpathItemTreeNode,
+        recipes::max,
     },
+    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemSet,
+    XpathItemTree,
 };
 
 use self::{

@@ -1,25 +1,20 @@
 use std::fmt::Display;
 
 use indexmap::IndexSet;
-use nom::{branch::alt, bytes::complete::tag, error::context, multi::many0, sequence::tuple};
+use nom::{branch::alt, error::context, sequence::tuple};
 
 use crate::xpath::{
     grammar::{
         data_model::{Node, XpathItem},
         expressions::{
-            path_expressions::{
-                abbreviated_syntax::abbrev_forward_step,
-                steps::{
-                    axes::{forward_axis::forward_axis, reverse_axis},
-                    forward_step::forward_step,
-                    node_tests::node_test,
-                    predicate_list,
-                    reverse_step::{reverse_step, ReverseStep},
-                },
+            path_expressions::steps::{
+                forward_step::forward_step,
+                predicate_list,
+                reverse_step::{reverse_step, ReverseStep},
             },
-            postfix_expressions::{postfix_expr, predicate, PostfixExpr, Predicate},
+            postfix_expressions::Predicate,
         },
-        recipes::{max, Res},
+        recipes::Res,
     },
     ExpressionApplyError, XPathExpressionContext, XpathItemSet,
 };

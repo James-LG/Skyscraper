@@ -13,7 +13,6 @@ use nom::{
 };
 
 use super::{
-    data_model::AnyAtomicType,
     recipes::{not_brace, not_quote, not_single_quote, Res},
     xml_names::nc_name,
 };

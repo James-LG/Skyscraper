@@ -4,10 +4,7 @@ use std::fmt::Display;
 
 use ordered_float::OrderedFloat;
 
-use super::{
-    types::function_test::FunctionTest, xml_names::QName, NonTreeXpathNode, XpathItemTree,
-    XpathItemTreeNode,
-};
+use super::{NonTreeXpathNode, XpathItemTreeNode};
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#dt-item
 #[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash)]
@@ -78,7 +75,7 @@ pub struct Function {
 }
 
 impl Display for Function {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!("Function::fmt")
     }
 }
@@ -191,7 +188,7 @@ pub struct PINode {
 }
 
 impl Display for PINode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!("PINode::fmt")
     }
 }

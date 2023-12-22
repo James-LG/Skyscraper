@@ -39,7 +39,7 @@ pub enum FunctionTest {
 }
 
 impl Display for FunctionTest {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!("fmt FunctionTest")
     }
 }
