@@ -2,7 +2,7 @@
 
 use std::fmt::Display;
 
-use indexmap::indexset;
+
 use nom::{branch::alt, character::complete::char, error::context, multi::many0, sequence::tuple};
 
 use crate::xpath::{

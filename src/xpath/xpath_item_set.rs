@@ -106,9 +106,50 @@ macro_rules! xpath_item_set {
     ($($value:expr,)+) => { $crate::xpath::xpath_item_set::xpath_item_set!($($value),+) };
     ($($value:expr),*) => {
         {
-            let set = indexset![$($value)*];
+            let set = indexmap::indexset![$($value,)*];
 
             XpathItemSet::from(set)
         }
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::xpath::grammar::data_model::AnyAtomicType;
+
+    use super::*;
+
+    #[test]
+    fn macro_works_with_one() {
+        // arrange
+        let node1 = XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("1")));
+
+        // act
+        let item_set = xpath_item_set![node1.clone()];
+
+        // assert
+        let mut expected = XpathItemSet::new();
+        expected.insert(node1);
+
+        assert_eq!(item_set, expected);
+    }
+
+    #[test]
+    fn macro_works_with_multiple() {
+        // arrange
+        let node1 = XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("1")));
+        let node2 = XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("2")));
+        let node3 = XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("3")));
+
+        // act
+        let item_set = xpath_item_set![node1.clone(), node2.clone(), node3.clone()];
+
+        // assert
+        let mut expected = XpathItemSet::new();
+        expected.insert(node1);
+        expected.insert(node2);
+        expected.insert(node3);
+
+        assert_eq!(item_set, expected);
+    }
 }
