@@ -10,7 +10,7 @@ use nom::{
 use crate::xpath::xpath_item_set::XpathItemSet;
 use crate::xpath::{
     grammar::{expressions::path_expressions::steps::step_expr::step_expr, recipes::Res},
-    Expression, ExpressionApplyError, XPathExpressionContext,
+    ExpressionApplyError, XPathExpressionContext,
 };
 
 use self::steps::step_expr::StepExpr;

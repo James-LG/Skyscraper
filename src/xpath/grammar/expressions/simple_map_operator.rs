@@ -5,7 +5,7 @@ use std::fmt::Display;
 use nom::{character::complete::char, error::context, multi::many0, sequence::tuple};
 
 use crate::xpath::{
-    grammar::recipes::Res, Expression, ExpressionApplyError, XPathExpressionContext, XPathResult,
+    grammar::recipes::Res, ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 use super::path_expressions::{path_expr, PathExpr};
@@ -41,8 +41,8 @@ impl Display for SimpleMapExpr {
     }
 }
 
-impl Expression for SimpleMapExpr {
-    fn eval<'tree>(
+impl SimpleMapExpr {
+    pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {

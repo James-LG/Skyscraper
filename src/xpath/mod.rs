@@ -27,13 +27,6 @@ pub struct ExpressionApplyError {
     msg: String,
 }
 
-trait Expression {
-    fn eval<'tree>(
-        &self,
-        context: &XPathExpressionContext<'tree>,
-    ) -> Result<XPathResult<'tree>, ExpressionApplyError>;
-}
-
 pub(crate) struct XPathExpressionContext<'tree> {
     item_tree: &'tree XpathItemTree,
     item: XpathItem<'tree>,

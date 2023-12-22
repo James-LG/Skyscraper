@@ -12,8 +12,7 @@ use crate::xpath::{
         },
         recipes::max,
     },
-    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemSet,
-    XpathItemTree,
+    ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemSet, XpathItemTree,
 };
 
 use self::{
@@ -59,8 +58,8 @@ impl Display for XPath {
     }
 }
 
-impl Expression for XPath {
-    fn eval<'tree>(
+impl XPath {
+    pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
@@ -218,8 +217,8 @@ impl Display for ExprSingle {
     }
 }
 
-impl Expression for ExprSingle {
-    fn eval<'tree>(
+impl ExprSingle {
+    pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {

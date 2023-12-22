@@ -5,7 +5,7 @@ use std::fmt::Display;
 use nom::{bytes::complete::tag, combinator::opt, error::context, sequence::tuple};
 
 use crate::xpath::{
-    grammar::recipes::Res, Expression, ExpressionApplyError, XPathExpressionContext, XPathResult,
+    grammar::recipes::Res, ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 use super::cast::{cast_expr, single_type, CastExpr, SingleType};
@@ -49,8 +49,8 @@ impl Display for CastableExpr {
     }
 }
 
-impl Expression for CastableExpr {
-    fn eval<'tree>(
+impl CastableExpr {
+    pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {

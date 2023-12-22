@@ -211,7 +211,7 @@ impl Wildcard {
                 // For the attribute axis, the principal node kind is attribute.
                 matches!(node, Node::NonTreeNode(NonTreeXpathNode::AttributeNode(_)))
             }
-            BiDirectionalAxis::ForwardAxis(ForwardAxis::Attribute) => {
+            BiDirectionalAxis::ForwardAxis(ForwardAxis::Namespace) => {
                 // For the namespace axis, the principal node kind is namespace.
                 matches!(node, Node::NonTreeNode(NonTreeXpathNode::NamespaceNode(_)))
             }

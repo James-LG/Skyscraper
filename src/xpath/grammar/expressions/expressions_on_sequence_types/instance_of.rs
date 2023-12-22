@@ -9,7 +9,7 @@ use crate::xpath::{
         recipes::Res,
         types::sequence_type::{sequence_type, SequenceType},
     },
-    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult,
+    ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 use super::treat::{treat_expr, TreatExpr};
@@ -53,8 +53,8 @@ impl Display for InstanceofExpr {
     }
 }
 
-impl Expression for InstanceofExpr {
-    fn eval<'tree>(
+impl InstanceofExpr {
+    pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {

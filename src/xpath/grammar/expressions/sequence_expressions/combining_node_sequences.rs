@@ -11,7 +11,7 @@ use crate::xpath::{
         },
         recipes::Res,
     },
-    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult,
+    ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 pub fn union_expr(input: &str) -> Res<&str, UnionExpr> {
@@ -60,8 +60,8 @@ impl Display for UnionExprPair {
     }
 }
 
-impl Expression for UnionExpr {
-    fn eval<'tree>(
+impl UnionExpr {
+    pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
@@ -150,8 +150,8 @@ impl Display for IntersectExceptExpr {
     }
 }
 
-impl Expression for IntersectExceptExpr {
-    fn eval<'tree>(
+impl IntersectExceptExpr {
+    pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {

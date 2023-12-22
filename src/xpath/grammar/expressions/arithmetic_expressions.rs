@@ -11,7 +11,7 @@ use crate::xpath::{
     grammar::{
         expressions::sequence_expressions::combining_node_sequences::union_expr, recipes::Res,
     },
-    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult,
+    ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 use super::{
@@ -64,8 +64,8 @@ impl Display for AdditiveExpr {
     }
 }
 
-impl Expression for AdditiveExpr {
-    fn eval<'tree>(
+impl AdditiveExpr {
+    pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
@@ -161,8 +161,8 @@ impl Display for MultiplicativeExpr {
     }
 }
 
-impl Expression for MultiplicativeExpr {
-    fn eval<'tree>(
+impl MultiplicativeExpr {
+    pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
@@ -247,8 +247,8 @@ impl Display for UnaryExpr {
     }
 }
 
-impl Expression for UnaryExpr {
-    fn eval<'tree>(
+impl UnaryExpr {
+    pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
@@ -296,8 +296,8 @@ impl Display for ValueExpr {
     }
 }
 
-impl Expression for ValueExpr {
-    fn eval<'tree>(
+impl ValueExpr {
+    pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {

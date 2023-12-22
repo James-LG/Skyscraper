@@ -5,7 +5,7 @@ use std::fmt::Display;
 use nom::{bytes::complete::tag, error::context, multi::many0, sequence::tuple};
 
 use crate::xpath::{
-    grammar::recipes::Res, Expression, ExpressionApplyError, XPathExpressionContext, XPathResult,
+    grammar::recipes::Res, ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 use super::sequence_expressions::constructing_sequences::{range_expr, RangeExpr};
@@ -40,8 +40,8 @@ impl Display for StringConcatExpr {
     }
 }
 
-impl Expression for StringConcatExpr {
-    fn eval<'tree>(
+impl StringConcatExpr {
+    pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {

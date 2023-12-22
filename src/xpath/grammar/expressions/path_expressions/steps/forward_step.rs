@@ -14,7 +14,7 @@ use crate::xpath::{
         NonTreeXpathNode, XpathItemTreeNodeData,
     },
     xpath_item_set::XpathItemSet,
-    Expression, ExpressionApplyError, XPathExpressionContext, XpathItemTreeNode,
+    ExpressionApplyError, XPathExpressionContext, XpathItemTreeNode,
 };
 
 use super::{

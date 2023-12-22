@@ -9,7 +9,7 @@ use crate::xpath::{
         expressions::arithmetic_expressions::{additive_expr, AdditiveExpr},
         recipes::Res,
     },
-    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult,
+    ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 pub fn range_expr(input: &str) -> Res<&str, RangeExpr> {
@@ -47,8 +47,8 @@ impl Display for RangeExpr {
     }
 }
 
-impl Expression for RangeExpr {
-    fn eval<'tree>(
+impl RangeExpr {
+    pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {

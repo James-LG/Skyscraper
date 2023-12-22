@@ -12,7 +12,7 @@ use crate::xpath::{
         NonTreeXpathNode, XpathItemTreeNodeData,
     },
     xpath_item_set::XpathItemSet,
-    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemTree,
+    ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemTree,
 };
 
 use super::string_concat_expressions::StringConcatExpr;
@@ -72,8 +72,8 @@ impl Display for ComparisonExpr {
     }
 }
 
-impl Expression for ComparisonExpr {
-    fn eval<'tree>(
+impl ComparisonExpr {
+    pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {

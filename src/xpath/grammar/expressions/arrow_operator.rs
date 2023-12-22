@@ -12,7 +12,7 @@ use crate::xpath::{
         recipes::Res,
         types::{eq_name, EQName},
     },
-    Expression, ExpressionApplyError, XPathExpressionContext, XPathResult,
+    ExpressionApplyError, XPathExpressionContext, XPathResult,
 };
 
 use super::{
@@ -64,8 +64,8 @@ impl Display for ArrowExpr {
     }
 }
 
-impl Expression for ArrowExpr {
-    fn eval<'tree>(
+impl ArrowExpr {
+    pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
