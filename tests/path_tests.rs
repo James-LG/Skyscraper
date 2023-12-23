@@ -13,7 +13,7 @@ fn leading_slash_should_select_html_node() {
         </html>"###;
 
     let document = html::parse(&text).unwrap();
-    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
+    let xpath_item_tree = xpath::XpathItemTree::from(&document);
     let xpath = xpath::parse("/html").unwrap();
 
     // act
@@ -56,7 +56,7 @@ fn leading_double_slash_should_select_all() {
         </html>"###;
 
     let document = html::parse(&text).unwrap();
-    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
+    let xpath_item_tree = xpath::XpathItemTree::from(&document);
     let xpath = xpath::parse("//p").unwrap();
 
     // act

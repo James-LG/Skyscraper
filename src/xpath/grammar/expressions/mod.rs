@@ -43,12 +43,13 @@ pub mod sequence_expressions;
 pub mod simple_map_operator;
 pub mod string_concat_expressions;
 
-pub fn xpath(input: &str) -> Res<&str, XPath> {
+pub(crate) fn xpath(input: &str) -> Res<&str, XPath> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-XPath
 
     context("xpath", expr)(input).map(|(next_input, res)| (next_input, XPath(res)))
 }
 
+/// An XPath expression.
 #[derive(PartialEq, Debug)]
 pub struct XPath(pub Expr);
 
@@ -65,9 +66,60 @@ impl XPath {
     ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
         self.0.eval(context)
     }
-}
 
-impl XPath {
+    /// Apply the XPath expression to the given item tree.
+    ///
+    /// # Arguments
+    ///
+    /// * `item_tree` - The item tree to apply the expression to.
+    ///
+    /// # Returns
+    ///
+    /// The result of applying the expression to the item tree.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use skyscraper::html;
+    /// use skyscraper::xpath::{self, XpathItemTree, grammar::{XpathItemTreeNodeData, data_model::{Node, XpathItem}}};
+    /// use std::error::Error;
+    ///
+    /// fn main() -> Result<(), Box<dyn Error>> {
+    ///     let html_text = r##"
+    ///     <html>
+    ///         <body>
+    ///             <div>Hello world</div>
+    ///         </body>
+    ///     </html>"##;
+    ///    
+    ///     let document = html::parse(html_text)?;
+    ///     let xpath_item_tree = XpathItemTree::from(&document);
+    ///     let xpath = xpath::parse("//div")?;
+    ///    
+    ///     let nodes = xpath.apply(&xpath_item_tree)?.unwrap_item_set();
+    ///    
+    ///     assert_eq!(nodes.len(), 1);
+    ///    
+    ///     let mut nodes = nodes.into_iter();
+    ///    
+    ///     let node = nodes.next().unwrap();
+    ///    
+    ///     match node {
+    ///         XpathItem::Node(Node::TreeNode(tree_node)) => {
+    ///             match tree_node.data {
+    ///                 XpathItemTreeNodeData::ElementNode(element) => {
+    ///                    assert_eq!(element.name, "div");
+    ///                 },
+    ///                _ => panic!("expected node to be an element node"),
+    ///             }
+    ///
+    ///             assert_eq!(tree_node.text(&xpath_item_tree), "Hello world");
+    ///         },
+    ///         _ => panic!("expected node to be a tree node"),
+    ///     }
+    ///     Ok(())
+    /// }
+    /// ```
     pub fn apply<'tree>(
         &self,
         item_tree: &'tree XpathItemTree,

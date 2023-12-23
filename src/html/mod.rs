@@ -14,6 +14,7 @@
 //! let document = html::parse(html_text)?;
 //! # Ok(())
 //! # }
+//! ```
 
 pub mod parse;
 mod tokenizer;

@@ -17,7 +17,7 @@ fn class_equals_predicate_should_select_nodes_with_that_match() {
         </html>"###;
 
     let document = html::parse(&text).unwrap();
-    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
+    let xpath_item_tree = xpath::XpathItemTree::from(&document);
     let xpath = xpath::parse("/html/div[@class='here']").unwrap();
 
     // act
@@ -56,7 +56,7 @@ fn predicate_on_double_leading_slash_should_select_nodes_with_that_match() {
         </html>"###;
 
     let document = html::parse(&text).unwrap();
-    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
+    let xpath_item_tree = xpath::XpathItemTree::from(&document);
     let xpath = xpath::parse("//div[@class='here']").unwrap();
 
     // act

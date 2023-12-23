@@ -1,5 +1,8 @@
+//! This module contains the grammar for the XPath language.
+//! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-grammar
+
+// Helpful links:
 // https://github.com/rust-bakery/nom/blob/main/doc/making_a_new_parser_from_scratch.md
-// https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-grammar
 
 pub mod data_model;
 mod expressions;
@@ -10,7 +13,8 @@ mod xml_names;
 
 use std::fmt::Display;
 
-pub use expressions::{xpath, XPath};
+pub(crate) use expressions::xpath;
+pub use expressions::XPath;
 
 use indextree::{Arena, NodeId};
 
@@ -21,11 +25,13 @@ use crate::{
     },
 };
 
-/// Subset of [Node] that are not allowed to have child nodes.
-/// Should be disjoint with [XpathItemTreeNodeData].
+/// Nodes that are not part of the [`XpathItemTree`].
 #[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash)]
 pub enum NonTreeXpathNode {
+    /// An attribute node.
     AttributeNode(AttributeNode),
+
+    /// A namespace node.
     NamespaceNode(NamespaceNode),
 }
 
@@ -38,14 +44,24 @@ impl Display for NonTreeXpathNode {
     }
 }
 
-/// Subset of [Node] that are allowed to have child nodes.
-/// Should be disjoint with [NonTreeXpathNode].
+/// Nodes that are part of the [`XpathItemTree`].
 #[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
 pub enum XpathItemTreeNodeData {
+    /// The root node of the document.
     DocumentNode(XpathDocumentNode),
+
+    /// An element node.
+    ///
+    /// HTML tags are represented as element nodes.
     ElementNode(ElementNode),
+
+    /// A processing instruction node.
     PINode(PINode),
+
+    /// A comment node.
     CommentNode(CommentNode),
+
+    /// A text node.
     TextNode(TextNode),
 }
 
@@ -58,9 +74,12 @@ impl XpathItemTreeNodeData {
     }
 }
 
+/// A node in the [`XpathItemTree`].
 #[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash)]
 pub struct XpathItemTreeNode<'a> {
     id: NodeId,
+
+    /// The data associated with this node.
     pub data: &'a XpathItemTreeNodeData,
 }
 
@@ -77,6 +96,15 @@ impl Display for XpathItemTreeNode<'_> {
 }
 
 impl<'a> XpathItemTreeNode<'a> {
+    /// Get all the child nodes of this node.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree that this node is a part of.
+    ///
+    /// # Returns
+    ///
+    /// An iterator over the child nodes of this node.
     pub fn children(&self, tree: &'a XpathItemTree) -> impl Iterator<Item = XpathItemTreeNode<'a>> {
         self.id
             .children(&tree.arena)
@@ -84,10 +112,28 @@ impl<'a> XpathItemTreeNode<'a> {
             .map(move |id| tree.get(id))
     }
 
+    /// Get the parent node of this node.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree that this node is a part of.
+    ///
+    /// # Returns
+    ///
+    /// The parent node of this node, or `None` if this node is the root node.
     pub fn parent(&self, tree: &'a XpathItemTree) -> Option<XpathItemTreeNode<'a>> {
         tree.get_index_node(self.id).parent().map(|id| tree.get(id))
     }
 
+    /// Get all text contained in this node and its descendants.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree that this node is a part of.
+    ///
+    /// # Returns
+    ///
+    /// A string of all text contained in this node and its descendants.
     pub fn text(&self, tree: &'a XpathItemTree) -> String {
         fn get_all_text_nodes(tree: &XpathItemTree, node: &XpathItemTreeNode) -> Vec<TextNode> {
             node
@@ -129,8 +175,11 @@ impl<'a> XpathItemTreeNode<'a> {
     }
 }
 
+/// A tree of [`XpathItemTreeNode`]s.
 pub struct XpathItemTree {
+    /// The index tree that stores the nodes.
     arena: Arena<XpathItemTreeNodeData>,
+
     /// The root node of the document.
     root_node: NodeId,
 }
@@ -142,21 +191,21 @@ impl XpathItemTree {
             .expect("xpath item node missing from tree")
     }
 
-    pub fn get(&self, id: NodeId) -> XpathItemTreeNode<'_> {
+    fn get(&self, id: NodeId) -> XpathItemTreeNode<'_> {
         let indextree_node = self.get_index_node(id);
 
         let data = indextree_node.get();
         XpathItemTreeNode { id, data }
     }
 
-    pub fn root(&self) -> XpathItemTreeNode<'_> {
+    fn root(&self) -> XpathItemTreeNode<'_> {
         self.get(self.root_node)
     }
 }
 
-impl XpathItemTree {
-    pub fn from_html_document(html_document: &HtmlDocument) -> Self {
-        fn internal_from_html_document(
+impl From<&HtmlDocument> for XpathItemTree {
+    fn from(html_document: &HtmlDocument) -> Self {
+        fn internal_from(
             current_html_node: &DocumentNode,
             html_document: &HtmlDocument,
             item_arena: &mut Arena<XpathItemTreeNodeData>,
@@ -188,7 +237,7 @@ impl XpathItemTree {
             let root_item_id = item_arena.new_node(root_item);
 
             for child in current_html_node.children(&html_document) {
-                let child_node = internal_from_html_document(&child, html_document, item_arena);
+                let child_node = internal_from(&child, html_document, item_arena);
                 root_item_id.append(child_node, item_arena);
             }
 
@@ -198,8 +247,7 @@ impl XpathItemTree {
         let mut item_arena = Arena::<XpathItemTreeNodeData>::new();
         let root_node_id =
             item_arena.new_node(XpathItemTreeNodeData::DocumentNode(XpathDocumentNode {}));
-        let first_child =
-            internal_from_html_document(&html_document.root_node, &html_document, &mut item_arena);
+        let first_child = internal_from(&html_document.root_node, &html_document, &mut item_arena);
         root_node_id.append(first_child, &mut item_arena);
 
         XpathItemTree {

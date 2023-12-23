@@ -17,10 +17,12 @@ pub mod xpath_item_set;
 
 pub use self::grammar::{XPath, XpathItemTree};
 
+/// Parse a string into an [XPath] expression.
 pub fn parse(input: &str) -> Result<XPath, nom::Err<VerboseError<&str>>> {
     xpath(input).map(|x| x.1)
 }
 
+/// Error that occurs when applying an [XPath] expression to an [XpathItemTree].
 #[derive(PartialEq, Debug, Error)]
 #[error("Error applying expression {msg}")]
 pub struct ExpressionApplyError {
@@ -58,9 +60,15 @@ impl<'tree> XPathExpressionContext<'tree> {
     }
 }
 
+/// The result of applying an [XPath] expression to an [XpathItemTree].
 #[derive(PartialEq, PartialOrd, Debug)]
 pub enum XPathResult<'tree> {
+    /// A set of multiple items.
     ItemSet(XpathItemSet<'tree>),
+
+    /// A single item.
+    ///
+    /// Returned by expressions that can _only_ return a single item such as boolean expressions.
     Item(XpathItem<'tree>),
 }
 

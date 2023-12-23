@@ -9,7 +9,7 @@ fn xpath_github_sample1() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
-    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
+    let xpath_item_tree = xpath::XpathItemTree::from(&document);
     let xpath = xpath::parse("//main").unwrap();
 
     // act
@@ -32,7 +32,7 @@ fn xpath_github_sample2() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
-    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
+    let xpath_item_tree = xpath::XpathItemTree::from(&document);
     let xpath = xpath::parse("//a[@class='Link--secondary']").unwrap();
 
     // act
@@ -68,7 +68,7 @@ fn xpath_github_sample3() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
-    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
+    let xpath_item_tree = xpath::XpathItemTree::from(&document);
     let xpath =
         xpath::parse("//div[@class='BorderGrid-cell']/div[@class=' text-small']/a").unwrap();
 
@@ -105,7 +105,7 @@ fn xpath_github_sample4() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
-    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
+    let xpath_item_tree = xpath::XpathItemTree::from(&document);
     let xpath = xpath::parse("//div[@role='gridcell']/descendant-or-self::node()").unwrap();
 
     // act
@@ -121,7 +121,7 @@ fn xpath_github_get_text_sample() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
-    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
+    let xpath_item_tree = xpath::XpathItemTree::from(&document);
     let xpath = xpath::parse("//div[@class='flex-auto min-width-0 width-fit mr-3']").unwrap();
 
     // act
@@ -144,7 +144,7 @@ fn xpath_github_parent_axis() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
-    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
+    let xpath_item_tree = xpath::XpathItemTree::from(&document);
     let xpath = xpath::parse("//div[@role='gridcell']/parent::div").unwrap();
 
     // act
@@ -160,7 +160,7 @@ fn xpath_github_parent_axis_recursive() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
-    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
+    let xpath_item_tree = xpath::XpathItemTree::from(&document);
     let xpath = xpath::parse("//div[@role='gridcell']//parent::div").unwrap();
 
     // act
@@ -176,7 +176,7 @@ fn xpath_github_dashed_attribute() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
-    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
+    let xpath_item_tree = xpath::XpathItemTree::from(&document);
     let xpath = xpath::parse("//span[@data-view-component='true']").unwrap();
 
     // act
@@ -192,7 +192,7 @@ fn xpath_github_get_attributes_sample() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
-    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
+    let xpath_item_tree = xpath::XpathItemTree::from(&document);
     let xpath = xpath::parse("//div[@class='flex-auto min-width-0 width-fit mr-3']").unwrap();
 
     // act
@@ -217,7 +217,7 @@ fn xpath_github_root_search() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
-    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
+    let xpath_item_tree = xpath::XpathItemTree::from(&document);
     let xpath = xpath::parse("/html").unwrap();
 
     // act
@@ -241,7 +241,7 @@ fn xpath_github_root_search_all() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
-    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
+    let xpath_item_tree = xpath::XpathItemTree::from(&document);
     let xpath = xpath::parse("//html").unwrap();
 
     // act
@@ -265,7 +265,7 @@ fn xpath_github_root_wildcard() {
     let text: String = HTML.parse().unwrap();
 
     let document = html::parse(&text).unwrap();
-    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
+    let xpath_item_tree = xpath::XpathItemTree::from(&document);
     let xpath = xpath::parse("//body/*").unwrap();
 
     // act

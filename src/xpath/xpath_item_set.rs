@@ -1,9 +1,12 @@
+//! An ordered set of [`XpathItem`]s.
+
 use std::ops::Index;
 
 use indexmap::{self, IndexSet};
 
 use super::grammar::data_model::XpathItem;
 
+/// An ordered set of [`XpathItem`]s.
 #[derive(Debug)]
 pub struct XpathItemSet<'tree> {
     index_set: IndexSet<XpathItem<'tree>>,
@@ -55,32 +58,39 @@ impl<'tree> Extend<XpathItem<'tree>> for XpathItemSet<'tree> {
 }
 
 impl<'tree> XpathItemSet<'tree> {
+    /// Create a new empty [`XpathItemSet`].
     pub fn new() -> Self {
         XpathItemSet {
             index_set: IndexSet::new(),
         }
     }
 
+    /// Whether the set is empty.
     pub fn is_empty(&self) -> bool {
         self.index_set.is_empty()
     }
 
+    /// The number of items in the set.
     pub fn len(&self) -> usize {
         self.index_set.len()
     }
 
+    /// Inserts a new item into the set.
+    ///
+    /// Returns true if the item was inserted, false if it was already present.
     pub fn insertb(&mut self, item: XpathItem<'tree>) -> bool {
         self.index_set.insert(item)
     }
 
     /// Inserts a new item into the set.
     ///
-    /// Drops the bool return by [XpathItemSet::insertb] so that it can be used in match arms
-    /// without causing incompatible types with [XpathItemSet::extend].
+    /// Drops the bool returned by [`XpathItemSet::insertb`] so that it can be used in match arms
+    /// without causing incompatible types with [`XpathItemSet::extend`].
     pub fn insert(&mut self, item: XpathItem<'tree>) {
         self.insertb(item);
     }
 
+    /// Return an iterator over the items in the set.
     pub fn iter(&self) -> indexmap::set::Iter<'_, XpathItem<'tree>> {
         self.index_set.iter()
     }

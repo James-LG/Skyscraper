@@ -13,7 +13,7 @@ fn parent_axis_should_select_parent_node() {
         </html>"###;
 
     let document = html::parse(&text).unwrap();
-    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
+    let xpath_item_tree = xpath::XpathItemTree::from(&document);
     let xpath = xpath::parse("//body/parent::html").unwrap();
 
     // act
@@ -57,7 +57,7 @@ fn parent_axis_should_select_parents_of_all_selected_nodes() {
         </html>"###;
 
     let document = html::parse(&text).unwrap();
-    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
+    let xpath_item_tree = xpath::XpathItemTree::from(&document);
     let xpath = xpath::parse("//p/parent::div").unwrap();
 
     // act
@@ -116,7 +116,7 @@ fn parent_axis_should_respect_node_test() {
         </html>"###;
 
     let document = html::parse(&text).unwrap();
-    let xpath_item_tree = xpath::XpathItemTree::from_html_document(&document);
+    let xpath_item_tree = xpath::XpathItemTree::from(&document);
     let xpath = xpath::parse("//p/parent::div").unwrap();
 
     // act

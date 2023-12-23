@@ -25,7 +25,7 @@
 //!
 //! // Parse the HTML text
 //! let document = html::parse(text)?;
-//! let xpath_item_tree = XpathItemTree::from_html_document(&document);
+//! let xpath_item_tree = XpathItemTree::from(&document);
 //!
 //! // Assuming your XPath string is static, it is safe to use `expect` during parsing
 //! let xpath = xpath::parse("//div[@class='yes']/parent::div/div[@class='duplicate']")
@@ -69,7 +69,7 @@
 //! static SPAN_XPATH: Lazy<XPath> = Lazy::new(|| xpath::parse("/div/span").unwrap());
 //!
 //! fn my_func(document: &HtmlDocument) -> Result<String, Box<dyn Error>> {
-//!     let xpath_item_tree = XpathItemTree::from_html_document(document);
+//!     let xpath_item_tree = XpathItemTree::from(document);
 //!     let result = SPAN_XPATH.apply(&xpath_item_tree)?;
 //!
 //!     let items = result.unwrap_item_set();
