@@ -12,7 +12,7 @@ use crate::xpath::{
         },
         recipes::max,
     },
-    ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemSet, XpathItemTree,
+    ExpressionApplyError, XPathExpressionContext, XpathItemSet, XpathItemTree,
 };
 
 use self::{
@@ -63,7 +63,7 @@ impl XPath {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         self.0.eval(context)
     }
 
@@ -96,7 +96,7 @@ impl XPath {
     ///     let xpath_item_tree = XpathItemTree::from(&document);
     ///     let xpath = xpath::parse("//div")?;
     ///    
-    ///     let nodes = xpath.apply(&xpath_item_tree)?.unwrap_item_set();
+    ///     let nodes = xpath.apply(&xpath_item_tree)?;
     ///    
     ///     assert_eq!(nodes.len(), 1);
     ///    
@@ -123,7 +123,7 @@ impl XPath {
     pub fn apply<'tree>(
         &self,
         item_tree: &'tree XpathItemTree,
-    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         let context = XPathExpressionContext::new_single(
             item_tree,
             XpathItem::Node(Node::TreeNode(item_tree.root())),
@@ -166,7 +166,7 @@ impl Expr {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         /// Add the result of an ExprSingle to the items vector.
         ///
         /// # Arguments
@@ -180,13 +180,10 @@ impl Expr {
             expr_single: &ExprSingle,
         ) -> Result<(), ExpressionApplyError> {
             // Evaluate the expression.
-            let result: XPathResult<'tree> = expr_single.eval(context)?;
+            let result: XpathItemSet<'tree> = expr_single.eval(context)?;
 
             // Add the result to the items vector.
-            match result {
-                XPathResult::ItemSet(item_set) => items.extend(item_set),
-                XPathResult::Item(item) => items.insert(item),
-            }
+            items.extend(result);
 
             Ok(())
         }
@@ -208,7 +205,7 @@ impl Expr {
             add_expr_single_item(context, &mut items, item)?;
         }
 
-        Ok(XPathResult::ItemSet(items))
+        Ok(items)
     }
 }
 
@@ -273,7 +270,7 @@ impl ExprSingle {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         match self {
             ExprSingle::ForExpr(_) => todo!("ExprSingle::ForExpr"),
             ExprSingle::LetExpr(_) => todo!("ExprSingle::LetExpr"),

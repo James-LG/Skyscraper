@@ -9,7 +9,8 @@ use crate::xpath::{
         recipes::{ws, Res},
         types::sequence_type::{sequence_type, SequenceType},
     },
-    ExpressionApplyError, XPathExpressionContext, XPathResult,
+    xpath_item_set::XpathItemSet,
+    ExpressionApplyError, XPathExpressionContext,
 };
 
 use super::castable::{castable_expr, CastableExpr};
@@ -57,7 +58,7 @@ impl TreatExpr {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         // Evaluate the first expression.
         let result = self.expr.eval(context)?;
 

@@ -4,24 +4,28 @@ use std::fmt::Display;
 
 use nom::{branch::alt, character::complete::char, error::context};
 
-use crate::xpath::{
-    grammar::{
-        data_model::XpathItem,
-        expressions::{
-            maps_and_arrays::{
-                arrays::array_constructor, lookup_operator::unary_lookup::unary_lookup,
-                maps::map_constructor,
+use crate::{
+    xpath::{
+        grammar::{
+            data_model::XpathItem,
+            expressions::{
+                maps_and_arrays::{
+                    arrays::array_constructor, lookup_operator::unary_lookup::unary_lookup,
+                    maps::map_constructor,
+                },
+                primary_expressions::{
+                    inline_function_expressions::inline_function_expr, literals::literal,
+                    named_function_references::named_function_ref,
+                    parenthesized_expressions::parenthesized_expr,
+                    static_function_calls::function_call, variable_references::var_ref,
+                },
             },
-            primary_expressions::{
-                inline_function_expressions::inline_function_expr, literals::literal,
-                named_function_references::named_function_ref,
-                parenthesized_expressions::parenthesized_expr,
-                static_function_calls::function_call, variable_references::var_ref,
-            },
+            recipes::{max, Res},
         },
-        recipes::{max, Res},
+        xpath_item_set::XpathItemSet,
+        ExpressionApplyError, XPathExpressionContext,
     },
-    ExpressionApplyError, XPathExpressionContext, XPathResult,
+    xpath_item_set,
 };
 
 use self::{
@@ -135,10 +139,10 @@ impl PrimaryExpr {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         match self {
             PrimaryExpr::Literal(literal) => {
-                Ok(XPathResult::Item(XpathItem::AnyAtomicType(literal.value())))
+                Ok(xpath_item_set![XpathItem::AnyAtomicType(literal.value())])
             }
             PrimaryExpr::VarRef(_) => todo!("PrimaryExpr::VarRef eval"),
             PrimaryExpr::ParenthesizedExpr(expr) => expr.eval(context),

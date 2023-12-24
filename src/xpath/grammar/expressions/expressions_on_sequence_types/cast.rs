@@ -13,7 +13,8 @@ use crate::xpath::{
         recipes::Res,
         types::{simple_type_name, SimpleTypeName},
     },
-    ExpressionApplyError, XPathExpressionContext, XPathResult,
+    xpath_item_set::XpathItemSet,
+    ExpressionApplyError, XPathExpressionContext,
 };
 
 pub fn cast_expr(input: &str) -> Res<&str, CastExpr> {
@@ -53,7 +54,7 @@ impl CastExpr {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         // Evaluate the first expression.
         let result = self.expr.eval(context)?;
 

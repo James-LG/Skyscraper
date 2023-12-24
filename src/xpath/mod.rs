@@ -60,69 +60,6 @@ impl<'tree> XPathExpressionContext<'tree> {
     }
 }
 
-/// The result of applying an [XPath] expression to an [XpathItemTree].
-#[derive(PartialEq, PartialOrd, Debug)]
-pub enum XPathResult<'tree> {
-    /// A set of multiple items.
-    ItemSet(XpathItemSet<'tree>),
-
-    /// A single item.
-    ///
-    /// Returned by expressions that can _only_ return a single item such as boolean expressions.
-    Item(XpathItem<'tree>),
-}
-
-impl Display for XPathResult<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            XPathResult::ItemSet(items) => {
-                write!(f, "[")?;
-                for item in items {
-                    write!(f, "{}", item)?;
-                }
-                write!(f, "]")
-            }
-            XPathResult::Item(item) => write!(f, "{}", item),
-        }
-    }
-}
-
-impl<'tree> XPathResult<'tree> {
-    /// Return the effective boolean value of the result.
-    ///
-    /// https://www.w3.org/TR/2017/REC-xpath-31-20170321/#dt-ebv
-    pub fn boolean(self) -> bool {
-        match self {
-            XPathResult::ItemSet(items) => !items.is_empty(),
-            XPathResult::Item(item) => match item {
-                XpathItem::Node(_) => true,
-                XpathItem::Function(_) => true,
-                XpathItem::AnyAtomicType(atomic_type) => match atomic_type {
-                    AnyAtomicType::Boolean(b) => b,
-                    AnyAtomicType::Integer(n) => n != 0,
-                    AnyAtomicType::Float(n) => n != 0.0,
-                    AnyAtomicType::Double(n) => n != 0.0,
-                    AnyAtomicType::String(s) => !s.is_empty(),
-                },
-            },
-        }
-    }
-
-    pub fn unwrap_item(self) -> XpathItem<'tree> {
-        match self {
-            XPathResult::Item(item) => item,
-            _ => panic!("Expected XPathResult::Item"),
-        }
-    }
-
-    pub fn unwrap_item_set(self) -> XpathItemSet<'tree> {
-        match self {
-            XPathResult::ItemSet(items) => items,
-            _ => panic!("Expected XPathResult::ItemSet"),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -13,7 +13,7 @@ fn xpath_github_sample1() {
     let xpath = xpath::parse("//main").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(nodes.len(), 1);
@@ -36,7 +36,7 @@ fn xpath_github_sample2() {
     let xpath = xpath::parse("//a[@class='Link--secondary']").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(nodes.len(), 5);
@@ -73,7 +73,7 @@ fn xpath_github_sample3() {
         xpath::parse("//div[@class='BorderGrid-cell']/div[@class=' text-small']/a").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(nodes.len(), 1);
@@ -109,7 +109,7 @@ fn xpath_github_sample4() {
     let xpath = xpath::parse("//div[@role='gridcell']/descendant-or-self::node()").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(nodes.len(), 100);
@@ -125,7 +125,7 @@ fn xpath_github_get_text_sample() {
     let xpath = xpath::parse("//div[@class='flex-auto min-width-0 width-fit mr-3']").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(nodes.len(), 1);
@@ -148,7 +148,7 @@ fn xpath_github_parent_axis() {
     let xpath = xpath::parse("//div[@role='gridcell']/parent::div").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(nodes.len(), 5);
@@ -164,7 +164,7 @@ fn xpath_github_parent_axis_recursive() {
     let xpath = xpath::parse("//div[@role='gridcell']//parent::div").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(nodes.len(), 20);
@@ -180,7 +180,7 @@ fn xpath_github_dashed_attribute() {
     let xpath = xpath::parse("//span[@data-view-component='true']").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(nodes.len(), 19);
@@ -196,7 +196,7 @@ fn xpath_github_get_attributes_sample() {
     let xpath = xpath::parse("//div[@class='flex-auto min-width-0 width-fit mr-3']").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(nodes.len(), 1);
@@ -221,7 +221,7 @@ fn xpath_github_root_search() {
     let xpath = xpath::parse("/html").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(nodes.len(), 1);
@@ -245,7 +245,7 @@ fn xpath_github_root_search_all() {
     let xpath = xpath::parse("//html").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(nodes.len(), 1);
@@ -269,7 +269,7 @@ fn xpath_github_root_wildcard() {
     let xpath = xpath::parse("//body/*").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(nodes.len(), 16);

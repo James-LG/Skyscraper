@@ -11,7 +11,8 @@ use crate::xpath::{
     grammar::{
         expressions::sequence_expressions::combining_node_sequences::union_expr, recipes::Res,
     },
-    ExpressionApplyError, XPathExpressionContext, XPathResult,
+    xpath_item_set::XpathItemSet,
+    ExpressionApplyError, XPathExpressionContext,
 };
 
 use super::{
@@ -68,7 +69,7 @@ impl AdditiveExpr {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         // Evaluate the first expression.
         let result = self.expr.eval(context)?;
 
@@ -165,7 +166,7 @@ impl MultiplicativeExpr {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         // Evaluate the first expression.
         let result = self.expr.eval(context)?;
 
@@ -251,7 +252,7 @@ impl UnaryExpr {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         // Evaluate the first expression.
         let result = self.expr.eval(context)?;
 
@@ -300,7 +301,7 @@ impl ValueExpr {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         self.0.eval(context)
     }
 }

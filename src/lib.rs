@@ -35,7 +35,7 @@
 //! let result = xpath.apply(&xpath_item_tree)?;
 //!
 //! // The xpath expression that was used always returns an item set.
-//! let items = result.unwrap_item_set();
+//! let items = result;
 //!
 //! assert_eq!(items.len(), 1);
 //!
@@ -72,7 +72,7 @@
 //!     let xpath_item_tree = XpathItemTree::from(document);
 //!     let result = SPAN_XPATH.apply(&xpath_item_tree)?;
 //!
-//!     let items = result.unwrap_item_set();
+//!     let items = result;
 //!     let node = items[0].unwrap_node_ref().unwrap_tree_node_ref();
 //!     Ok(node.text(&xpath_item_tree))
 //! }

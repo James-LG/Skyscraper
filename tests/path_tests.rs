@@ -17,7 +17,7 @@ fn leading_slash_should_select_html_node() {
     let xpath = xpath::parse("/html").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(nodes.len(), 1);
@@ -60,7 +60,7 @@ fn leading_double_slash_should_select_all() {
     let xpath = xpath::parse("//p").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(nodes.len(), 6);
@@ -179,7 +179,7 @@ fn double_slash_should_select_all() {
     let xpath = xpath::parse("/html/footer/div//p").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(nodes.len(), 3);

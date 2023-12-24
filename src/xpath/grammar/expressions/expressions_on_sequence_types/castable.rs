@@ -5,7 +5,8 @@ use std::fmt::Display;
 use nom::{bytes::complete::tag, combinator::opt, error::context, sequence::tuple};
 
 use crate::xpath::{
-    grammar::recipes::Res, ExpressionApplyError, XPathExpressionContext, XPathResult,
+    grammar::recipes::Res, xpath_item_set::XpathItemSet, ExpressionApplyError,
+    XPathExpressionContext,
 };
 
 use super::cast::{cast_expr, single_type, CastExpr, SingleType};
@@ -53,7 +54,7 @@ impl CastableExpr {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         // Evaluate the first expression.
         let result = self.expr.eval(context)?;
 

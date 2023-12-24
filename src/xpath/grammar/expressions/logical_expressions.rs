@@ -5,7 +5,8 @@ use std::fmt::Display;
 use nom::{bytes::complete::tag, error::context, multi::many0, sequence::tuple};
 
 use crate::xpath::{
-    grammar::recipes::Res, ExpressionApplyError, XPathExpressionContext, XPathResult,
+    grammar::recipes::Res, xpath_item_set::XpathItemSet, ExpressionApplyError,
+    XPathExpressionContext,
 };
 
 use super::comparison_expressions::{comparison_expr, ComparisonExpr};
@@ -44,7 +45,7 @@ impl OrExpr {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         // Evaluate the first expression.
         let result = self.expr.eval(context)?;
 
@@ -92,7 +93,7 @@ impl AndExpr {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         // Evaluate the first expression.
         let result = self.expr.eval(context)?;
 

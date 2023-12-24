@@ -19,7 +19,8 @@ use crate::xpath::{
             kind_test, map_test::map_test,
         },
     },
-    ExpressionApplyError, XPathExpressionContext, XPathResult,
+    xpath_item_set::XpathItemSet,
+    ExpressionApplyError, XPathExpressionContext,
 };
 
 use super::{
@@ -71,25 +72,19 @@ impl Display for SequenceType {
 impl SequenceType {
     pub(crate) fn eval<'tree>(
         &self,
-        result: &XPathResult,
+        item_set: &XpathItemSet,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<bool, ExpressionApplyError> {
         match self {
-            SequenceType::EmptySequence => match result {
-                // The sequence type empty-sequence() matches a value that is the empty sequence.
-                XPathResult::ItemSet(set) => Ok(set.is_empty()),
-                XPathResult::Item(_) => Ok(false),
-            },
+            // The sequence type empty-sequence() matches a value that is the empty sequence.
+            SequenceType::EmptySequence => Ok(item_set.is_empty()),
             SequenceType::Sequence(x) => match x.occurrence {
                 Some(_) => todo!("SequenceType::Sequence::is_match occurrence"),
-                None => {
-                    // An ItemType with no OccurrenceIndicator matches any value that contains exactly one item if the ItemType matches that item.
 
+                // An ItemType with no OccurrenceIndicator matches any value that contains exactly one item if the ItemType matches that item.
+                None => {
                     let item_type_result = x.item_type.eval(context)?;
-                    match result {
-                        XPathResult::ItemSet(set) => Ok(set.len() == 1 && item_type_result),
-                        XPathResult::Item(_item) => Ok(item_type_result),
-                    }
+                    Ok(item_set.len() == 1 && item_type_result)
                 }
             },
         }

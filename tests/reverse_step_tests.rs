@@ -17,7 +17,7 @@ fn parent_axis_should_select_parent_node() {
     let xpath = xpath::parse("//body/parent::html").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(nodes.len(), 1);
@@ -61,7 +61,7 @@ fn parent_axis_should_select_parents_of_all_selected_nodes() {
     let xpath = xpath::parse("//p/parent::div").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(nodes.len(), 2);
@@ -120,7 +120,7 @@ fn parent_axis_should_respect_node_test() {
     let xpath = xpath::parse("//p/parent::div").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap().unwrap_item_set();
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
     assert_eq!(nodes.len(), 2);

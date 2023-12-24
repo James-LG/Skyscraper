@@ -4,15 +4,19 @@ use std::fmt::Display;
 
 use nom::{error::context, sequence::tuple};
 
-use crate::xpath::{
-    grammar::{
-        data_model::{Node, XpathItem},
-        expressions::common::{argument_list, ArgumentList},
-        recipes::Res,
-        types::{eq_name, EQName},
-        xml_names::QName,
+use crate::{
+    xpath::{
+        grammar::{
+            data_model::{Node, XpathItem},
+            expressions::common::{argument_list, ArgumentList},
+            recipes::Res,
+            types::{eq_name, EQName},
+            xml_names::QName,
+        },
+        xpath_item_set::XpathItemSet,
+        ExpressionApplyError, XPathExpressionContext,
     },
-    ExpressionApplyError, XPathExpressionContext, XPathResult,
+    xpath_item_set,
 };
 
 pub fn function_call(input: &str) -> Res<&str, FunctionCall> {
@@ -45,19 +49,22 @@ impl FunctionCall {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XPathExpressionContext<'tree>,
-    ) -> Result<XPathResult<'tree>, ExpressionApplyError> {
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         match &self.name {
             EQName::QName(qname) => match qname {
                 QName::PrefixedName(prefixed_name) => {
                     if prefixed_name.prefix == "fn" {
+                        // Root function selects the root node of the tree.
                         if prefixed_name.local_part == "root" {
-                            return Ok(XPathResult::Item(XpathItem::Node(Node::TreeNode(
+                            return Ok(xpath_item_set![XpathItem::Node(Node::TreeNode(
                                 context.item_tree.root(),
-                            ))));
+                            ))]);
                         }
                     }
 
-                    panic!("unknown function: {}", prefixed_name)
+                    Err(ExpressionApplyError {
+                        msg: format!("Unknown function {}", self.name.to_string()),
+                    })
                 }
                 QName::UnprefixedName(_) => todo!("FunctionCall::eval UnprefixedName"),
             },

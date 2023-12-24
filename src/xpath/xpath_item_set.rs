@@ -4,7 +4,7 @@ use std::ops::Index;
 
 use indexmap::{self, IndexSet};
 
-use super::grammar::data_model::XpathItem;
+use super::grammar::data_model::{AnyAtomicType, XpathItem};
 
 /// An ordered set of [`XpathItem`]s.
 #[derive(Debug)]
@@ -93,6 +93,30 @@ impl<'tree> XpathItemSet<'tree> {
     /// Return an iterator over the items in the set.
     pub fn iter(&self) -> indexmap::set::Iter<'_, XpathItem<'tree>> {
         self.index_set.iter()
+    }
+
+    /// Return the effective boolean value of the result.
+    ///
+    /// https://www.w3.org/TR/2017/REC-xpath-31-20170321/#dt-ebv
+    pub fn boolean(&self) -> bool {
+        // If this is a singleton value, check for the effective boolean value of that value.
+        if self.index_set.len() == 1 {
+            match &self.index_set[0] {
+                XpathItem::Node(_) => true,
+                XpathItem::Function(_) => true,
+                XpathItem::AnyAtomicType(atomic_type) => match atomic_type {
+                    AnyAtomicType::Boolean(b) => *b,
+                    AnyAtomicType::Integer(n) => *n != 0,
+                    AnyAtomicType::Float(n) => *n != 0.0,
+                    AnyAtomicType::Double(n) => *n != 0.0,
+                    AnyAtomicType::String(s) => !s.is_empty(),
+                },
+            }
+        }
+        // Otherwise, the effective boolean value is true if the sequence contains any items.
+        else {
+            !self.index_set.is_empty()
+        }
     }
 }
 

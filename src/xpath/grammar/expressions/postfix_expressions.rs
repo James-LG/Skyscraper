@@ -2,21 +2,19 @@
 
 use std::fmt::Display;
 
-
 use nom::{branch::alt, character::complete::char, error::context, multi::many0, sequence::tuple};
 
 use crate::xpath::{
     grammar::{
+        data_model::{AnyAtomicType, XpathItem},
         expressions::{
             common::argument_list, maps_and_arrays::lookup_operator::postfix_lookup::lookup,
             primary_expressions::primary_expr,
         },
         recipes::{ws, Res},
     },
-    ExpressionApplyError, XPathExpressionContext, XPathResult, XpathItemSet,
+    ExpressionApplyError, XPathExpressionContext, XpathItemSet,
 };
-
-use crate::xpath_item_set;
 
 use super::{
     common::ArgumentList, expr, maps_and_arrays::lookup_operator::postfix_lookup::Lookup,
@@ -81,16 +79,11 @@ impl PostfixExpr {
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         let res = self.expr.eval(context)?;
 
-        let items = match res {
-            XPathResult::ItemSet(x) => x,
-            XPathResult::Item(x) => xpath_item_set![x],
-        };
-
         if !self.items.is_empty() {
             todo!("PostfixExpr eval items")
         }
 
-        Ok(items)
+        Ok(res)
     }
 }
 
@@ -132,6 +125,25 @@ impl Predicate {
         context: &XPathExpressionContext<'tree>,
     ) -> Result<bool, ExpressionApplyError> {
         let res = self.0.eval(&context)?;
+
+        // The predicate truth value is derived by applying the following rules, in order:
+        // 1. If the value of the predicate expression is a singleton atomic value of a numeric type or derived from a numeric type,
+        //    the predicate truth value is true if the value of the predicate expression is equal (by the eq operator) to the context position,
+        //    and is false otherwise.
+        // 2. Otherwise, the predicate truth value is the effective boolean value of the predicate expression.
+
+        // Step 1. If the value is a number, check if it matches the context position.
+        if res.len() == 1 {
+            match &res[0] {
+                XpathItem::AnyAtomicType(atomic_type) => match atomic_type {
+                    AnyAtomicType::Integer(n) => return Ok(*n == context.position as i64),
+                    AnyAtomicType::Float(n) => return Ok(*n == context.position as f32),
+                    AnyAtomicType::Double(n) => return Ok(*n == context.position as f64),
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
 
         Ok(res.boolean())
     }
