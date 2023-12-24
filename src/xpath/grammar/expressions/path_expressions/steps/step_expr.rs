@@ -27,7 +27,7 @@ pub fn step_expr(input: &str) -> Res<&str, StepExpr> {
         axis_step(input).map(|(next_input, res)| (next_input, StepExpr::AxisStep(res)))
     }
 
-    context("step_expr", max((postfix_expr_map, axis_step_map)))(input)
+    context("step_expr", max((axis_step_map, postfix_expr_map)))(input)
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -54,5 +54,45 @@ impl StepExpr {
             StepExpr::PostfixExpr(expr) => expr.eval(context),
             StepExpr::AxisStep(step) => step.eval(context),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::xpath::grammar::{
+        expressions::path_expressions::{
+            abbreviated_syntax::AbbrevForwardStep,
+            steps::{axis_step::AxisStepType, forward_step::ForwardStep, node_tests::NodeTest},
+        },
+        types::KindTest,
+    };
+
+    use super::*;
+
+    /// `text()` could be matched by a function call or a node test. It should be a node test.
+    #[test]
+    fn step_expr_should_use_text_test_not_function_call() {
+        // arrange
+        let text = "text()";
+
+        // act
+        let xpath = step_expr(text).unwrap();
+
+        // assert
+        assert_eq!(
+            xpath,
+            (
+                "",
+                StepExpr::AxisStep(AxisStep {
+                    step_type: AxisStepType::ForwardStep(ForwardStep::Abbreviated(
+                        AbbrevForwardStep {
+                            has_at: false,
+                            node_test: NodeTest::KindTest(KindTest::TextTest)
+                        }
+                    )),
+                    predicates: vec![]
+                })
+            )
+        );
     }
 }

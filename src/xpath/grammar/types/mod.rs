@@ -144,7 +144,23 @@ impl KindTest {
                     Ok(None)
                 }
             }
-            KindTest::TextTest => todo!("KindTest::TextTest::is_match"),
+            KindTest::TextTest => {
+                // TextTest is `text()`.
+                // Select all text nodes.
+                if let XpathItem::Node(node) = &context.item {
+                    if matches!(
+                        node,
+                        Node::TreeNode(XpathItemTreeNode {
+                            data: XpathItemTreeNodeData::TextNode(_),
+                            ..
+                        })
+                    ) {
+                        return Ok(Some(node.clone()));
+                    }
+                }
+
+                Ok(None)
+            }
             KindTest::CommentTest => todo!("KindTest::CommentTest::is_match"),
             KindTest::NamespaceNodeTest => todo!("KindTest::NamespaceNodeTest::is_match"),
             KindTest::DocumentTest(x) => x.eval(context),

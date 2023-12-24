@@ -188,3 +188,32 @@ fn eval_forward_axis_attribute<'tree>(
 
     Ok(attributes)
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::xpath::grammar::types::KindTest;
+
+    use super::*;
+
+    /// `text()` could be matched by a function call or a node test. It should be a node test.
+    #[test]
+    fn forward_step_should_use_text_test_not_function_call() {
+        // arrange
+        let text = "text()";
+
+        // act
+        let xpath = forward_step(text).unwrap();
+
+        // assert
+        assert_eq!(
+            xpath,
+            (
+                "",
+                ForwardStep::Abbreviated(AbbrevForwardStep {
+                    has_at: false,
+                    node_test: NodeTest::KindTest(KindTest::TextTest)
+                })
+            )
+        );
+    }
+}
