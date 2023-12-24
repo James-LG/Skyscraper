@@ -180,6 +180,39 @@ impl RelativePathExpr {
         &self,
         context: &XPathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
+        /// Recursively evaluate a series of steps.
+        fn eval_steps<'tree>(
+            context: &XPathExpressionContext<'tree>,
+            steps: &[StepPair],
+        ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
+            // If there are no steps, return the context item.
+            if steps.is_empty() {
+                let mut result = XpathItemSet::new();
+                result.insert(context.item.clone());
+                return Ok(result);
+            }
+
+            // Otherwise, evaluate the first step.
+            let mut items = XpathItemSet::new();
+            let this_result = steps[0].eval(context)?;
+
+            // For each item in the result of the first step, recursively evaluate the rest of the steps.
+            // The goal is to feed the result of the first steps into the following steps,
+            // so that the final result is only the result of the last step.
+            for (i, _item) in this_result.iter().enumerate() {
+                // Create a context for the inner steps using an item from the current result.
+                let inner_context =
+                    XPathExpressionContext::new(context.item_tree, &this_result, i + 1);
+
+                // Recursively evaluate the rest of the steps for this item.
+                let inner_result = eval_steps(&inner_context, &steps[1..])?;
+
+                // Add the result of the inner steps to the result.
+                items.extend(inner_result);
+            }
+
+            Ok(items)
+        }
         let e1_result = self.expr.eval(context)?;
 
         // If there are no items, return the result of the expression.
@@ -187,54 +220,12 @@ impl RelativePathExpr {
             return Ok(e1_result);
         }
 
-        // Otherwise, evaluate each step in the path expression.
-        // E2 is evaluated with a context item for each item returned by E1.
-        let e2 = &self.items[0];
-
+        // Otherwise, for each item in the result of the expression, evaluate the steps.
         let mut items = XpathItemSet::new();
         for (i, _item) in e1_result.iter().enumerate() {
-            let e2_context = XPathExpressionContext::new(context.item_tree, &e1_result, i + 1);
-            let e2_result = match e2.0 {
-                PathSeparator::Slash => e2.1.eval(&e2_context)?,
-                PathSeparator::DoubleSlash => {
-                    let expanded_e2 = double_slash_expansion(&e2.1);
-                    expanded_e2.eval(&e2_context)?
-                }
-            };
-
-            // First and second expression were just evaluated,
-            // if there are more, recursively evaluate the remaining steps.
-            if self.items.len() > 1 {
-                let expr = &self.items[1].1; // Third expression becomes first, since the first two were already evaluated.
-
-                let e3 = RelativePathExpr {
-                    expr: expr.clone(),
-                    items: self.items[2..].to_vec(),
-                };
-
-                // The path separator between E2 and E3 must be evaluated now since it will be dropped.
-                // E1 /1 E2     /2 E3 /3 E4
-                // <evaluated>  <not evaluated>
-                match self.items[1].0 {
-                    PathSeparator::Slash => {
-                        // For each item in the result of E2, evaluate E3.
-                        for (i, _item) in e2_result.iter().enumerate() {
-                            let e3_context = XPathExpressionContext::new(
-                                e2_context.item_tree,
-                                &e2_result,
-                                i + 1,
-                            );
-                            let e3_result = e3.eval(&e3_context)?;
-                            items.extend(e3_result);
-                        }
-                    }
-                    PathSeparator::DoubleSlash => todo!("RelativePathExpr::eval double slash"),
-                }
-            }
-            // Otherwise, if there were only two expressions, return E2's items.
-            else {
-                items.extend(e2_result);
-            }
+            let en_context = XPathExpressionContext::new(context.item_tree, &e1_result, i + 1);
+            let result = eval_steps(&en_context, &self.items)?;
+            items.extend(result);
         }
 
         Ok(items)
@@ -266,6 +257,23 @@ impl Display for StepPair {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)?;
         write!(f, "{}", self.1)
+    }
+}
+
+impl StepPair {
+    pub(crate) fn eval<'tree>(
+        &self,
+        context: &XPathExpressionContext<'tree>,
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
+        let result: XpathItemSet<'_> = match self.0 {
+            PathSeparator::Slash => self.1.eval(context)?,
+            PathSeparator::DoubleSlash => {
+                let expanded_e2 = double_slash_expansion(&self.1);
+                expanded_e2.eval(context)?
+            }
+        };
+
+        Ok(result)
     }
 }
 
