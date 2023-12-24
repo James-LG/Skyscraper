@@ -165,7 +165,15 @@ impl KindTest {
             KindTest::NamespaceNodeTest => todo!("KindTest::NamespaceNodeTest::is_match"),
             KindTest::DocumentTest(x) => x.eval(context),
             KindTest::ElementTest(_) => todo!("KindTest::ElementTest::is_match"),
-            KindTest::AttributeTest(_) => todo!("KindTest::AttributeTest::is_match"),
+            KindTest::AttributeTest(x) => {
+                if let XpathItem::Node(node) = &context.item {
+                    if x.is_match(&node)? {
+                        return Ok(Some(node.clone()));
+                    }
+                }
+
+                Ok(None)
+            }
             KindTest::SchemaElementTest(_) => todo!("KindTest::SchemaElementTest::is_match"),
             KindTest::SchemaAttributeTest(_) => todo!("KindTest::SchemaAttributeTest::is_match"),
             KindTest::PITest(_) => todo!("KindTest::PITest::is_match"),

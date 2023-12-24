@@ -7,7 +7,10 @@ use nom::{
     sequence::tuple,
 };
 
-use crate::xpath::grammar::{recipes::Res, types::common::attribute_name};
+use crate::xpath::{
+    grammar::{data_model::Node, recipes::Res, types::common::attribute_name},
+    ExpressionApplyError,
+};
 
 use super::common::{type_name, AttributeName, TypeName};
 
@@ -23,23 +26,16 @@ pub fn attribute_test(input: &str) -> Res<&str, AttributeTest> {
                 attrib_name_or_wildcard,
                 opt(tuple((char(','), type_name, opt(char('?'))))),
             ))),
+            char(')'),
         )),
     )(input)
     .map(|(next_input, res)| {
         let res = res.2.map(|tup| (tup.0, tup.1.map(|tup2| tup2.1)));
-        let element_test = match res {
-            Some((name_or_wildcard, Some(type_name))) => AttributeTest {
-                name_or_wildcard: Some(name_or_wildcard),
-                type_name: Some(type_name),
-            },
-            Some((name_or_wildcard, None)) => AttributeTest {
-                name_or_wildcard: Some(name_or_wildcard),
-                type_name: None,
-            },
-            None => AttributeTest {
-                name_or_wildcard: None,
-                type_name: None,
-            },
+        let element_test = AttributeTest {
+            pair: res.map(|tup| AttributeTestPair {
+                name_or_wildcard: tup.0,
+                type_name: tup.1,
+            }),
         };
         (next_input, element_test)
     })
@@ -47,13 +43,46 @@ pub fn attribute_test(input: &str) -> Res<&str, AttributeTest> {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct AttributeTest {
-    pub name_or_wildcard: Option<AttribNameOrWildcard>,
-    pub type_name: Option<TypeName>,
+    pub pair: Option<AttributeTestPair>,
 }
 
 impl Display for AttributeTest {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!("fmt AttributeTest")
+    }
+}
+
+impl AttributeTest {
+    pub(crate) fn is_match<'tree>(&self, node: &Node<'tree>) -> Result<bool, ExpressionApplyError> {
+        match &self.pair {
+            Some(pair) => pair.is_match(node),
+            // No value is equivalent to a wildcard.
+            None => {
+                let pair = AttributeTestPair {
+                    name_or_wildcard: AttribNameOrWildcard::Wildcard,
+                    type_name: None,
+                };
+                pair.is_match(node)
+            }
+        }
+    }
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub struct AttributeTestPair {
+    pub name_or_wildcard: AttribNameOrWildcard,
+    pub type_name: Option<TypeName>,
+}
+
+impl AttributeTestPair {
+    pub(crate) fn is_match<'tree>(&self, node: &Node<'tree>) -> Result<bool, ExpressionApplyError> {
+        let is_match = self.name_or_wildcard.is_match(node)?;
+
+        if let Some(_type_name) = &self.type_name {
+            todo!("AttributeTestPair::eval type_name")
+        }
+
+        Ok(is_match)
     }
 }
 
@@ -79,4 +108,18 @@ pub fn attrib_name_or_wildcard(input: &str) -> Res<&str, AttribNameOrWildcard> {
 pub enum AttribNameOrWildcard {
     AttributeName(AttributeName),
     Wildcard,
+}
+
+impl AttribNameOrWildcard {
+    pub(crate) fn is_match<'tree>(
+        &self,
+        _node: &Node<'tree>,
+    ) -> Result<bool, ExpressionApplyError> {
+        match self {
+            AttribNameOrWildcard::AttributeName(_) => {
+                todo!("AttribNameOrWildcard::eval attribute_name")
+            }
+            AttribNameOrWildcard::Wildcard => Ok(true),
+        }
+    }
 }

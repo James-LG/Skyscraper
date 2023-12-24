@@ -1,6 +1,9 @@
 use skyscraper::{
     html,
-    xpath::{self, grammar::XpathItemTreeNodeData},
+    xpath::{
+        self,
+        grammar::{data_model::AttributeNode, NonTreeXpathNode, XpathItemTreeNodeData},
+    },
 };
 
 #[test]
@@ -112,5 +115,64 @@ fn text_test_should_match_all_text() {
             }
             _ => panic!("expected text, got {:?}", tree_node.data),
         }
+    }
+}
+
+#[test]
+fn attribute_test_should_match_all_attributes() {
+    // arrange
+    let text = r###"
+        <html id="foo" class="bar" style="baz">
+        </html>"###;
+
+    let document = html::parse(&text).unwrap();
+    let xpath_item_tree = xpath::XpathItemTree::from(&document);
+    let xpath = xpath::parse("/html/attribute::attribute()").unwrap();
+
+    // act
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
+
+    // assert
+    assert_eq!(nodes.len(), 3);
+    let attributes: Vec<AttributeNode> = nodes
+        .into_iter()
+        .filter_map(|x| {
+            let non_tree_node = x.unwrap_node().unwrap_non_tree_node();
+
+            match non_tree_node {
+                NonTreeXpathNode::AttributeNode(e) => Some(e),
+                _ => None,
+            }
+        })
+        .collect();
+
+    // assert attribute
+    {
+        let attribute = attributes
+            .iter()
+            .find(|x| x.name == "id")
+            .expect("missing id attribute");
+
+        assert_eq!(attribute.value, "foo")
+    }
+
+    // assert attribute
+    {
+        let attribute = attributes
+            .iter()
+            .find(|x| x.name == "class")
+            .expect("missing id attribute");
+
+        assert_eq!(attribute.value, "bar")
+    }
+
+    // assert attribute
+    {
+        let attribute = attributes
+            .iter()
+            .find(|x| x.name == "style")
+            .expect("missing id attribute");
+
+        assert_eq!(attribute.value, "baz")
     }
 }
