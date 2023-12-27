@@ -15,10 +15,10 @@ use self::{
 pub mod grammar;
 pub mod xpath_item_set;
 
-pub use self::grammar::{XPath, XpathItemTree};
+pub use self::grammar::{Xpath, XpathItemTree};
 
 /// Parse a string into an [XPath] expression.
-pub fn parse(input: &str) -> Result<XPath, nom::Err<VerboseError<&str>>> {
+pub fn parse(input: &str) -> Result<Xpath, nom::Err<VerboseError<&str>>> {
     xpath(input).map(|x| x.1)
 }
 
@@ -29,14 +29,14 @@ pub struct ExpressionApplyError {
     msg: String,
 }
 
-pub(crate) struct XPathExpressionContext<'tree> {
+pub(crate) struct XpathExpressionContext<'tree> {
     item_tree: &'tree XpathItemTree,
     item: XpathItem<'tree>,
     position: usize,
     size: usize,
 }
 
-impl<'tree> XPathExpressionContext<'tree> {
+impl<'tree> XpathExpressionContext<'tree> {
     pub fn new(
         item_tree: &'tree XpathItemTree,
         items: &XpathItemSet<'tree>,

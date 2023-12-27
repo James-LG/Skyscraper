@@ -6,7 +6,7 @@ use nom::{character::complete::char, error::context, multi::many0, sequence::tup
 
 use crate::xpath::{
     grammar::recipes::Res, xpath_item_set::XpathItemSet, ExpressionApplyError,
-    XPathExpressionContext,
+    XpathExpressionContext,
 };
 
 use super::path_expressions::{path_expr, PathExpr};
@@ -45,7 +45,7 @@ impl Display for SimpleMapExpr {
 impl SimpleMapExpr {
     pub(crate) fn eval<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         // Evaluate the first expression.
         let result = self.expr.eval(context)?;

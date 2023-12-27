@@ -10,7 +10,7 @@ use nom::{
 use crate::xpath::xpath_item_set::XpathItemSet;
 use crate::xpath::{
     grammar::{expressions::path_expressions::steps::step_expr::step_expr, recipes::Res},
-    ExpressionApplyError, XPathExpressionContext,
+    ExpressionApplyError, XpathExpressionContext,
 };
 
 use self::steps::step_expr::StepExpr;
@@ -68,7 +68,7 @@ impl Display for PathExpr {
 impl PathExpr {
     pub(crate) fn eval<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         // Leading slashes mean different things than slashes in the middle of a path expression
         // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-path-expressions
@@ -178,11 +178,11 @@ impl Display for RelativePathExpr {
 impl RelativePathExpr {
     pub(crate) fn eval<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         /// Recursively evaluate a series of steps.
         fn eval_steps<'tree>(
-            context: &XPathExpressionContext<'tree>,
+            context: &XpathExpressionContext<'tree>,
             steps: &[StepPair],
         ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
             // If there are no steps, return the context item.
@@ -202,7 +202,7 @@ impl RelativePathExpr {
             for (i, _item) in this_result.iter().enumerate() {
                 // Create a context for the inner steps using an item from the current result.
                 let inner_context =
-                    XPathExpressionContext::new(context.item_tree, &this_result, i + 1);
+                    XpathExpressionContext::new(context.item_tree, &this_result, i + 1);
 
                 // Recursively evaluate the rest of the steps for this item.
                 let inner_result = eval_steps(&inner_context, &steps[1..])?;
@@ -223,7 +223,7 @@ impl RelativePathExpr {
         // Otherwise, for each item in the result of the expression, evaluate the steps.
         let mut items = XpathItemSet::new();
         for (i, _item) in e1_result.iter().enumerate() {
-            let en_context = XPathExpressionContext::new(context.item_tree, &e1_result, i + 1);
+            let en_context = XpathExpressionContext::new(context.item_tree, &e1_result, i + 1);
             let result = eval_steps(&en_context, &self.items)?;
             items.extend(result);
         }
@@ -263,7 +263,7 @@ impl Display for StepPair {
 impl StepPair {
     pub(crate) fn eval<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         let result: XpathItemSet<'_> = match self.0 {
             PathSeparator::Slash => self.1.eval(context)?,

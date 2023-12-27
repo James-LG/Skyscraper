@@ -6,7 +6,7 @@ use nom::{bytes::complete::tag, error::context, multi::many0, sequence::tuple};
 
 use crate::xpath::{
     grammar::recipes::Res, xpath_item_set::XpathItemSet, ExpressionApplyError,
-    XPathExpressionContext,
+    XpathExpressionContext,
 };
 
 use super::sequence_expressions::constructing_sequences::{range_expr, RangeExpr};
@@ -44,7 +44,7 @@ impl Display for StringConcatExpr {
 impl StringConcatExpr {
     pub(crate) fn eval<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         // Evaluate the first expression.
         let result = self.expr.eval(context)?;

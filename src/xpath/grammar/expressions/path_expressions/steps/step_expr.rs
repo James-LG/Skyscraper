@@ -11,7 +11,7 @@ use crate::xpath::{
         recipes::{max, Res},
     },
     xpath_item_set::XpathItemSet,
-    ExpressionApplyError, XPathExpressionContext,
+    ExpressionApplyError, XpathExpressionContext,
 };
 
 use super::axis_step::AxisStep;
@@ -48,7 +48,7 @@ impl Display for StepExpr {
 impl StepExpr {
     pub(crate) fn eval<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         match self {
             StepExpr::PostfixExpr(expr) => expr.eval(context),

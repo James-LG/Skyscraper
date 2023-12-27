@@ -15,7 +15,7 @@ use crate::xpath::{
         xml_names::{nc_name, QName},
         NonTreeXpathNode, XpathItemTreeNode, XpathItemTreeNodeData,
     },
-    ExpressionApplyError, XPathExpressionContext,
+    ExpressionApplyError, XpathExpressionContext,
 };
 
 use super::axes::{forward_axis::ForwardAxis, reverse_axis::ReverseAxis};
@@ -53,7 +53,7 @@ impl NodeTest {
     pub(crate) fn eval<'tree>(
         &self,
         axis: BiDirectionalAxis,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<Option<Node<'tree>>, ExpressionApplyError> {
         match self {
             NodeTest::KindTest(test) => test.eval(context),
@@ -100,7 +100,7 @@ impl NameTest {
     pub(crate) fn eval<'tree>(
         &self,
         axis: BiDirectionalAxis,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<Option<Node<'tree>>, ExpressionApplyError> {
         let node = if let XpathItem::Node(node) = &context.item {
             node

@@ -10,7 +10,7 @@ use crate::xpath::{
         recipes::Res,
     },
     xpath_item_set::XpathItemSet,
-    ExpressionApplyError, XPathExpressionContext,
+    ExpressionApplyError, XpathExpressionContext,
 };
 
 pub fn range_expr(input: &str) -> Res<&str, RangeExpr> {
@@ -51,7 +51,7 @@ impl Display for RangeExpr {
 impl RangeExpr {
     pub(crate) fn eval<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         // Evaluate the first expression.
         let result = self.expr.eval(context)?;

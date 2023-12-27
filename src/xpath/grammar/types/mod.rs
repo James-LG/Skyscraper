@@ -12,7 +12,7 @@ use crate::xpath::{
         terminal_symbols::{string_literal, uri_qualified_name},
         xml_names::qname,
     },
-    ExpressionApplyError, XPathExpressionContext,
+    ExpressionApplyError, XpathExpressionContext,
 };
 
 use self::{
@@ -132,7 +132,7 @@ pub enum KindTest {
 impl KindTest {
     pub(crate) fn eval<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<Option<Node<'tree>>, ExpressionApplyError> {
         match self {
             KindTest::AnyKindTest => {
@@ -241,7 +241,7 @@ impl Display for DocumentTest {
 impl DocumentTest {
     pub(crate) fn eval<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<Option<Node<'tree>>, ExpressionApplyError> {
         match &self.value {
             // document-node() matches any document node.

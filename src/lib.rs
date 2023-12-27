@@ -63,10 +63,10 @@
 //!
 //! ```rust
 //! use std::error::Error;
-//! use skyscraper::{html::{self, HtmlDocument}, xpath::{self, XPath, XpathItemTree}};
+//! use skyscraper::{html::{self, HtmlDocument}, xpath::{self, Xpath, XpathItemTree}};
 //! use once_cell::sync::Lazy;
 //!
-//! static SPAN_XPATH: Lazy<XPath> = Lazy::new(|| xpath::parse("/div/span").unwrap());
+//! static SPAN_XPATH: Lazy<Xpath> = Lazy::new(|| xpath::parse("/div/span").unwrap());
 //!
 //! fn my_func(document: &HtmlDocument) -> Result<String, Box<dyn Error>> {
 //!     let xpath_item_tree = XpathItemTree::from(document);

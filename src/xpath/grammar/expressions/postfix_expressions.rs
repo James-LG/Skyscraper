@@ -13,7 +13,7 @@ use crate::xpath::{
         },
         recipes::{ws, Res},
     },
-    ExpressionApplyError, XPathExpressionContext, XpathItemSet,
+    ExpressionApplyError, XpathExpressionContext, XpathItemSet,
 };
 
 use super::{
@@ -75,7 +75,7 @@ impl Display for PostfixExpr {
 impl PostfixExpr {
     pub(crate) fn eval<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         let res = self.expr.eval(context)?;
 
@@ -122,7 +122,7 @@ impl Display for Predicate {
 impl Predicate {
     pub(crate) fn is_match<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<bool, ExpressionApplyError> {
         let res = self.0.eval(&context)?;
 

@@ -16,7 +16,7 @@ use crate::xpath::{
         },
         recipes::Res,
     },
-    ExpressionApplyError, XPathExpressionContext, XpathItemSet,
+    ExpressionApplyError, XpathExpressionContext, XpathItemSet,
 };
 
 use super::forward_step::ForwardStep;
@@ -67,7 +67,7 @@ impl Display for AxisStep {
 impl AxisStep {
     pub(crate) fn eval<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         let nodes = self.step_type.eval(context)?;
         let items: XpathItemSet<'tree> = nodes.into_iter().map(XpathItem::Node).collect();
@@ -83,7 +83,7 @@ impl AxisStep {
             // All predicates must match for a node to be selected.
             let mut is_match = true;
 
-            let predicate_context = XPathExpressionContext::new(context.item_tree, &items, i + 1);
+            let predicate_context = XpathExpressionContext::new(context.item_tree, &items, i + 1);
             for predicate in self.predicates.iter() {
                 if !predicate.is_match(&predicate_context)? {
                     is_match = false;
@@ -108,7 +108,7 @@ pub enum AxisStepType {
 impl AxisStepType {
     pub(crate) fn eval<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
         match self {
             AxisStepType::ReverseStep(step) => step.eval(context),

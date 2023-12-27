@@ -13,7 +13,7 @@ use crate::xpath::{
         types::KindTest,
     },
     xpath_item_set::XpathItemSet,
-    ExpressionApplyError, XPathExpressionContext,
+    ExpressionApplyError, XpathExpressionContext,
 };
 
 use super::{
@@ -57,7 +57,7 @@ impl Display for ReverseStep {
 impl ReverseStep {
     pub(crate) fn eval<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
         match self {
             ReverseStep::Full(axis, node_test) => eval_reverse_axis(context, *axis, node_test),
@@ -74,7 +74,7 @@ impl ReverseStep {
 }
 
 fn eval_reverse_axis<'tree>(
-    context: &XPathExpressionContext<'tree>,
+    context: &XpathExpressionContext<'tree>,
     axis: ReverseAxis,
     node_test: &NodeTest,
 ) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
@@ -90,7 +90,7 @@ fn eval_reverse_axis<'tree>(
     let mut nodes = IndexSet::new();
 
     for (i, _node) in items.iter().enumerate() {
-        let node_test_context = XPathExpressionContext::new(context.item_tree, &items, i + 1);
+        let node_test_context = XpathExpressionContext::new(context.item_tree, &items, i + 1);
 
         if let Some(result) =
             node_test.eval(BiDirectionalAxis::ReverseAxis(axis), &node_test_context)?
@@ -104,7 +104,7 @@ fn eval_reverse_axis<'tree>(
 
 /// Direct parent of the context node.
 fn eval_reverse_axis_parent<'tree>(
-    context: &XPathExpressionContext<'tree>,
+    context: &XpathExpressionContext<'tree>,
 ) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
     let mut nodes: IndexSet<Node<'tree>> = IndexSet::new();
 

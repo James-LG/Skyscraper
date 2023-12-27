@@ -10,7 +10,7 @@ use crate::xpath::{
         recipes::Res,
     },
     xpath_item_set::XpathItemSet,
-    ExpressionApplyError, XPathExpressionContext,
+    ExpressionApplyError, XpathExpressionContext,
 };
 
 pub fn parenthesized_expr(input: &str) -> Res<&str, ParenthesizedExpr> {
@@ -38,7 +38,7 @@ impl Display for ParenthesizedExpr {
 impl ParenthesizedExpr {
     pub(crate) fn eval<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         if let Some(expr) = &self.0 {
             expr.eval(context)

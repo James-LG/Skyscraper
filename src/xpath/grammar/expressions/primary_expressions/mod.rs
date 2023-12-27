@@ -23,7 +23,7 @@ use crate::{
             recipes::{max, Res},
         },
         xpath_item_set::XpathItemSet,
-        ExpressionApplyError, XPathExpressionContext,
+        ExpressionApplyError, XpathExpressionContext,
     },
     xpath_item_set,
 };
@@ -138,7 +138,7 @@ impl Display for PrimaryExpr {
 impl PrimaryExpr {
     pub(crate) fn eval<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         match self {
             PrimaryExpr::Literal(literal) => {

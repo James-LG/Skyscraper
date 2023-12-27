@@ -14,7 +14,7 @@ use crate::{
             xml_names::QName,
         },
         xpath_item_set::XpathItemSet,
-        ExpressionApplyError, XPathExpressionContext,
+        ExpressionApplyError, XpathExpressionContext,
     },
     xpath_item_set,
 };
@@ -48,7 +48,7 @@ impl Display for FunctionCall {
 impl FunctionCall {
     pub(crate) fn eval<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         match &self.name {
             EQName::QName(qname) => match qname {

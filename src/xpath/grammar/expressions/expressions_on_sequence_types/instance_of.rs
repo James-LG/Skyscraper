@@ -10,7 +10,7 @@ use crate::xpath::{
         types::sequence_type::{sequence_type, SequenceType},
     },
     xpath_item_set::XpathItemSet,
-    ExpressionApplyError, XPathExpressionContext,
+    ExpressionApplyError, XpathExpressionContext,
 };
 
 use super::treat::{treat_expr, TreatExpr};
@@ -57,7 +57,7 @@ impl Display for InstanceofExpr {
 impl InstanceofExpr {
     pub(crate) fn eval<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         // Evaluate the first expression.
         let result = self.expr.eval(context)?;

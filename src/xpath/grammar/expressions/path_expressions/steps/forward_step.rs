@@ -14,7 +14,7 @@ use crate::xpath::{
         NonTreeXpathNode, XpathItemTreeNodeData,
     },
     xpath_item_set::XpathItemSet,
-    ExpressionApplyError, XPathExpressionContext, XpathItemTreeNode,
+    ExpressionApplyError, XpathExpressionContext, XpathItemTreeNode,
 };
 
 use super::{
@@ -59,7 +59,7 @@ impl Display for ForwardStep {
 impl ForwardStep {
     pub(crate) fn eval<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
         match self {
             ForwardStep::Full(axis, node_test) => eval_forward_axis(context, *axis, node_test),
@@ -78,7 +78,7 @@ impl ForwardStep {
 }
 
 fn eval_forward_axis<'tree>(
-    context: &XPathExpressionContext<'tree>,
+    context: &XpathExpressionContext<'tree>,
     axis: ForwardAxis,
     node_test: &NodeTest,
 ) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
@@ -97,7 +97,7 @@ fn eval_forward_axis<'tree>(
     let mut nodes = IndexSet::new();
 
     for (i, _item) in items.iter().enumerate() {
-        let node_test_context = XPathExpressionContext::new(context.item_tree, &items, i + 1);
+        let node_test_context = XpathExpressionContext::new(context.item_tree, &items, i + 1);
 
         if let Some(result) =
             node_test.eval(BiDirectionalAxis::ForwardAxis(axis), &node_test_context)?
@@ -111,7 +111,7 @@ fn eval_forward_axis<'tree>(
 
 /// Direct children of the context nodes.
 fn eval_forward_axis_child<'tree>(
-    context: &XPathExpressionContext<'tree>,
+    context: &XpathExpressionContext<'tree>,
 ) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
     let mut nodes: IndexSet<Node<'tree>> = IndexSet::new();
 
@@ -128,7 +128,7 @@ fn eval_forward_axis_child<'tree>(
 
 /// All descendants of the context nodes.
 fn eval_forward_axis_descendant<'tree>(
-    context: &XPathExpressionContext<'tree>,
+    context: &XpathExpressionContext<'tree>,
 ) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
     let mut nodes: IndexSet<Node<'tree>> = IndexSet::new();
 
@@ -141,7 +141,7 @@ fn eval_forward_axis_descendant<'tree>(
 
             // Add the child's descendants.
             let child_eval_context =
-                XPathExpressionContext::new_single(context.item_tree, child.into());
+                XpathExpressionContext::new_single(context.item_tree, child.into());
             let child_descendants = eval_forward_axis_descendant(&child_eval_context)?;
             nodes.extend(child_descendants);
         }
@@ -152,7 +152,7 @@ fn eval_forward_axis_descendant<'tree>(
 
 /// All descendants of the context nodes including the context nodes.
 fn eval_forward_axis_self_or_descendant<'tree>(
-    context: &XPathExpressionContext<'tree>,
+    context: &XpathExpressionContext<'tree>,
 ) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
     let mut nodes = eval_forward_axis_descendant(context)?;
 
@@ -169,7 +169,7 @@ fn eval_forward_axis_self_or_descendant<'tree>(
 
 // All attributes of the context nodes.
 fn eval_forward_axis_attribute<'tree>(
-    context: &XPathExpressionContext<'tree>,
+    context: &XpathExpressionContext<'tree>,
 ) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
     let mut attributes = IndexSet::new();
 

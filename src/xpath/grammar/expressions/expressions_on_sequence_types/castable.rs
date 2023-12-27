@@ -6,7 +6,7 @@ use nom::{bytes::complete::tag, combinator::opt, error::context, sequence::tuple
 
 use crate::xpath::{
     grammar::recipes::Res, xpath_item_set::XpathItemSet, ExpressionApplyError,
-    XPathExpressionContext,
+    XpathExpressionContext,
 };
 
 use super::cast::{cast_expr, single_type, CastExpr, SingleType};
@@ -53,7 +53,7 @@ impl Display for CastableExpr {
 impl CastableExpr {
     pub(crate) fn eval<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         // Evaluate the first expression.
         let result = self.expr.eval(context)?;

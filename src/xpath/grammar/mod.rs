@@ -14,7 +14,7 @@ mod xml_names;
 use std::fmt::Display;
 
 pub(crate) use expressions::xpath;
-pub use expressions::XPath;
+pub use expressions::Xpath;
 
 use indextree::{Arena, NodeId};
 

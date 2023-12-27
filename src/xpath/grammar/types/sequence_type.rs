@@ -20,7 +20,7 @@ use crate::xpath::{
         },
     },
     xpath_item_set::XpathItemSet,
-    ExpressionApplyError, XPathExpressionContext,
+    ExpressionApplyError, XpathExpressionContext,
 };
 
 use super::{
@@ -73,7 +73,7 @@ impl SequenceType {
     pub(crate) fn eval<'tree>(
         &self,
         item_set: &XpathItemSet,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<bool, ExpressionApplyError> {
         match self {
             // The sequence type empty-sequence() matches a value that is the empty sequence.
@@ -178,7 +178,7 @@ impl Display for ItemType {
 impl ItemType {
     pub(crate) fn eval<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<bool, ExpressionApplyError> {
         match self {
             // item() matches any single item.

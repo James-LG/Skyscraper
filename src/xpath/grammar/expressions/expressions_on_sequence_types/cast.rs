@@ -14,7 +14,7 @@ use crate::xpath::{
         types::{simple_type_name, SimpleTypeName},
     },
     xpath_item_set::XpathItemSet,
-    ExpressionApplyError, XPathExpressionContext,
+    ExpressionApplyError, XpathExpressionContext,
 };
 
 pub fn cast_expr(input: &str) -> Res<&str, CastExpr> {
@@ -53,7 +53,7 @@ impl Display for CastExpr {
 impl CastExpr {
     pub(crate) fn eval<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         // Evaluate the first expression.
         let result = self.expr.eval(context)?;

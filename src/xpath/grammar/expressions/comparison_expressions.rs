@@ -13,7 +13,7 @@ use crate::{
             NonTreeXpathNode, XpathItemTreeNodeData,
         },
         xpath_item_set::XpathItemSet,
-        ExpressionApplyError, XPathExpressionContext, XpathItemTree,
+        ExpressionApplyError, XpathExpressionContext, XpathItemTree,
     },
     xpath_item_set,
 };
@@ -78,7 +78,7 @@ impl Display for ComparisonExpr {
 impl ComparisonExpr {
     pub(crate) fn eval<'tree>(
         &self,
-        context: &XPathExpressionContext<'tree>,
+        context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         // Evaluate the first expression.
         let result = self.expr.eval(context)?;
