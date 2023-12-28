@@ -419,7 +419,7 @@ pub mod test_helpers {
     ) -> Vec<DocumentNode> {
         let html_node = document.get_html_node(&doc_node).unwrap();
 
-        let tag = html_node.unwrap_tag();
+        let tag = html_node.extract_as_tag();
         assert_eq!(String::from(tag_name), tag.name);
 
         if let Some(attributes) = attributes {
@@ -444,7 +444,7 @@ pub mod test_helpers {
     pub fn assert_text(document: &HtmlDocument, key: DocumentNode, text: &str) {
         let html_node = document.get_html_node(&key).unwrap();
 
-        let node_text = html_node.unwrap_text();
+        let node_text = html_node.extract_as_text();
         assert_eq!(&HtmlText::from_str(text), node_text);
     }
 }

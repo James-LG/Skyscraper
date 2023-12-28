@@ -2,12 +2,13 @@
 
 use std::fmt::Display;
 
+use enum_extract_macro::EnumExtract;
 use ordered_float::OrderedFloat;
 
 use super::{NonTreeXpathNode, XpathItemTreeNode};
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#dt-item
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash)]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash, EnumExtract)]
 pub enum XpathItem<'tree> {
     /// A node in the [`XpathItemTree`](crate::xpath::XpathItemTree).
     ///
@@ -31,22 +32,6 @@ impl Display for XpathItem<'_> {
             XpathItem::Node(node) => write!(f, "{}", node),
             XpathItem::Function(function) => write!(f, "{}", function),
             XpathItem::AnyAtomicType(atomic_type) => write!(f, "{}", atomic_type),
-        }
-    }
-}
-
-impl<'tree> XpathItem<'tree> {
-    pub fn unwrap_node(self) -> Node<'tree> {
-        match self {
-            XpathItem::Node(node) => node,
-            _ => panic!("Expected XpathItem::Node"),
-        }
-    }
-
-    pub fn unwrap_node_ref(&self) -> &Node<'tree> {
-        match self {
-            XpathItem::Node(node) => node,
-            _ => panic!("Expected XpathItem::Node"),
         }
     }
 }
@@ -105,7 +90,7 @@ impl Display for Function {
 /// A node in the [`XpathItemTree`](crate::xpath::XpathItemTree).
 ///
 ///  https://www.w3.org/TR/xpath-datamodel-31/#dt-node
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash)]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash, EnumExtract)]
 pub enum Node<'tree> {
     /// A node in the [`XpathItemTree`](crate::xpath::XpathItemTree).
     TreeNode(XpathItemTreeNode<'tree>),
@@ -119,29 +104,6 @@ impl Display for Node<'_> {
         match self {
             Node::TreeNode(node) => write!(f, "{}", node),
             Node::NonTreeNode(node) => write!(f, "{}", node),
-        }
-    }
-}
-
-impl<'tree> Node<'tree> {
-    pub fn unwrap_tree_node(self) -> XpathItemTreeNode<'tree> {
-        match self {
-            Node::TreeNode(node) => node,
-            _ => panic!("Expected Node::TreeNode"),
-        }
-    }
-
-    pub fn unwrap_tree_node_ref(&self) -> &XpathItemTreeNode<'tree> {
-        match self {
-            Node::TreeNode(node) => node,
-            _ => panic!("Expected Node::TreeNode"),
-        }
-    }
-
-    pub fn unwrap_non_tree_node(self) -> NonTreeXpathNode {
-        match self {
-            Node::NonTreeNode(node) => node,
-            _ => panic!("Expected Node::NonTreeNode"),
         }
     }
 }
@@ -221,7 +183,7 @@ pub struct NamespaceNode {
 }
 
 impl Display for NamespaceNode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!("NamespaceNode::fmt")
     }
 }

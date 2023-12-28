@@ -25,7 +25,11 @@ fn parent_axis_should_select_parent_node() {
 
     // assert node
     {
-        let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
 
         match tree_node.data {
             XpathItemTreeNodeData::ElementNode(e) => {
@@ -69,7 +73,11 @@ fn parent_axis_should_select_parents_of_all_selected_nodes() {
 
     // assert node
     {
-        let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
 
         match tree_node.data {
             XpathItemTreeNodeData::ElementNode(e) => {
@@ -82,7 +90,11 @@ fn parent_axis_should_select_parents_of_all_selected_nodes() {
 
     // assert node
     {
-        let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
 
         match tree_node.data {
             XpathItemTreeNodeData::ElementNode(e) => {
@@ -128,7 +140,11 @@ fn parent_axis_should_respect_node_test() {
 
     // assert node
     {
-        let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
 
         match tree_node.data {
             XpathItemTreeNodeData::ElementNode(e) => {
@@ -141,7 +157,11 @@ fn parent_axis_should_respect_node_test() {
 
     // assert node
     {
-        let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
 
         match tree_node.data {
             XpathItemTreeNodeData::ElementNode(e) => {

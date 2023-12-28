@@ -13,6 +13,7 @@ mod xml_names;
 
 use std::fmt::Display;
 
+use enum_extract_macro::EnumExtract;
 pub(crate) use expressions::xpath;
 pub use expressions::Xpath;
 
@@ -45,7 +46,7 @@ impl Display for NonTreeXpathNode {
 }
 
 /// Nodes that are part of the [`XpathItemTree`].
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash, EnumExtract)]
 pub enum XpathItemTreeNodeData {
     /// The root node of the document.
     DocumentNode(XpathDocumentNode),
@@ -63,15 +64,6 @@ pub enum XpathItemTreeNodeData {
 
     /// A text node.
     TextNode(TextNode),
-}
-
-impl XpathItemTreeNodeData {
-    pub fn unwrap_element_ref(&self) -> &ElementNode {
-        match self {
-            XpathItemTreeNodeData::ElementNode(node) => node,
-            _ => panic!("tree item is not an element"),
-        }
-    }
 }
 
 /// A node in the [`XpathItemTree`].

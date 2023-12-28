@@ -40,13 +40,13 @@
 //! assert_eq!(items.len(), 1);
 //!
 //! // Compare the text of the first and only node returned by the XPath expression
-//! let node = items[0].unwrap_node_ref().unwrap_tree_node_ref();
+//! let node = items[0].extract_as_node().extract_as_tree_node();
 //! let text = node.text(&xpath_item_tree);
 //!
 //! assert_eq!(text, "Good info");
 //!
 //! // Assert that node class attribute is "duplicate" string.
-//! let element = node.data.unwrap_element_ref();
+//! let element = node.data.extract_as_element_node();
 //! let attribute = element.get_attribute("class").unwrap();
 //! assert_eq!(attribute, "duplicate");
 //!
@@ -73,7 +73,7 @@
 //!     let result = SPAN_XPATH.apply(&xpath_item_tree)?;
 //!
 //!     let items = result;
-//!     let node = items[0].unwrap_node_ref().unwrap_tree_node_ref();
+//!     let node = items[0].extract_as_node().extract_as_tree_node();
 //!     Ok(node.text(&xpath_item_tree))
 //! }
 //!

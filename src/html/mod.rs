@@ -24,6 +24,7 @@ use std::{
     fmt::{self, Write},
 };
 
+use enum_extract_macro::EnumExtract;
 use indextree::{Arena, NodeId};
 use once_cell::sync::Lazy;
 
@@ -154,7 +155,7 @@ impl HtmlText {
 }
 
 /// An HTML node can be either a tag or raw text.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, EnumExtract)]
 pub enum HtmlNode {
     /// An HTML tag.
     Tag(HtmlTag),
@@ -214,28 +215,6 @@ impl HtmlNode {
         match self {
             HtmlNode::Tag(tag) => Some(&tag.attributes),
             &HtmlNode::Text(_) => None,
-        }
-    }
-
-    /// If this is node is an [HtmlNode::Tag], unwrap and return it, otherwise panic.
-    ///
-    /// Prefer using a `match`; only use this if you *know* this is a [HtmlNode::Tag], or
-    /// if panicking is ok, such as during testing.
-    pub fn unwrap_tag(&self) -> &HtmlTag {
-        match self {
-            HtmlNode::Tag(tag) => tag,
-            x => panic!("node is not a tag {:?}", x),
-        }
-    }
-
-    /// If this is node is an [HtmlNode::Text], unwrap and return it, otherwise panic.
-    ///
-    /// Prefer using a `match`; only use this if you *know* this is a [HtmlNode::Text], or
-    /// if panicking is ok, such as during testing.
-    pub fn unwrap_text(&self) -> &HtmlText {
-        match self {
-            HtmlNode::Text(text) => text,
-            _ => panic!("node is not text"),
         }
     }
 }
@@ -776,7 +755,7 @@ mod tests {
         let node = result_document
             .get_html_node(&result_document.root_node)
             .unwrap()
-            .unwrap_tag();
+            .extract_as_tag();
 
         assert_eq!("html", node.name);
         assert_eq!("foo", node.attributes["@class"]);

@@ -25,7 +25,7 @@ fn abbrev_attribute_step_should_match_given_attribute() {
     let attributes: Vec<AttributeNode> = nodes
         .into_iter()
         .filter_map(|x| {
-            let non_tree_node = x.unwrap_node().unwrap_non_tree_node();
+            let non_tree_node = x.extract_into_node().into_non_tree_node().unwrap();
 
             match non_tree_node {
                 NonTreeXpathNode::AttributeNode(e) => Some(e),

@@ -19,7 +19,12 @@ fn xpath_github_sample1() {
     assert_eq!(nodes.len(), 1);
     let mut nodes = nodes.into_iter();
 
-    let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+    let tree_node = nodes
+        .next()
+        .unwrap()
+        .extract_into_node()
+        .extract_into_tree_node();
+
     match tree_node.data {
         XpathItemTreeNodeData::ElementNode(e) => assert_eq!(e.name, "main"),
         _ => panic!(""),
@@ -42,7 +47,12 @@ fn xpath_github_sample2() {
     assert_eq!(nodes.len(), 5);
     let mut nodes = nodes.into_iter();
 
-    let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+    let tree_node = nodes
+        .next()
+        .unwrap()
+        .extract_into_node()
+        .extract_into_tree_node();
+
     match tree_node.data {
         XpathItemTreeNodeData::ElementNode(e) => {
             assert_eq!(e.name, "a");
@@ -79,7 +89,12 @@ fn xpath_github_sample3() {
     assert_eq!(nodes.len(), 1);
     let mut nodes = nodes.into_iter();
 
-    let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+    let tree_node = nodes
+        .next()
+        .unwrap()
+        .extract_into_node()
+        .extract_into_tree_node();
+
     match tree_node.data {
         XpathItemTreeNodeData::ElementNode(e) => {
             assert_eq!(e.name, "a");
@@ -131,7 +146,11 @@ fn xpath_github_get_text_sample() {
     assert_eq!(nodes.len(), 1);
     let mut nodes = nodes.into_iter();
 
-    let element = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+    let element = nodes
+        .next()
+        .unwrap()
+        .extract_into_node()
+        .extract_into_tree_node();
 
     let text = element.text(&xpath_item_tree).trim().to_string();
 
@@ -202,8 +221,12 @@ fn xpath_github_get_attributes_sample() {
     assert_eq!(nodes.len(), 1);
     let mut nodes = nodes.into_iter();
 
-    let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
-    let elem = tree_node.data.unwrap_element_ref();
+    let tree_node = nodes
+        .next()
+        .unwrap()
+        .extract_into_node()
+        .extract_into_tree_node();
+    let elem = tree_node.data.extract_as_element_node();
 
     assert_eq!(
         elem.get_attribute("class").unwrap(),
@@ -227,7 +250,11 @@ fn xpath_github_root_search() {
     assert_eq!(nodes.len(), 1);
     let mut nodes = nodes.into_iter();
 
-    let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+    let tree_node = nodes
+        .next()
+        .unwrap()
+        .extract_into_node()
+        .extract_into_tree_node();
 
     match tree_node.data {
         XpathItemTreeNodeData::ElementNode(e) => assert_eq!(e.name, "html"),
@@ -251,7 +278,11 @@ fn xpath_github_root_search_all() {
     assert_eq!(nodes.len(), 1);
     let mut nodes = nodes.into_iter();
 
-    let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+    let tree_node = nodes
+        .next()
+        .unwrap()
+        .extract_into_node()
+        .extract_into_tree_node();
 
     match tree_node.data {
         XpathItemTreeNodeData::ElementNode(e) => assert_eq!(e.name, "html"),
@@ -275,8 +306,8 @@ fn xpath_github_root_wildcard() {
     assert_eq!(nodes.len(), 16);
 
     // assert first node
-    let tree_node = &nodes[0].unwrap_node_ref().unwrap_tree_node_ref();
-    let elem = tree_node.data.unwrap_element_ref();
+    let tree_node = &nodes[0].extract_as_node().extract_as_tree_node();
+    let elem = tree_node.data.extract_as_element_node();
 
     assert_eq!(elem.name, "div");
 
@@ -286,14 +317,14 @@ fn xpath_github_root_wildcard() {
     );
 
     // assert random node 4
-    let tree_node = &nodes[3].unwrap_node_ref().unwrap_tree_node_ref();
-    let elem = tree_node.data.unwrap_element_ref();
+    let tree_node = &nodes[3].extract_as_node().extract_as_tree_node();
+    let elem = tree_node.data.extract_as_element_node();
 
     assert_eq!(elem.name, "include-fragment");
 
     // assert last node
-    let tree_node = &nodes[15].unwrap_node_ref().unwrap_tree_node_ref();
-    let elem = tree_node.data.unwrap_element_ref();
+    let tree_node = &nodes[15].extract_as_node().extract_as_tree_node();
+    let elem = tree_node.data.extract_as_element_node();
 
     assert_eq!(elem.name, "div");
 

@@ -25,7 +25,11 @@ fn leading_slash_should_select_html_node() {
 
     // assert node
     {
-        let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
 
         match tree_node.data {
             XpathItemTreeNodeData::ElementNode(e) => {
@@ -68,7 +72,11 @@ fn leading_double_slash_should_select_all() {
 
     // assert node
     {
-        let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
 
         match tree_node.data {
             XpathItemTreeNodeData::ElementNode(e) => {
@@ -82,7 +90,11 @@ fn leading_double_slash_should_select_all() {
 
     // assert node
     {
-        let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
 
         match tree_node.data {
             XpathItemTreeNodeData::ElementNode(e) => {
@@ -96,7 +108,11 @@ fn leading_double_slash_should_select_all() {
 
     // assert node
     {
-        let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
 
         match tree_node.data {
             XpathItemTreeNodeData::ElementNode(e) => {
@@ -110,7 +126,11 @@ fn leading_double_slash_should_select_all() {
 
     // assert node
     {
-        let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
 
         match tree_node.data {
             XpathItemTreeNodeData::ElementNode(e) => {
@@ -124,7 +144,11 @@ fn leading_double_slash_should_select_all() {
 
     // assert node
     {
-        let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
 
         match tree_node.data {
             XpathItemTreeNodeData::ElementNode(e) => {
@@ -138,7 +162,11 @@ fn leading_double_slash_should_select_all() {
 
     // assert node
     {
-        let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
 
         match tree_node.data {
             XpathItemTreeNodeData::ElementNode(e) => {
@@ -187,7 +215,11 @@ fn double_slash_should_select_all() {
 
     // assert node
     {
-        let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
 
         match tree_node.data {
             XpathItemTreeNodeData::ElementNode(e) => {
@@ -201,7 +233,11 @@ fn double_slash_should_select_all() {
 
     // assert node
     {
-        let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
 
         match tree_node.data {
             XpathItemTreeNodeData::ElementNode(e) => {
@@ -215,7 +251,11 @@ fn double_slash_should_select_all() {
 
     // assert node
     {
-        let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
 
         match tree_node.data {
             XpathItemTreeNodeData::ElementNode(e) => {

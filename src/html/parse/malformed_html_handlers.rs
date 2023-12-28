@@ -219,7 +219,7 @@ impl MismatchedTagHandler for CloseMismatchedTagHandler {
                     .get(parent_key)
                     .unwrap()
                     .get()
-                    .unwrap_tag();
+                    .extract_as_tag();
 
                 // if the parent name matches the end tag of the mistmatch, assume the parent's end tag is missing and move up to close it.
                 // otherwise, ignore the mismatch and hope for the best.

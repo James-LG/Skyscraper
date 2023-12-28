@@ -29,7 +29,11 @@ fn class_equals_predicate_should_select_nodes_with_that_match() {
 
     // assert node
     {
-        let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
 
         match tree_node.data {
             XpathItemTreeNodeData::ElementNode(e) => {
@@ -68,7 +72,11 @@ fn predicate_on_double_leading_slash_should_select_nodes_with_that_match() {
 
     // assert node
     {
-        let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
 
         match tree_node.data {
             XpathItemTreeNodeData::ElementNode(e) => {
@@ -111,7 +119,11 @@ fn index_should_select_indexed_child_for_all_selected_parents() {
 
     // assert node
     {
-        let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
 
         match tree_node.data {
             XpathItemTreeNodeData::ElementNode(e) => {
@@ -125,7 +137,11 @@ fn index_should_select_indexed_child_for_all_selected_parents() {
 
     // assert node
     {
-        let tree_node = nodes.next().unwrap().unwrap_node().unwrap_tree_node();
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
 
         match tree_node.data {
             XpathItemTreeNodeData::ElementNode(e) => {
