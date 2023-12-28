@@ -119,6 +119,8 @@ impl<'a> XpathItemTreeNode<'a> {
 
     /// Get all text contained in this node and its descendants.
     ///
+    /// Use [`XpathItemTreeNode::text`] to get _only_ text contained directly in this node.
+    ///
     /// # Arguments
     ///
     /// * `tree` - The tree that this node is a part of.
@@ -126,8 +128,31 @@ impl<'a> XpathItemTreeNode<'a> {
     /// # Returns
     ///
     /// A string of all text contained in this node and its descendants.
+    pub fn all_text(&self, tree: &'a XpathItemTree) -> String {
+        self.text_internal(tree, true)
+    }
+
+    /// Get text directly contained in this node.
+    ///
+    /// Use [`XpathItemTreeNode::all_text`] to get all text _including_ text in descendant nodes.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree that this node is a part of.
+    ///
+    /// # Returns
+    ///
+    /// A string of all text contained in this node.
     pub fn text(&self, tree: &'a XpathItemTree) -> String {
-        fn get_all_text_nodes(tree: &XpathItemTree, node: &XpathItemTreeNode) -> Vec<TextNode> {
+        self.text_internal(tree, false)
+    }
+
+    fn text_internal(&self, tree: &'a XpathItemTree, recurse: bool) -> String {
+        fn get_all_text_nodes(
+            tree: &XpathItemTree,
+            node: &XpathItemTreeNode,
+            recurse: bool,
+        ) -> Vec<TextNode> {
             node
                 // Get all children of the given node.
                 .children(tree)
@@ -137,9 +162,9 @@ impl<'a> XpathItemTreeNode<'a> {
                     if let XpathItemTreeNodeData::TextNode(text) = child.data {
                         v.push(text.clone());
                     }
-                    // Otherwise, get all the text nodes descending from this child.
-                    else {
-                        v.extend(get_all_text_nodes(tree, &child));
+                    // Otherwise, if this is a recursive search, get all the text nodes descending from this child.
+                    else if recurse {
+                        v.extend(get_all_text_nodes(tree, &child, recurse));
                     }
                     v
                 })
@@ -147,7 +172,7 @@ impl<'a> XpathItemTreeNode<'a> {
 
         let strings: Vec<String> =
             // Get all children.
-            get_all_text_nodes(tree, self)
+            get_all_text_nodes(tree, self, recurse)
             .into_iter()
             // Filter out all whitespace-only text nodes
             .filter_map(|x| {
@@ -205,6 +230,7 @@ impl From<&HtmlDocument> for XpathItemTree {
             let html_node = html_document
                 .get_html_node(&current_html_node)
                 .expect("html document missing expected node");
+
             let root_item = match html_node {
                 HtmlNode::Tag(tag) => {
                     let attributes = tag

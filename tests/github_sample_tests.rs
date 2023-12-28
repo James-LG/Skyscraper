@@ -152,7 +152,7 @@ fn xpath_github_get_text_sample() {
         .extract_into_node()
         .extract_into_tree_node();
 
-    let text = element.text(&xpath_item_tree).trim().to_string();
+    let text = element.all_text(&xpath_item_tree).trim().to_string();
 
     assert_eq!(text, "James-LG / Skyscraper Public");
 }

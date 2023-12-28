@@ -267,3 +267,74 @@ fn double_slash_should_select_all() {
         assert_eq!(tree_node.text(&xpath_item_tree), "6");
     }
 }
+
+#[test]
+fn document_order_preserved_in_results() {
+    // arrange
+    let text = r###"
+        <html>
+            <body>
+                <span>1</span>
+                <span>
+                    2
+                    <span>3</span>
+                </span>
+            </body>
+        </html>"###;
+
+    let document = html::parse(&text).unwrap();
+    let xpath_item_tree = xpath::XpathItemTree::from(&document);
+    let xpath = xpath::parse("/html/body//span").unwrap();
+
+    // act
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
+
+    // assert
+    assert_eq!(nodes.len(), 3);
+    let mut nodes = nodes.into_iter();
+
+    // assert node
+    {
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
+
+        let element_node = tree_node.data.extract_as_element_node();
+
+        assert_eq!(element_node.name, "span");
+
+        assert_eq!(tree_node.text(&xpath_item_tree), "1");
+    }
+
+    // assert node
+    {
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
+
+        let element_node = tree_node.data.extract_as_element_node();
+
+        assert_eq!(element_node.name, "span");
+
+        assert_eq!(tree_node.text(&xpath_item_tree), "2");
+    }
+
+    // assert node
+    {
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
+
+        let element_node = tree_node.data.extract_as_element_node();
+
+        assert_eq!(element_node.name, "span");
+
+        assert_eq!(tree_node.text(&xpath_item_tree), "3");
+    }
+}

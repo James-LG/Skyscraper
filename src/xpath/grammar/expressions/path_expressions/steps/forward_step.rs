@@ -154,7 +154,7 @@ fn eval_forward_axis_descendant<'tree>(
 fn eval_forward_axis_self_or_descendant<'tree>(
     context: &XpathExpressionContext<'tree>,
 ) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
-    let mut nodes = eval_forward_axis_descendant(context)?;
+    let mut nodes = IndexSet::new();
 
     if let XpathItem::Node(node) = &context.item {
         nodes.insert(node.clone());
@@ -163,6 +163,8 @@ fn eval_forward_axis_self_or_descendant<'tree>(
             msg: String::from("err:XPTY0020 context item for axis step is not a node"),
         });
     }
+
+    nodes.extend(eval_forward_axis_descendant(context)?);
 
     Ok(nodes)
 }
