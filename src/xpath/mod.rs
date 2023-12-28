@@ -1,11 +1,7 @@
 //! Parse and apply XPath expressions to HTML documents.
 
-use std::fmt::Display;
-
 use nom::error::VerboseError;
 use thiserror::Error;
-
-use crate::xpath::grammar::data_model::AnyAtomicType;
 
 use self::{
     grammar::{data_model::XpathItem, xpath, XpathItemTreeNode},
@@ -33,6 +29,9 @@ pub(crate) struct XpathExpressionContext<'tree> {
     item_tree: &'tree XpathItemTree,
     item: XpathItem<'tree>,
     position: usize,
+
+    // size is part of the XPath expression context spec, and will be used eventually
+    #[allow(unused)]
     size: usize,
 }
 

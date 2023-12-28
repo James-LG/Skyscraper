@@ -130,6 +130,15 @@ impl Xpath {
         );
         self.eval(&context)
     }
+
+    pub fn apply_to_item<'tree>(
+        &self,
+        item_tree: &'tree XpathItemTree,
+        item: XpathItem<'tree>,
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
+        let context = XpathExpressionContext::new_single(item_tree, item);
+        self.eval(&context)
+    }
 }
 
 pub fn expr(input: &str) -> Res<&str, Expr> {

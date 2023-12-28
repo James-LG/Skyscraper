@@ -146,7 +146,10 @@ impl PrimaryExpr {
             }
             PrimaryExpr::VarRef(_) => todo!("PrimaryExpr::VarRef eval"),
             PrimaryExpr::ParenthesizedExpr(expr) => expr.eval(context),
-            PrimaryExpr::ContextItemExpr => todo!("PrimaryExpr::LiteContextItemExprral eval"),
+            PrimaryExpr::ContextItemExpr => {
+                // Context item expression is '.', which means select the current context item.
+                Ok(xpath_item_set![context.item.clone()])
+            }
             PrimaryExpr::FunctionCall(expr) => expr.eval(context),
             PrimaryExpr::FunctionItemExpr(_) => todo!("PrimaryExpr::FunctionItemExpr eval"),
             PrimaryExpr::MapConstructor(_) => todo!("PrimaryExpr::MapConstructor eval"),
