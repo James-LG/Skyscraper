@@ -69,11 +69,12 @@ impl TreatExpr {
             Some(treat_type) => treat_type,
         };
 
+        // TODO: Use context based on above result
         if !treat_type.eval(&result, context)? {
             return Err(ExpressionApplyError {
                 msg: format!(
                     "err:XPDY0050 Cannot treat {:?} as {}",
-                    result,
+                    context.item,
                     treat_type.to_string()
                 ),
             });

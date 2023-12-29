@@ -97,7 +97,8 @@ fn eval_forward_axis<'tree>(
     let mut nodes = IndexSet::new();
 
     for (i, _item) in items.iter().enumerate() {
-        let node_test_context = XpathExpressionContext::new(context.item_tree, &items, i + 1);
+        let node_test_context =
+            XpathExpressionContext::new(context.item_tree, &items, i + 1, context.is_root_level);
 
         if let Some(result) =
             node_test.eval(BiDirectionalAxis::ForwardAxis(axis), &node_test_context)?
@@ -140,8 +141,11 @@ fn eval_forward_axis_descendant<'tree>(
             nodes.insert(child.clone());
 
             // Add the child's descendants.
-            let child_eval_context =
-                XpathExpressionContext::new_single(context.item_tree, child.into());
+            let child_eval_context = XpathExpressionContext::new_single(
+                context.item_tree,
+                child.into(),
+                context.is_root_level,
+            );
             let child_descendants = eval_forward_axis_descendant(&child_eval_context)?;
             nodes.extend(child_descendants);
         }

@@ -33,6 +33,12 @@ pub(crate) struct XpathExpressionContext<'tree> {
     // size is part of the XPath expression context spec, and will be used eventually
     #[allow(unused)]
     size: usize,
+
+    /// `true` if this expression is being applied to the root item tree;
+    /// `false` if this expression is being applied to a specific item in the tree.
+    ///
+    /// This should not be modified for the entire evaluation cycle of an expression.
+    is_root_level: bool,
 }
 
 impl<'tree> XpathExpressionContext<'tree> {
@@ -40,21 +46,28 @@ impl<'tree> XpathExpressionContext<'tree> {
         item_tree: &'tree XpathItemTree,
         items: &XpathItemSet<'tree>,
         position: usize,
+        is_root_level: bool,
     ) -> Self {
         Self {
             item_tree,
             item: items[position - 1].clone(), // Position is 1-based
             position: position,
             size: items.len(),
+            is_root_level,
         }
     }
 
-    pub fn new_single(item_tree: &'tree XpathItemTree, item: XpathItem<'tree>) -> Self {
+    pub fn new_single(
+        item_tree: &'tree XpathItemTree,
+        item: XpathItem<'tree>,
+        is_root_level: bool,
+    ) -> Self {
         Self {
             item_tree,
             item,
             position: 1,
             size: 1,
+            is_root_level,
         }
     }
 }

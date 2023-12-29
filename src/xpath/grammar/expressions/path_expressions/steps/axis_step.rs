@@ -83,7 +83,12 @@ impl AxisStep {
             // All predicates must match for a node to be selected.
             let mut is_match = true;
 
-            let predicate_context = XpathExpressionContext::new(context.item_tree, &items, i + 1);
+            let predicate_context = XpathExpressionContext::new(
+                context.item_tree,
+                &items,
+                i + 1,
+                context.is_root_level,
+            );
             for predicate in self.predicates.iter() {
                 if !predicate.is_match(&predicate_context)? {
                     is_match = false;

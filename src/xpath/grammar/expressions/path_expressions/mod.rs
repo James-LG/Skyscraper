@@ -74,11 +74,21 @@ impl PathExpr {
         // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-path-expressions
         match self {
             PathExpr::LeadingSlash(expr) => {
-                let expanded_expr = initial_slash_expansion(expr);
+                let expanded_expr = if context.is_root_level {
+                    initial_slash_expansion(expr)
+                } else {
+                    relative_slash_expansion(expr)
+                };
+
                 expanded_expr.eval(context)
             }
             PathExpr::LeadingDoubleSlash(expr) => {
-                let expanded_expr = initial_double_slash_expansion(expr);
+                let expanded_expr = if context.is_root_level {
+                    initial_double_slash_expansion(expr)
+                } else {
+                    relative_double_slash_expansion(expr)
+                };
+
                 expanded_expr.eval(context)
             }
             PathExpr::Plain(expr) => expr.eval(context),
@@ -87,10 +97,31 @@ impl PathExpr {
 }
 
 fn initial_slash_expansion(unexpanded_expr: &Option<RelativePathExpr>) -> RelativePathExpr {
-    // A leading slash is expanded to `(fn:root(self::node()) treat as document-node())/`
+    // A leading slash is expanded to `(fn:root(self::node()) treat as document-node())/<unexpanded_expr>`
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-path-expressions
     let first_step = step_expr("(fn:root(self::node()) treat as document-node())")
-        .expect("slash expansion step 1 failed")
+        .expect("initial slash expansion step 1 failed")
+        .1;
+
+    let items = match unexpanded_expr {
+        Some(x) => {
+            let mut items = vec![StepPair(PathSeparator::Slash, x.expr.clone())];
+            items.extend(x.items.iter().map(|x| x.clone()));
+            items
+        }
+        None => vec![],
+    };
+
+    RelativePathExpr {
+        expr: first_step,
+        items,
+    }
+}
+
+fn relative_slash_expansion(unexpanded_expr: &Option<RelativePathExpr>) -> RelativePathExpr {
+    // A leading slash in a relative expression is expanded to `./<unexpanded_expr>`
+    let first_step = step_expr(".")
+        .expect("relative slash expansion step 1 failed")
         .1;
 
     let items = match unexpanded_expr {
@@ -109,7 +140,7 @@ fn initial_slash_expansion(unexpanded_expr: &Option<RelativePathExpr>) -> Relati
 }
 
 fn initial_double_slash_expansion(unexpanded_expr: &RelativePathExpr) -> RelativePathExpr {
-    // A leading double slash is expanded to `(fn:root(self::node()) treat as document-node())/descendant-or-self::node()/`
+    // A leading double slash is expanded to `(fn:root(self::node()) treat as document-node())/descendant-or-self::node()/<unexpanded_expr>`
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-path-expressions
     let first_step = step_expr("(fn:root(self::node()) treat as document-node())")
         .expect("double slash expansion step 1 failed")
@@ -121,6 +152,24 @@ fn initial_double_slash_expansion(unexpanded_expr: &RelativePathExpr) -> Relativ
 
     let mut items = vec![StepPair(PathSeparator::Slash, second_step)];
     items.push(StepPair(PathSeparator::Slash, unexpanded_expr.expr.clone()));
+    items.extend(unexpanded_expr.items.iter().map(|x| x.clone()));
+
+    RelativePathExpr {
+        expr: first_step,
+        items,
+    }
+}
+
+fn relative_double_slash_expansion(unexpanded_expr: &RelativePathExpr) -> RelativePathExpr {
+    // A leading double slash in a relative expression is expanded to `.//<unexpanded_expr>`
+    let first_step = step_expr(".")
+        .expect("relative double slash expansion step 1 failed")
+        .1;
+
+    let mut items = vec![StepPair(
+        PathSeparator::DoubleSlash,
+        unexpanded_expr.expr.clone(),
+    )];
     items.extend(unexpanded_expr.items.iter().map(|x| x.clone()));
 
     RelativePathExpr {
@@ -201,8 +250,12 @@ impl RelativePathExpr {
             // so that the final result is only the result of the last step.
             for (i, _item) in this_result.iter().enumerate() {
                 // Create a context for the inner steps using an item from the current result.
-                let inner_context =
-                    XpathExpressionContext::new(context.item_tree, &this_result, i + 1);
+                let inner_context = XpathExpressionContext::new(
+                    context.item_tree,
+                    &this_result,
+                    i + 1,
+                    context.is_root_level,
+                );
 
                 // Recursively evaluate the rest of the steps for this item.
                 let inner_result = eval_steps(&inner_context, &steps[1..])?;
@@ -223,7 +276,12 @@ impl RelativePathExpr {
         // Otherwise, for each item in the result of the expression, evaluate the steps.
         let mut items = XpathItemSet::new();
         for (i, _item) in e1_result.iter().enumerate() {
-            let en_context = XpathExpressionContext::new(context.item_tree, &e1_result, i + 1);
+            let en_context = XpathExpressionContext::new(
+                context.item_tree,
+                &e1_result,
+                i + 1,
+                context.is_root_level,
+            );
             let result = eval_steps(&en_context, &self.items)?;
             items.extend(result);
         }

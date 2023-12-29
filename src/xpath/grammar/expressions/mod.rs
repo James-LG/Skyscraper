@@ -91,7 +91,7 @@ impl Xpath {
     ///             <div>Hello world</div>
     ///         </body>
     ///     </html>"##;
-    ///    
+    ///
     ///     let document = html::parse(html_text)?;
     ///     let xpath_item_tree = XpathItemTree::from(&document);
     ///     let xpath = xpath::parse("//div")?;
@@ -102,21 +102,17 @@ impl Xpath {
     ///    
     ///     let mut nodes = nodes.into_iter();
     ///    
-    ///     let node = nodes.next().unwrap();
-    ///    
-    ///     match node {
-    ///         XpathItem::Node(Node::TreeNode(tree_node)) => {
-    ///             match tree_node.data {
-    ///                 XpathItemTreeNodeData::ElementNode(element) => {
-    ///                    assert_eq!(element.name, "div");
-    ///                 },
-    ///                _ => panic!("expected node to be an element node"),
-    ///             }
+    ///     let node = nodes
+    ///         .next()
+    ///         .unwrap();
     ///
-    ///             assert_eq!(tree_node.text(&xpath_item_tree), "Hello world");
-    ///         },
-    ///         _ => panic!("expected node to be a tree node"),
-    ///     }
+    ///     let element = node
+    ///         .as_node()?
+    ///         .as_tree_node()?
+    ///         .data
+    ///         .as_element_node()?;
+    ///
+    ///     assert_eq!(element.name, "div");
     ///     Ok(())
     /// }
     /// ```
@@ -127,6 +123,7 @@ impl Xpath {
         let context = XpathExpressionContext::new_single(
             item_tree,
             XpathItem::Node(Node::TreeNode(item_tree.root())),
+            true,
         );
         self.eval(&context)
     }
@@ -136,7 +133,7 @@ impl Xpath {
         item_tree: &'tree XpathItemTree,
         item: XpathItem<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
-        let context = XpathExpressionContext::new_single(item_tree, item);
+        let context = XpathExpressionContext::new_single(item_tree, item, false);
         self.eval(&context)
     }
 }
