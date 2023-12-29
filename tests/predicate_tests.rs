@@ -35,12 +35,8 @@ fn class_equals_predicate_should_select_nodes_with_that_match() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::ElementNode(e) => {
-                assert_eq!(e.name, "div")
-            }
-            _ => panic!("expected element, got {:?}", tree_node.data),
-        }
+        let element = tree_node.data.extract_as_element_node();
+        assert_eq!(element.name, "div");
 
         assert_eq!(tree_node.text(&xpath_item_tree).trim(), "good");
     }
@@ -78,12 +74,8 @@ fn predicate_on_double_leading_slash_should_select_nodes_with_that_match() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::ElementNode(e) => {
-                assert_eq!(e.name, "div")
-            }
-            _ => panic!("expected element, got {:?}", tree_node.data),
-        }
+        let element = tree_node.data.extract_as_element_node();
+        assert_eq!(element.name, "div");
 
         assert_eq!(tree_node.text(&xpath_item_tree).trim(), "good");
     }
@@ -125,12 +117,8 @@ fn index_should_select_indexed_child_for_all_selected_parents() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::ElementNode(e) => {
-                assert_eq!(e.name, "p")
-            }
-            _ => panic!("expected element, got {:?}", tree_node.data),
-        }
+        let element = tree_node.data.extract_as_element_node();
+        assert_eq!(element.name, "p");
 
         assert_eq!(tree_node.text(&xpath_item_tree).trim(), "2");
     }
@@ -143,12 +131,8 @@ fn index_should_select_indexed_child_for_all_selected_parents() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::ElementNode(e) => {
-                assert_eq!(e.name, "p")
-            }
-            _ => panic!("expected element, got {:?}", tree_node.data),
-        }
+        let element = tree_node.data.extract_as_element_node();
+        assert_eq!(element.name, "p");
 
         assert_eq!(tree_node.text(&xpath_item_tree).trim(), "5");
     }

@@ -27,7 +27,7 @@ use crate::{
 };
 
 /// Nodes that are not part of the [`XpathItemTree`].
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash)]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash, EnumExtract)]
 pub enum NonTreeXpathNode {
     /// An attribute node.
     AttributeNode(AttributeNode),

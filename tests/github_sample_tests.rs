@@ -25,10 +25,8 @@ fn xpath_github_sample1() {
         .extract_into_node()
         .extract_into_tree_node();
 
-    match tree_node.data {
-        XpathItemTreeNodeData::ElementNode(e) => assert_eq!(e.name, "main"),
-        _ => panic!(""),
-    }
+    let element = tree_node.data.extract_as_element_node();
+    assert_eq!(element.name, "main")
 }
 
 #[test]
@@ -53,23 +51,15 @@ fn xpath_github_sample2() {
         .extract_into_node()
         .extract_into_tree_node();
 
-    match tree_node.data {
-        XpathItemTreeNodeData::ElementNode(e) => {
-            assert_eq!(e.name, "a");
+    let element = tree_node.data.extract_as_element_node();
+    assert_eq!(element.name, "a");
 
-            let children: Vec<XpathItemTreeNode> = tree_node.children(&xpath_item_tree).collect();
-            assert_eq!(1, children.len());
-            let mut children = children.into_iter();
+    let children: Vec<XpathItemTreeNode> = tree_node.children(&xpath_item_tree).collect();
+    assert_eq!(1, children.len());
+    let mut children = children.into_iter();
 
-            match children.next().unwrap().data {
-                XpathItemTreeNodeData::TextNode(text) => {
-                    assert_eq!(text.content, "refactor: Reorganize into workspace")
-                }
-                x => panic!("expected text, got {:?}", x),
-            }
-        }
-        _ => panic!("expected element"),
-    }
+    let text = children.next().unwrap().data.extract_as_text_node();
+    assert_eq!(text.content, "refactor: Reorganize into workspace")
 }
 
 #[test]
@@ -95,23 +85,15 @@ fn xpath_github_sample3() {
         .extract_into_node()
         .extract_into_tree_node();
 
-    match tree_node.data {
-        XpathItemTreeNodeData::ElementNode(e) => {
-            assert_eq!(e.name, "a");
+    let element = tree_node.data.extract_as_element_node();
+    assert_eq!(element.name, "a");
 
-            let children: Vec<XpathItemTreeNode> = tree_node.children(&xpath_item_tree).collect();
-            assert_eq!(children.len(), 1);
-            let mut children = children.into_iter();
+    let children: Vec<XpathItemTreeNode> = tree_node.children(&xpath_item_tree).collect();
+    assert_eq!(children.len(), 1);
+    let mut children = children.into_iter();
 
-            match children.next().unwrap().data {
-                XpathItemTreeNodeData::TextNode(text) => {
-                    assert_eq!(text.content, "Create a new release")
-                }
-                _ => panic!("expected text"),
-            }
-        }
-        _ => panic!("expected tag"),
-    }
+    let text = children.next().unwrap().data.extract_as_text_node();
+    assert_eq!(text.content, "Create a new release");
 }
 
 #[test]
@@ -256,10 +238,8 @@ fn xpath_github_root_search() {
         .extract_into_node()
         .extract_into_tree_node();
 
-    match tree_node.data {
-        XpathItemTreeNodeData::ElementNode(e) => assert_eq!(e.name, "html"),
-        _ => panic!(""),
-    }
+    let element = tree_node.data.extract_as_element_node();
+    assert_eq!(element.name, "html");
 }
 
 #[test]
@@ -284,10 +264,8 @@ fn xpath_github_root_search_all() {
         .extract_into_node()
         .extract_into_tree_node();
 
-    match tree_node.data {
-        XpathItemTreeNodeData::ElementNode(e) => assert_eq!(e.name, "html"),
-        _ => panic!(""),
-    }
+    let element = tree_node.data.extract_as_element_node();
+    assert_eq!(element.name, "html")
 }
 
 #[test]

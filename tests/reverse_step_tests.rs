@@ -31,12 +31,8 @@ fn parent_axis_should_select_parent_node() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::ElementNode(e) => {
-                assert_eq!(e.name, "html")
-            }
-            _ => panic!("expected element, got {:?}", tree_node.data),
-        }
+        let element = tree_node.data.extract_as_element_node();
+        assert_eq!(element.name, "html");
     }
 }
 
@@ -79,13 +75,9 @@ fn parent_axis_should_select_parents_of_all_selected_nodes() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::ElementNode(e) => {
-                assert_eq!(e.name, "div");
-                assert_eq!(e.get_attribute("id"), Some("1"));
-            }
-            _ => panic!("expected element, got {:?}", tree_node.data),
-        }
+        let element = tree_node.data.extract_as_element_node();
+        assert_eq!(element.name, "div");
+        assert_eq!(element.get_attribute("id"), Some("1"));
     }
 
     // assert node
@@ -96,13 +88,9 @@ fn parent_axis_should_select_parents_of_all_selected_nodes() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::ElementNode(e) => {
-                assert_eq!(e.name, "div");
-                assert_eq!(e.get_attribute("id"), Some("2"));
-            }
-            _ => panic!("expected element, got {:?}", tree_node.data),
-        }
+        let element = tree_node.data.extract_as_element_node();
+        assert_eq!(element.name, "div");
+        assert_eq!(element.get_attribute("id"), Some("2"));
     }
 }
 
@@ -146,13 +134,9 @@ fn parent_axis_should_respect_node_test() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::ElementNode(e) => {
-                assert_eq!(e.name, "div");
-                assert_eq!(e.get_attribute("id"), Some("1"));
-            }
-            _ => panic!("expected element, got {:?}", tree_node.data),
-        }
+        let element = tree_node.data.extract_as_element_node();
+        assert_eq!(element.name, "div");
+        assert_eq!(element.get_attribute("id"), Some("1"));
     }
 
     // assert node
@@ -163,12 +147,8 @@ fn parent_axis_should_respect_node_test() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::ElementNode(e) => {
-                assert_eq!(e.name, "div");
-                assert_eq!(e.get_attribute("id"), Some("2"));
-            }
-            _ => panic!("expected element, got {:?}", tree_node.data),
-        }
+        let element = tree_node.data.extract_as_element_node();
+        assert_eq!(element.name, "div");
+        assert_eq!(element.get_attribute("id"), Some("2"));
     }
 }

@@ -31,12 +31,8 @@ fn leading_slash_should_select_html_node() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::ElementNode(e) => {
-                assert_eq!(e.name, "html")
-            }
-            _ => panic!("expected element, got {:?}", tree_node.data),
-        }
+        let element = tree_node.data.extract_as_element_node();
+        assert_eq!(element.name, "html");
     }
 }
 
@@ -78,12 +74,8 @@ fn leading_double_slash_should_select_all() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::ElementNode(e) => {
-                assert_eq!(e.name, "p")
-            }
-            _ => panic!("expected element, got {:?}", tree_node.data),
-        }
+        let element = tree_node.data.extract_as_element_node();
+        assert_eq!(element.name, "p");
 
         assert_eq!(tree_node.text(&xpath_item_tree), "1");
     }
@@ -96,12 +88,8 @@ fn leading_double_slash_should_select_all() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::ElementNode(e) => {
-                assert_eq!(e.name, "p")
-            }
-            _ => panic!("expected element, got {:?}", tree_node.data),
-        }
+        let element = tree_node.data.extract_as_element_node();
+        assert_eq!(element.name, "p");
 
         assert_eq!(tree_node.text(&xpath_item_tree), "2");
     }
@@ -114,12 +102,8 @@ fn leading_double_slash_should_select_all() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::ElementNode(e) => {
-                assert_eq!(e.name, "p")
-            }
-            _ => panic!("expected element, got {:?}", tree_node.data),
-        }
+        let element = tree_node.data.extract_as_element_node();
+        assert_eq!(element.name, "p");
 
         assert_eq!(tree_node.text(&xpath_item_tree), "3");
     }
@@ -132,12 +116,8 @@ fn leading_double_slash_should_select_all() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::ElementNode(e) => {
-                assert_eq!(e.name, "p")
-            }
-            _ => panic!("expected element, got {:?}", tree_node.data),
-        }
+        let element = tree_node.data.extract_as_element_node();
+        assert_eq!(element.name, "p");
 
         assert_eq!(tree_node.text(&xpath_item_tree), "4");
     }
@@ -150,12 +130,8 @@ fn leading_double_slash_should_select_all() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::ElementNode(e) => {
-                assert_eq!(e.name, "p")
-            }
-            _ => panic!("expected element, got {:?}", tree_node.data),
-        }
+        let element = tree_node.data.extract_as_element_node();
+        assert_eq!(element.name, "p");
 
         assert_eq!(tree_node.text(&xpath_item_tree), "5");
     }
@@ -168,12 +144,8 @@ fn leading_double_slash_should_select_all() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::ElementNode(e) => {
-                assert_eq!(e.name, "p")
-            }
-            _ => panic!("expected element, got {:?}", tree_node.data),
-        }
+        let element = tree_node.data.extract_as_element_node();
+        assert_eq!(element.name, "p");
 
         assert_eq!(tree_node.text(&xpath_item_tree), "6");
     }
@@ -221,12 +193,8 @@ fn double_slash_should_select_all() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::ElementNode(e) => {
-                assert_eq!(e.name, "p")
-            }
-            _ => panic!("expected element, got {:?}", tree_node.data),
-        }
+        let element = tree_node.data.extract_as_element_node();
+        assert_eq!(element.name, "p");
 
         assert_eq!(tree_node.text(&xpath_item_tree), "4");
     }
@@ -239,12 +207,8 @@ fn double_slash_should_select_all() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::ElementNode(e) => {
-                assert_eq!(e.name, "p")
-            }
-            _ => panic!("expected element, got {:?}", tree_node.data),
-        }
+        let element = tree_node.data.extract_as_element_node();
+        assert_eq!(element.name, "p");
 
         assert_eq!(tree_node.text(&xpath_item_tree), "5");
     }
@@ -257,12 +221,8 @@ fn double_slash_should_select_all() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::ElementNode(e) => {
-                assert_eq!(e.name, "p")
-            }
-            _ => panic!("expected element, got {:?}", tree_node.data),
-        }
+        let element = tree_node.data.extract_as_element_node();
+        assert_eq!(element.name, "p");
 
         assert_eq!(tree_node.text(&xpath_item_tree), "6");
     }

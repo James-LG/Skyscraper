@@ -24,13 +24,10 @@ fn abbrev_attribute_step_should_match_given_attribute() {
     assert_eq!(nodes.len(), 1);
     let attributes: Vec<AttributeNode> = nodes
         .into_iter()
-        .filter_map(|x| {
-            let non_tree_node = x.extract_into_node().into_non_tree_node().unwrap();
-
-            match non_tree_node {
-                NonTreeXpathNode::AttributeNode(e) => Some(e),
-                _ => None,
-            }
+        .map(|item| {
+            item.extract_into_node()
+                .extract_into_non_tree_node()
+                .extract_into_attribute_node()
         })
         .collect();
 

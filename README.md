@@ -48,34 +48,44 @@ assert_eq!(parent_node, parent_of_child1);
 
 ## XPath Expressions
 
-Skyscraper is capable of parsing XPath strings and applying them to HTML
-documents.
+Skyscraper is capable of parsing XPath strings and applying them to HTML documents.
+
+Please see the [docs](https://docs.rs/skyscraper/latest/skyscraper/xpath/index.html) for more examples.
 
 ```rust
-use skyscraper::{html, xpath};
-// Parse the html text into a document.
-let html_text = r##"
-<div>
-    <div class="foo">
-        <span some_attr="value">yes</span>
-    </div>
-    <div class="bar">
-        <span>no</span>
-    </div>
-</div>
-"##;
-let document = html::parse(html_text)?;
- 
-// Parse and apply the xpath.
-let expr = xpath::parse("//div[@class='foo']/span")?;
-let results = expr.apply(&document)?;
-assert_eq!(1, results.len());
- 
-// Get text from the node
-let text = results[0].get_text(&document).expect("text missing");
-assert_eq!("yes", text);
+use skyscraper::html;
+use skyscraper::xpath::{self, XpathItemTree, grammar::{XpathItemTreeNodeData, data_model::{Node, XpathItem}}};
+use std::error::Error;
 
-// Get attributes from the node
-let attributes = results[0].get_attributes(&document).expect("no attributes");
-assert_eq!("value", attributes["some_attr"]);
+fn main() -> Result<(), Box<dyn Error>> {
+    let html_text = r##"
+    <html>
+        <body>
+            <div>Hello world</div>
+        </body>
+    </html>"##;
+
+    let document = html::parse(html_text)?;
+    let xpath_item_tree = XpathItemTree::from(&document);
+    let xpath = xpath::parse("//div")?;
+   
+    let nodes = xpath.apply(&xpath_item_tree)?;
+   
+    assert_eq!(nodes.len(), 1);
+   
+    let mut nodes = nodes.into_iter();
+   
+    let node = nodes
+        .next()
+        .unwrap();
+
+    let element = node
+        .as_node()?
+        .as_tree_node()?
+        .data
+        .as_element_node()?;
+
+    assert_eq!(element.name, "div");
+    Ok(())
+}
 ```

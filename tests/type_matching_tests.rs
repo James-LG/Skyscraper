@@ -53,12 +53,8 @@ fn text_test_should_match_all_text() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::TextNode(e) => {
-                assert_eq!(e.content, "1")
-            }
-            _ => panic!("expected text, got {:?}", tree_node.data),
-        }
+        let text_node = tree_node.data.extract_as_text_node();
+        assert_eq!(text_node.content, "1");
     }
 
     // assert node
@@ -69,12 +65,8 @@ fn text_test_should_match_all_text() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::TextNode(e) => {
-                assert_eq!(e.content, "2")
-            }
-            _ => panic!("expected text, got {:?}", tree_node.data),
-        }
+        let text_node = tree_node.data.extract_as_text_node();
+        assert_eq!(text_node.content, "2");
     }
 
     // assert node
@@ -85,12 +77,8 @@ fn text_test_should_match_all_text() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::TextNode(e) => {
-                assert_eq!(e.content, "3")
-            }
-            _ => panic!("expected text, got {:?}", tree_node.data),
-        }
+        let text_node = tree_node.data.extract_as_text_node();
+        assert_eq!(text_node.content, "3");
     }
 
     // assert node
@@ -101,12 +89,8 @@ fn text_test_should_match_all_text() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::TextNode(e) => {
-                assert_eq!(e.content, "4")
-            }
-            _ => panic!("expected text, got {:?}", tree_node.data),
-        }
+        let text_node = tree_node.data.extract_as_text_node();
+        assert_eq!(text_node.content, "4");
     }
 
     // assert node
@@ -117,12 +101,8 @@ fn text_test_should_match_all_text() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::TextNode(e) => {
-                assert_eq!(e.content, "5")
-            }
-            _ => panic!("expected text, got {:?}", tree_node.data),
-        }
+        let text_node = tree_node.data.extract_as_text_node();
+        assert_eq!(text_node.content, "5");
     }
 
     // assert node
@@ -133,12 +113,8 @@ fn text_test_should_match_all_text() {
             .extract_into_node()
             .extract_into_tree_node();
 
-        match tree_node.data {
-            XpathItemTreeNodeData::TextNode(e) => {
-                assert_eq!(e.content, "6")
-            }
-            _ => panic!("expected text, got {:?}", tree_node.data),
-        }
+        let text_node = tree_node.data.extract_as_text_node();
+        assert_eq!(text_node.content, "6");
     }
 }
 
@@ -161,12 +137,10 @@ fn attribute_test_should_match_all_attributes() {
     let attributes: Vec<AttributeNode> = nodes
         .into_iter()
         .filter_map(|x| {
-            let non_tree_node = x.extract_into_node().extract_into_non_tree_node();
-
-            match non_tree_node {
-                NonTreeXpathNode::AttributeNode(e) => Some(e),
-                _ => None,
-            }
+            x.extract_into_node()
+                .extract_into_non_tree_node()
+                .into_attribute_node()
+                .ok()
         })
         .collect();
 
