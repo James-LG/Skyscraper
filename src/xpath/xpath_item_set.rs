@@ -1,6 +1,9 @@
 //! An ordered set of [`XpathItem`]s.
 
-use std::ops::Index;
+use std::{
+    fmt::{write, Display},
+    ops::Index,
+};
 
 use indexmap::{self, IndexSet};
 
@@ -10,6 +13,16 @@ use super::grammar::data_model::{AnyAtomicType, XpathItem};
 #[derive(Debug)]
 pub struct XpathItemSet<'tree> {
     index_set: IndexSet<XpathItem<'tree>>,
+}
+
+impl Display for XpathItemSet<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")?;
+        let values: Vec<String> = self.iter().map(|item| item.to_string()).collect();
+        let values_str = values.join(", ");
+        write!(f, "{}", values_str)?;
+        write!(f, "]")
+    }
 }
 
 impl PartialEq for XpathItemSet<'_> {
@@ -142,7 +155,7 @@ macro_rules! xpath_item_set {
         {
             let set = indexmap::indexset![$($value,)*];
 
-            XpathItemSet::from(set)
+            crate::xpath::XpathItemSet::from(set)
         }
     };
 }

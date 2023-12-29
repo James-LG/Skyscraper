@@ -2,6 +2,7 @@
 
 use std::fmt::Display;
 
+use indexmap::IndexSet;
 use nom::{
     branch::alt, bytes::complete::tag, character::complete::char, combinator::opt, error::context,
     sequence::tuple,
@@ -12,6 +13,7 @@ use crate::xpath::{
         terminal_symbols::{string_literal, uri_qualified_name},
         xml_names::qname,
     },
+    xpath_item_set::XpathItemSet,
     ExpressionApplyError, XpathExpressionContext,
 };
 
@@ -130,49 +132,61 @@ pub enum KindTest {
 }
 
 impl KindTest {
-    pub(crate) fn eval<'tree>(
+    pub(crate) fn filter<'tree>(
         &self,
-        context: &XpathExpressionContext<'tree>,
-    ) -> Result<Option<Node<'tree>>, ExpressionApplyError> {
+        item_set: &XpathItemSet<'tree>,
+    ) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
         match self {
             KindTest::AnyKindTest => {
                 // AnyKindTest is `node()`.
                 // Select all node types.
-                if let XpathItem::Node(node) = &context.item {
-                    Ok(Some(node.clone()))
-                } else {
-                    Ok(None)
-                }
+                let filtered_nodes = item_set.iter().filter_map(|item| {
+                    if let XpathItem::Node(node) = item {
+                        Some(node.clone())
+                    } else {
+                        None
+                    }
+                });
+
+                Ok(filtered_nodes.collect())
             }
             KindTest::TextTest => {
                 // TextTest is `text()`.
                 // Select all text nodes.
-                if let XpathItem::Node(node) = &context.item {
-                    if matches!(
-                        node,
-                        Node::TreeNode(XpathItemTreeNode {
-                            data: XpathItemTreeNodeData::TextNode(_),
-                            ..
-                        })
-                    ) {
-                        return Ok(Some(node.clone()));
+                let filtered_nodes = item_set.iter().filter_map(|item| {
+                    if let XpathItem::Node(node) = item {
+                        if matches!(
+                            node,
+                            Node::TreeNode(XpathItemTreeNode {
+                                data: XpathItemTreeNodeData::TextNode(_),
+                                ..
+                            })
+                        ) {
+                            return Some(node.clone());
+                        }
                     }
-                }
 
-                Ok(None)
+                    None
+                });
+
+                Ok(filtered_nodes.collect())
             }
             KindTest::CommentTest => todo!("KindTest::CommentTest::is_match"),
             KindTest::NamespaceNodeTest => todo!("KindTest::NamespaceNodeTest::is_match"),
-            KindTest::DocumentTest(x) => x.eval(context),
+            KindTest::DocumentTest(x) => x.filter(item_set),
             KindTest::ElementTest(_) => todo!("KindTest::ElementTest::is_match"),
             KindTest::AttributeTest(x) => {
-                if let XpathItem::Node(node) = &context.item {
-                    if x.is_match(&node)? {
-                        return Ok(Some(node.clone()));
+                let mut filtered_nodes = IndexSet::new();
+
+                for item in item_set {
+                    if let XpathItem::Node(node) = item {
+                        if x.is_match(&node)? {
+                            filtered_nodes.insert(node.clone());
+                        }
                     }
                 }
 
-                Ok(None)
+                Ok(filtered_nodes)
             }
             KindTest::SchemaElementTest(_) => todo!("KindTest::SchemaElementTest::is_match"),
             KindTest::SchemaAttributeTest(_) => todo!("KindTest::SchemaAttributeTest::is_match"),
@@ -239,26 +253,30 @@ impl Display for DocumentTest {
 }
 
 impl DocumentTest {
-    pub(crate) fn eval<'tree>(
+    pub(crate) fn filter<'tree>(
         &self,
-        context: &XpathExpressionContext<'tree>,
-    ) -> Result<Option<Node<'tree>>, ExpressionApplyError> {
+        item_set: &XpathItemSet<'tree>,
+    ) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
         match &self.value {
             // document-node() matches any document node.
             None => {
-                if let XpathItem::Node(node) = &context.item {
-                    if matches!(
-                        node,
-                        Node::TreeNode(XpathItemTreeNode {
-                            data: XpathItemTreeNodeData::DocumentNode(_),
-                            ..
-                        })
-                    ) {
-                        return Ok(Some(node.clone()));
+                let mut filtered_nodes = IndexSet::new();
+
+                for item in item_set {
+                    if let XpathItem::Node(node) = item {
+                        if matches!(
+                            node,
+                            Node::TreeNode(XpathItemTreeNode {
+                                data: XpathItemTreeNodeData::DocumentNode(_),
+                                ..
+                            })
+                        ) {
+                            filtered_nodes.insert(node.clone());
+                        }
                     }
                 }
 
-                Ok(None)
+                Ok(filtered_nodes)
             }
             // document-node( E ) matches any document node that contains exactly one element node,
             // optionally accompanied by one or more comment and processing instruction nodes,

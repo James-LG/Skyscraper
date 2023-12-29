@@ -1,0 +1,33 @@
+use skyscraper::{html, xpath};
+
+#[test]
+fn root_should_select_root_node() {
+    // arrange
+    let text = r###"
+        <html>
+            <body>
+            </body>
+        </html>"###;
+
+    let document = html::parse(&text).unwrap();
+    let xpath_item_tree = xpath::XpathItemTree::from(&document);
+    let xpath = xpath::parse("/html/body/fn:root()").unwrap();
+
+    // act
+    let nodes = xpath.apply(&xpath_item_tree).unwrap();
+
+    // assert
+    assert_eq!(nodes.len(), 1);
+    let mut nodes = nodes.into_iter();
+
+    // assert node
+    {
+        let tree_node = nodes
+            .next()
+            .unwrap()
+            .extract_into_node()
+            .extract_into_tree_node();
+
+        tree_node.data.extract_as_document_node();
+    }
+}

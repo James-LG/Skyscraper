@@ -70,10 +70,9 @@ impl Display for SequenceType {
 }
 
 impl SequenceType {
-    pub(crate) fn eval<'tree>(
+    pub(crate) fn is_match<'tree>(
         &self,
-        item_set: &XpathItemSet,
-        context: &XpathExpressionContext<'tree>,
+        item_set: &XpathItemSet<'tree>,
     ) -> Result<bool, ExpressionApplyError> {
         match self {
             // The sequence type empty-sequence() matches a value that is the empty sequence.
@@ -83,7 +82,7 @@ impl SequenceType {
 
                 // An ItemType with no OccurrenceIndicator matches any value that contains exactly one item if the ItemType matches that item.
                 None => {
-                    let item_type_result = x.item_type.eval(context)?;
+                    let item_type_result = x.item_type.is_match(item_set)?;
                     Ok(item_set.len() == 1 && item_type_result)
                 }
             },
@@ -176,16 +175,16 @@ impl Display for ItemType {
 }
 
 impl ItemType {
-    pub(crate) fn eval<'tree>(
+    pub(crate) fn is_match<'tree>(
         &self,
-        context: &XpathExpressionContext<'tree>,
+        item_set: &XpathItemSet<'tree>,
     ) -> Result<bool, ExpressionApplyError> {
         match self {
             // item() matches any single item.
             ItemType::Item => Ok(true),
             ItemType::KindTest(x) => {
-                let result = x.eval(context)?;
-                Ok(!result.is_none())
+                let result = x.filter(item_set)?;
+                Ok(!result.is_empty())
             }
             ItemType::FunctionTest(_x) => todo!("ItemType::FunctionTest::is_match"),
             ItemType::MapTest(_x) => todo!("ItemType::MapTest::is_match"),

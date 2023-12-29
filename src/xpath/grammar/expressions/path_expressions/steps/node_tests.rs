@@ -6,16 +6,19 @@ use nom::{
     branch::alt, bytes::complete::tag, character::complete::char, error::context, sequence::tuple,
 };
 
-use crate::xpath::{
-    grammar::{
-        data_model::{Node, XpathItem},
-        recipes::Res,
-        terminal_symbols::braced_uri_literal,
-        types::{eq_name, kind_test, EQName, KindTest},
-        xml_names::{nc_name, QName},
-        NonTreeXpathNode, XpathItemTreeNode, XpathItemTreeNodeData,
+use crate::{
+    xpath::{
+        grammar::{
+            data_model::{Node, XpathItem},
+            recipes::Res,
+            terminal_symbols::braced_uri_literal,
+            types::{eq_name, kind_test, EQName, KindTest},
+            xml_names::{nc_name, QName},
+            NonTreeXpathNode, XpathItemTreeNode, XpathItemTreeNodeData,
+        },
+        ExpressionApplyError, XpathExpressionContext,
     },
-    ExpressionApplyError, XpathExpressionContext,
+    xpath_item_set,
 };
 
 use super::axes::{forward_axis::ForwardAxis, reverse_axis::ReverseAxis};
@@ -56,7 +59,16 @@ impl NodeTest {
         context: &XpathExpressionContext<'tree>,
     ) -> Result<Option<Node<'tree>>, ExpressionApplyError> {
         match self {
-            NodeTest::KindTest(test) => test.eval(context),
+            NodeTest::KindTest(test) => {
+                let filtered_nodes = test.filter(&xpath_item_set![context.item.clone()])?;
+
+                if !filtered_nodes.is_empty() {
+                    let node: Node<'_> = filtered_nodes.into_iter().next().unwrap();
+                    Ok(Some(node))
+                } else {
+                    Ok(None)
+                }
+            }
             NodeTest::NameTest(test) => test.eval(axis, context),
         }
     }
