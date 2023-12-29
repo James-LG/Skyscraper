@@ -14,7 +14,7 @@ use crate::xpath::{
         xml_names::qname,
     },
     xpath_item_set::XpathItemSet,
-    ExpressionApplyError, XpathExpressionContext,
+    ExpressionApplyError,
 };
 
 use self::{

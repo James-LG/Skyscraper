@@ -20,7 +20,7 @@ use crate::xpath::{
         },
     },
     xpath_item_set::XpathItemSet,
-    ExpressionApplyError, XpathExpressionContext,
+    ExpressionApplyError,
 };
 
 use super::{
@@ -82,8 +82,12 @@ impl SequenceType {
 
                 // An ItemType with no OccurrenceIndicator matches any value that contains exactly one item if the ItemType matches that item.
                 None => {
+                    if item_set.len() != 1 {
+                        return Ok(false);
+                    }
+
                     let item_type_result = x.item_type.is_match(item_set)?;
-                    Ok(item_set.len() == 1 && item_type_result)
+                    Ok(item_type_result)
                 }
             },
         }

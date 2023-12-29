@@ -1,9 +1,6 @@
 //! An ordered set of [`XpathItem`]s.
 
-use std::{
-    fmt::{write, Display},
-    ops::Index,
-};
+use std::{fmt::Display, ops::Index};
 
 use indexmap::{self, IndexSet};
 

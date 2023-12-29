@@ -128,6 +128,61 @@ impl Xpath {
         self.eval(&context)
     }
 
+    /// Apply the XPath expression to the given item.
+    /// The expression will be evaluated relative to the given item.
+    ///
+    /// # Arguments
+    ///
+    /// * `item_tree` - The item tree.
+    /// * `item` - The item to apply the expression to.
+    ///
+    /// # Returns
+    ///
+    /// The result of applying the expression to the item.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use skyscraper::html;
+    /// use skyscraper::xpath::{self, XpathItemTree, grammar::{XpathItemTreeNodeData, data_model::{Node, XpathItem}}};
+    /// use std::error::Error;
+    ///
+    /// fn main() -> Result<(), Box<dyn Error>> {
+    ///     let html_text = r##"
+    ///     <html>
+    ///         <body>
+    ///             <div id="1"><span>Hello</span></div>
+    ///             <div id="2"><span>world</span></div>
+    ///         </body>
+    ///     </html>"##;
+    ///
+    ///     let document = html::parse(html_text)?;
+    ///     let xpath_item_tree = XpathItemTree::from(&document);
+    ///     let xpath = xpath::parse(r#"//div[@id="2"]"#)?;
+    ///    
+    ///     let items = xpath.apply(&xpath_item_tree)?;
+    ///    
+    ///     assert_eq!(items.len(), 1);
+    ///
+    ///     let relative_xpath = xpath::parse("/span")?;
+    ///     let items = relative_xpath.apply_to_item(&xpath_item_tree, items[0].clone())?;
+    ///     let mut items = items.into_iter();
+    ///
+    ///     let item = items.next().unwrap();
+    ///     let tree_node = item
+    ///         .as_node()?
+    ///         .as_tree_node()?;
+    ///
+    ///     let element = tree_node
+    ///         .data
+    ///         .as_element_node()?;
+    ///
+    ///     assert_eq!(element.name, "span");
+    ///     assert_eq!(tree_node.text(&xpath_item_tree), "world");
+    ///     
+    ///     Ok(())
+    /// }
+    /// ```
     pub fn apply_to_item<'tree>(
         &self,
         item_tree: &'tree XpathItemTree,
