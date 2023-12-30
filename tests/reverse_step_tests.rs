@@ -1,7 +1,4 @@
-use skyscraper::{
-    html,
-    xpath::{self, grammar::XpathItemTreeNodeData},
-};
+use skyscraper::{html, xpath};
 
 #[test]
 fn parent_axis_should_select_parent_node() {

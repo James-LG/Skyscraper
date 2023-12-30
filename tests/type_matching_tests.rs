@@ -2,7 +2,7 @@ use skyscraper::{
     html,
     xpath::{
         self,
-        grammar::{data_model::AttributeNode, NonTreeXpathNode, XpathItemTreeNodeData},
+        grammar::{data_model::AttributeNode, XpathItemTreeNodeData},
     },
 };
 

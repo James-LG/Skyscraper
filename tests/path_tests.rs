@@ -1,7 +1,4 @@
-use skyscraper::{
-    html,
-    xpath::{self, grammar::XpathItemTreeNodeData},
-};
+use skyscraper::{html, xpath};
 
 #[test]
 fn leading_slash_should_select_html_node() {

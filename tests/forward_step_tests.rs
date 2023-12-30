@@ -1,9 +1,6 @@
 use skyscraper::{
     html,
-    xpath::{
-        self,
-        grammar::{data_model::AttributeNode, NonTreeXpathNode},
-    },
+    xpath::{self, grammar::data_model::AttributeNode},
 };
 
 #[test]

@@ -1,4 +1,4 @@
-use skyscraper::xpath::grammar::{XpathItemTreeNode, XpathItemTreeNodeData};
+use skyscraper::xpath::grammar::XpathItemTreeNode;
 use skyscraper::{html, xpath};
 
 static HTML: &'static str = include_str!("samples/James-LG_Skyscraper.html");
