@@ -89,3 +89,28 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 ```
+
+### Supported XPath Features
+
+XPath is a huge language that can do a lot more than most people require.
+Below is a non-exhaustive list of all the features that are currently supported.
+This library is major-version 0 because there are still `todo!` calls in many places.
+If you encounter one that you would like to be prioritized, open an issue.
+
+1. Basic xpath steps: `/html/body/div`, `//div/table//span`
+1. Attribute selection: `//div/@class`
+1. Text selection: `//div/text()`
+1. Wildcard node selection: `//body/*`
+1. Predicates:
+    1. Attributes: `//div[@class='hi']`
+    1. Indexing: `//div[1]`
+1. Functions:
+    1. `fn:root()`
+1. Forward axes:
+    1. Child: `child::*`
+    1. Descendant: `descendant::*`
+    1. Attribute: `attribute::*`
+    1. DescendentOrSelf: `descendant-or-self::*`
+1. Reverse axes:
+    1. Parent:  `parent::*`
+1. Treat expressions: `/html treat as node()`

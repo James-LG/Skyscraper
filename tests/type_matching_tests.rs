@@ -127,7 +127,7 @@ fn attribute_test_should_match_all_attributes() {
 
     let document = html::parse(&text).unwrap();
     let xpath_item_tree = xpath::XpathItemTree::from(&document);
-    let xpath = xpath::parse("/html/attribute::attribute()").unwrap();
+    let xpath = xpath::parse("/html/attribute::*").unwrap();
 
     // act
     let nodes = xpath.apply(&xpath_item_tree).unwrap();
