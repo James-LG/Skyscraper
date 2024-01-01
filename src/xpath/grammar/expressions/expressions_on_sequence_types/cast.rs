@@ -11,6 +11,7 @@ use crate::xpath::{
     grammar::{
         expressions::arrow_operator::{arrow_expr, ArrowExpr},
         recipes::Res,
+        terminal_symbols::sep,
         types::{simple_type_name, SimpleTypeName},
     },
     xpath_item_set::XpathItemSet,
@@ -22,10 +23,7 @@ pub fn cast_expr(input: &str) -> Res<&str, CastExpr> {
 
     context(
         "cast_expr",
-        tuple((
-            arrow_expr,
-            opt(tuple((tag("cast"), tag("as"), single_type))),
-        )),
+        sep((arrow_expr, opt(sep((tag("cast"), tag("as"), single_type))))),
     )(input)
     .map(|(next_input, res)| {
         let cast = res.1.map(|res| res.2);
@@ -90,7 +88,42 @@ pub struct SingleType {
 }
 
 impl Display for SingleType {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!("fmt SingleType")
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.type_name)?;
+        if self.has_question_mark {
+            write!(f, "?")?;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn single_type_should_parse() {
+        // arrange
+        let input = "integer?";
+
+        // act
+        let (next_input, res) = single_type(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
+    }
+
+    #[test]
+    fn cast_expr_should_parse() {
+        // arrange
+        let input = "fn:root() cast as integer?";
+
+        // act
+        let (next_input, res) = cast_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
     }
 }

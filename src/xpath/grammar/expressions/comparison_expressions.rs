@@ -9,7 +9,8 @@ use crate::{
         grammar::{
             data_model::{AnyAtomicType, Node, XpathItem},
             expressions::string_concat_expressions::string_concat_expr,
-            recipes::{ws, Res},
+            recipes::Res,
+            terminal_symbols::symbol_separator,
             NonTreeXpathNode, XpathItemTreeNodeData,
         },
         xpath_item_set::XpathItemSet,
@@ -217,15 +218,20 @@ fn value_comp(input: &str) -> Res<&str, ValueComp> {
 
     context(
         "value_comp",
-        ws(alt((
-            equal,
-            not_equal,
-            less_than,
-            less_than_equal_to,
-            greater_than,
-            greater_than_equal_to,
-        ))),
+        tuple((
+            symbol_separator,
+            alt((
+                equal,
+                not_equal,
+                less_than,
+                less_than_equal_to,
+                greater_than,
+                greater_than_equal_to,
+            )),
+            symbol_separator,
+        )),
     )(input)
+    .map(|(next_input, res)| (next_input, res.1))
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]

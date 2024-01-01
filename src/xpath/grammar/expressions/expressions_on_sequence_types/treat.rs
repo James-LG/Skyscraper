@@ -2,11 +2,12 @@
 
 use std::fmt::Display;
 
-use nom::{bytes::complete::tag, combinator::opt, error::context, sequence::tuple};
+use nom::{bytes::complete::tag, combinator::opt, error::context};
 
 use crate::xpath::{
     grammar::{
-        recipes::{ws, Res},
+        recipes::Res,
+        terminal_symbols::sep,
         types::sequence_type::{sequence_type, SequenceType},
     },
     xpath_item_set::XpathItemSet,
@@ -20,9 +21,9 @@ pub fn treat_expr(input: &str) -> Res<&str, TreatExpr> {
 
     context(
         "treat_expr",
-        tuple((
+        sep((
             castable_expr,
-            opt(tuple((ws(tag("treat")), ws(tag("as")), sequence_type))),
+            opt(sep((tag("treat"), tag("as"), sequence_type))),
         )),
     )(input)
     .map(|(next_input, res)| {

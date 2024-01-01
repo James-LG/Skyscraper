@@ -394,6 +394,12 @@ pub fn simple_type_name(input: &str) -> Res<&str, SimpleTypeName> {
 #[derive(PartialEq, Debug, Clone)]
 pub struct SimpleTypeName(TypeName);
 
+impl Display for SimpleTypeName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 pub fn eq_name(input: &str) -> Res<&str, EQName> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-EQName
 

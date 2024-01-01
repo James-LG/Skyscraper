@@ -1,9 +1,7 @@
 use std::ops::RangeFrom;
 
 use nom::{
-    character::complete::multispace0,
     error::{ErrorKind, ParseError, VerboseError},
-    sequence::delimited,
     AsChar, Err as NomErr, IResult, InputIter, Offset, Parser, Slice,
 };
 
@@ -66,15 +64,6 @@ where
     char_if(|c| c != '{' && c != '}')
 }
 
-/// A combinator that takes a parser `inner` and produces a parser that also consumes both leading and
-/// trailing whitespace, returning the output of `inner`.
-pub fn ws<'a, F, O, E: ParseError<&'a str>>(inner: F) -> impl Parser<&'a str, O, E>
-where
-    F: Parser<&'a str, O, E>,
-{
-    delimited(multispace0, inner, multispace0)
-}
-
 pub fn max<I: Clone, O, E: ParseError<I>, List: Max<I, O, E>>(
     mut l: List,
 ) -> impl FnMut(I) -> IResult<I, O, E> {
@@ -82,7 +71,7 @@ pub fn max<I: Clone, O, E: ParseError<I>, List: Max<I, O, E>>(
 }
 
 pub trait Max<I, O, E> {
-    /// Tests each parser in the tuple and returns the result of the first one that succeeds
+    /// Tests each parser in the tuple and returns the result of the one the consumed the most input.
     fn choice(&mut self, input: I) -> IResult<I, O, E>;
 }
 

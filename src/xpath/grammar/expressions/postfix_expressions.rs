@@ -11,7 +11,7 @@ use crate::xpath::{
             common::argument_list, maps_and_arrays::lookup_operator::postfix_lookup::lookup,
             primary_expressions::primary_expr,
         },
-        recipes::{ws, Res},
+        recipes::Res,
     },
     ExpressionApplyError, XpathExpressionContext, XpathItemSet,
 };
@@ -106,7 +106,7 @@ impl Display for PostfixExprItem {
 
 pub fn predicate(input: &str) -> Res<&str, Predicate> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-Predicate
-    context("predicate", tuple((ws(char('[')), expr, ws(char(']')))))(input)
+    context("predicate", tuple((char('['), expr, char(']'))))(input)
         .map(|(next_input, res)| (next_input, Predicate(res.1)))
 }
 

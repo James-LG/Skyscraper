@@ -4,18 +4,215 @@ use std::fmt::Display;
 
 use nom::{
     branch::alt,
-    bytes::complete::tag,
+    bytes::complete::{tag, take_till1},
     character::complete::{char, digit0, digit1},
-    combinator::{map_res, recognize},
-    error::context,
-    multi::{fold_many0, many0},
-    sequence::tuple,
+    combinator::{map_res, peek, recognize},
+    error::{context, ParseError, VerboseError},
+    multi::{fold_many0, many0, many1},
+    sequence::{terminated, tuple},
+    Err as NomErr, IResult, Offset, Parser,
 };
 
 use super::{
     recipes::{not_brace, not_quote, not_single_quote, Res},
     xml_names::nc_name,
 };
+
+pub fn sep<I: Clone, O, E: ParseError<I>, List: Sep<I, O, E>>(
+    mut l: List,
+) -> impl FnMut(I) -> IResult<I, O, E> {
+    move |i: I| l.parse(i)
+}
+
+pub trait Sep<I, O, E> {
+    /// Tests each parser with a symbol separator between them.
+    fn parse(&mut self, input: I) -> IResult<I, O, E>;
+}
+
+fn sep_parse<'a, Output, A: Parser<&'a str, Output, VerboseError<&'a str>>>(
+    input: &'a str,
+    parser: &mut A,
+) -> Result<(&'a str, Output), NomErr<VerboseError<&'a str>>> {
+    let symbol_sep_res = symbol_separator(input);
+
+    match symbol_sep_res {
+        Ok((next_input, _)) => {
+            // If there's a separator, the parser must capture something.
+            match parser.parse(next_input) {
+                Ok((parser_next_input, parser_res)) => {
+                    let length = next_input.offset(parser_next_input);
+
+                    // If the parser didn't capture anything, and there was a separator, uncapture the separator.
+                    // Return the original input like nothing happened.
+                    if length == 0 {
+                        Ok((input, parser_res))
+                    }
+                    // If the parser did capture something, and there was a separator, we have a successful match.
+                    else {
+                        Ok((parser_next_input, parser_res))
+                    }
+                }
+                Err(_) => Err(NomErr::Error(VerboseError::from_error_kind(
+                    input,
+                    nom::error::ErrorKind::Many0,
+                ))),
+            }
+        }
+        Err(e) => {
+            // If there's no separator, this is only an error if the parser wanted to capture something.
+            // i.e. If the parser is optional, it's not an error.
+            match parser.parse(input) {
+                Ok((parser_next_input, parser_res)) => {
+                    let length = input.offset(parser_next_input);
+
+                    // If the parser didn't capture anything, and there was no separator, this is not an error.
+                    // Return the original input like nothing happened.
+                    if length == 0 {
+                        Ok((input, parser_res))
+                    }
+                    // If the parser captured something, but there was no separator, this is an error.
+                    else {
+                        Err(e)
+                    }
+                }
+                Err(_) => {
+                    // The separator is what really failed here, not the parser.
+                    Err(e)
+                }
+            }
+        }
+    }
+}
+
+impl<
+        'a,
+        Output1,
+        Output2,
+        A: Parser<&'a str, Output1, VerboseError<&'a str>>,
+        B: Parser<&'a str, Output2, VerboseError<&'a str>>,
+    > Sep<&'a str, (Output1, Output2), VerboseError<&'a str>> for (A, B)
+{
+    fn parse(
+        &mut self,
+        input: &'a str,
+    ) -> IResult<&'a str, (Output1, Output2), VerboseError<&'a str>> {
+        let (input, res1) = self.0.parse(input)?;
+        let (input, res2) = sep_parse(input, &mut self.1)?;
+        Ok((input, (res1, res2)))
+    }
+}
+
+impl<
+        'a,
+        Output1,
+        Output2,
+        Output3,
+        A: Parser<&'a str, Output1, VerboseError<&'a str>>,
+        B: Parser<&'a str, Output2, VerboseError<&'a str>>,
+        C: Parser<&'a str, Output3, VerboseError<&'a str>>,
+    > Sep<&'a str, (Output1, Output2, Output3), VerboseError<&'a str>> for (A, B, C)
+{
+    fn parse(
+        &mut self,
+        input: &'a str,
+    ) -> IResult<&'a str, (Output1, Output2, Output3), VerboseError<&'a str>> {
+        let (input, res1) = self.0.parse(input)?;
+        let (input, res2) = sep_parse(input, &mut self.1)?;
+        let (input, res3) = sep_parse(input, &mut self.2)?;
+        Ok((input, (res1, res2, res3)))
+    }
+}
+
+impl<
+        'a,
+        Output1,
+        Output2,
+        Output3,
+        Output4,
+        A: Parser<&'a str, Output1, VerboseError<&'a str>>,
+        B: Parser<&'a str, Output2, VerboseError<&'a str>>,
+        C: Parser<&'a str, Output3, VerboseError<&'a str>>,
+        D: Parser<&'a str, Output4, VerboseError<&'a str>>,
+    > Sep<&'a str, (Output1, Output2, Output3, Output4), VerboseError<&'a str>> for (A, B, C, D)
+{
+    fn parse(
+        &mut self,
+        input: &'a str,
+    ) -> IResult<&'a str, (Output1, Output2, Output3, Output4), VerboseError<&'a str>> {
+        let (input, res1) = self.0.parse(input)?;
+        let (input, res2) = sep_parse(input, &mut self.1)?;
+        let (input, res3) = sep_parse(input, &mut self.2)?;
+        let (input, res4) = sep_parse(input, &mut self.3)?;
+        Ok((input, (res1, res2, res3, res4)))
+    }
+}
+
+pub fn symbol_separator(input: &str) -> Res<&str, ()> {
+    //https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-terminal-delimitation
+
+    fn comment_map(input: &str) -> Res<&str, char> {
+        comment(input).map(|(next_input, _res)| (next_input, ' '))
+    }
+    many1(alt((
+        char(' '),
+        char('\t'),
+        char('\r'),
+        char('\n'),
+        comment_map,
+    )))(input)
+    .map(|(next_input, _res)| (next_input, ()))
+}
+
+pub fn comment(input: &str) -> Res<&str, Comment> {
+    // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-Comment
+    fn comment_contents_map(input: &str) -> Res<&str, CommentItem> {
+        comment_contents(input)
+            .map(|(next_input, res)| (next_input, CommentItem::CommentContents(res)))
+    }
+
+    fn comment_map(input: &str) -> Res<&str, CommentItem> {
+        comment(input).map(|(next_input, res)| (next_input, CommentItem::Comment(Box::new(res))))
+    }
+
+    context(
+        "comment",
+        tuple((
+            tag("(:"),
+            many0(alt((comment_contents_map, comment_map))),
+            tag(":)"),
+        )),
+    )(input)
+    .map(|(next_input, res)| {
+        let items = res.1;
+        (next_input, Comment { items })
+    })
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub struct Comment {
+    pub items: Vec<CommentItem>,
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum CommentItem {
+    Comment(Box<Comment>),
+    CommentContents(CommentContents),
+}
+
+pub fn comment_contents(input: &str) -> Res<&str, CommentContents> {
+    // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-CommentContents
+    context(
+        "comment_contents",
+        terminated(
+            take_till1(|c: char| c == '(' || c == ':'),
+            peek(alt((tag("(:"), tag(":)")))),
+        ),
+    )(input)
+    .map(|(next_input, res)| (next_input, CommentContents(res.to_string())))
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub struct CommentContents(String);
 
 pub fn integer_literal(input: &str) -> Res<&str, u32> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-IntegerLiteral
@@ -176,9 +373,49 @@ fn escape_apos(input: &str) -> Res<&str, &str> {
 
 #[cfg(test)]
 mod tests {
+    use nom::combinator::opt;
     use proptest::prelude::*;
 
     use super::*;
+
+    #[test]
+    fn sep_should_allow_whitespace_between() {
+        // arrange
+        let input = "hello world";
+
+        // act
+        let (next_input, res) = sep((tag("hello"), tag("world")))(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res, ("hello", "world"))
+    }
+
+    #[test]
+    fn sep_should_allow_multiple_whitespace_before_and_after() {
+        // arrange
+        let input = "hello  world";
+
+        // act
+        let (next_input, res) = sep((tag("hello"), tag("world")))(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res, ("hello", "world"))
+    }
+
+    #[test]
+    fn sep_should_match_when_opt_doesnt() {
+        // arrange
+        let input = "hello bob";
+
+        // act
+        let (next_input, res) = sep((tag("hello"), opt(tag("world"))))(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, " bob");
+        assert_eq!(res, ("hello", None))
+    }
 
     #[test]
     fn string_literal_should_allow_escaped_double_quotes() {
@@ -214,6 +451,52 @@ mod tests {
             StringLiteral {
                 value: String::from("He said, \"I don't like it.\""),
                 quotation_type: QuotationType::Single
+            }
+        )
+    }
+
+    #[test]
+    fn comment_should_match_comment() {
+        // arrange
+        let input = "(: hello world :)";
+
+        // act
+        let (next_input, res) = comment(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(
+            res,
+            Comment {
+                items: vec![CommentItem::CommentContents(CommentContents(String::from(
+                    " hello world "
+                )))]
+            }
+        )
+    }
+
+    #[test]
+    fn comment_should_allow_nested_comments() {
+        // arrange
+        let input = "(: hello (: world :) :)";
+
+        // act
+        let (next_input, res) = comment(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(
+            res,
+            Comment {
+                items: vec![
+                    CommentItem::CommentContents(CommentContents(String::from(" hello "))),
+                    CommentItem::Comment(Box::new(Comment {
+                        items: vec![CommentItem::CommentContents(CommentContents(String::from(
+                            " world "
+                        )))]
+                    })),
+                    CommentItem::CommentContents(CommentContents(String::from(" ")))
+                ]
             }
         )
     }

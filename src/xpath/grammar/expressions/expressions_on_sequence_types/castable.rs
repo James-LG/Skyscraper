@@ -2,11 +2,12 @@
 
 use std::fmt::Display;
 
-use nom::{bytes::complete::tag, combinator::opt, error::context, sequence::tuple};
+use nom::{bytes::complete::tag, combinator::opt, error::context};
 
 use crate::xpath::{
-    grammar::recipes::Res, xpath_item_set::XpathItemSet, ExpressionApplyError,
-    XpathExpressionContext,
+    grammar::{recipes::Res, terminal_symbols::sep},
+    xpath_item_set::XpathItemSet,
+    ExpressionApplyError, XpathExpressionContext,
 };
 
 use super::cast::{cast_expr, single_type, CastExpr, SingleType};
@@ -16,9 +17,9 @@ pub fn castable_expr(input: &str) -> Res<&str, CastableExpr> {
 
     context(
         "castable_expr",
-        tuple((
+        sep((
             cast_expr,
-            opt(tuple((tag("castable"), tag("as"), single_type))),
+            opt(sep((tag("castable"), tag("as"), single_type))),
         )),
     )(input)
     .map(|(next_input, res)| {
@@ -65,5 +66,23 @@ impl CastableExpr {
 
         // Otherwise, do the operation.
         todo!("CastableExpr::eval treat operator")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn castable_expr_should_parse() {
+        // arrange
+        let input = "fn:root() castable as integer";
+
+        // act
+        let (next_input, res) = castable_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
     }
 }
