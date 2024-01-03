@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use indexmap::IndexSet;
-use nom::{branch::alt, error::context, sequence::tuple};
+use nom::{branch::alt, error::context};
 
 use crate::xpath::{
     grammar::{
@@ -11,6 +11,7 @@ use crate::xpath::{
             steps::{axes::forward_axis::forward_axis, node_tests::node_test},
         },
         recipes::Res,
+        whitespace_recipes::ws,
         NonTreeXpathNode, XpathItemTreeNodeData,
     },
     xpath_item_set::XpathItemSet,
@@ -26,7 +27,7 @@ pub fn forward_step(input: &str) -> Res<&str, ForwardStep> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-ForwardStep
 
     fn full_forward_step(input: &str) -> Res<&str, ForwardStep> {
-        tuple((forward_axis, node_test))(input)
+        ws((forward_axis, node_test))(input)
             .map(|(next_input, res)| (next_input, ForwardStep::Full(res.0, res.1)))
     }
 
@@ -200,6 +201,45 @@ mod tests {
     use crate::xpath::grammar::types::KindTest;
 
     use super::*;
+
+    #[test]
+    fn forward_step_should_parse_abbrev() {
+        // arrange
+        let input = "@class";
+
+        // act
+        let (next_input, res) = forward_step(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
+    }
+
+    #[test]
+    fn forward_step_should_parse_full() {
+        // arrange
+        let input = "child::*";
+
+        // act
+        let (next_input, res) = forward_step(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
+    }
+
+    #[test]
+    fn forward_step_should_parse_full_whitespace() {
+        // arrange
+        let input = "child:: *";
+
+        // act
+        let (next_input, res) = forward_step(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "child::*");
+    }
 
     /// `text()` could be matched by a function call or a node test. It should be a node test.
     #[test]

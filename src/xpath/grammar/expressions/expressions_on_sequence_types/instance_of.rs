@@ -2,12 +2,13 @@
 
 use std::fmt::Display;
 
-use nom::{bytes::complete::tag, combinator::opt, error::context, sequence::tuple};
+use nom::{bytes::complete::tag, combinator::opt, error::context};
 
 use crate::xpath::{
     grammar::{
         recipes::Res,
         types::sequence_type::{sequence_type, SequenceType},
+        whitespace_recipes::sep,
     },
     xpath_item_set::XpathItemSet,
     ExpressionApplyError, XpathExpressionContext,
@@ -20,9 +21,9 @@ pub fn instanceof_expr(input: &str) -> Res<&str, InstanceofExpr> {
 
     context(
         "instanceof_expr",
-        tuple((
+        sep((
             treat_expr,
-            opt(tuple((tag("instance"), tag("of"), sequence_type))),
+            opt(sep((tag("instance"), tag("of"), sequence_type))),
         )),
     )(input)
     .map(|(next_input, res)| {
@@ -69,5 +70,23 @@ impl InstanceofExpr {
 
         // Otherwise, do the operation.
         todo!("InstanceofExpr::eval instanceof operator")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn instanceof_expr_should_parse() {
+        // arrange
+        let input = "fn:root() instance of integer";
+
+        // act
+        let (next_input, res) = instanceof_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
     }
 }

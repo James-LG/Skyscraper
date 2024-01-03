@@ -2,7 +2,10 @@
 
 use std::fmt::Display;
 
-use nom::{branch::alt, bytes::complete::tag, error::context, multi::many0, sequence::tuple};
+use nom::{
+    branch::alt, bytes::complete::tag, character::complete::multispace0, error::context,
+    multi::many0, sequence::tuple,
+};
 
 use crate::xpath::{
     grammar::{
@@ -10,6 +13,7 @@ use crate::xpath::{
             instanceof_expr, InstanceofExpr,
         },
         recipes::Res,
+        terminal_symbols::symbol_separator,
     },
     xpath_item_set::XpathItemSet,
     ExpressionApplyError, XpathExpressionContext,
@@ -19,11 +23,13 @@ pub fn union_expr(input: &str) -> Res<&str, UnionExpr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-UnionExpr
 
     fn union_operator_map(input: &str) -> Res<&str, UnionExprOperatorType> {
-        tag("union")(input).map(|(next_input, _res)| (next_input, UnionExprOperatorType::Union))
+        tuple((symbol_separator, tag("union"), symbol_separator))(input)
+            .map(|(next_input, _res)| (next_input, UnionExprOperatorType::Union))
     }
 
     fn bar_operator_map(input: &str) -> Res<&str, UnionExprOperatorType> {
-        tag("|")(input).map(|(next_input, _res)| (next_input, UnionExprOperatorType::Bar))
+        tuple((multispace0, tag("|"), multispace0))(input)
+            .map(|(next_input, _res)| (next_input, UnionExprOperatorType::Bar))
     }
 
     context(
@@ -88,7 +94,7 @@ enum UnionExprOperatorType {
 impl Display for UnionExprOperatorType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            UnionExprOperatorType::Union => write!(f, "union"),
+            UnionExprOperatorType::Union => write!(f, " union "),
             UnionExprOperatorType::Bar => write!(f, "|"),
         }
     }
@@ -109,12 +115,13 @@ fn intersect_except_expr(input: &str) -> Res<&str, IntersectExceptExpr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-IntersectExceptExpr
 
     fn intersect(input: &str) -> Res<&str, IntersectExceptType> {
-        tag("intersect")(input)
+        tuple((symbol_separator, tag("intersect"), symbol_separator))(input)
             .map(|(next_input, _res)| (next_input, IntersectExceptType::Intersect))
     }
 
     fn except(input: &str) -> Res<&str, IntersectExceptType> {
-        tag("except")(input).map(|(next_input, _res)| (next_input, IntersectExceptType::Except))
+        tuple((symbol_separator, tag("except"), symbol_separator))(input)
+            .map(|(next_input, _res)| (next_input, IntersectExceptType::Except))
     }
 
     context(
@@ -198,9 +205,61 @@ mod test {
     use super::*;
 
     #[test]
-    fn union_expr_should_parse1() {
+    fn union_expr_should_parse_bar() {
         // arrange
         let input = "chapter|appendix";
+
+        // act
+        let (next_input, res) = union_expr(input).unwrap();
+
+        // assert
+        assert_eq!(res.to_string(), input);
+        assert_eq!(next_input, "");
+    }
+
+    #[test]
+    fn union_expr_should_parse_bar_whitespace() {
+        // arrange
+        let input = "chapter | appendix";
+
+        // act
+        let (next_input, res) = union_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "chapter|appendix");
+    }
+
+    #[test]
+    fn union_expr_should_parse_union() {
+        // arrange
+        let input = "chapter union appendix";
+
+        // act
+        let (next_input, res) = union_expr(input).unwrap();
+
+        // assert
+        assert_eq!(res.to_string(), input);
+        assert_eq!(next_input, "");
+    }
+
+    #[test]
+    fn union_expr_should_parse_intersect() {
+        // arrange
+        let input = "chapter intersect appendix";
+
+        // act
+        let (next_input, res) = union_expr(input).unwrap();
+
+        // assert
+        assert_eq!(res.to_string(), input);
+        assert_eq!(next_input, "");
+    }
+
+    #[test]
+    fn union_expr_should_parse_except() {
+        // arrange
+        let input = "chapter except appendix";
 
         // act
         let (next_input, res) = union_expr(input).unwrap();

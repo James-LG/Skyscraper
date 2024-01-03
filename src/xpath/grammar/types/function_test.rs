@@ -2,13 +2,13 @@
 
 use std::fmt::Display;
 
-use crate::xpath::grammar::recipes::Res;
+use crate::xpath::grammar::{recipes::Res, whitespace_recipes::ws};
 
 use super::sequence_type::{sequence_type, SequenceType};
 
 use nom::{
     branch::alt, bytes::complete::tag, character::complete::char, combinator::opt, error::context,
-    multi::many0, sequence::tuple,
+    multi::many0,
 };
 
 pub fn function_test(input: &str) -> Res<&str, FunctionTest> {
@@ -17,7 +17,7 @@ pub fn function_test(input: &str) -> Res<&str, FunctionTest> {
     fn any_function_test(input: &str) -> Res<&str, FunctionTest> {
         // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-AnyFunctionTest
 
-        tuple((tag("function"), char('('), char('*'), char(')')))(input)
+        ws((tag("function"), char('('), char('*'), char(')')))(input)
             .map(|(next_input, _res)| (next_input, FunctionTest::AnyFunctionTest))
     }
 
@@ -39,8 +39,11 @@ pub enum FunctionTest {
 }
 
 impl Display for FunctionTest {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!("fmt FunctionTest")
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FunctionTest::AnyFunctionTest => write!(f, "function(*)"),
+            FunctionTest::TypedFunctionTest(x) => write!(f, "{}", x),
+        }
     }
 }
 
@@ -49,13 +52,10 @@ pub fn typed_function_test(input: &str) -> Res<&str, TypedFunctionTest> {
 
     context(
         "typed_function_test",
-        tuple((
+        ws((
             tag("function"),
             char('('),
-            opt(tuple((
-                sequence_type,
-                many0(tuple((char(','), sequence_type))),
-            ))),
+            opt(ws((sequence_type, many0(ws((char(','), sequence_type)))))),
             char(')'),
             tag("as"),
             sequence_type,
@@ -83,4 +83,74 @@ pub fn typed_function_test(input: &str) -> Res<&str, TypedFunctionTest> {
 pub struct TypedFunctionTest {
     pub params: Vec<SequenceType>,
     pub ret_val: SequenceType,
+}
+
+impl Display for TypedFunctionTest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "function(")?;
+        for (i, param) in self.params.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", param)?;
+        }
+        write!(f, ") as {}", self.ret_val)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn function_test_should_parse_any() {
+        // arrange
+        let input = "function(*)";
+
+        // act
+        let (next_input, res) = function_test(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "function(*)");
+    }
+
+    #[test]
+    fn function_test_should_parse_any_whitespace() {
+        // arrange
+        let input = "function ( * )";
+
+        // act
+        let (next_input, res) = function_test(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "function(*)");
+    }
+
+    #[test]
+    fn function_test_should_parse_typed_name() {
+        // arrange
+        let input = "function(int,int) as int";
+
+        // act
+        let (next_input, res) = function_test(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "function(int, int) as int");
+    }
+
+    #[test]
+    fn function_test_should_parse_typed_whitespace() {
+        // arrange
+        let input = "function ( int, int ) as int";
+
+        // act
+        let (next_input, res) = function_test(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "function(int, int) as int");
+    }
 }

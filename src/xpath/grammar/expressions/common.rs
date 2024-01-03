@@ -1,11 +1,8 @@
 use std::fmt::Display;
 
-use nom::{
-    branch::alt, character::complete::char, combinator::opt, error::context, multi::many0,
-    sequence::tuple,
-};
+use nom::{branch::alt, character::complete::char, combinator::opt, error::context, multi::many0};
 
-use crate::xpath::grammar::{expressions::expr_single, recipes::Res};
+use crate::xpath::grammar::{expressions::expr_single, recipes::Res, whitespace_recipes::ws};
 
 use super::ExprSingle;
 
@@ -14,9 +11,9 @@ pub fn argument_list(input: &str) -> Res<&str, ArgumentList> {
 
     context(
         "argument_list",
-        tuple((
+        ws((
             char('('),
-            opt(tuple((argument, many0(tuple((char(','), argument)))))),
+            opt(ws((argument, many0(ws((char(','), argument)))))),
             char(')'),
         )),
     )(input)
@@ -39,7 +36,7 @@ impl Display for ArgumentList {
         write!(f, "(")?;
         for (i, x) in self.0.iter().enumerate() {
             if i > 0 {
-                write!(f, ",")?;
+                write!(f, ", ")?;
             }
             write!(f, "{}", x)?;
         }
@@ -76,5 +73,36 @@ impl Display for Argument {
             Argument::ExprSingle(x) => write!(f, "{}", x),
             Argument::ArgumentPlaceHolder => write!(f, "?"),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn argument_list_should_parse() {
+        // arrange
+        let input = "(2,3)";
+
+        // act
+        let (next_input, res) = argument_list(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "(2, 3)");
+    }
+
+    #[test]
+    fn argument_list_should_parse_whitespace() {
+        // arrange
+        let input = "(2, 3)";
+
+        // act
+        let (next_input, res) = argument_list(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "(2, 3)");
     }
 }

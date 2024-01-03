@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use indexmap::IndexSet;
-use nom::{branch::alt, bytes::complete::tag, error::context, sequence::tuple};
+use nom::{branch::alt, bytes::complete::tag, error::context};
 
 use crate::xpath::{
     grammar::{
@@ -11,6 +11,7 @@ use crate::xpath::{
         },
         recipes::Res,
         types::KindTest,
+        whitespace_recipes::ws,
     },
     xpath_item_set::XpathItemSet,
     ExpressionApplyError, XpathExpressionContext,
@@ -24,13 +25,13 @@ use super::{
 pub fn reverse_step(input: &str) -> Res<&str, ReverseStep> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-ReverseStep
     fn full_reverse_step(input: &str) -> Res<&str, ReverseStep> {
-        tuple((reverse_axis, node_test))(input)
+        ws((reverse_axis, node_test))(input)
             .map(|(next_input, res)| (next_input, ReverseStep::Full(res.0, res.1)))
     }
 
     fn abbrev_reverse_step(input: &str) -> Res<&str, ReverseStep> {
         // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-AbbrevReverseStep
-        tag("..")(input).map(|(next_input, _res)| (next_input, ReverseStep::Abbreviated))
+        ws((tag(".."),))(input).map(|(next_input, _res)| (next_input, ReverseStep::Abbreviated))
     }
 
     context(
@@ -118,4 +119,48 @@ fn eval_reverse_axis_parent<'tree>(
     }
 
     Ok(nodes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reverse_step_should_parse_abbrev() {
+        // arrange
+        let input = "..";
+
+        // act
+        let (next_input, res) = reverse_step(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
+    }
+
+    #[test]
+    fn reverse_step_should_parse_full() {
+        // arrange
+        let input = "parent::*";
+
+        // act
+        let (next_input, res) = reverse_step(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
+    }
+
+    #[test]
+    fn reverse_step_should_parse_full_whitespace() {
+        // arrange
+        let input = "parent:: *";
+
+        // act
+        let (next_input, res) = reverse_step(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "parent::*");
+    }
 }

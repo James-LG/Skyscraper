@@ -9,6 +9,7 @@ mod expressions;
 mod recipes;
 mod terminal_symbols;
 mod types;
+mod whitespace_recipes;
 mod xml_names;
 
 use std::fmt::Display;

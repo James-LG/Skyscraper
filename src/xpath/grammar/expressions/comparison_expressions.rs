@@ -2,7 +2,10 @@
 
 use std::fmt::Display;
 
-use nom::{branch::alt, bytes::complete::tag, combinator::opt, error::context, sequence::tuple};
+use nom::{
+    branch::alt, bytes::complete::tag, character::complete::multispace0, combinator::opt,
+    error::context, sequence::tuple,
+};
 
 use crate::{
     xpath::{
@@ -41,7 +44,7 @@ pub fn comparison_expr(input: &str) -> Res<&str, ComparisonExpr> {
         tuple((
             string_concat_expr,
             opt(tuple((
-                alt((value_comp_map, general_comp_map, node_comp_map)),
+                alt((value_comp_map, node_comp_map, general_comp_map)),
                 string_concat_expr,
             ))),
         )),
@@ -261,27 +264,33 @@ fn general_comp(input: &str) -> Res<&str, GeneralComp> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-GeneralComp
 
     fn equal(input: &str) -> Res<&str, GeneralComp> {
-        tag("=")(input).map(|(next_input, _res)| (next_input, GeneralComp::Equal))
+        tuple((multispace0, tag("="), multispace0))(input)
+            .map(|(next_input, _res)| (next_input, GeneralComp::Equal))
     }
 
     fn not_equal(input: &str) -> Res<&str, GeneralComp> {
-        tag("!=")(input).map(|(next_input, _res)| (next_input, GeneralComp::NotEqual))
+        tuple((multispace0, tag("!="), multispace0))(input)
+            .map(|(next_input, _res)| (next_input, GeneralComp::NotEqual))
     }
 
     fn less_than(input: &str) -> Res<&str, GeneralComp> {
-        tag("<")(input).map(|(next_input, _res)| (next_input, GeneralComp::LessThan))
+        tuple((multispace0, tag("<"), multispace0))(input)
+            .map(|(next_input, _res)| (next_input, GeneralComp::LessThan))
     }
 
     fn less_than_equal_to(input: &str) -> Res<&str, GeneralComp> {
-        tag("<=")(input).map(|(next_input, _res)| (next_input, GeneralComp::LessThanEqualTo))
+        tuple((multispace0, tag("<="), multispace0))(input)
+            .map(|(next_input, _res)| (next_input, GeneralComp::LessThanEqualTo))
     }
 
     fn greater_than(input: &str) -> Res<&str, GeneralComp> {
-        tag(">")(input).map(|(next_input, _res)| (next_input, GeneralComp::GreaterThan))
+        tuple((multispace0, tag(">"), multispace0))(input)
+            .map(|(next_input, _res)| (next_input, GeneralComp::GreaterThan))
     }
 
     fn greater_than_equal_to(input: &str) -> Res<&str, GeneralComp> {
-        tag(">=")(input).map(|(next_input, _res)| (next_input, GeneralComp::GreaterThanEqualTo))
+        tuple((multispace0, tag(">="), multispace0))(input)
+            .map(|(next_input, _res)| (next_input, GeneralComp::GreaterThanEqualTo))
     }
 
     context(
@@ -337,15 +346,18 @@ fn node_comp(input: &str) -> Res<&str, NodeComp> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-NodeComp
 
     fn is(input: &str) -> Res<&str, NodeComp> {
-        tag("is")(input).map(|(next_input, _res)| (next_input, NodeComp::Is))
+        tuple((symbol_separator, tag("is"), symbol_separator))(input)
+            .map(|(next_input, _res)| (next_input, NodeComp::Is))
     }
 
     fn precedes(input: &str) -> Res<&str, NodeComp> {
-        tag("<<")(input).map(|(next_input, _res)| (next_input, NodeComp::Precedes))
+        tuple((multispace0, tag("<<"), multispace0))(input)
+            .map(|(next_input, _res)| (next_input, NodeComp::Precedes))
     }
 
     fn follows(input: &str) -> Res<&str, NodeComp> {
-        tag(">>")(input).map(|(next_input, _res)| (next_input, NodeComp::Follows))
+        tuple((multispace0, tag(">>"), multispace0))(input)
+            .map(|(next_input, _res)| (next_input, NodeComp::Follows))
     }
 
     context("node_comp", alt((is, precedes, follows)))(input)
@@ -361,9 +373,92 @@ pub enum NodeComp {
 impl Display for NodeComp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NodeComp::Is => write!(f, "is"),
+            NodeComp::Is => write!(f, " is "),
             NodeComp::Precedes => write!(f, "<<"),
             NodeComp::Follows => write!(f, ">>"),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn comparison_expr_should_parse() {
+        // arrange
+        let input = r#"$book1/author eq "Kennedy""#;
+
+        // act
+        let (next_input, res) = comparison_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), r#"$book1/author eq "Kennedy""#);
+    }
+
+    #[test]
+    fn comparison_expr_should_parse_node_comp_precedes() {
+        // arrange
+        let input = r#"$book1/author<<"Kennedy""#;
+
+        // act
+        let (next_input, res) = comparison_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), r#"$book1/author<<"Kennedy""#);
+    }
+
+    #[test]
+    fn comparison_expr_should_parse_node_comp_precedes_whitespace() {
+        // arrange
+        let input = r#"$book1/author << "Kennedy""#;
+
+        // act
+        let (next_input, res) = comparison_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), r#"$book1/author<<"Kennedy""#);
+    }
+
+    #[test]
+    fn comparison_expr_should_parse_node_comp_is() {
+        // arrange
+        let input = r#"$book1/author is "Kennedy""#;
+
+        // act
+        let (next_input, res) = comparison_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), r#"$book1/author is "Kennedy""#);
+    }
+
+    #[test]
+    fn comparison_expr_should_parse_general_comp() {
+        // arrange
+        let input = r#"$book1/author="Kennedy""#;
+
+        // act
+        let (next_input, res) = comparison_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), r#"$book1/author="Kennedy""#);
+    }
+
+    #[test]
+    fn comparison_expr_should_parse_general_comp_whitespace() {
+        // arrange
+        let input = r#"$book1/author = "Kennedy""#;
+
+        // act
+        let (next_input, res) = comparison_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), r#"$book1/author="Kennedy""#);
     }
 }

@@ -7,6 +7,7 @@ use nom::{
     multi::many0, sequence::tuple,
 };
 
+use crate::xpath::grammar::whitespace_recipes::ws;
 use crate::xpath::xpath_item_set::XpathItemSet;
 use crate::xpath::{
     grammar::{expressions::path_expressions::steps::step_expr::step_expr, recipes::Res},
@@ -22,12 +23,12 @@ pub fn path_expr(input: &str) -> Res<&str, PathExpr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-PathExpr
 
     fn leading_slash(input: &str) -> Res<&str, PathExpr> {
-        tuple((char('/'), opt(relative_path_expr)))(input)
+        ws((char('/'), opt(relative_path_expr)))(input)
             .map(|(next_input, res)| (next_input, PathExpr::LeadingSlash(res.1)))
     }
 
     fn leading_double_slash(input: &str) -> Res<&str, PathExpr> {
-        tuple((tag("//"), relative_path_expr))(input)
+        ws((tag("//"), relative_path_expr))(input)
             .map(|(next_input, res)| (next_input, PathExpr::LeadingDoubleSlash(res.1)))
     }
 
@@ -190,7 +191,7 @@ pub fn relative_path_expr(input: &str) -> Res<&str, RelativePathExpr> {
     }
 
     fn step_pair(input: &str) -> Res<&str, StepPair> {
-        tuple((alt((double_slash, slash)), step_expr))(input)
+        ws((alt((double_slash, slash)), step_expr))(input)
             .map(|(next_input, res)| (next_input, StepPair(res.0, res.1)))
     }
 
@@ -354,6 +355,32 @@ impl Display for PathSeparator {
 mod tests {
 
     use super::*;
+
+    #[test]
+    fn path_expr_should_parse() {
+        // arrange
+        let input = "/div/span";
+
+        // act
+        let (next_input, res) = path_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
+    }
+
+    #[test]
+    fn path_expr_should_parse_whitespace() {
+        // arrange
+        let input = "/ div / span";
+
+        // act
+        let (next_input, res) = path_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "/div/span");
+    }
 
     #[test]
     fn relative_path_expr_should_parse() {

@@ -18,6 +18,7 @@ use crate::xpath::{
             array_test::array_test, common::atomic_or_union_type, function_test::function_test,
             kind_test, map_test::map_test,
         },
+        whitespace_recipes::ws,
     },
     xpath_item_set::XpathItemSet,
     ExpressionApplyError,
@@ -32,12 +33,12 @@ pub fn sequence_type(input: &str) -> Res<&str, SequenceType> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-SequenceType
 
     fn empty_sequence_map(input: &str) -> Res<&str, SequenceType> {
-        tuple((tag("empty-sequence"), char('('), char(')')))(input)
+        ws((tag("empty-sequence"), char('('), char(')')))(input)
             .map(|(next_input, _res)| (next_input, SequenceType::EmptySequence))
     }
 
     fn sequence_value_map(input: &str) -> Res<&str, SequenceType> {
-        tuple((item_type, opt(occurrence_indicator)))(input).map(|(next_input, res)| {
+        ws((item_type, opt(occurrence_indicator)))(input).map(|(next_input, res)| {
             (
                 next_input,
                 SequenceType::Sequence(SequenceTypeValue {
@@ -250,13 +251,65 @@ mod test {
     use crate::xpath::grammar::{
         types::{
             common::ElementName,
-            element_test::{ElementNameOrWildcard, ElementTest},
+            element_test::{ElementNameOrWildcard, ElementTest, ElementTestItem},
             DocumentTest, DocumentTestValue, EQName, PITest, PITestValue,
         },
         xml_names::QName,
     };
 
     use super::*;
+
+    #[test]
+    fn sequence_type_test_should_parse_empty() {
+        // arrange
+        let input = "empty-sequence()";
+
+        // act
+        let (next_input, res) = sequence_type(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "empty-sequence()");
+    }
+
+    #[test]
+    fn sequence_type_should_parse_empty_whitespace() {
+        // arrange
+        let input = "empty-sequence ( )";
+
+        // act
+        let (next_input, res) = sequence_type(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "empty-sequence()");
+    }
+
+    #[test]
+    fn sequence_type_test_should_parse_value() {
+        // arrange
+        let input = "item()?";
+
+        // act
+        let (next_input, res) = sequence_type(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "item()?");
+    }
+
+    #[test]
+    fn sequence_type_should_parse_value_whitespace() {
+        // arrange
+        let input = "item() ?";
+
+        // act
+        let (next_input, res) = sequence_type(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "item()?");
+    }
 
     #[test]
     fn item_type_example1() {
@@ -392,10 +445,14 @@ mod test {
                 "",
                 ItemType::KindTest(KindTest::DocumentTest(DocumentTest {
                     value: Some(DocumentTestValue::ElementTest(ElementTest {
-                        name_or_wildcard: Some(ElementNameOrWildcard::ElementName(ElementName(
-                            EQName::QName(QName::UnprefixedName(String::from("book")))
-                        ))),
-                        type_name: None
+                        item: Some(ElementTestItem {
+                            element_name_or_wildcard: ElementNameOrWildcard::ElementName(
+                                ElementName(EQName::QName(QName::UnprefixedName(String::from(
+                                    "book"
+                                ))))
+                            ),
+                            type_name: None
+                        })
                     }))
                 }))
             ))

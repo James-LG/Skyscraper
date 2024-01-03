@@ -6,146 +6,16 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take_till1},
     character::complete::{char, digit0, digit1},
-    combinator::{map_res, peek, recognize},
-    error::{context, ParseError, VerboseError},
+    combinator::{map_res, opt, peek, recognize},
+    error::context,
     multi::{fold_many0, many0, many1},
     sequence::{terminated, tuple},
-    Err as NomErr, IResult, Offset, Parser,
 };
 
 use super::{
     recipes::{not_brace, not_quote, not_single_quote, Res},
     xml_names::nc_name,
 };
-
-pub fn sep<I: Clone, O, E: ParseError<I>, List: Sep<I, O, E>>(
-    mut l: List,
-) -> impl FnMut(I) -> IResult<I, O, E> {
-    move |i: I| l.parse(i)
-}
-
-pub trait Sep<I, O, E> {
-    /// Tests each parser with a symbol separator between them.
-    fn parse(&mut self, input: I) -> IResult<I, O, E>;
-}
-
-fn sep_parse<'a, Output, A: Parser<&'a str, Output, VerboseError<&'a str>>>(
-    input: &'a str,
-    parser: &mut A,
-) -> Result<(&'a str, Output), NomErr<VerboseError<&'a str>>> {
-    let symbol_sep_res = symbol_separator(input);
-
-    match symbol_sep_res {
-        Ok((next_input, _)) => {
-            // If there's a separator, the parser must capture something.
-            match parser.parse(next_input) {
-                Ok((parser_next_input, parser_res)) => {
-                    let length = next_input.offset(parser_next_input);
-
-                    // If the parser didn't capture anything, and there was a separator, uncapture the separator.
-                    // Return the original input like nothing happened.
-                    if length == 0 {
-                        Ok((input, parser_res))
-                    }
-                    // If the parser did capture something, and there was a separator, we have a successful match.
-                    else {
-                        Ok((parser_next_input, parser_res))
-                    }
-                }
-                Err(_) => Err(NomErr::Error(VerboseError::from_error_kind(
-                    input,
-                    nom::error::ErrorKind::Many0,
-                ))),
-            }
-        }
-        Err(e) => {
-            // If there's no separator, this is only an error if the parser wanted to capture something.
-            // i.e. If the parser is optional, it's not an error.
-            match parser.parse(input) {
-                Ok((parser_next_input, parser_res)) => {
-                    let length = input.offset(parser_next_input);
-
-                    // If the parser didn't capture anything, and there was no separator, this is not an error.
-                    // Return the original input like nothing happened.
-                    if length == 0 {
-                        Ok((input, parser_res))
-                    }
-                    // If the parser captured something, but there was no separator, this is an error.
-                    else {
-                        Err(e)
-                    }
-                }
-                Err(_) => {
-                    // The separator is what really failed here, not the parser.
-                    Err(e)
-                }
-            }
-        }
-    }
-}
-
-impl<
-        'a,
-        Output1,
-        Output2,
-        A: Parser<&'a str, Output1, VerboseError<&'a str>>,
-        B: Parser<&'a str, Output2, VerboseError<&'a str>>,
-    > Sep<&'a str, (Output1, Output2), VerboseError<&'a str>> for (A, B)
-{
-    fn parse(
-        &mut self,
-        input: &'a str,
-    ) -> IResult<&'a str, (Output1, Output2), VerboseError<&'a str>> {
-        let (input, res1) = self.0.parse(input)?;
-        let (input, res2) = sep_parse(input, &mut self.1)?;
-        Ok((input, (res1, res2)))
-    }
-}
-
-impl<
-        'a,
-        Output1,
-        Output2,
-        Output3,
-        A: Parser<&'a str, Output1, VerboseError<&'a str>>,
-        B: Parser<&'a str, Output2, VerboseError<&'a str>>,
-        C: Parser<&'a str, Output3, VerboseError<&'a str>>,
-    > Sep<&'a str, (Output1, Output2, Output3), VerboseError<&'a str>> for (A, B, C)
-{
-    fn parse(
-        &mut self,
-        input: &'a str,
-    ) -> IResult<&'a str, (Output1, Output2, Output3), VerboseError<&'a str>> {
-        let (input, res1) = self.0.parse(input)?;
-        let (input, res2) = sep_parse(input, &mut self.1)?;
-        let (input, res3) = sep_parse(input, &mut self.2)?;
-        Ok((input, (res1, res2, res3)))
-    }
-}
-
-impl<
-        'a,
-        Output1,
-        Output2,
-        Output3,
-        Output4,
-        A: Parser<&'a str, Output1, VerboseError<&'a str>>,
-        B: Parser<&'a str, Output2, VerboseError<&'a str>>,
-        C: Parser<&'a str, Output3, VerboseError<&'a str>>,
-        D: Parser<&'a str, Output4, VerboseError<&'a str>>,
-    > Sep<&'a str, (Output1, Output2, Output3, Output4), VerboseError<&'a str>> for (A, B, C, D)
-{
-    fn parse(
-        &mut self,
-        input: &'a str,
-    ) -> IResult<&'a str, (Output1, Output2, Output3, Output4), VerboseError<&'a str>> {
-        let (input, res1) = self.0.parse(input)?;
-        let (input, res2) = sep_parse(input, &mut self.1)?;
-        let (input, res3) = sep_parse(input, &mut self.2)?;
-        let (input, res4) = sep_parse(input, &mut self.3)?;
-        Ok((input, (res1, res2, res3, res4)))
-    }
-}
 
 pub fn symbol_separator(input: &str) -> Res<&str, ()> {
     //https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-terminal-delimitation
@@ -235,10 +105,15 @@ pub fn double_literal(input: &str) -> Res<&str, f64> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-DoubleLiteral
 
     map_res(
-        alt((
-            recognize(tuple((char('.'), digit1))),
-            recognize(tuple((digit1, char('.'), digit0))),
-        )),
+        recognize(tuple((
+            alt((
+                recognize(tuple((char('.'), digit1))),
+                recognize(tuple((digit1, opt(tuple((char('.'), digit0)))))),
+            )),
+            alt((char('e'), char('E'))),
+            opt(alt((char('+'), char('-')))),
+            digit1,
+        ))),
         str::parse,
     )(input)
 }
@@ -373,49 +248,9 @@ fn escape_apos(input: &str) -> Res<&str, &str> {
 
 #[cfg(test)]
 mod tests {
-    use nom::combinator::opt;
     use proptest::prelude::*;
 
     use super::*;
-
-    #[test]
-    fn sep_should_allow_whitespace_between() {
-        // arrange
-        let input = "hello world";
-
-        // act
-        let (next_input, res) = sep((tag("hello"), tag("world")))(input).unwrap();
-
-        // assert
-        assert_eq!(next_input, "");
-        assert_eq!(res, ("hello", "world"))
-    }
-
-    #[test]
-    fn sep_should_allow_multiple_whitespace_before_and_after() {
-        // arrange
-        let input = "hello  world";
-
-        // act
-        let (next_input, res) = sep((tag("hello"), tag("world")))(input).unwrap();
-
-        // assert
-        assert_eq!(next_input, "");
-        assert_eq!(res, ("hello", "world"))
-    }
-
-    #[test]
-    fn sep_should_match_when_opt_doesnt() {
-        // arrange
-        let input = "hello bob";
-
-        // act
-        let (next_input, res) = sep((tag("hello"), opt(tag("world"))))(input).unwrap();
-
-        // assert
-        assert_eq!(next_input, " bob");
-        assert_eq!(res, ("hello", None))
-    }
 
     #[test]
     fn string_literal_should_allow_escaped_double_quotes() {
@@ -501,6 +336,32 @@ mod tests {
         )
     }
 
+    #[test]
+    fn double_should_match_scientific_notation_positive() {
+        // arrange
+        let input = "1.0e+2";
+
+        // act
+        let (next_input, res) = double_literal(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res, 100.0);
+    }
+
+    #[test]
+    fn double_should_match_scientific_notation_negative() {
+        // arrange
+        let input = "1.0e-2";
+
+        // act
+        let (next_input, res) = double_literal(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res, 0.01);
+    }
+
     proptest! {
         #[test]
         fn integer_literal_should_work_for_all_valid_u32(i in any::<u32>()) {
@@ -522,7 +383,7 @@ mod tests {
 
         #[test]
         fn double_literal_should_work_for_all_valid_f64(i in 0f64..10_000.0) {
-            let i_str = format!("{:?}", i);
+            let i_str = format!("{:e}", i);
             let res = double_literal(&i_str).unwrap();
 
             prop_assert_eq!("", res.0, "next input not empty");

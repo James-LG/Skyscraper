@@ -11,6 +11,7 @@ use crate::xpath::{
         },
         recipes::Res,
         types::{eq_name, EQName},
+        whitespace_recipes::ws,
     },
     xpath_item_set::XpathItemSet,
     ExpressionApplyError, XpathExpressionContext,
@@ -31,7 +32,10 @@ pub fn arrow_expr(input: &str) -> Res<&str, ArrowExpr> {
         "arrow_expr",
         tuple((
             unary_expr,
-            many0(tuple((tag("=>"), arrow_function_specifier, argument_list))),
+            many0(tuple((
+                ws((tag("=>"), arrow_function_specifier)),
+                argument_list,
+            ))),
         )),
     )(input)
     .map(|(next_input, res)| {
@@ -40,8 +44,8 @@ pub fn arrow_expr(input: &str) -> Res<&str, ArrowExpr> {
             .1
             .into_iter()
             .map(|res| ArrowExprItem {
-                function_specifier: res.1,
-                arguments: res.2,
+                function_specifier: res.0 .1,
+                arguments: res.1,
             })
             .collect();
         (next_input, ArrowExpr { expr, items })
@@ -90,8 +94,8 @@ pub struct ArrowExprItem {
 }
 
 impl Display for ArrowExprItem {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!("fmt ArrowExprItem")
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", self.function_specifier, self.arguments)
     }
 }
 
@@ -122,4 +126,51 @@ pub enum ArrowFunctionSpecifier {
     Name(EQName),
     VarRef(VarRef),
     ParenthesizedExpr(ParenthesizedExpr),
+}
+
+impl Display for ArrowFunctionSpecifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ArrowFunctionSpecifier::Name(x) => write!(f, "{}", x),
+            ArrowFunctionSpecifier::VarRef(x) => write!(f, "{}", x),
+            ArrowFunctionSpecifier::ParenthesizedExpr(x) => write!(f, "{}", x),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn arrow_expr_should_parse() {
+        // arrange
+        let input = r#"$string=>upper-case()=>normalize-unicode()=>tokenize("\s+")"#;
+
+        // act
+        let (next_input, res) = arrow_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(
+            res.to_string(),
+            r#"$string => upper-case() => normalize-unicode() => tokenize("\s+")"#
+        );
+    }
+
+    #[test]
+    fn arrow_expr_should_parse_whitespace() {
+        // arrange
+        let input = r#"$string => upper-case() => normalize-unicode() => tokenize("\s+")"#;
+
+        // act
+        let (next_input, res) = arrow_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(
+            res.to_string(),
+            r#"$string => upper-case() => normalize-unicode() => tokenize("\s+")"#
+        );
+    }
 }

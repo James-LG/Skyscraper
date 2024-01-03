@@ -4,12 +4,12 @@ use std::fmt::Display;
 
 use nom::{
     bytes::complete::tag, character::complete::char, combinator::opt, error::context, multi::many0,
-    sequence::tuple,
 };
 
 use crate::xpath::grammar::{
     expressions::{expr_single, ExprSingle},
     recipes::Res,
+    whitespace_recipes::ws,
 };
 
 pub fn map_constructor(input: &str) -> Res<&str, MapConstructor> {
@@ -17,12 +17,12 @@ pub fn map_constructor(input: &str) -> Res<&str, MapConstructor> {
 
     context(
         "map_constructor",
-        tuple((
+        ws((
             tag("map"),
             char('{'),
-            opt(tuple((
+            opt(ws((
                 map_constructor_entry,
-                many0(tuple((char(','), map_constructor_entry))),
+                many0(ws((char(','), map_constructor_entry))),
             ))),
             char('}'),
         )),
@@ -44,8 +44,12 @@ pub struct MapConstructor {
 }
 
 impl Display for MapConstructor {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!("fmt MapConstructor")
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "map {{")?;
+        for entry in &self.entries {
+            write!(f, " {}", entry)?;
+        }
+        write!(f, " }}")
     }
 }
 
@@ -53,14 +57,14 @@ fn map_constructor_entry(input: &str) -> Res<&str, MapConstructorEntry> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-MapConstructorEntry
     context(
         "map_constructor_entry",
-        tuple((map_key_expr, map_value_expr)),
+        ws((map_key_expr, char(':'), map_value_expr)),
     )(input)
     .map(|(next_input, res)| {
         (
             next_input,
             MapConstructorEntry {
                 key: res.0,
-                value: res.1,
+                value: res.2,
             },
         )
     })
@@ -72,6 +76,12 @@ pub struct MapConstructorEntry {
     pub value: ExprSingle,
 }
 
+impl Display for MapConstructorEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.key, self.value)
+    }
+}
+
 fn map_key_expr(input: &str) -> Res<&str, ExprSingle> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-MapKeyExpr
     context("map_key_expr", expr_single)(input)
@@ -80,4 +90,35 @@ fn map_key_expr(input: &str) -> Res<&str, ExprSingle> {
 fn map_value_expr(input: &str) -> Res<&str, ExprSingle> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-MapValueExpr
     context("map_value_expr", expr_single)(input)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn map_constructor_should_parse() {
+        // arrange
+        let input = "map { a: b }";
+
+        // act
+        let (next_input, res) = map_constructor(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
+    }
+
+    #[test]
+    fn map_constructor_should_parse_no_whitespace() {
+        // arrange
+        let input = "map{a: b}";
+
+        // act
+        let (next_input, res) = map_constructor(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "map { a: b }");
+    }
 }

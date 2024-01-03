@@ -12,6 +12,7 @@ use crate::xpath::{
             primary_expressions::primary_expr,
         },
         recipes::Res,
+        whitespace_recipes::ws,
     },
     ExpressionApplyError, XpathExpressionContext, XpathItemSet,
 };
@@ -106,7 +107,7 @@ impl Display for PostfixExprItem {
 
 pub fn predicate(input: &str) -> Res<&str, Predicate> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-Predicate
-    context("predicate", tuple((char('['), expr, char(']'))))(input)
+    context("predicate", ws((char('['), expr, char(']'))))(input)
         .map(|(next_input, res)| (next_input, Predicate(res.1)))
 }
 
@@ -177,5 +178,31 @@ mod test {
         // assert
         assert_eq!(next_input, "");
         assert_eq!(res.to_string(), input);
+    }
+
+    #[test]
+    fn predicate_should_parse2() {
+        // arrange
+        let input = "[2]";
+
+        // act
+        let (next_input, res) = predicate(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
+    }
+
+    #[test]
+    fn predicate_should_parse3() {
+        // arrange
+        let input = "[ 2 ]";
+
+        // act
+        let (next_input, res) = predicate(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "[2]");
     }
 }

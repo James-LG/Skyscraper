@@ -2,12 +2,13 @@
 
 use std::fmt::Display;
 
-use nom::{character::complete::char, combinator::opt, error::context, sequence::tuple};
+use nom::{character::complete::char, combinator::opt, error::context};
 
 use crate::xpath::{
     grammar::{
         expressions::{expr, Expr},
         recipes::Res,
+        whitespace_recipes::ws,
     },
     xpath_item_set::XpathItemSet,
     ExpressionApplyError, XpathExpressionContext,
@@ -15,11 +16,8 @@ use crate::xpath::{
 
 pub fn parenthesized_expr(input: &str) -> Res<&str, ParenthesizedExpr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-ParenthesizedExpr
-    context(
-        "parenthesized_expr",
-        tuple((char('('), opt(expr), char(')'))),
-    )(input)
-    .map(|(next_input, res)| (next_input, ParenthesizedExpr(res.1)))
+    context("parenthesized_expr", ws((char('('), opt(expr), char(')'))))(input)
+        .map(|(next_input, res)| (next_input, ParenthesizedExpr(res.1)))
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -53,7 +51,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn parenthesized_expr_should_parse1() {
+    fn parenthesized_expr_should_parse() {
         // arrange
         let input = "(chapter|appendix)";
 
@@ -61,7 +59,20 @@ mod test {
         let (next_input, res) = parenthesized_expr(input).unwrap();
 
         // assert
-        assert_eq!(res.to_string(), input);
         assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
+    }
+
+    #[test]
+    fn parenthesized_expr_should_parse_whitespace() {
+        // arrange
+        let input = "( chapter | appendix )";
+
+        // act
+        let (next_input, res) = parenthesized_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "(chapter|appendix)");
     }
 }

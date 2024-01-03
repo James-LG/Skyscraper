@@ -11,8 +11,8 @@ use crate::xpath::{
     grammar::{
         expressions::arrow_operator::{arrow_expr, ArrowExpr},
         recipes::Res,
-        terminal_symbols::sep,
         types::{simple_type_name, SimpleTypeName},
+        whitespace_recipes::sep,
     },
     xpath_item_set::XpathItemSet,
     ExpressionApplyError, XpathExpressionContext,

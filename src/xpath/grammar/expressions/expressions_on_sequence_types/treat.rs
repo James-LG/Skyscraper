@@ -7,8 +7,8 @@ use nom::{bytes::complete::tag, combinator::opt, error::context};
 use crate::xpath::{
     grammar::{
         recipes::Res,
-        terminal_symbols::sep,
         types::sequence_type::{sequence_type, SequenceType},
+        whitespace_recipes::sep,
     },
     xpath_item_set::XpathItemSet,
     ExpressionApplyError, XpathExpressionContext,
@@ -81,5 +81,23 @@ impl TreatExpr {
         }
 
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn treat_expr_should_parse() {
+        // arrange
+        let input = "fn:root() treat as integer";
+
+        // act
+        let (next_input, res) = treat_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
     }
 }

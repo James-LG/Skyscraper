@@ -2,7 +2,7 @@
 
 use std::fmt::Display;
 
-use nom::{error::context, sequence::tuple};
+use nom::error::context;
 
 use crate::{
     xpath::{
@@ -11,6 +11,7 @@ use crate::{
             expressions::common::{argument_list, ArgumentList},
             recipes::Res,
             types::{eq_name, EQName},
+            whitespace_recipes::ws,
             xml_names::QName,
         },
         xpath_item_set::XpathItemSet,
@@ -22,7 +23,7 @@ use crate::{
 pub fn function_call(input: &str) -> Res<&str, FunctionCall> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-FunctionCall
 
-    context("function_call", tuple((eq_name, argument_list)))(input).map(|(next_input, res)| {
+    context("function_call", ws((eq_name, argument_list)))(input).map(|(next_input, res)| {
         (
             next_input,
             FunctionCall {
@@ -70,5 +71,36 @@ impl FunctionCall {
             },
             EQName::UriQualifiedName(_) => todo!("FunctionCall::eval UriQualifiedName"),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn function_call_should_parse() {
+        // arrange
+        let input = "my:three-argument-function(1,2,3)";
+
+        // act
+        let (next_input, res) = function_call(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "my:three-argument-function(1, 2, 3)");
+    }
+
+    #[test]
+    fn function_call_should_parse_whitespace() {
+        // arrange
+        let input = "my:three-argument-function ( 1, 2, 3 )";
+
+        // act
+        let (next_input, res) = function_call(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "my:three-argument-function(1, 2, 3)");
     }
 }

@@ -216,7 +216,7 @@ impl Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.expr)?;
         for x in &self.items {
-            write!(f, " {}", x)?;
+            write!(f, ", {}", x)?;
         }
 
         Ok(())
@@ -360,6 +360,19 @@ mod tests {
     }
 
     #[test]
+    fn expr_should_parse2() {
+        // arrange
+        let input = "((book/author[.=$a])[1], book[author=$a]/title)";
+
+        // act
+        let (next_input, res) = expr(input).unwrap();
+
+        // assert
+        assert_eq!(res.to_string(), input);
+        assert_eq!(next_input, "");
+    }
+
+    #[test]
     fn xpath_should_parse1() {
         // arrange
         let input = "//div[@class='BorderGrid-cell']/div[@class=' text-small']/a";
@@ -419,6 +432,19 @@ mod tests {
 
         // act
         let (next_input, res) = xpath(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
+    }
+
+    #[test]
+    fn xpath_should_parse6() {
+        // arrange
+        let input = r#"$emp/bonus>0.25 * $emp/salary"#;
+
+        // act
+        let (next_input, res) = expr_single(input).unwrap();
 
         // assert
         assert_eq!(next_input, "");

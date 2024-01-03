@@ -3,13 +3,18 @@
 use std::fmt::Display;
 
 use nom::{
-    branch::alt, bytes::complete::tag, character::complete::char, error::context, multi::many0,
+    branch::alt,
+    bytes::complete::tag,
+    character::complete::{char, multispace0},
+    error::context,
+    multi::many0,
     sequence::tuple,
 };
 
 use crate::xpath::{
     grammar::{
         expressions::sequence_expressions::combining_node_sequences::union_expr, recipes::Res,
+        terminal_symbols::symbol_separator, whitespace_recipes::ws,
     },
     xpath_item_set::XpathItemSet,
     ExpressionApplyError, XpathExpressionContext,
@@ -24,11 +29,11 @@ pub fn additive_expr(input: &str) -> Res<&str, AdditiveExpr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-AdditiveExpr
 
     fn plus(input: &str) -> Res<&str, AdditiveExprOperator> {
-        char('+')(input).map(|(next_input, _res)| (next_input, AdditiveExprOperator::Plus))
+        ws((char('+'),))(input).map(|(next_input, _res)| (next_input, AdditiveExprOperator::Plus))
     }
 
     fn minus(input: &str) -> Res<&str, AdditiveExprOperator> {
-        char('-')(input).map(|(next_input, _res)| (next_input, AdditiveExprOperator::Minus))
+        ws((char('-'),))(input).map(|(next_input, _res)| (next_input, AdditiveExprOperator::Minus))
     }
 
     context(
@@ -111,20 +116,22 @@ fn multiplicative_expr(input: &str) -> Res<&str, MultiplicativeExpr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-MultiplicativeExpr
 
     fn star(input: &str) -> Res<&str, MultiplicativeExprOperator> {
-        char('*')(input).map(|(next_input, _res)| (next_input, MultiplicativeExprOperator::Star))
+        tuple((multispace0, char('*'), multispace0))(input)
+            .map(|(next_input, _res)| (next_input, MultiplicativeExprOperator::Star))
     }
 
     fn div(input: &str) -> Res<&str, MultiplicativeExprOperator> {
-        tag("div")(input).map(|(next_input, _res)| (next_input, MultiplicativeExprOperator::Div))
+        tuple((symbol_separator, tag("div"), symbol_separator))(input)
+            .map(|(next_input, _res)| (next_input, MultiplicativeExprOperator::Div))
     }
 
     fn integer_div(input: &str) -> Res<&str, MultiplicativeExprOperator> {
-        tag("idiv")(input)
+        tuple((symbol_separator, tag("idiv"), symbol_separator))(input)
             .map(|(next_input, _res)| (next_input, MultiplicativeExprOperator::IntegerDiv))
     }
 
     fn modulus(input: &str) -> Res<&str, MultiplicativeExprOperator> {
-        tag("mod")(input)
+        tuple((symbol_separator, tag("mod"), symbol_separator))(input)
             .map(|(next_input, _res)| (next_input, MultiplicativeExprOperator::Modulus))
     }
 
@@ -212,11 +219,11 @@ pub fn unary_expr(input: &str) -> Res<&str, UnaryExpr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-UnaryExpr
 
     fn plus(input: &str) -> Res<&str, UnarySymbol> {
-        char('+')(input).map(|(next_input, _res)| (next_input, UnarySymbol::Plus))
+        ws((char('+'),))(input).map(|(next_input, _res)| (next_input, UnarySymbol::Plus))
     }
 
     fn minus(input: &str) -> Res<&str, UnarySymbol> {
-        char('-')(input).map(|(next_input, _res)| (next_input, UnarySymbol::Minus))
+        ws((char('-'),))(input).map(|(next_input, _res)| (next_input, UnarySymbol::Minus))
     }
 
     context("unary_expr", tuple((many0(alt((plus, minus))), value_expr)))(input).map(
@@ -303,5 +310,88 @@ impl ValueExpr {
         context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         self.0.eval(context)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn additive_expr_should_parse() {
+        // arrange
+        let input = "A+B";
+
+        // act
+        let (next_input, res) = additive_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "A + B");
+    }
+
+    #[test]
+    fn additive_expr_should_parse_whitespace() {
+        // arrange
+        let input = "A + B - C";
+
+        // act
+        let (next_input, res) = additive_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "A + B - C");
+    }
+
+    #[test]
+    fn multiplicative_expr_should_parse() {
+        // arrange
+        let input = "A*B";
+
+        // act
+        let (next_input, res) = multiplicative_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "A * B");
+    }
+
+    #[test]
+    fn multiplicative_expr_should_parse_whitespace() {
+        // arrange
+        let input = "A * B div C idiv D mod E";
+
+        // act
+        let (next_input, res) = multiplicative_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "A * B div C idiv D mod E");
+    }
+
+    #[test]
+    fn unary_expr_should_parse_minus() {
+        // arrange
+        let input = "-+A";
+
+        // act
+        let (next_input, res) = unary_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "-+A");
+    }
+
+    #[test]
+    fn unary_expr_should_parse_minus_whitespace() {
+        // arrange
+        let input = "- + A";
+
+        // act
+        let (next_input, res) = unary_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "-+A");
     }
 }

@@ -5,8 +5,9 @@ use std::fmt::Display;
 use nom::{bytes::complete::tag, error::context, multi::many0, sequence::tuple};
 
 use crate::xpath::{
-    grammar::recipes::Res, xpath_item_set::XpathItemSet, ExpressionApplyError,
-    XpathExpressionContext,
+    grammar::{recipes::Res, whitespace_recipes::ws},
+    xpath_item_set::XpathItemSet,
+    ExpressionApplyError, XpathExpressionContext,
 };
 
 use super::sequence_expressions::constructing_sequences::{range_expr, RangeExpr};
@@ -16,7 +17,7 @@ pub fn string_concat_expr(input: &str) -> Res<&str, StringConcatExpr> {
 
     context(
         "string_concat_expr",
-        tuple((range_expr, many0(tuple((tag("||"), range_expr))))),
+        tuple((range_expr, many0(ws((tag("||"), range_expr))))),
     )(input)
     .map(|(next_input, res)| {
         let items = res.1.into_iter().map(|res| res.1).collect();
@@ -56,5 +57,36 @@ impl StringConcatExpr {
 
         // Otherwise, do the operation.
         todo!("StringConcatExpr::eval concat operator")
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn string_concat_expr_should_parse() {
+        // arrange
+        let input = "a||b||c";
+
+        // act
+        let (next_input, res) = string_concat_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "a || b || c");
+    }
+
+    #[test]
+    fn string_concat_expr_should_parse_whitespace() {
+        // arrange
+        let input = "a || b || c";
+
+        // act
+        let (next_input, res) = string_concat_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "a || b || c");
     }
 }

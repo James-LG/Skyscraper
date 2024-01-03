@@ -164,6 +164,7 @@ impl NameTest {
 
 fn wildcard(input: &str) -> Res<&str, Wildcard> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-Wildcard
+    // ws: explicit
 
     fn prefixed_name_map(input: &str) -> Res<&str, Wildcard> {
         tuple((tag("*:"), nc_name))(input)
@@ -181,7 +182,7 @@ fn wildcard(input: &str) -> Res<&str, Wildcard> {
     }
 
     fn simple_map(input: &str) -> Res<&str, Wildcard> {
-        char('*')(input).map(|(next_input, _res)| (next_input, Wildcard::Simple))
+        tuple((char('*'),))(input).map(|(next_input, _res)| (next_input, Wildcard::Simple))
     }
 
     context(
@@ -209,7 +210,7 @@ impl Display for Wildcard {
             Wildcard::Simple => write!(f, "*"),
             Wildcard::PrefixedName(x) => write!(f, "*:{}", x),
             Wildcard::SuffixedName(x) => write!(f, "{}:*", x),
-            Wildcard::BracedUri(x) => write!(f, "{}*", x),
+            Wildcard::BracedUri(x) => write!(f, "Q{{{}}}*", x),
         }
     }
 }
@@ -249,5 +250,62 @@ impl Wildcard {
             Wildcard::SuffixedName(_) => todo!("Wildcard::is_match SuffixedName"),
             Wildcard::BracedUri(_) => todo!("Wildcard::is_match BracedUri"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wildcard_should_parse_simple() {
+        // arrange
+        let input = "*";
+
+        // act
+        let (next_input, res) = wildcard(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
+    }
+
+    #[test]
+    fn wildcard_should_parse_prefixed_name() {
+        // arrange
+        let input = "*:foo";
+
+        // act
+        let (next_input, res) = wildcard(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "*:foo");
+    }
+
+    #[test]
+    fn wildcard_should_parse_suffixed_name() {
+        // arrange
+        let input = "foo:*";
+
+        // act
+        let (next_input, res) = wildcard(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "foo:*");
+    }
+
+    #[test]
+    fn wildcard_should_parse_braced_uri() {
+        // arrange
+        let input = "Q{http://example.com/ns}*";
+
+        // act
+        let (next_input, res) = wildcard(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
     }
 }

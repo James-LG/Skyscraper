@@ -5,7 +5,7 @@ use std::fmt::Display;
 use nom::{bytes::complete::tag, combinator::opt, error::context};
 
 use crate::xpath::{
-    grammar::{recipes::Res, terminal_symbols::sep},
+    grammar::{recipes::Res, whitespace_recipes::sep},
     xpath_item_set::XpathItemSet,
     ExpressionApplyError, XpathExpressionContext,
 };

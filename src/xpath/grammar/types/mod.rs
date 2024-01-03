@@ -11,6 +11,7 @@ use nom::{
 use crate::xpath::{
     grammar::{
         terminal_symbols::{string_literal, uri_qualified_name},
+        whitespace_recipes::ws,
         xml_names::qname,
     },
     xpath_item_set::XpathItemSet,
@@ -47,28 +48,28 @@ pub fn kind_test(input: &str) -> Res<&str, KindTest> {
     fn any_kind_test(input: &str) -> Res<&str, KindTest> {
         // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-AnyKindTest
 
-        tuple((tag("node"), char('('), char(')')))(input)
+        ws((tag("node"), char('('), char(')')))(input)
             .map(|(next_input, _res)| (next_input, KindTest::AnyKindTest))
     }
 
     fn text_test(input: &str) -> Res<&str, KindTest> {
         // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-TextTest
 
-        tuple((tag("text"), char('('), char(')')))(input)
+        ws((tag("text"), char('('), char(')')))(input)
             .map(|(next_input, _res)| (next_input, KindTest::TextTest))
     }
 
     fn comment_test(input: &str) -> Res<&str, KindTest> {
         // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-CommentTest
 
-        tuple((tag("comment"), char('('), char(')')))(input)
+        ws((tag("comment"), char('('), char(')')))(input)
             .map(|(next_input, _res)| (next_input, KindTest::CommentTest))
     }
 
     fn namespace_node_test(input: &str) -> Res<&str, KindTest> {
         // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-NamespaceNodeTest
 
-        tuple((tag("namespace-node"), char('('), char(')')))(input)
+        ws((tag("namespace-node"), char('('), char(')')))(input)
             .map(|(next_input, _res)| (next_input, KindTest::NamespaceNodeTest))
     }
 
@@ -380,8 +381,8 @@ pub enum PITestValue {
 pub struct AtomicOrUnionType(EQName);
 
 impl Display for AtomicOrUnionType {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!("fmt AtomicOrUnionType")
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 

@@ -2,15 +2,15 @@
 
 use std::fmt::Display;
 
-use nom::{character::complete::char, combinator::opt, error::context, sequence::tuple};
+use nom::{character::complete::char, combinator::opt, error::context};
 
-use crate::xpath::grammar::recipes::Res;
+use crate::xpath::grammar::{recipes::Res, whitespace_recipes::ws};
 
 use super::steps::node_tests::{node_test, NodeTest};
 
 pub fn abbrev_forward_step(input: &str) -> Res<&str, AbbrevForwardStep> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-AbbrevForwardStep
-    context("abbrev_forward_step", tuple((opt(char('@')), node_test)))(input).map(
+    context("abbrev_forward_step", ws((opt(char('@')), node_test)))(input).map(
         |(next_input, res)| {
             (
                 next_input,
@@ -35,5 +35,36 @@ impl Display for AbbrevForwardStep {
             write!(f, "@")?;
         }
         write!(f, "{}", self.node_test)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn abbrev_forward_step_step_should_parse() {
+        // arrange
+        let input = "@chapter";
+
+        // act
+        let (next_input, res) = abbrev_forward_step(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
+    }
+
+    #[test]
+    fn abbrev_forward_step_step_should_parse_with_whitespace() {
+        // arrange
+        let input = "@ chapter";
+
+        // act
+        let (next_input, res) = abbrev_forward_step(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "@chapter");
     }
 }

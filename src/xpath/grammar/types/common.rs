@@ -15,6 +15,12 @@ pub fn element_name(input: &str) -> Res<&str, ElementName> {
 #[derive(PartialEq, Debug, Clone)]
 pub struct ElementName(pub EQName);
 
+impl Display for ElementName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 pub fn type_name(input: &str) -> Res<&str, TypeName> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-TypeName
 
@@ -39,6 +45,12 @@ pub fn attribute_name(input: &str) -> Res<&str, AttributeName> {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct AttributeName(pub EQName);
+
+impl Display for AttributeName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 pub fn atomic_or_union_type(input: &str) -> Res<&str, AtomicOrUnionType> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-AtomicOrUnionType

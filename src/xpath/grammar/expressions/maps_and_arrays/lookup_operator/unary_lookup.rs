@@ -23,8 +23,8 @@ pub fn unary_lookup(input: &str) -> Res<&str, UnaryLookup> {
 pub struct UnaryLookup(pub KeySpecifier);
 
 impl Display for UnaryLookup {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!("fmt UnaryLookup")
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "?{}", self.0)
     }
 }
 
@@ -75,5 +75,23 @@ impl Display for KeySpecifier {
             KeySpecifier::ParenthesizedExpr(x) => write!(f, "{}", x),
             KeySpecifier::Wildcard => write!(f, "*"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unary_lookup_should_parse() {
+        // arrange
+        let input = "?2";
+
+        // act
+        let (next_input, res) = unary_lookup(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
     }
 }

@@ -6,50 +6,49 @@ use nom::error::context;
 
 use nom::bytes::complete::tag;
 
-use nom::sequence::tuple;
-
 use crate::xpath::grammar::recipes::Res;
+use crate::xpath::grammar::whitespace_recipes::ws;
 
 pub fn forward_axis(input: &str) -> Res<&str, ForwardAxis> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-ForwardAxis
 
     fn child(input: &str) -> Res<&str, ForwardAxis> {
-        tuple((tag("child"), tag("::")))(input)
+        ws((tag("child"), tag("::")))(input)
             .map(|(next_input, _res)| (next_input, ForwardAxis::Child))
     }
 
     fn descendant(input: &str) -> Res<&str, ForwardAxis> {
-        tuple((tag("descendant"), tag("::")))(input)
+        ws((tag("descendant"), tag("::")))(input)
             .map(|(next_input, _res)| (next_input, ForwardAxis::Descendant))
     }
 
     fn attribute(input: &str) -> Res<&str, ForwardAxis> {
-        tuple((tag("attribute"), tag("::")))(input)
+        ws((tag("attribute"), tag("::")))(input)
             .map(|(next_input, _res)| (next_input, ForwardAxis::Attribute))
     }
 
     fn self_axis(input: &str) -> Res<&str, ForwardAxis> {
-        tuple((tag("self"), tag("::")))(input)
+        ws((tag("self"), tag("::")))(input)
             .map(|(next_input, _res)| (next_input, ForwardAxis::SelfAxis))
     }
 
     fn descendant_or_self(input: &str) -> Res<&str, ForwardAxis> {
-        tuple((tag("descendant-or-self"), tag("::")))(input)
+        ws((tag("descendant-or-self"), tag("::")))(input)
             .map(|(next_input, _res)| (next_input, ForwardAxis::DescendantOrSelf))
     }
 
     fn following_sibling(input: &str) -> Res<&str, ForwardAxis> {
-        tuple((tag("following-sibling"), tag("::")))(input)
+        ws((tag("following-sibling"), tag("::")))(input)
             .map(|(next_input, _res)| (next_input, ForwardAxis::FollowingSibling))
     }
 
     fn following(input: &str) -> Res<&str, ForwardAxis> {
-        tuple((tag("descendant-or-self"), tag("::")))(input)
+        ws((tag("descendant-or-self"), tag("::")))(input)
             .map(|(next_input, _res)| (next_input, ForwardAxis::Following))
     }
 
     fn namespace(input: &str) -> Res<&str, ForwardAxis> {
-        tuple((tag("namespace"), tag("::")))(input)
+        ws((tag("namespace"), tag("::")))(input)
             .map(|(next_input, _res)| (next_input, ForwardAxis::Namespace))
     }
 

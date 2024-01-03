@@ -67,7 +67,7 @@ pub fn numeric_literal(input: &str) -> Res<&str, NumericLiteral> {
 
     context(
         "numeric_literal",
-        alt((integer_literal_map, decimal_literal_map, double_literal_map)),
+        alt((double_literal_map, decimal_literal_map, integer_literal_map)),
     )(input)
 }
 
@@ -95,5 +95,49 @@ impl NumericLiteral {
             NumericLiteral::Decimal(x) => AnyAtomicType::Float(ordered_float::OrderedFloat(*x)),
             NumericLiteral::Double(x) => AnyAtomicType::Double(ordered_float::OrderedFloat(*x)),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn numeric_literal_should_match_decimal() {
+        // arrange
+        let input = "0.25";
+
+        // act
+        let (next_input, res) = numeric_literal(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "0.25");
+    }
+    
+    #[test]
+    fn numeric_literal_should_match_double() {
+        // arrange
+        let input = "1e+2";
+
+        // act
+        let (next_input, res) = numeric_literal(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "100");
+    }
+
+    #[test]
+    fn numeric_literal_should_match_integer() {
+        // arrange
+        let input = "1";
+
+        // act
+        let (next_input, res) = numeric_literal(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "1");
     }
 }

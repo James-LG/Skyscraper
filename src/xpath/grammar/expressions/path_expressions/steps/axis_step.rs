@@ -142,6 +142,32 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn axis_step_should_parse() {
+        // arrange
+        let input = "child::chapter[2]";
+
+        // act
+        let (next_input, res) = axis_step(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
+    }
+
+    #[test]
+    fn axis_step_should_parse_with_whitespace() {
+        // arrange
+        let input = "child::chapter [ 2 ]";
+
+        // act
+        let (next_input, res) = axis_step(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "child::chapter[2]");
+    }
+
     /// `text()` could be matched by a function call or a node test. It should be a node test.
     #[test]
     fn axis_step_should_use_text_test_not_function_call() {

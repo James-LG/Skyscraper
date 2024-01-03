@@ -5,8 +5,9 @@ use std::fmt::Display;
 use nom::{character::complete::char, error::context, multi::many0, sequence::tuple};
 
 use crate::xpath::{
-    grammar::recipes::Res, xpath_item_set::XpathItemSet, ExpressionApplyError,
-    XpathExpressionContext,
+    grammar::{recipes::Res, whitespace_recipes::ws},
+    xpath_item_set::XpathItemSet,
+    ExpressionApplyError, XpathExpressionContext,
 };
 
 use super::path_expressions::{path_expr, PathExpr};
@@ -16,7 +17,7 @@ pub fn simple_map_expr(input: &str) -> Res<&str, SimpleMapExpr> {
 
     context(
         "simple_map_expr",
-        tuple((path_expr, many0(tuple((char('!'), path_expr))))),
+        tuple((path_expr, many0(ws((char('!'), path_expr))))),
     )(input)
     .map(|(next_input, res)| {
         let expr = res.0;
@@ -65,9 +66,35 @@ mod tests {
     use super::*;
 
     #[test]
+    fn simple_map_expr_should_parse() {
+        // arrange
+        let input = "a!b!c";
+
+        // act
+        let (next_input, res) = simple_map_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "a!b!c");
+    }
+
+    #[test]
+    fn simple_map_expr_should_parse_whitespace() {
+        // arrange
+        let input = "a ! b ! c";
+
+        // act
+        let (next_input, res) = simple_map_expr(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "a!b!c");
+    }
+
+    #[test]
     fn simple_map_expr_should_parse1() {
         // arrange
-        let input = r#"child::div1/child::para/string()!concat("id-",.)"#;
+        let input = r#"child::div1/child::para/string()!concat("id-", .)"#;
 
         // act
         let (next_input, res) = simple_map_expr(input).unwrap();

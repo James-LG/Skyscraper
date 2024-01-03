@@ -2,16 +2,17 @@
 
 use std::fmt::Display;
 
-use nom::{character::complete::char, error::context, sequence::tuple};
+use nom::{character::complete::char, error::context};
 
 use crate::xpath::grammar::{
     recipes::Res,
     types::{eq_name, EQName},
+    whitespace_recipes::ws,
 };
 
 pub fn var_ref(input: &str) -> Res<&str, VarRef> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-VarRef
-    context("var_ref", tuple((char('$'), var_name)))(input)
+    context("var_ref", ws((char('$'), var_name)))(input)
         .map(|(next_input, res)| (next_input, VarRef(res.1)))
 }
 
@@ -43,7 +44,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn var_ref_should_parse1() {
+    fn var_ref_should_parse() {
         // arrange
         let input = "$products";
 
@@ -52,6 +53,19 @@ mod test {
 
         // assert
         assert_eq!(next_input, "");
-        assert_eq!(res.to_string(), input);
+        assert_eq!(res.to_string(), "$products");
+    }
+
+    #[test]
+    fn var_ref_should_parse_whitespace() {
+        // arrange
+        let input = "$ products";
+
+        // act
+        let (next_input, res) = var_ref(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), "$products");
     }
 }

@@ -19,6 +19,24 @@ pub struct Lookup(pub KeySpecifier);
 
 impl Display for Lookup {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "?{}", self.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lookup_should_parse() {
+        // arrange
+        let input = "?2";
+
+        // act
+        let (next_input, res) = lookup(input).unwrap();
+
+        // assert
+        assert_eq!(next_input, "");
+        assert_eq!(res.to_string(), input);
     }
 }
