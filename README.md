@@ -7,6 +7,11 @@
 
 Rust library to scrape HTML documents with XPath expressions.
 
+> This library is major-version 0 because there are still `todo!` calls for many xpath features.
+>If you encounter one that you feel should be prioritized, open an issue on [GitHub](https://github.com/James-LG/Skyscraper/issues).
+>
+> See the [Supported XPath Features](#supported-xpath-features) section for details.
+
 ## HTML Parsing
 
 Skyscraper has its own HTML parser implementation. The parser outputs a
@@ -50,7 +55,7 @@ assert_eq!(parent_node, parent_of_child1);
 
 Skyscraper is capable of parsing XPath strings and applying them to HTML documents.
 
-Please see the [docs](https://docs.rs/skyscraper/latest/skyscraper/xpath/index.html) for more examples.
+Below is a basic xpath example. Please see the [docs](https://docs.rs/skyscraper/latest/skyscraper/xpath/index.html) for more examples.
 
 ```rust
 use skyscraper::html;
@@ -69,17 +74,17 @@ fn main() -> Result<(), Box<dyn Error>> {
     let xpath_item_tree = XpathItemTree::from(&document);
     let xpath = xpath::parse("//div")?;
    
-    let nodes = xpath.apply(&xpath_item_tree)?;
+    let item_set = xpath.apply(&xpath_item_tree)?;
    
-    assert_eq!(nodes.len(), 1);
+    assert_eq!(item_set.len(), 1);
    
-    let mut nodes = nodes.into_iter();
+    let mut items = item_set.into_iter();
    
-    let node = nodes
+    let item = items
         .next()
         .unwrap();
 
-    let element = node
+    let element = item
         .as_node()?
         .as_tree_node()?
         .data
@@ -92,10 +97,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 ### Supported XPath Features
 
-XPath is a huge language that can do a lot more than most people require.
 Below is a non-exhaustive list of all the features that are currently supported.
-This library is major-version 0 because there are still `todo!` calls in many places.
-If you encounter one that you would like to be prioritized, open an issue on [GitHub](https://github.com/James-LG/Skyscraper/issues).
 
 1. Basic xpath steps: `/html/body/div`, `//div/table//span`
 1. Attribute selection: `//div/@class`
@@ -111,6 +113,12 @@ If you encounter one that you would like to be prioritized, open an issue on [Gi
     1. Descendant: `descendant::*`
     1. Attribute: `attribute::*`
     1. DescendentOrSelf: `descendant-or-self::*`
+    1. (more coming soon)
 1. Reverse axes:
     1. Parent:  `parent::*`
+    1. (more coming soon)
 1. Treat expressions: `/html treat as node()`
+
+This should cover most XPath use-cases.
+If your use case requires an unimplemented feature,
+please open an issue on [GitHub](https://github.com/James-LG/Skyscraper/issues).
