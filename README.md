@@ -95,7 +95,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 XPath is a huge language that can do a lot more than most people require.
 Below is a non-exhaustive list of all the features that are currently supported.
 This library is major-version 0 because there are still `todo!` calls in many places.
-If you encounter one that you would like to be prioritized, open an issue.
+If you encounter one that you would like to be prioritized, open an issue on [GitHub](https://github.com/James-LG/Skyscraper/issues).
 
 1. Basic xpath steps: `/html/body/div`, `//div/table//span`
 1. Attribute selection: `//div/@class`
