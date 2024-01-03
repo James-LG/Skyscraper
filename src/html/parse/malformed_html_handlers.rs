@@ -84,7 +84,7 @@ impl MismatchedTagHandler for ErrorMismatchedTagHandler {
 /// ```rust
 /// # use std::error::Error;
 /// # fn main() -> Result<(), Box<dyn Error>> {
-/// use skyscraper::html::parse::{Parser, ParseOptionsBuilder, malformed_html_handlers::VoidMismatchedTagHandler};
+/// use skyscraper::html::{DocumentFormatType, parse::{Parser, ParseOptionsBuilder, malformed_html_handlers::VoidMismatchedTagHandler}};
 /// let input = r#"
 ///     <html>
 ///         <body>
@@ -111,7 +111,7 @@ impl MismatchedTagHandler for ErrorMismatchedTagHandler {
 ///     </body>
 /// </html>
 /// "#;
-/// assert_eq!(html.to_string(), output);
+/// assert_eq!(html.to_formatted_string(DocumentFormatType::Indented), output);
 /// # Ok(())
 /// # }
 /// ```
@@ -149,7 +149,7 @@ impl MismatchedTagHandler for VoidMismatchedTagHandler {
 /// ```rust
 /// # use std::error::Error;
 /// # fn main() -> Result<(), Box<dyn Error>> {
-/// use skyscraper::html::parse::{Parser, ParseOptionsBuilder, malformed_html_handlers::CloseMismatchedTagHandler};
+/// use skyscraper::html::{DocumentFormatType, parse::{Parser, ParseOptionsBuilder, malformed_html_handlers::CloseMismatchedTagHandler}};
 /// let input = r#"
 ///     <html>
 ///         <body>
@@ -176,7 +176,7 @@ impl MismatchedTagHandler for VoidMismatchedTagHandler {
 ///     friend
 /// </html>
 /// "#;
-/// assert_eq!(html.to_string(), output);
+/// assert_eq!(html.to_formatted_string(DocumentFormatType::Indented), output);
 /// # Ok(())
 /// # }
 /// ```
@@ -219,7 +219,7 @@ impl MismatchedTagHandler for CloseMismatchedTagHandler {
                     .get(parent_key)
                     .unwrap()
                     .get()
-                    .unwrap_tag();
+                    .extract_as_tag();
 
                 // if the parent name matches the end tag of the mistmatch, assume the parent's end tag is missing and move up to close it.
                 // otherwise, ignore the mismatch and hope for the best.
@@ -245,7 +245,10 @@ mod tests {
     use indoc::indoc;
 
     use super::*;
-    use crate::html::parse::{parse_options::ParseOptionsBuilder, Parser};
+    use crate::html::{
+        parse::{parse_options::ParseOptionsBuilder, Parser},
+        DocumentFormatType,
+    };
 
     const HTML_MISMATCHED_END_TAG: &'static str = r#"
         <html>
@@ -342,7 +345,7 @@ mod tests {
         let result = parser.parse(HTML_MISSING_END_TAG).unwrap();
 
         // assert
-        let output = result.to_string();
+        let output = result.to_formatted_string(DocumentFormatType::Indented);
         let expected_output = indoc!(
             r#"
             <html>
@@ -378,7 +381,7 @@ mod tests {
         let result = parser.parse(HTML_MISMATCHED_END_TAG).unwrap();
 
         // assert
-        let output = result.to_string();
+        let output = result.to_formatted_string(DocumentFormatType::Indented);
         let expected_output = indoc!(
             r#"
             <html>
@@ -414,7 +417,7 @@ mod tests {
         let result = parser.parse(HTML_MISSING_END_TAG).unwrap();
 
         // assert
-        let output = result.to_string();
+        let output = result.to_formatted_string(DocumentFormatType::Indented);
         let expected_output = indoc!(
             r#"
             <html>
@@ -450,7 +453,7 @@ mod tests {
         let result = parser.parse(HTML_MISMATCHED_END_TAG).unwrap();
 
         // assert
-        let output = result.to_string();
+        let output = result.to_formatted_string(DocumentFormatType::Indented);
         let expected_output = indoc!(
             r#"
             <html>

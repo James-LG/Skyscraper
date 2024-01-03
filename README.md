@@ -7,6 +7,11 @@
 
 Rust library to scrape HTML documents with XPath expressions.
 
+> This library is major-version 0 because there are still `todo!` calls for many xpath features.
+>If you encounter one that you feel should be prioritized, open an issue on [GitHub](https://github.com/James-LG/Skyscraper/issues).
+>
+> See the [Supported XPath Features](#supported-xpath-features) section for details.
+
 ## HTML Parsing
 
 Skyscraper has its own HTML parser implementation. The parser outputs a
@@ -48,34 +53,72 @@ assert_eq!(parent_node, parent_of_child1);
 
 ## XPath Expressions
 
-Skyscraper is capable of parsing XPath strings and applying them to HTML
-documents.
+Skyscraper is capable of parsing XPath strings and applying them to HTML documents.
+
+Below is a basic xpath example. Please see the [docs](https://docs.rs/skyscraper/latest/skyscraper/xpath/index.html) for more examples.
 
 ```rust
-use skyscraper::{html, xpath};
-// Parse the html text into a document.
-let html_text = r##"
-<div>
-    <div class="foo">
-        <span some_attr="value">yes</span>
-    </div>
-    <div class="bar">
-        <span>no</span>
-    </div>
-</div>
-"##;
-let document = html::parse(html_text)?;
- 
-// Parse and apply the xpath.
-let expr = xpath::parse("//div[@class='foo']/span")?;
-let results = expr.apply(&document)?;
-assert_eq!(1, results.len());
- 
-// Get text from the node
-let text = results[0].get_text(&document).expect("text missing");
-assert_eq!("yes", text);
+use skyscraper::html;
+use skyscraper::xpath::{self, XpathItemTree, grammar::{XpathItemTreeNodeData, data_model::{Node, XpathItem}}};
+use std::error::Error;
 
-// Get attributes from the node
-let attributes = results[0].get_attributes(&document).expect("no attributes");
-assert_eq!("value", attributes["some_attr"]);
+fn main() -> Result<(), Box<dyn Error>> {
+    let html_text = r##"
+    <html>
+        <body>
+            <div>Hello world</div>
+        </body>
+    </html>"##;
+
+    let document = html::parse(html_text)?;
+    let xpath_item_tree = XpathItemTree::from(&document);
+    let xpath = xpath::parse("//div")?;
+   
+    let item_set = xpath.apply(&xpath_item_tree)?;
+   
+    assert_eq!(item_set.len(), 1);
+   
+    let mut items = item_set.into_iter();
+   
+    let item = items
+        .next()
+        .unwrap();
+
+    let element = item
+        .as_node()?
+        .as_tree_node()?
+        .data
+        .as_element_node()?;
+
+    assert_eq!(element.name, "div");
+    Ok(())
+}
 ```
+
+### Supported XPath Features
+
+Below is a non-exhaustive list of all the features that are currently supported.
+
+1. Basic xpath steps: `/html/body/div`, `//div/table//span`
+1. Attribute selection: `//div/@class`
+1. Text selection: `//div/text()`
+1. Wildcard node selection: `//body/*`
+1. Predicates:
+    1. Attributes: `//div[@class='hi']`
+    1. Indexing: `//div[1]`
+1. Functions:
+    1. `fn:root()`
+1. Forward axes:
+    1. Child: `child::*`
+    1. Descendant: `descendant::*`
+    1. Attribute: `attribute::*`
+    1. DescendentOrSelf: `descendant-or-self::*`
+    1. (more coming soon)
+1. Reverse axes:
+    1. Parent:  `parent::*`
+    1. (more coming soon)
+1. Treat expressions: `/html treat as node()`
+
+This should cover most XPath use-cases.
+If your use case requires an unimplemented feature,
+please open an issue on [GitHub](https://github.com/James-LG/Skyscraper/issues).

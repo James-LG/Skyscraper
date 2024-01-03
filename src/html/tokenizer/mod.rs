@@ -140,10 +140,8 @@ mod tests {
     #[test]
     fn lex_should_handle_end_tag_with_whitespace() {
         // arrange
-        let text = r#"
-            <node>1</node
-            >
-            "#;
+        let text = r#"<node>1</node
+            >"#;
 
         // act
         let result = lex(text).unwrap();
@@ -157,7 +155,7 @@ mod tests {
             Token::TagClose,
         ];
 
-        assert_eq!(expected, result);
+        assert_eq!(result, expected);
     }
 
     #[test]
@@ -233,21 +231,26 @@ mod tests {
             Token::StartTag(String::from("!DOCTYPE")),
             Token::Identifier(String::from("html")),
             Token::TagClose,
+            Token::Text(String::from("\n        ")),
             Token::Comment(String::from(
                 " saved from url=(0026)https://www.rust-lang.org/ ",
             )),
+            Token::Text(String::from("\n        ")),
             Token::StartTag(String::from("html")),
             Token::Identifier(String::from("lang")),
             Token::AssignmentSign,
             Token::Literal(String::from("en-US")),
             Token::TagClose,
+            Token::Text(String::from("\n            ")),
             Token::StartTag(String::from("head")),
             Token::TagClose,
+            Token::Text(String::from("\n                ")),
             Token::StartTag(String::from("title")),
             Token::TagClose,
             Token::Text(String::from("Rust Programming Language")),
             Token::EndTag(String::from("title")),
             Token::TagClose,
+            Token::Text(String::from("\n                ")),
             Token::StartTag(String::from("meta")),
             Token::Identifier(String::from("name")),
             Token::AssignmentSign,
@@ -256,7 +259,10 @@ mod tests {
             Token::AssignmentSign,
             Token::Literal(String::from("width=device-width,initial-scale=1.0")),
             Token::TagClose,
+            Token::Text(String::from("\n        ")),
+            Token::Text(String::from("\n                ")),
             Token::Comment(String::from(" Twitter card ")),
+            Token::Text(String::from("\n                ")),
             Token::StartTag(String::from("meta")),
             Token::Identifier(String::from("name")),
             Token::AssignmentSign,
@@ -265,12 +271,16 @@ mod tests {
             Token::AssignmentSign,
             Token::Literal(String::from("summary")),
             Token::TagClose,
+            Token::Text(String::from("\n            ")),
             Token::EndTag(String::from("head")),
             Token::TagClose,
+            Token::Text(String::from("\n            ")),
             Token::StartTag(String::from("body")),
             Token::TagClose,
+            Token::Text(String::from("\n                ")),
             Token::StartTag(String::from("main")),
             Token::TagClose,
+            Token::Text(String::from("\n                    ")),
             Token::StartTag(String::from("section")),
             Token::Identifier(String::from("id")),
             Token::AssignmentSign,
@@ -279,37 +289,41 @@ mod tests {
             Token::AssignmentSign,
             Token::Literal(String::from("green")),
             Token::TagClose,
+            Token::Text(String::from("\n                        ")),
             Token::StartTag(String::from("div")),
             Token::Identifier(String::from("class")),
             Token::AssignmentSign,
             Token::Literal(String::from("w-100 mw-none ph3 mw8-m mw9-l center f3")),
             Token::TagClose,
+            Token::Text(String::from("\n                            ")),
             Token::StartTag(String::from("header")),
             Token::Identifier(String::from("class")),
             Token::AssignmentSign,
             Token::Literal(String::from("pb0")),
             Token::TagClose,
+            Token::Text(String::from("\n                                ")),
             Token::StartTag(String::from("h2")),
             Token::TagClose,
-            Token::Text(String::from(
-                r#"
-                                Why Rust?
-                                "#,
-            )),
+            Token::Text(String::from("\n                                Why Rust?")),
+            Token::Text(String::from("\n                                ")),
             Token::EndTag(String::from("h2")),
             Token::TagClose,
+            Token::Text(String::from("\n                            ")),
             Token::EndTag(String::from("header")),
             Token::TagClose,
+            Token::Text(String::from("\n                            ")),
             Token::StartTag(String::from("div")),
             Token::Identifier(String::from("class")),
             Token::AssignmentSign,
             Token::Literal(String::from("flex-none flex-l")),
             Token::TagClose,
+            Token::Text(String::from("\n                                ")),
             Token::StartTag(String::from("section")),
             Token::Identifier(String::from("class")),
             Token::AssignmentSign,
             Token::Literal(String::from("w-100 pv2 pv0-l mt4")),
             Token::TagClose,
+            Token::Text(String::from("\n                                    ")),
             Token::StartTag(String::from("h3")),
             Token::Identifier(String::from("class")),
             Token::AssignmentSign,
@@ -318,30 +332,40 @@ mod tests {
             Token::Text(String::from("Performance")),
             Token::EndTag(String::from("h3")),
             Token::TagClose,
+            Token::Text(String::from("\n                                    ")),
             Token::StartTag(String::from("p")),
             Token::Identifier(String::from("class")),
             Token::AssignmentSign,
             Token::Literal(String::from("f3 lh-copy")),
             Token::TagClose,
             Token::Text(String::from(
-                r#"
-                                    Rust is blazingly fast and memory-efficient: with no runtime or
-                                    garbage collector, it can power performance-critical services, run on
-                                    embedded devices, and easily integrate with other languages.
-                                    "#,
+                "\n                                    Rust is blazingly fast and memory-efficient: with no runtime or",
             )),
+            Token::Text(String::from(
+                "\n                                    garbage collector, it can power performance-critical services, run on",
+            )),
+            Token::Text(String::from(
+                "\n                                    embedded devices, and easily integrate with other languages.",
+            )),
+            Token::Text(String::from("\n                                    ")),
             Token::EndTag(String::from("p")),
             Token::TagClose,
+            Token::Text(String::from("\n                                ")),
             Token::EndTag(String::from("section")),
             Token::TagClose,
+            Token::Text(String::from("\n                            ")),
             Token::EndTag(String::from("div")),
             Token::TagClose,
+            Token::Text(String::from("\n                        ")),
             Token::EndTag(String::from("div")),
             Token::TagClose,
+            Token::Text(String::from("\n                    ")),
             Token::EndTag(String::from("section")),
             Token::TagClose,
+            Token::Text(String::from("\n                ")),
             Token::EndTag(String::from("main")),
             Token::TagClose,
+            Token::Text(String::from("\n                ")),
             Token::StartTag(String::from("script")),
             Token::Identifier(String::from("src")),
             Token::AssignmentSign,
@@ -349,15 +373,17 @@ mod tests {
                 "./Rust Programming Language_files/languages.js.download",
             )),
             Token::TagCloseAndEnd,
+            Token::Text(String::from("\n            ")),
             Token::EndTag(String::from("body")),
             Token::TagClose,
+            Token::Text(String::from("\n        ")),
             Token::EndTag(String::from("html")),
             Token::TagClose,
         ];
 
         // looping makes debugging much easier than just asserting the entire vectors are equal
-        for (e, r) in expected.into_iter().zip(result) {
-            assert_eq!(e, r);
+        for (r, e) in result.into_iter().zip(expected) {
+            assert_eq!(r, e);
         }
     }
 }

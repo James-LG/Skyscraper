@@ -16,11 +16,6 @@ impl<'a, T> VecPointerRef<'a, T> {
         self.get(self.index)
     }
 
-    pub fn back_add(&mut self, i: usize) -> Option<&T> {
-        self.index -= i;
-        self.current()
-    }
-
     pub fn next(&mut self) -> Option<&T> {
         self.next_add(1)
     }
