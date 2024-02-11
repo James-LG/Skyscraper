@@ -1,6 +1,6 @@
 [package]
 name = "skyscraper"
-version = "0.6.0"
+version = "0.6.1-beta.0"
 authors = ["James La Novara-Gsell <james.lanovara.gsell@gmail.com>"]
 edition = "2021"
 description = "XPath for HTML web scraping"

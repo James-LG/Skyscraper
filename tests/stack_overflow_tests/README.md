@@ -5,7 +5,7 @@ The structs in this library are large enough that the recursive parsing of XPath
 This has only ever been reproduced on Windows 10 and only when building a binary in debug mode.
 Notably, this cannot be reproduced using an actual test, thus this mini project was created.
 
-This project is run automatically during a `cargo test` of the main project by way of `run_stack_overflow_tests.rs`.
+This project is tested by the main project by way of `tests/run_stack_overflow_tests.rs`.
 
 A typical failure of this tests appears as follows:
 

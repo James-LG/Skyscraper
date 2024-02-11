@@ -25,8 +25,8 @@ pub fn range_expr(input: &str) -> Res<&str, RangeExpr> {
         (
             next_input,
             RangeExpr {
-                expr: res.0,
-                to_expr: res.1.map(|res| res.1),
+                expr: Box::new(res.0),
+                to_expr: res.1.map(|res| Box::new(res.1)),
             },
         )
     })
@@ -34,8 +34,8 @@ pub fn range_expr(input: &str) -> Res<&str, RangeExpr> {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct RangeExpr {
-    pub expr: AdditiveExpr,
-    pub to_expr: Option<AdditiveExpr>,
+    pub expr: Box<AdditiveExpr>,
+    pub to_expr: Option<Box<AdditiveExpr>>,
 }
 
 impl Display for RangeExpr {
