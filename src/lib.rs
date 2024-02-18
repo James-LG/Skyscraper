@@ -41,7 +41,7 @@
 //!
 //! // Compare the text of the first and only node returned by the XPath expression
 //! let node = items[0].extract_as_node().extract_as_tree_node();
-//! let text = node.text(&xpath_item_tree);
+//! let text = node.text(&xpath_item_tree).unwrap();
 //!
 //! assert_eq!(text, "Good info");
 //!
@@ -74,7 +74,7 @@
 //!
 //!     let items = result;
 //!     let node = items[0].extract_as_node().extract_as_tree_node();
-//!     Ok(node.text(&xpath_item_tree))
+//!     Ok(node.text(&xpath_item_tree).unwrap())
 //! }
 //!
 //! fn main() -> Result<(), Box<dyn Error>> {

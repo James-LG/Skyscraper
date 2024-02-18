@@ -1,3 +1,4 @@
+use skyscraper::html::trim_internal_whitespace;
 use skyscraper::xpath::grammar::XpathItemTreeNode;
 use skyscraper::{html, xpath};
 
@@ -135,8 +136,9 @@ fn xpath_github_get_text_sample() {
         .extract_into_tree_node();
 
     let text = element.all_text(&xpath_item_tree).trim().to_string();
+    let trimmed_text = trim_internal_whitespace(&text);
 
-    assert_eq!(text, "James-LG / Skyscraper Public");
+    assert_eq!(trimmed_text, "James-LG / Skyscraper Public");
 }
 
 #[test]

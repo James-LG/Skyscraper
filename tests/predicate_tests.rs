@@ -1,4 +1,7 @@
-use skyscraper::{html, xpath};
+use skyscraper::{
+    html::{self, trim_internal_whitespace},
+    xpath,
+};
 
 #[test]
 fn class_equals_predicate_should_select_nodes_with_that_match() {
@@ -35,7 +38,10 @@ fn class_equals_predicate_should_select_nodes_with_that_match() {
         let element = tree_node.data.extract_as_element_node();
         assert_eq!(element.name, "div");
 
-        assert_eq!(tree_node.text(&xpath_item_tree).trim(), "good");
+        assert_eq!(
+            trim_internal_whitespace(&tree_node.text(&xpath_item_tree).unwrap()),
+            "good"
+        );
     }
 }
 
@@ -74,7 +80,10 @@ fn predicate_on_double_leading_slash_should_select_nodes_with_that_match() {
         let element = tree_node.data.extract_as_element_node();
         assert_eq!(element.name, "div");
 
-        assert_eq!(tree_node.text(&xpath_item_tree).trim(), "good");
+        assert_eq!(
+            trim_internal_whitespace(&tree_node.text(&xpath_item_tree).unwrap()),
+            "good"
+        );
     }
 }
 
@@ -117,7 +126,10 @@ fn index_should_select_indexed_child_for_all_selected_parents() {
         let element = tree_node.data.extract_as_element_node();
         assert_eq!(element.name, "p");
 
-        assert_eq!(tree_node.text(&xpath_item_tree).trim(), "2");
+        assert_eq!(
+            trim_internal_whitespace(&tree_node.text(&xpath_item_tree).unwrap()),
+            "2"
+        );
     }
 
     // assert node
@@ -131,7 +143,10 @@ fn index_should_select_indexed_child_for_all_selected_parents() {
         let element = tree_node.data.extract_as_element_node();
         assert_eq!(element.name, "p");
 
-        assert_eq!(tree_node.text(&xpath_item_tree).trim(), "5");
+        assert_eq!(
+            trim_internal_whitespace(&tree_node.text(&xpath_item_tree).unwrap()),
+            "5"
+        );
     }
 }
 
@@ -174,6 +189,9 @@ fn index_out_of_bounds_should_select_nothing_for_parent() {
         let element = tree_node.data.extract_as_element_node();
         assert_eq!(element.name, "p");
 
-        assert_eq!(tree_node.text(&xpath_item_tree).trim(), "2");
+        assert_eq!(
+            trim_internal_whitespace(&tree_node.text(&xpath_item_tree).unwrap()),
+            "2"
+        );
     }
 }

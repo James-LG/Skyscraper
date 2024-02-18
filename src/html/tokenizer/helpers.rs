@@ -275,10 +275,10 @@ pub fn is_text(
                         pointer.index = pointer_index;
                         buffer.push('<');
                     }
-                    Some('\n') => {
-                        // Text is allowed to start with a new line, but not allowed to contain one mid-sequence.
-                        break;
-                    }
+                    // Some('\n') => {
+                    //     // Text is allowed to start with a new line, but not allowed to contain one mid-sequence.
+                    //     break;
+                    // }
                     Some(c) => {
                         buffer.push(*c);
                     }
@@ -683,7 +683,7 @@ mod tests {
     }
 
     #[test]
-    fn is_text_should_terminate_on_newline() {
+    fn is_text_should_not_terminate_on_newline() {
         // arrange
         let chars: Vec<char> = "foo\nbar".chars().collect();
         let mut pointer = VecPointerRef::new(&chars);
@@ -692,8 +692,8 @@ mod tests {
         let result = is_text(&mut pointer, false, true).unwrap();
 
         // assert
-        assert_eq!(result, Token::Text(String::from("foo")));
-        assert_eq!(pointer.index, 3);
+        assert_eq!(result, Token::Text(String::from("foo\nbar")));
+        assert_eq!(pointer.index, 7);
     }
 
     #[test]
@@ -708,5 +708,19 @@ mod tests {
         // assert
         assert_eq!(result, Token::Text(String::from("\n\t\t")));
         assert_eq!(pointer.index, 3);
+    }
+
+    #[test]
+    fn is_text_should_capture_multiple_lines_of_whitespace() {
+        // arrange
+        let chars: Vec<char> = "\n\t\n\t".chars().collect();
+        let mut pointer = VecPointerRef::new(&chars);
+
+        // act
+        let result = is_text(&mut pointer, false, true).unwrap();
+
+        // assert
+        assert_eq!(result, Token::Text(String::from("\n\t\n\t")));
+        assert_eq!(pointer.index, 4);
     }
 }

@@ -140,10 +140,10 @@ fn func_data<'tree>(
             XpathItem::Node(node) => match node {
                 Node::TreeNode(tree_node) => match tree_node.data {
                     XpathItemTreeNodeData::DocumentNode(_) => {
-                        AnyAtomicType::String(tree_node.text(item_tree))
+                        AnyAtomicType::String(tree_node.all_text(item_tree))
                     }
                     XpathItemTreeNodeData::ElementNode(_) => {
-                        AnyAtomicType::String(tree_node.text(item_tree))
+                        AnyAtomicType::String(tree_node.all_text(item_tree))
                     }
                     XpathItemTreeNodeData::PINode(_) => todo!("func_data PINode"),
                     XpathItemTreeNodeData::CommentNode(_) => todo!("func_data CommentNode"),
