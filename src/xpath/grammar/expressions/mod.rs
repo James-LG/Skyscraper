@@ -125,7 +125,9 @@ impl Xpath {
             XpathItem::Node(Node::TreeNode(item_tree.root())),
             true,
         );
-        self.eval(&context)
+        let mut item_set = self.eval(&context)?;
+        item_set.sort();
+        Ok(item_set)
     }
 
     /// Apply the XPath expression to the given item.
@@ -143,7 +145,7 @@ impl Xpath {
     /// # Examples
     ///
     /// ```rust
-    /// use skyscraper::html;
+    /// use skyscraper::html::{self, trim_internal_whitespace};
     /// use skyscraper::xpath::{self, XpathItemTree, grammar::{XpathItemTreeNodeData, data_model::{Node, XpathItem}}};
     /// use std::error::Error;
     ///
@@ -178,7 +180,7 @@ impl Xpath {
     ///         .as_element_node()?;
     ///
     ///     assert_eq!(element.name, "span");
-    ///     assert_eq!(tree_node.text(&xpath_item_tree), "world");
+    ///     assert_eq!(trim_internal_whitespace(&tree_node.text(&xpath_item_tree).unwrap()), "world");
     ///     
     ///     Ok(())
     /// }

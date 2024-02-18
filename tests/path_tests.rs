@@ -1,4 +1,7 @@
-use skyscraper::{html, xpath};
+use skyscraper::{
+    html::{self, trim_internal_whitespace},
+    xpath,
+};
 
 #[test]
 fn leading_slash_should_select_html_node() {
@@ -74,7 +77,7 @@ fn leading_double_slash_should_select_all() {
         let element = tree_node.data.extract_as_element_node();
         assert_eq!(element.name, "p");
 
-        assert_eq!(tree_node.text(&xpath_item_tree), "1");
+        assert_eq!(tree_node.text(&xpath_item_tree), Some("1".to_string()));
     }
 
     // assert node
@@ -88,7 +91,7 @@ fn leading_double_slash_should_select_all() {
         let element = tree_node.data.extract_as_element_node();
         assert_eq!(element.name, "p");
 
-        assert_eq!(tree_node.text(&xpath_item_tree), "2");
+        assert_eq!(tree_node.text(&xpath_item_tree), Some("2".to_string()));
     }
 
     // assert node
@@ -102,7 +105,7 @@ fn leading_double_slash_should_select_all() {
         let element = tree_node.data.extract_as_element_node();
         assert_eq!(element.name, "p");
 
-        assert_eq!(tree_node.text(&xpath_item_tree), "3");
+        assert_eq!(tree_node.text(&xpath_item_tree), Some("3".to_string()));
     }
 
     // assert node
@@ -116,7 +119,7 @@ fn leading_double_slash_should_select_all() {
         let element = tree_node.data.extract_as_element_node();
         assert_eq!(element.name, "p");
 
-        assert_eq!(tree_node.text(&xpath_item_tree), "4");
+        assert_eq!(tree_node.text(&xpath_item_tree), Some("4".to_string()));
     }
 
     // assert node
@@ -130,7 +133,7 @@ fn leading_double_slash_should_select_all() {
         let element = tree_node.data.extract_as_element_node();
         assert_eq!(element.name, "p");
 
-        assert_eq!(tree_node.text(&xpath_item_tree), "5");
+        assert_eq!(tree_node.text(&xpath_item_tree), Some("5".to_string()));
     }
 
     // assert node
@@ -144,7 +147,7 @@ fn leading_double_slash_should_select_all() {
         let element = tree_node.data.extract_as_element_node();
         assert_eq!(element.name, "p");
 
-        assert_eq!(tree_node.text(&xpath_item_tree), "6");
+        assert_eq!(tree_node.text(&xpath_item_tree), Some("6".to_string()));
     }
 }
 
@@ -193,7 +196,7 @@ fn double_slash_should_select_all() {
         let element = tree_node.data.extract_as_element_node();
         assert_eq!(element.name, "p");
 
-        assert_eq!(tree_node.text(&xpath_item_tree), "4");
+        assert_eq!(tree_node.text(&xpath_item_tree), Some("4".to_string()));
     }
 
     // assert node
@@ -207,7 +210,7 @@ fn double_slash_should_select_all() {
         let element = tree_node.data.extract_as_element_node();
         assert_eq!(element.name, "p");
 
-        assert_eq!(tree_node.text(&xpath_item_tree), "5");
+        assert_eq!(tree_node.text(&xpath_item_tree), Some("5".to_string()));
     }
 
     // assert node
@@ -221,7 +224,7 @@ fn double_slash_should_select_all() {
         let element = tree_node.data.extract_as_element_node();
         assert_eq!(element.name, "p");
 
-        assert_eq!(tree_node.text(&xpath_item_tree), "6");
+        assert_eq!(tree_node.text(&xpath_item_tree), Some("6".to_string()));
     }
 }
 
@@ -262,7 +265,7 @@ fn document_order_preserved_in_results() {
 
         assert_eq!(element_node.name, "span");
 
-        assert_eq!(tree_node.text(&xpath_item_tree), "1");
+        assert_eq!(tree_node.text(&xpath_item_tree), Some("1".to_string()));
     }
 
     // assert node
@@ -277,7 +280,10 @@ fn document_order_preserved_in_results() {
 
         assert_eq!(element_node.name, "span");
 
-        assert_eq!(tree_node.text(&xpath_item_tree), "2");
+        assert_eq!(
+            trim_internal_whitespace(&tree_node.text(&xpath_item_tree).unwrap()),
+            "2"
+        );
     }
 
     // assert node
@@ -292,6 +298,9 @@ fn document_order_preserved_in_results() {
 
         assert_eq!(element_node.name, "span");
 
-        assert_eq!(tree_node.text(&xpath_item_tree), "3");
+        assert_eq!(
+            trim_internal_whitespace(&tree_node.text(&xpath_item_tree).unwrap()),
+            "3"
+        );
     }
 }

@@ -1,0 +1,231 @@
+use std::{
+    collections::HashMap,
+    io::Write,
+    path::PathBuf,
+    process::{Command, Stdio},
+};
+
+use serde::Deserialize;
+use skyscraper::{
+    html::{self, HtmlNode},
+    xpath::{self, xpath_item_set::XpathItemSet, XpathItemTree},
+};
+
+#[derive(Deserialize, Debug, PartialEq)]
+struct LxmlElement {
+    pub tag: String,
+    pub text: Option<String>,
+    pub attrib: HashMap<String, String>,
+    pub itertext: Vec<String>,
+}
+
+fn get_lxml_elements(xpath: &str, html_text: String) -> Vec<LxmlElement> {
+    let mut lxml_python_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    lxml_python_path.push("tests/lxml_tests/xpath.py");
+
+    let mut cmd = Command::new("python3")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .arg(
+            lxml_python_path
+                .clone()
+                .into_os_string()
+                .into_string()
+                .unwrap(),
+        )
+        .arg(xpath)
+        .spawn()
+        .expect("failed to spawn process");
+
+    let mut stdin = cmd.stdin.take().expect("Failed to open stdin");
+    std::thread::spawn(move || {
+        stdin
+            .write_all(html_text.as_bytes())
+            .expect("Failed to write to stdin");
+    });
+
+    let output = cmd
+        .wait_with_output()
+        .expect("failed to execute stack overflow tests");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        stdout,
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let lxml_elements: Vec<LxmlElement> = serde_json::from_str(&stdout).unwrap();
+    return lxml_elements;
+}
+
+fn skyscraper_to_lxml_elements(
+    xpath_tree: &XpathItemTree,
+    item_set: XpathItemSet,
+) -> Vec<LxmlElement> {
+    let mut lxml_elements = Vec::new();
+    for item in item_set.into_iter() {
+        let node = item.extract_into_node();
+        let tree_node = node.extract_into_tree_node();
+        let element = tree_node.data.extract_as_element_node();
+        let text = tree_node.text(&xpath_tree);
+        let itertext = tree_node.itertext(&xpath_tree).collect();
+
+        lxml_elements.push(LxmlElement {
+            tag: element.name.to_string(),
+            text,
+            attrib: element
+                .attributes
+                .iter()
+                .map(|x| (x.name.clone(), x.value.clone()))
+                .collect(),
+            itertext,
+        });
+    }
+    return lxml_elements;
+}
+
+fn compare_skyscraper_to_lxml(
+    lxml_elements: Vec<LxmlElement>,
+    converted_skyscraper_elems: Vec<LxmlElement>,
+) {
+    for (i, (lxml_elem, skyscraper_elem)) in lxml_elements
+        .iter()
+        .zip(converted_skyscraper_elems.iter())
+        .enumerate()
+    {
+        assert_eq!(
+            lxml_elem.tag, skyscraper_elem.tag,
+            "Tag mismatch at index {}",
+            i
+        );
+        assert_eq!(
+            lxml_elem.text, skyscraper_elem.text,
+            "Text mismatch at index {}",
+            i
+        );
+        assert_eq!(
+            lxml_elem.attrib, skyscraper_elem.attrib,
+            "Attribute mismatch at index {}",
+            i
+        );
+        assert_eq!(
+            lxml_elem.itertext, skyscraper_elem.itertext,
+            "Itertext mismatch at index {}",
+            i
+        );
+    }
+    assert_eq!(converted_skyscraper_elems.len(), lxml_elements.len());
+}
+
+static GITHUB_HTML: &'static str = include_str!("samples/James-LG_Skyscraper.html");
+
+/// This test is a sanity check of the lxml output.
+#[test]
+fn test_lxml_output() {
+    // arrange
+    let html_text = GITHUB_HTML.to_string();
+    let xpath = r#"//a[@rel='author']"#;
+
+    // act
+    let lxml_elements = get_lxml_elements(xpath, html_text);
+
+    // assert
+    assert_eq!(lxml_elements.len(), 1);
+
+    let mut lxml_elements = lxml_elements.into_iter();
+    let lxml_element = lxml_elements.next().unwrap();
+    assert_eq!(lxml_element.tag, "a");
+    assert_eq!(lxml_element.text, Some("James-LG".to_string()));
+    assert_eq!(lxml_element.attrib["rel"], "author");
+}
+
+/// Selects a large block of text and checks that Skyscraper handles text the same as lxml.
+#[test]
+fn test_text_handling() {
+    // arrange
+    let html_text = GITHUB_HTML.to_string();
+    let xpath = r#"//div[@role='tabpanel']"#;
+
+    let html_document = html::parse(&html_text).unwrap();
+    let xpath_item_tree = XpathItemTree::from(&html_document);
+    let xpath_expr = xpath::parse(xpath).unwrap();
+
+    // act
+    let lxml_elements = get_lxml_elements(xpath, html_text);
+    let skyscraper_elements = xpath_expr.apply(&xpath_item_tree).unwrap();
+
+    // assert
+    let converted_skyscraper_elems =
+        skyscraper_to_lxml_elements(&xpath_item_tree, skyscraper_elements);
+
+    compare_skyscraper_to_lxml(lxml_elements, converted_skyscraper_elems);
+}
+
+#[test]
+fn test_text_handling2() {
+    // arrange
+    let html_text = GITHUB_HTML.to_string();
+    let xpath = r#"//h2"#;
+
+    let html_document = html::parse(&html_text).unwrap();
+    let xpath_item_tree = XpathItemTree::from(&html_document);
+    let xpath_expr = xpath::parse(xpath).unwrap();
+
+    // act
+    let lxml_elements = get_lxml_elements(xpath, html_text);
+    let skyscraper_elements = xpath_expr.apply(&xpath_item_tree).unwrap();
+
+    // assert
+    let converted_skyscraper_elems =
+        skyscraper_to_lxml_elements(&xpath_item_tree, skyscraper_elements);
+
+    compare_skyscraper_to_lxml(lxml_elements, converted_skyscraper_elems);
+}
+
+#[test]
+fn test_text_handling3() {
+    // arrange
+    let html_text = GITHUB_HTML.to_string();
+    let xpath = r#"//div"#;
+
+    let html_document = html::parse(&html_text).unwrap();
+    let xpath_item_tree = XpathItemTree::from(&html_document);
+    let xpath_expr = xpath::parse(xpath).unwrap();
+
+    // act
+    let lxml_elements = get_lxml_elements(xpath, html_text);
+    let skyscraper_elements = xpath_expr.apply(&xpath_item_tree).unwrap();
+
+    // assert
+    let converted_skyscraper_elems =
+        skyscraper_to_lxml_elements(&xpath_item_tree, skyscraper_elements);
+
+    compare_skyscraper_to_lxml(lxml_elements, converted_skyscraper_elems);
+}
+
+#[allow(dead_code)]
+fn debug_xpath_tree(xpath_item_tree: &XpathItemTree) {
+    let xpath_iter = xpath_item_tree.iter();
+    for node in xpath_iter {
+        if let Ok(element) = node.data.as_element_node() {
+            if element.name == "h2" {
+                println!("{:?}", node.itertext(&xpath_item_tree).collect::<Vec<_>>());
+            }
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn debug_html(html_document: html::HtmlDocument) {
+    let html_iter = html_document.iter();
+    for node in html_iter {
+        let html_node = html_document.get_html_node(&node).unwrap();
+        if let HtmlNode::Tag(tag) = html_node {
+            if tag.name == "h2" {
+                println!("{:?}", tag.get_all_text(&node, &html_document));
+            }
+        }
+    }
+}

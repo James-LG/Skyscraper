@@ -11,14 +11,17 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  build:          
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v3
+      - name: Run tests in devcontainer
+        uses: devcontainers/ci@v0.3
+        with:
+          push: never
+          runCmd: |
+            cargo test
   
   stack_overflow_tests:
     runs-on: windows-latest

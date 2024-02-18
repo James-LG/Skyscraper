@@ -12,7 +12,7 @@ mod types;
 mod whitespace_recipes;
 mod xml_names;
 
-use std::fmt::Display;
+use std::{fmt::Display, iter};
 
 use enum_extract_macro::EnumExtract;
 pub(crate) use expressions::xpath;
@@ -130,7 +130,15 @@ impl<'a> XpathItemTreeNode<'a> {
     ///
     /// A string of all text contained in this node and its descendants.
     pub fn all_text(&self, tree: &'a XpathItemTree) -> String {
-        self.text_internal(tree, true)
+        let strings: Vec<String> =
+            // Get all children.
+            Self::get_all_text_nodes(tree, self, true)
+            .into_iter()
+            .map(|x| x.content)
+            .collect();
+
+        let text = strings.join("");
+        text
     }
 
     /// Get text directly contained in this node.
@@ -144,52 +152,103 @@ impl<'a> XpathItemTreeNode<'a> {
     /// # Returns
     ///
     /// A string of all text contained in this node.
-    pub fn text(&self, tree: &'a XpathItemTree) -> String {
-        self.text_internal(tree, false)
-    }
-
-    fn text_internal(&self, tree: &'a XpathItemTree, recurse: bool) -> String {
-        fn get_all_text_nodes(
-            tree: &XpathItemTree,
-            node: &XpathItemTreeNode,
-            recurse: bool,
-        ) -> Vec<TextNode> {
-            node
-                // Get all children of the given node.
-                .children(tree)
-                // Combine all the direct and indirect children into a Vec.
-                .fold(Vec::new(), |mut v, child| {
-                    // If this child is a text node, push it to the Vec.
-                    if let XpathItemTreeNodeData::TextNode(text) = child.data {
-                        v.push(text.clone());
-                    }
-                    // Otherwise, if this is a recursive search, get all the text nodes descending from this child.
-                    else if recurse {
-                        v.extend(get_all_text_nodes(tree, &child, recurse));
-                    }
-                    v
-                })
-        }
-
+    pub fn text(&self, tree: &XpathItemTree) -> Option<String> {
         let strings: Vec<String> =
             // Get all children.
-            get_all_text_nodes(tree, self, recurse)
+            Self::get_all_text_nodes(tree, self, false)
             .into_iter()
-            // Filter out all whitespace-only text nodes
-            .filter_map(|x| {
-                if x.only_whitespace {
-                    None
-                } else {
-                    Some(x.content)
-                }
-            })
+            .map(|x| x.content)
             .collect();
 
-        // Merge all text into a single string.
-        // Space delimited.
-        let text = strings.join(" ");
+        strings.into_iter().next()
+    }
 
-        text
+    fn get_all_text_nodes(
+        tree: &XpathItemTree,
+        node: &XpathItemTreeNode,
+        recurse: bool,
+    ) -> Vec<TextNode> {
+        node
+            // Get all children of the given node.
+            .children(tree)
+            // Combine all the direct and indirect children into a Vec.
+            .fold(Vec::new(), |mut v, child| {
+                // If this child is a text node, push it to the Vec.
+                if let XpathItemTreeNodeData::TextNode(text) = child.data {
+                    v.push(text.clone());
+                }
+                // Otherwise, if this is a recursive search, get all the text nodes descending from this child.
+                else if recurse {
+                    v.extend(Self::get_all_text_nodes(tree, &child, recurse));
+                }
+                v
+            })
+    }
+
+    /// Get an iterator over all text contained in this node and its descendants.
+    ///
+    /// Includes whitespace text nodes.
+    /// Text nodes are split by opening and closing tags contained in the current node.
+    ///
+    /// ```rust
+    /// use skyscraper::{html, xpath};
+    ///
+    /// let html = r#"
+    ///     <div>
+    ///         <p>Good info</p>
+    ///         Ok info
+    ///         <p>Bad info</p>
+    ///    </div>"#;
+    ///
+    /// let document = html::parse(html).unwrap();
+    /// let xpath_item_tree = xpath::XpathItemTree::from(&document);
+    /// let xpath = xpath::parse("//div").unwrap();
+    ///
+    /// let nodes = xpath.apply(&xpath_item_tree).unwrap();
+    /// let mut nodes = nodes.into_iter();
+    /// let node = nodes.next().unwrap().extract_into_node().extract_into_tree_node();
+    ///
+    /// let text = node.itertext(&xpath_item_tree).collect::<Vec<String>>();
+    ///
+    /// assert_eq!(text, vec![
+    ///     "\n        ",                  // Whitespace between the opening div tag and the first p tag
+    ///     "Good info",                   // Text of the first p tag
+    ///     "\n        Ok info\n        ", // Text between the first and second p tags
+    ///     "Bad info",                    // Text of the second p tag
+    ///     "\n   "                        // Whitespace between the second p tag and the closing div tag
+    /// ]);
+    /// ```
+    pub fn itertext(self, tree: &'a XpathItemTree) -> TextIter<'a> {
+        TextIter::new(tree, self)
+    }
+}
+
+/// An iterator over all text contained in a node and its descendants.
+pub struct TextIter<'a> {
+    iter_chain: Box<dyn Iterator<Item = String> + 'a>,
+}
+
+impl<'a> TextIter<'a> {
+    pub(crate) fn new(tree: &'a XpathItemTree, node: XpathItemTreeNode<'a>) -> TextIter<'a> {
+        let mut iter_chain: Box<dyn Iterator<Item = String>> = Box::new(iter::empty());
+
+        for child in node.children(tree) {
+            if let XpathItemTreeNodeData::TextNode(text) = child.data {
+                iter_chain = Box::new(iter_chain.chain(iter::once(text.content.clone())));
+            } else {
+                iter_chain = Box::new(iter_chain.chain(TextIter::new(tree, child)));
+            }
+        }
+
+        TextIter { iter_chain }
+    }
+}
+
+impl<'a> Iterator for TextIter<'a> {
+    type Item = String;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter_chain.next()
     }
 }
 
@@ -218,6 +277,14 @@ impl XpathItemTree {
 
     fn root(&self) -> XpathItemTreeNode<'_> {
         self.get(self.root_node)
+    }
+
+    /// Get an iterator over all nodes in the tree.
+    pub fn iter(&self) -> impl Iterator<Item = XpathItemTreeNode> {
+        self.arena.iter().map(|node| {
+            let id = self.arena.get_node_id(node).unwrap();
+            self.get(id)
+        })
     }
 }
 

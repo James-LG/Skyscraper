@@ -409,7 +409,7 @@ fn get_mut_tree_node(key: Option<NodeId>, arena: &mut Arena<HtmlNode>) -> &mut N
 pub mod test_helpers {
     use std::collections::HashMap;
 
-    use crate::html::{DocumentNode, HtmlDocument, HtmlNode, HtmlText};
+    use crate::html::{DocumentNode, HtmlDocument, HtmlNode};
 
     pub fn assert_tag(
         document: &HtmlDocument,
@@ -445,7 +445,7 @@ pub mod test_helpers {
         let html_node = document.get_html_node(&key).unwrap();
 
         let node_text = html_node.extract_as_text();
-        assert_eq!(&HtmlText::from_str(text), node_text);
+        assert_eq!(text, node_text.value.trim());
     }
 }
 
@@ -910,23 +910,12 @@ mod tests {
 
                                     // <html> -> <body> -> <main> -> <section> -> <div> -> <div> -> <section> -> <p> -> text()
                                     {
-                                        let key = children.next().unwrap();
-                                        assert_text(
-                                            &result,
-                                            key,
-                                            "Rust is blazingly fast and memory-efficient: with no runtime or");
+                                        let mut t = String::from("Rust is blazingly fast and memory-efficient: with no runtime or");
+                                        t = format!("{}\n                                    garbage collector, it can power performance-critical services, run on", t);
+                                        t = format!("{}\n                                    embedded devices, and easily integrate with other languages.", t);
 
                                         let key = children.next().unwrap();
-                                        assert_text(
-                                            &result,
-                                            key,
-                                            "garbage collector, it can power performance-critical services, run on");
-
-                                        let key = children.next().unwrap();
-                                        assert_text(
-                                            &result,
-                                            key,
-                                            "embedded devices, and easily integrate with other languages.");
+                                        assert_text(&result, key, &t);
                                     }
                                 }
                             }

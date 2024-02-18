@@ -139,19 +139,68 @@ pub struct HtmlText {
 impl HtmlText {
     /// Creates a new [HtmlText] from the given string.
     pub fn from_str(value: &str) -> HtmlText {
-        // If the text has non-whitespace characters, trim it.
-        let trimmed_text = value.trim();
-        let value = if trimmed_text.is_empty() {
-            value
-        } else {
-            trimmed_text
-        };
-
+        let text = unescape_characters(value);
         HtmlText {
-            value: value.to_string(),
-            only_whitespace: trimmed_text.is_empty(),
+            value: text.to_string(),
+            only_whitespace: text.trim().is_empty(),
         }
     }
+}
+
+/// Unescapes commonly escaped characters in HTML text.
+///
+/// - `&amp;` becomes `&`
+/// - `&lt;` becomes `<`
+/// - `&gt;` becomes `>`
+/// - `&quot;` becomes `"`
+/// - `&#39;` becomes `'`
+pub fn unescape_characters(text: &str) -> String {
+    text.replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", r#"""#)
+        .replace("&#39;", "'")
+}
+
+/// Escapes commonly escaped characters in HTML text.
+///
+/// - `&` becomes `&amp;`
+/// - `<` becomes `&lt;`
+/// - `>` becomes `&gt;`
+/// - `"` becomes `&quot;`
+/// - `'` becomes `&#39;`
+pub fn escape_characters(text: &str) -> String {
+    text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace(r#"""#, "&quot;")
+        .replace("'", "&#39;")
+}
+
+/// Trims internal whitespace from the given text such that only a single space separates words.
+/// This is used to emulate the behaviour of Chromium browsers.
+///
+/// # Example
+/// ```rust
+/// use skyscraper::html::trim_internal_whitespace;
+/// let text = "  hello  \n world  ";
+/// let result = trim_internal_whitespace(text);
+/// assert_eq!("hello world", result);
+/// ```
+pub fn trim_internal_whitespace(text: &str) -> String {
+    let mut result = String::new();
+    let mut last_char = ' ';
+    for c in text.chars() {
+        if c.is_whitespace() {
+            if !last_char.is_whitespace() {
+                result.push(' ');
+            }
+        } else {
+            result.push(c);
+        }
+        last_char = c;
+    }
+    result.trim_end().to_string()
 }
 
 /// An HTML node can be either a tag or raw text.
@@ -249,6 +298,14 @@ impl HtmlDocument {
             display_node(0, self, &self.root_node, format_type).expect("failed to display node");
         format!("{}", text)
     }
+
+    /// Get an iterator over all nodes in this document.
+    pub fn iter(&self) -> impl Iterator<Item = DocumentNode> + '_ {
+        self.arena.iter().map(|node| {
+            let id = self.arena.get_node_id(node).unwrap();
+            DocumentNode::new(id)
+        })
+    }
 }
 
 impl fmt::Display for HtmlDocument {
@@ -325,14 +382,15 @@ fn display_node(
             }
         }
         HtmlNode::Text(text) => {
+            let output_text = escape_characters(text.value.as_str());
             match format_type {
                 DocumentFormatType::Standard => {
-                    write!(&mut str, "{}", text.value)?;
+                    write!(&mut str, "{}", output_text)?;
                 }
                 DocumentFormatType::IgnoreWhitespace => {
                     // If ignoring whitespace texts, only display if this text is not solely whitespace.
                     if !text.only_whitespace {
-                        write!(&mut str, "{}", text.value)?;
+                        write!(&mut str, "{}", output_text)?;
                     }
                 }
                 DocumentFormatType::Indented => {
@@ -341,7 +399,7 @@ fn display_node(
                         display_indent(indent, &mut str)?;
 
                         // Trim the text incase there's leading or trailing whitespace.
-                        writeln!(&mut str, "{}", text.value.trim())?;
+                        writeln!(&mut str, "{}", output_text.trim())?;
                     }
                 }
             }
@@ -807,6 +865,32 @@ mod tests {
         let html_output = document.to_formatted_string(DocumentFormatType::Indented);
 
         // assert
+        assert_eq!(html_output, text);
+    }
+
+    #[test]
+    fn html_document_display_should_escape_text() {
+        // arrange
+        let text = indoc!(
+            r#"
+            <html>
+                &lt;
+            </html>
+            "#,
+        );
+
+        let document = parse(&text).unwrap();
+
+        // act
+        let html_output = document.to_formatted_string(DocumentFormatType::Indented);
+
+        // assert
+        // assert that the text retrieved from the tag was unescaped
+        let root_text = document.root_node.get_text(&document).unwrap();
+        let trimmed = root_text.trim();
+        assert_eq!("<", trimmed);
+
+        // asser that the display output was escaped
         assert_eq!(html_output, text);
     }
 }

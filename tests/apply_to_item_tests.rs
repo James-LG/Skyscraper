@@ -99,7 +99,7 @@ fn apply_to_item_slash_should_select_children() {
         let element = tree_node.data.extract_as_element_node();
         assert_eq!(element.name, "span");
 
-        assert_eq!(tree_node.text(&xpath_item_tree), "1");
+        assert_eq!(tree_node.text(&xpath_item_tree), Some("1".to_string()));
     }
 
     // assert node
@@ -113,7 +113,7 @@ fn apply_to_item_slash_should_select_children() {
         let element = tree_node.data.extract_as_element_node();
         assert_eq!(element.name, "span");
 
-        assert_eq!(tree_node.text(&xpath_item_tree), "2");
+        assert_eq!(tree_node.text(&xpath_item_tree), Some("2".to_string()));
     }
 
     // assert node
@@ -127,7 +127,7 @@ fn apply_to_item_slash_should_select_children() {
         let element = tree_node.data.extract_as_element_node();
         assert_eq!(element.name, "span");
 
-        assert_eq!(tree_node.text(&xpath_item_tree), "3");
+        assert_eq!(tree_node.text(&xpath_item_tree), Some("3".to_string()));
     }
 }
 
@@ -182,7 +182,7 @@ fn apply_to_item_double_slash_should_select_self_or_descendents() {
         let element = tree_node.data.extract_as_element_node();
         assert_eq!(element.name, "span");
 
-        assert_eq!(tree_node.text(&xpath_item_tree), "1");
+        assert_eq!(tree_node.text(&xpath_item_tree), Some("1".to_string()));
     }
 
     // assert node
@@ -196,7 +196,7 @@ fn apply_to_item_double_slash_should_select_self_or_descendents() {
         let element = tree_node.data.extract_as_element_node();
         assert_eq!(element.name, "span");
 
-        assert_eq!(tree_node.text(&xpath_item_tree), "2");
+        assert_eq!(tree_node.text(&xpath_item_tree), Some("2".to_string()));
     }
 
     // assert node
@@ -210,6 +210,6 @@ fn apply_to_item_double_slash_should_select_self_or_descendents() {
         let element = tree_node.data.extract_as_element_node();
         assert_eq!(element.name, "span");
 
-        assert_eq!(tree_node.text(&xpath_item_tree), "3");
+        assert_eq!(tree_node.text(&xpath_item_tree), Some("3".to_string()));
     }
 }

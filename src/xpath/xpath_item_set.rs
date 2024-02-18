@@ -128,6 +128,10 @@ impl<'tree> XpathItemSet<'tree> {
             !self.index_set.is_empty()
         }
     }
+
+    pub(crate) fn sort(&mut self) {
+        self.index_set.sort();
+    }
 }
 
 impl<'tree> From<IndexSet<XpathItem<'tree>>> for XpathItemSet<'tree> {
