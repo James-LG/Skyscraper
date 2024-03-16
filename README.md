@@ -108,6 +108,7 @@ Below is a non-exhaustive list of all the features that are currently supported.
     1. Indexing: `//div[1]`
 1. Functions:
     1. `fn:root()`
+    1. `contains(haystack, needle)`
 1. Forward axes:
     1. Child: `child::*`
     1. Descendant: `descendant::*`

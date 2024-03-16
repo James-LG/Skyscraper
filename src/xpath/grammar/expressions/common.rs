@@ -2,7 +2,11 @@ use std::fmt::Display;
 
 use nom::{branch::alt, character::complete::char, combinator::opt, error::context, multi::many0};
 
-use crate::xpath::grammar::{expressions::expr_single, recipes::Res, whitespace_recipes::ws};
+use crate::xpath::{
+    grammar::{expressions::expr_single, recipes::Res, whitespace_recipes::ws},
+    xpath_item_set::XpathItemSet,
+    ExpressionApplyError, XpathExpressionContext,
+};
 
 use super::ExprSingle;
 
@@ -72,6 +76,18 @@ impl Display for Argument {
         match self {
             Argument::ExprSingle(x) => write!(f, "{}", x),
             Argument::ArgumentPlaceHolder => write!(f, "?"),
+        }
+    }
+}
+
+impl Argument {
+    pub(crate) fn eval<'tree>(
+        &self,
+        context: &XpathExpressionContext<'tree>,
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
+        match &self {
+            Argument::ExprSingle(expr_single) => expr_single.eval(context),
+            Argument::ArgumentPlaceHolder => todo!("Argument::ArgumentPlaceHolder eval"),
         }
     }
 }

@@ -22,7 +22,10 @@ use crate::{
     xpath_item_set,
 };
 
-use super::string_concat_expressions::StringConcatExpr;
+use super::{
+    primary_expressions::static_function_calls::func_data,
+    string_concat_expressions::StringConcatExpr,
+};
 
 pub fn comparison_expr(input: &str) -> Res<&str, ComparisonExpr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-ComparisonExpr
@@ -128,42 +131,6 @@ impl ComparisonExpr {
             AnyAtomicType::Boolean(bool_value),
         )])
     }
-}
-
-/// https://www.w3.org/TR/2017/REC-xpath-31-20170321/#dt-atomization
-fn func_data<'tree>(
-    set: &XpathItemSet<'tree>,
-    item_tree: &'tree XpathItemTree,
-) -> Vec<AnyAtomicType> {
-    fn atomize<'tree>(item: &XpathItem, item_tree: &'tree XpathItemTree) -> AnyAtomicType {
-        match item {
-            XpathItem::Node(node) => match node {
-                Node::TreeNode(tree_node) => match tree_node.data {
-                    XpathItemTreeNodeData::DocumentNode(_) => {
-                        AnyAtomicType::String(tree_node.all_text(item_tree))
-                    }
-                    XpathItemTreeNodeData::ElementNode(_) => {
-                        AnyAtomicType::String(tree_node.all_text(item_tree))
-                    }
-                    XpathItemTreeNodeData::PINode(_) => todo!("func_data PINode"),
-                    XpathItemTreeNodeData::CommentNode(_) => todo!("func_data CommentNode"),
-                    XpathItemTreeNodeData::TextNode(text) => {
-                        AnyAtomicType::String(text.content.clone())
-                    }
-                },
-                Node::NonTreeNode(non_tree_node) => match non_tree_node {
-                    NonTreeXpathNode::AttributeNode(attribute) => {
-                        AnyAtomicType::String(attribute.value.clone())
-                    }
-                    NonTreeXpathNode::NamespaceNode(_) => todo!("func_data NamespaceNode"),
-                },
-            },
-            XpathItem::Function(_) => todo!("func_data Function"),
-            XpathItem::AnyAtomicType(atomic) => atomic.clone(),
-        }
-    }
-
-    set.iter().map(|item| atomize(item, item_tree)).collect()
 }
 
 #[derive(PartialEq, Debug, Clone)]

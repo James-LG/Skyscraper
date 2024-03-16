@@ -7,15 +7,16 @@ use nom::error::context;
 use crate::{
     xpath::{
         grammar::{
-            data_model::{Node, XpathItem},
+            data_model::{AnyAtomicType, Node, XpathItem},
             expressions::common::{argument_list, ArgumentList},
             recipes::Res,
             types::{eq_name, EQName},
             whitespace_recipes::ws,
             xml_names::QName,
+            NonTreeXpathNode, XpathItemTreeNodeData,
         },
         xpath_item_set::XpathItemSet,
-        ExpressionApplyError, XpathExpressionContext,
+        ExpressionApplyError, XpathExpressionContext, XpathItemTree,
     },
     xpath_item_set,
 };
@@ -67,10 +68,133 @@ impl FunctionCall {
                         msg: format!("Unknown function {}", self.name.to_string()),
                     })
                 }
-                QName::UnprefixedName(_) => todo!("FunctionCall::eval UnprefixedName"),
+                QName::UnprefixedName(unprefixed_name) => match unprefixed_name.as_str() {
+                    "contains" => func_contains(&self.argument_list, context),
+                    _ => Err(ExpressionApplyError {
+                        msg: format!("Unknown function {}", self.name.to_string()),
+                    }),
+                },
             },
             EQName::UriQualifiedName(_) => todo!("FunctionCall::eval UriQualifiedName"),
         }
+    }
+}
+
+/// https://developer.mozilla.org/en-US/docs/Web/XPath/Functions/contains
+fn func_contains<'tree>(
+    argument_list: &ArgumentList,
+    context: &XpathExpressionContext<'tree>,
+) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
+    let arguments = &argument_list.0;
+    if arguments.len() != 2 {
+        return Err(ExpressionApplyError {
+            msg: format!(
+                "contains: function expects 2 arguments, got {}",
+                arguments.len()
+            ),
+        });
+    }
+
+    let arg1_set = arguments[0].eval(context)?;
+    if arg1_set.len() > 1 {
+        return Err(ExpressionApplyError {
+            msg: format!(
+                "contains: unexpected item set length {} for first argument",
+                arg1_set.len()
+            ),
+        });
+    }
+
+    let haystack = if arg1_set.len() == 0 {
+        String::from("")
+    } else {
+        func_string(&arg1_set[0], &context.item_tree)
+    };
+
+    let arg2_set = arguments[1].eval(context)?;
+    if arg2_set.len() > 1 {
+        return Err(ExpressionApplyError {
+            msg: format!(
+                "contains: unexpected item set length {} for second argument",
+                arg2_set.len()
+            ),
+        });
+    }
+
+    let needle = if arg2_set.len() == 0 {
+        String::from("")
+    } else {
+        func_string(&arg2_set[0], &context.item_tree)
+    };
+
+    Ok(xpath_item_set![XpathItem::AnyAtomicType(
+        AnyAtomicType::Boolean(haystack.contains(&needle))
+    )])
+}
+
+/// https://www.w3.org/TR/2017/REC-xpath-31-20170321/#dt-atomization
+pub(crate) fn func_data<'tree>(
+    set: &XpathItemSet<'tree>,
+    item_tree: &'tree XpathItemTree,
+) -> Vec<AnyAtomicType> {
+    fn atomize<'tree>(item: &XpathItem, item_tree: &'tree XpathItemTree) -> AnyAtomicType {
+        match item {
+            XpathItem::Node(node) => match node {
+                Node::TreeNode(tree_node) => match tree_node.data {
+                    XpathItemTreeNodeData::DocumentNode(_) => {
+                        AnyAtomicType::String(tree_node.all_text(item_tree))
+                    }
+                    XpathItemTreeNodeData::ElementNode(_) => {
+                        AnyAtomicType::String(tree_node.all_text(item_tree))
+                    }
+                    XpathItemTreeNodeData::PINode(_) => todo!("func_data PINode"),
+                    XpathItemTreeNodeData::CommentNode(_) => todo!("func_data CommentNode"),
+                    XpathItemTreeNodeData::TextNode(text) => {
+                        AnyAtomicType::String(text.content.clone())
+                    }
+                },
+                Node::NonTreeNode(non_tree_node) => match non_tree_node {
+                    NonTreeXpathNode::AttributeNode(attribute) => {
+                        AnyAtomicType::String(attribute.value.clone())
+                    }
+                    NonTreeXpathNode::NamespaceNode(_) => todo!("func_data NamespaceNode"),
+                },
+            },
+            XpathItem::Function(_) => todo!("func_data Function"),
+            XpathItem::AnyAtomicType(atomic) => atomic.clone(),
+        }
+    }
+
+    set.iter().map(|item| atomize(item, item_tree)).collect()
+}
+
+/// https://www.w3.org/TR/xpath-functions-31/#func-string
+pub(crate) fn func_string<'tree>(
+    item: &XpathItem<'tree>,
+    item_tree: &'tree XpathItemTree,
+) -> String {
+    match item {
+        XpathItem::Node(node) => match node {
+            Node::TreeNode(tree_node) => match tree_node.data {
+                XpathItemTreeNodeData::DocumentNode(_) => tree_node.all_text(item_tree),
+                XpathItemTreeNodeData::ElementNode(_) => tree_node.all_text(item_tree),
+                XpathItemTreeNodeData::PINode(_) => todo!("func_string PINode"),
+                XpathItemTreeNodeData::CommentNode(_) => todo!("func_string CommentNode"),
+                XpathItemTreeNodeData::TextNode(text) => text.content.clone(),
+            },
+            Node::NonTreeNode(non_tree_node) => match non_tree_node {
+                NonTreeXpathNode::AttributeNode(attribute) => attribute.value.clone(),
+                NonTreeXpathNode::NamespaceNode(_) => todo!("func_string NamespaceNode"),
+            },
+        },
+        XpathItem::AnyAtomicType(atomic) => match atomic {
+            AnyAtomicType::Boolean(b) => b.to_string(),
+            AnyAtomicType::Integer(n) => n.to_string(),
+            AnyAtomicType::Float(n) => n.to_string(),
+            AnyAtomicType::Double(n) => n.to_string(),
+            AnyAtomicType::String(s) => s.clone(),
+        },
+        XpathItem::Function(_) => todo!("func_string Function"),
     }
 }
 

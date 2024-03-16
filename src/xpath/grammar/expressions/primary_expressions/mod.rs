@@ -43,7 +43,7 @@ mod inline_function_expressions;
 mod literals;
 mod named_function_references;
 pub mod parenthesized_expressions;
-mod static_function_calls;
+pub mod static_function_calls;
 pub mod variable_references;
 
 pub fn primary_expr(input: &str) -> Res<&str, PrimaryExpr> {
