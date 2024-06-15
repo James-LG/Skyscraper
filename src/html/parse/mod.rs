@@ -380,16 +380,16 @@ fn is_doctype(
             if iden != "html" {
                 return Err(ParseError::MissingHtmlAfterDoctype);
             }
-            let token = tokens.next().ok_or(ParseError::UnexpectedEndOfTokens)?;
 
-            if !matches!(token, Token::TagClose) {
-                return Err(ParseError::MissingTagCloseAfterDoctype);
+            for token in tokens {
+                if let Token::TagClose = token {
+                    return Ok(true);
+                }
             }
+            return Err(ParseError::MissingTagCloseAfterDoctype);
         } else {
             return Err(ParseError::MissingHtmlAfterDoctype);
         }
-
-        return Ok(true);
     }
 
     Ok(false)
