@@ -3,6 +3,7 @@
 use std::fmt::Display;
 
 use enum_extract_macro::EnumExtract;
+use indextree::NodeId;
 use ordered_float::OrderedFloat;
 
 use super::{NonTreeXpathNode, XpathItemTreeNode};
@@ -123,6 +124,12 @@ impl Display for XpathDocumentNode {
 ///  https://www.w3.org/TR/xpath-datamodel-31/#ElementNode
 #[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
 pub struct ElementNode {
+    /// The ID of the element.
+    ///
+    /// Optional to enable construction of the tree before assigning IDs.
+    /// Can be considered always Some in a valid tree.
+    id: Option<NodeId>,
+
     /// The name of the element.
     pub name: String,
 
@@ -141,6 +148,25 @@ impl Display for ElementNode {
 }
 
 impl ElementNode {
+    /// Create a new element node.
+    pub(crate) fn new(name: String, attributes: Vec<AttributeNode>) -> Self {
+        Self {
+            id: None,
+            name,
+            attributes,
+        }
+    }
+
+    /// Set the ID of the element.
+    pub(crate) fn set_id(&mut self, id: NodeId) {
+        self.id = Some(id);
+    }
+
+    /// Get the ID of the element.
+    pub(crate) fn id(&self) -> NodeId {
+        self.id.unwrap()
+    }
+
     /// Get the value of an attribute.
     ///
     /// # Arguments
@@ -216,11 +242,38 @@ impl Display for CommentNode {
 /// https://www.w3.org/TR/xpath-datamodel-31/#TextNode
 #[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash, Clone)]
 pub struct TextNode {
+    /// The ID of the text node.
+    ///
+    /// Optional to enable construction of the tree before assigning IDs.
+    /// Can be considered always Some in a valid tree.
+    id: Option<NodeId>,
+
     /// The value of the text node.
     pub content: String,
 
     /// Whether the text node contains only whitespace.
     pub only_whitespace: bool,
+}
+
+impl TextNode {
+    /// Create a new text node.
+    pub(crate) fn new(content: String, only_whitespace: bool) -> Self {
+        Self {
+            id: None,
+            content,
+            only_whitespace,
+        }
+    }
+
+    /// Set the ID of the text node.
+    pub(crate) fn set_id(&mut self, id: NodeId) {
+        self.id = Some(id);
+    }
+
+    /// Get the ID of the text node.
+    pub(crate) fn id(&self) -> NodeId {
+        self.id.unwrap()
+    }
 }
 
 impl Display for TextNode {

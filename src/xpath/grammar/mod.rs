@@ -299,7 +299,7 @@ impl From<&HtmlDocument> for XpathItemTree {
                 .get_html_node(&current_html_node)
                 .expect("html document missing expected node");
 
-            let root_item = match html_node {
+            let root_item_id = match html_node {
                 HtmlNode::Tag(tag) => {
                     let attributes = tag
                         .attributes
@@ -309,18 +309,41 @@ impl From<&HtmlDocument> for XpathItemTree {
                             value: a.1.to_string(),
                         })
                         .collect();
-                    XpathItemTreeNodeData::ElementNode(ElementNode {
-                        name: tag.name.to_string(),
-                        attributes,
-                    })
-                }
-                HtmlNode::Text(text) => XpathItemTreeNodeData::TextNode(TextNode {
-                    content: text.value.to_string(),
-                    only_whitespace: text.only_whitespace,
-                }),
-            };
 
-            let root_item_id = item_arena.new_node(root_item);
+                    let node = XpathItemTreeNodeData::ElementNode(ElementNode::new(
+                        tag.name.to_string(),
+                        attributes,
+                    ));
+
+                    let item_id = item_arena.new_node(node);
+                    item_arena
+                        .get_mut(item_id)
+                        .unwrap()
+                        .get_mut()
+                        .as_element_node_mut()
+                        .unwrap()
+                        .set_id(item_id);
+
+                    item_id
+                }
+                HtmlNode::Text(text) => {
+                    let node = XpathItemTreeNodeData::TextNode(TextNode::new(
+                        text.value.to_string(),
+                        text.only_whitespace,
+                    ));
+
+                    let item_id = item_arena.new_node(node);
+                    item_arena
+                        .get_mut(item_id)
+                        .unwrap()
+                        .get_mut()
+                        .as_text_node_mut()
+                        .unwrap()
+                        .set_id(item_id);
+
+                    item_id
+                }
+            };
 
             for child in current_html_node.children(&html_document) {
                 let child_node = internal_from(&child, html_document, item_arena);
