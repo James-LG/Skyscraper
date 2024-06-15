@@ -10,14 +10,13 @@ use nom::{
 use crate::{
     xpath::{
         grammar::{
-            data_model::{AnyAtomicType, Node, XpathItem},
+            data_model::{AnyAtomicType, XpathItem},
             expressions::string_concat_expressions::string_concat_expr,
             recipes::Res,
             terminal_symbols::symbol_separator,
-            NonTreeXpathNode, XpathItemTreeNodeData,
         },
         xpath_item_set::XpathItemSet,
-        ExpressionApplyError, XpathExpressionContext, XpathItemTree,
+        ExpressionApplyError, XpathExpressionContext,
     },
     xpath_item_set,
 };
