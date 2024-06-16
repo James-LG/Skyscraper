@@ -23,28 +23,9 @@ use indextree::{Arena, NodeId};
 use crate::{
     html::{DocumentNode, HtmlDocument, HtmlNode},
     xpath::grammar::data_model::{
-        AttributeNode, CommentNode, ElementNode, NamespaceNode, PINode, TextNode, XpathDocumentNode,
+        AttributeNode, CommentNode, ElementNode, PINode, TextNode, XpathDocumentNode,
     },
 };
-
-/// Nodes that are not part of the [`XpathItemTree`].
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash, EnumExtract)]
-pub enum NonTreeXpathNode {
-    /// An attribute node.
-    AttributeNode(AttributeNode),
-
-    /// A namespace node.
-    NamespaceNode(NamespaceNode),
-}
-
-impl Display for NonTreeXpathNode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            NonTreeXpathNode::AttributeNode(node) => write!(f, "{}", node),
-            NonTreeXpathNode::NamespaceNode(node) => write!(f, "{}", node),
-        }
-    }
-}
 
 /// Nodes that are part of the [`XpathItemTree`].
 #[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash, EnumExtract)]
@@ -65,9 +46,14 @@ pub enum XpathItemTreeNodeData {
 
     /// A text node.
     TextNode(TextNode),
+
+    /// An attribute node.
+    AttributeNode(AttributeNode),
 }
 
 /// A node in the [`XpathItemTree`].
+///
+///  https://www.w3.org/TR/xpath-datamodel-31/#dt-node
 #[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash)]
 pub struct XpathItemTreeNode<'a> {
     id: NodeId,
@@ -84,6 +70,7 @@ impl Display for XpathItemTreeNode<'_> {
             XpathItemTreeNodeData::PINode(node) => write!(f, "{}", node),
             XpathItemTreeNodeData::CommentNode(node) => write!(f, "{}", node),
             XpathItemTreeNodeData::TextNode(node) => write!(f, "{}", node),
+            XpathItemTreeNodeData::AttributeNode(node) => write!(f, "{}", node),
         }
     }
 }

@@ -26,7 +26,7 @@ use self::{
 };
 
 use super::{
-    data_model::{Node, XpathItem},
+    data_model::XpathItem,
     recipes::Res,
     terminal_symbols::UriQualifiedName,
     xml_names::{nc_name, QName},
@@ -136,7 +136,7 @@ impl KindTest {
     pub(crate) fn filter<'tree>(
         &self,
         item_set: &XpathItemSet<'tree>,
-    ) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
+    ) -> Result<IndexSet<XpathItemTreeNode<'tree>>, ExpressionApplyError> {
         match self {
             KindTest::AnyKindTest => {
                 // AnyKindTest is `node()`.
@@ -158,10 +158,10 @@ impl KindTest {
                     if let XpathItem::Node(node) = item {
                         if matches!(
                             node,
-                            Node::TreeNode(XpathItemTreeNode {
+                            XpathItemTreeNode {
                                 data: XpathItemTreeNodeData::TextNode(_),
                                 ..
-                            })
+                            }
                         ) {
                             return Some(node.clone());
                         }
@@ -257,7 +257,7 @@ impl DocumentTest {
     pub(crate) fn filter<'tree>(
         &self,
         item_set: &XpathItemSet<'tree>,
-    ) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
+    ) -> Result<IndexSet<XpathItemTreeNode<'tree>>, ExpressionApplyError> {
         match &self.value {
             // document-node() matches any document node.
             None => {
@@ -267,10 +267,10 @@ impl DocumentTest {
                     if let XpathItem::Node(node) = item {
                         if matches!(
                             node,
-                            Node::TreeNode(XpathItemTreeNode {
+                            XpathItemTreeNode {
                                 data: XpathItemTreeNodeData::DocumentNode(_),
                                 ..
-                            })
+                            }
                         ) {
                             filtered_nodes.insert(node.clone());
                         }

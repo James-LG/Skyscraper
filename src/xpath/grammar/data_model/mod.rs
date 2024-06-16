@@ -1,12 +1,12 @@
 //! https://www.w3.org/TR/xpath-datamodel-31/#intro
 
-use std::fmt::Display;
+use std::{fmt::Display, iter};
 
 use enum_extract_macro::EnumExtract;
 use indextree::NodeId;
 use ordered_float::OrderedFloat;
 
-use super::{NonTreeXpathNode, XpathItemTreeNode};
+use super::{XpathItemTree, XpathItemTreeNode, XpathItemTreeNodeData};
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#dt-item
 #[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash, EnumExtract)]
@@ -14,7 +14,7 @@ pub enum XpathItem<'tree> {
     /// A node in the [`XpathItemTree`](crate::xpath::XpathItemTree).
     ///
     ///  https://www.w3.org/TR/xpath-datamodel-31/#dt-node
-    Node(Node<'tree>),
+    Node(XpathItemTreeNode<'tree>),
 
     /// A function item.
     ///
@@ -37,8 +37,8 @@ impl Display for XpathItem<'_> {
     }
 }
 
-impl<'tree> From<Node<'tree>> for XpathItem<'tree> {
-    fn from(node: Node<'tree>) -> Self {
+impl<'tree> From<XpathItemTreeNode<'tree>> for XpathItem<'tree> {
+    fn from(node: XpathItemTreeNode<'tree>) -> Self {
         XpathItem::Node(node)
     }
 }
@@ -88,27 +88,6 @@ impl Display for Function {
     }
 }
 
-/// A node in the [`XpathItemTree`](crate::xpath::XpathItemTree).
-///
-///  https://www.w3.org/TR/xpath-datamodel-31/#dt-node
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash, EnumExtract)]
-pub enum Node<'tree> {
-    /// A node in the [`XpathItemTree`](crate::xpath::XpathItemTree).
-    TreeNode(XpathItemTreeNode<'tree>),
-
-    /// A node that is not part of an [`XpathItemTree`](crate::xpath::XpathItemTree).
-    NonTreeNode(NonTreeXpathNode),
-}
-
-impl Display for Node<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Node::TreeNode(node) => write!(f, "{}", node),
-            Node::NonTreeNode(node) => write!(f, "{}", node),
-        }
-    }
-}
-
 /// https://www.w3.org/TR/xpath-datamodel-31/#DocumentNode
 #[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
 pub struct XpathDocumentNode {}
@@ -122,7 +101,7 @@ impl Display for XpathDocumentNode {
 /// An element node such as an HTML tag.
 ///
 ///  https://www.w3.org/TR/xpath-datamodel-31/#ElementNode
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash, Clone)]
 pub struct ElementNode {
     /// The ID of the element.
     ///
@@ -182,6 +161,150 @@ impl ElementNode {
             .find(|x| x.name == name)
             .map(|x| &*x.value)
     }
+
+    /// Get all direct child nodes of the element.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree containing the element.
+    ///
+    /// # Returns
+    ///
+    /// An iterator over the child nodes.
+    pub fn children<'tree>(
+        &self,
+        tree: &'tree XpathItemTree,
+    ) -> impl Iterator<Item = &'tree XpathItemTreeNodeData> {
+        tree.get(self.id()).children(tree).map(|x| x.data)
+    }
+
+    /// Get the parent of the element.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree containing the element.
+    ///
+    /// # Returns
+    ///
+    /// The parent of the element if it exists, or `None` if it does not.
+    pub fn parent<'tree>(&self, tree: &'tree XpathItemTree) -> Option<XpathItemTreeNode<'tree>> {
+        tree.get(self.id()).parent(tree)
+    }
+
+    /// Get an iterator over all text contained in this element and its descendants.
+    ///
+    /// Includes whitespace text nodes.
+    /// Text nodes are split by opening and closing tags contained in the current element.
+    pub fn itertext<'tree>(self, tree: &'tree XpathItemTree) -> ElementTextIter<'tree> {
+        ElementTextIter::new(tree, self)
+    }
+
+    /// Get all text contained in this element and its descendants.
+    ///
+    /// Use [`ElementNode::text`] to get _only_ text contained directly in this node.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree that this element is a part of.
+    ///
+    /// # Returns
+    ///
+    /// A string of all text contained in this element and its descendants.
+    pub fn all_text<'tree>(&self, tree: &'tree XpathItemTree) -> String {
+        let strings: Vec<String> =
+            // Get all children.
+            Self::get_all_text_nodes(tree, self, true)
+            .into_iter()
+            .map(|x| x.content)
+            .collect();
+
+        let text = strings.join("");
+        text
+    }
+
+    /// Get text directly contained in this element.
+    ///
+    /// Use [`ElementNode::all_text`] to get all text _including_ text in descendant nodes.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree that this element is a part of.
+    ///
+    /// # Returns
+    ///
+    /// A string of all text contained in this element.
+    pub fn text(&self, tree: &XpathItemTree) -> Option<String> {
+        let strings: Vec<String> =
+            // Get all children.
+            Self::get_all_text_nodes(tree, self, false)
+            .into_iter()
+            .map(|x| x.content)
+            .collect();
+
+        strings.into_iter().next()
+    }
+
+    fn get_all_text_nodes(
+        tree: &XpathItemTree,
+        node: &ElementNode,
+        recurse: bool,
+    ) -> Vec<TextNode> {
+        node
+            // Get all children of the given node.
+            .children(tree)
+            // Combine all the direct and indirect children into a Vec.
+            .fold(Vec::new(), |mut v, child| {
+                match child {
+                    XpathItemTreeNodeData::ElementNode(child_element) => {
+                        if recurse {
+                            // If this child is an element node, get all the text nodes in it.
+                            v.extend(Self::get_all_text_nodes(tree, &child_element, recurse));
+                        }
+                    }
+                    XpathItemTreeNodeData::TextNode(text) => {
+                        // If this child is a text node, push it to the Vec.
+                        v.push(text.clone());
+                    }
+                    _ => {}
+                }
+                v
+            })
+    }
+}
+
+/// An iterator over all text contained in a element and its descendants.
+pub struct ElementTextIter<'a> {
+    iter_chain: Box<dyn Iterator<Item = String> + 'a>,
+}
+
+impl<'a> ElementTextIter<'a> {
+    pub(crate) fn new(tree: &'a XpathItemTree, node: ElementNode) -> ElementTextIter<'a> {
+        let mut iter_chain: Box<dyn Iterator<Item = String>> = Box::new(iter::empty());
+
+        for child in node.children(tree) {
+            match child {
+                XpathItemTreeNodeData::TextNode(text) => {
+                    iter_chain = Box::new(iter_chain.chain(iter::once(text.content.clone())));
+                }
+                XpathItemTreeNodeData::ElementNode(child_element) => {
+                    iter_chain = Box::new(
+                        iter_chain.chain(ElementTextIter::new(tree, child_element.clone())),
+                    );
+                }
+                _ => {}
+            }
+        }
+
+        ElementTextIter { iter_chain }
+    }
+}
+
+impl<'a> Iterator for ElementTextIter<'a> {
+    type Item = String;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter_chain.next()
+    }
 }
 
 /// An attribute node.
@@ -199,18 +322,6 @@ pub struct AttributeNode {
 impl Display for AttributeNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}=\"{}\"", self.name, self.value)
-    }
-}
-
-/// https://www.w3.org/TR/xpath-datamodel-31/#NamespaceNode
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash)]
-pub struct NamespaceNode {
-    // TODO
-}
-
-impl Display for NamespaceNode {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!("NamespaceNode::fmt")
     }
 }
 
