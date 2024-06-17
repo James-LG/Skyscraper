@@ -143,7 +143,11 @@ impl KindTest {
                 // Select all node types.
                 let filtered_nodes = item_set.iter().filter_map(|item| {
                     if let XpathItem::Node(node) = item {
-                        Some(node.clone())
+                        if let XpathItemTreeNodeData::AttributeNode(_) = node {
+                            None
+                        } else {
+                            Some(*node)
+                        }
                     } else {
                         None
                     }
@@ -157,7 +161,7 @@ impl KindTest {
                 let filtered_nodes = item_set.iter().filter_map(|item| {
                     if let XpathItem::Node(node) = item {
                         if matches!(node, XpathItemTreeNodeData::TextNode(_),) {
-                            return Some(node.clone());
+                            return Some(*node);
                         }
                     }
 
@@ -175,8 +179,8 @@ impl KindTest {
 
                 for item in item_set {
                     if let XpathItem::Node(node) = item {
-                        if x.is_match(&node)? {
-                            filtered_nodes.insert(node.clone());
+                        if x.is_match(node)? {
+                            filtered_nodes.insert(*node);
                         }
                     }
                 }
@@ -260,7 +264,7 @@ impl DocumentTest {
                 for item in item_set {
                     if let XpathItem::Node(node) = item {
                         if matches!(node, XpathItemTreeNodeData::DocumentNode(_),) {
-                            filtered_nodes.insert(node.clone());
+                            filtered_nodes.insert(*node);
                         }
                     }
                 }

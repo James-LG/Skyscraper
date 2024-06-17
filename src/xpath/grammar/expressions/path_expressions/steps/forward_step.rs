@@ -160,7 +160,7 @@ fn eval_forward_axis_self_or_descendant<'tree>(
     let mut nodes = IndexSet::new();
 
     if let XpathItem::Node(node) = &context.item {
-        nodes.insert(node.clone());
+        nodes.insert(*node);
     } else {
         return Err(ExpressionApplyError {
             msg: String::from("err:XPTY0020 context item for axis step is not a node"),

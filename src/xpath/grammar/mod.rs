@@ -50,6 +50,15 @@ pub enum XpathItemTreeNodeData {
 }
 
 impl XpathItemTreeNodeData {
+    /// Get all children of the document.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree containing the document.
+    ///
+    /// # Returns
+    ///
+    /// A vector of all children of the document.
     pub fn children<'tree>(&self, tree: &'tree XpathItemTree) -> Vec<&'tree XpathItemTreeNodeData> {
         match self {
             XpathItemTreeNodeData::DocumentNode(node) => node.children(tree),
@@ -61,6 +70,15 @@ impl XpathItemTreeNodeData {
         }
     }
 
+    /// Get the parent of the element.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree containing the element.
+    ///
+    /// # Returns
+    ///
+    /// The parent of the element if it exists, or `None` if it does not.
     pub fn parent<'tree>(
         &self,
         tree: &'tree XpathItemTree,
@@ -78,10 +96,19 @@ impl XpathItemTreeNodeData {
         })
     }
 
-    pub fn all_text<'tree>(&self, tree: &'tree XpathItemTree) -> String {
+    /// Get all text contained in this element and its descendants.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree that this element is a part of.
+    ///
+    /// # Returns
+    ///
+    /// A string of all text contained in this element and its descendants.
+    pub fn text_content<'tree>(&self, tree: &'tree XpathItemTree) -> String {
         match self {
-            XpathItemTreeNodeData::DocumentNode(node) => node.all_text(tree),
-            XpathItemTreeNodeData::ElementNode(node) => node.all_text(tree),
+            XpathItemTreeNodeData::DocumentNode(node) => node.text_content(tree),
+            XpathItemTreeNodeData::ElementNode(node) => node.text_content(tree),
             XpathItemTreeNodeData::PINode(_) => String::from(""),
             XpathItemTreeNodeData::CommentNode(_) => String::from(""),
             XpathItemTreeNodeData::TextNode(node) => node.content.to_string(),
@@ -89,13 +116,24 @@ impl XpathItemTreeNodeData {
         }
     }
 
+    /// Text before the first subelement. This is either a string or the value None, if there was no text.
+    ///
+    /// Use [`ElementNode::text_content`] to get all text _including_ text in descendant nodes.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree that this element is a part of.
+    ///
+    /// # Returns
+    ///
+    /// A string of all text contained in this element.
     pub fn text<'tree>(&self, tree: &'tree XpathItemTree) -> Option<String> {
         match self {
             XpathItemTreeNodeData::DocumentNode(node) => node.text(tree),
             XpathItemTreeNodeData::ElementNode(node) => node.text(tree),
             XpathItemTreeNodeData::PINode(_) => None,
             XpathItemTreeNodeData::CommentNode(_) => None,
-            XpathItemTreeNodeData::TextNode(node) => None,
+            XpathItemTreeNodeData::TextNode(node) => Some(node.content.to_string()),
             XpathItemTreeNodeData::AttributeNode(_) => None,
         }
     }

@@ -83,19 +83,39 @@ impl Display for Function {
 pub struct XpathDocumentNode {}
 
 impl XpathDocumentNode {
-    pub fn all_text<'tree>(&self, tree: &'tree XpathItemTree) -> String {
+    /// Get all text contained in this element and its descendants.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree that this document is a part of.
+    ///
+    /// # Returns
+    ///
+    /// A string of all text contained in this document and its descendants.
+    pub fn text_content<'tree>(&self, tree: &'tree XpathItemTree) -> String {
         let strings: Vec<String> = tree
             .root_node
             .children(&tree.arena)
             .into_iter()
             .map(|x| tree.get(x))
-            .map(|x| x.all_text(tree))
+            .map(|x| x.text_content(tree))
             .collect();
 
         let text = strings.join("");
         text
     }
 
+    /// Text before the first subelement. This is either a string or the value None, if there was no text.
+    ///
+    /// Use [`XpathDocumentNode::text_content`] to get all text _including_ text in descendant nodes.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree that this document is a part of.
+    ///
+    /// # Returns
+    ///
+    /// A string of all text contained in this document.
     pub fn text<'tree>(&self, tree: &'tree XpathItemTree) -> Option<String> {
         let strings: Vec<String> = tree
             .root_node
@@ -109,6 +129,15 @@ impl XpathDocumentNode {
         strings.into_iter().next()
     }
 
+    /// Get all children of the document.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree containing the document.
+    ///
+    /// # Returns
+    ///
+    /// A vector of all children of the document.
     pub fn children<'tree>(&self, tree: &'tree XpathItemTree) -> Vec<&'tree XpathItemTreeNodeData> {
         tree.root_node
             .children(&tree.arena)
@@ -236,8 +265,6 @@ impl ElementNode {
 
     /// Get all text contained in this element and its descendants.
     ///
-    /// Use [`ElementNode::text`] to get _only_ text contained directly in this node.
-    ///
     /// # Arguments
     ///
     /// * `tree` - The tree that this element is a part of.
@@ -245,21 +272,13 @@ impl ElementNode {
     /// # Returns
     ///
     /// A string of all text contained in this element and its descendants.
-    pub fn all_text<'tree>(&self, tree: &'tree XpathItemTree) -> String {
-        let strings: Vec<String> =
-            // Get all children.
-            Self::get_all_text_nodes(tree, self, true)
-            .into_iter()
-            .map(|x| x.content)
-            .collect();
-
-        let text = strings.join("");
-        text
+    pub fn text_content<'tree>(&self, tree: &'tree XpathItemTree) -> String {
+        self.itertext(tree).collect::<Vec<String>>().join("")
     }
 
-    /// Get text directly contained in this element.
+    /// Text before the first subelement. This is either a string or the value None, if there was no text.
     ///
-    /// Use [`ElementNode::all_text`] to get all text _including_ text in descendant nodes.
+    /// Use [`ElementNode::text_content`] to get all text _including_ text in descendant nodes.
     ///
     /// # Arguments
     ///

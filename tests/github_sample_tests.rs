@@ -111,7 +111,7 @@ fn xpath_github_sample4() {
     let nodes = xpath.apply(&xpath_item_tree).unwrap();
 
     // assert
-    // TODOD assert_eq!(nodes.len(), 100);
+    assert_eq!(nodes.len(), 100);
 }
 
 #[test]
@@ -132,7 +132,7 @@ fn xpath_github_get_text_sample() {
 
     let element = nodes.next().unwrap().extract_into_node();
 
-    let text = element.all_text(&xpath_item_tree).trim().to_string();
+    let text = element.text_content(&xpath_item_tree).trim().to_string();
     let trimmed_text = trim_internal_whitespace(&text);
 
     assert_eq!(trimmed_text, "James-LG / Skyscraper Public");

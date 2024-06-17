@@ -15,6 +15,7 @@ use skyscraper::{
 struct LxmlElement {
     pub tag: String,
     pub text: Option<String>,
+    pub text_content: String,
     pub attrib: HashMap<String, String>,
     pub itertext: Vec<String>,
 }
@@ -69,11 +70,13 @@ fn skyscraper_to_lxml_elements(
         let node = item.extract_into_node();
         let element = node.extract_as_element_node();
         let text = element.text(&xpath_tree);
+        let text_content = element.text_content(&xpath_tree);
         let itertext = element.itertext(&xpath_tree).collect();
 
         lxml_elements.push(LxmlElement {
             tag: element.name.to_string(),
             text,
+            text_content,
             attrib: element
                 .attributes(&xpath_tree)
                 .iter()

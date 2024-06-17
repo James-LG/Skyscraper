@@ -4,9 +4,10 @@ import sys
 import lxml.html
 
 class OutputElement:
-    def __init__(self, tag: str, text: str, attrib: dict[str, str], itertext: list[str]):
+    def __init__(self, tag: str, text: str, text_content: str, attrib: dict[str, str], itertext: list[str]):
         self.tag = tag
         self.text = text
+        self.text_content = text_content
         self.attrib = attrib
         self.itertext = itertext
     
@@ -20,6 +21,7 @@ class OutputElement:
         return OutputElement(
             tag=element.tag,
             text=element.text,
+            text_content=element.text_content(),
             attrib=attributes,
             itertext=itertext
         )

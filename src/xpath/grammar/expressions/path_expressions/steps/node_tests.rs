@@ -151,7 +151,7 @@ impl NameTest {
         };
 
         if is_match {
-            Ok(Some(node.clone()))
+            Ok(Some(*node))
         } else {
             Ok(None)
         }

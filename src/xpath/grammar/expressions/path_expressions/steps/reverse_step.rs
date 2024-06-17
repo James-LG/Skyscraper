@@ -115,7 +115,7 @@ fn eval_reverse_axis_parent<'tree>(
     // TODO: Technically an attribute's parent is an element, but there is no link to that ATM.
     if let XpathItem::Node(node) = &context.item {
         if let Some(parent) = &node.parent(context.item_tree) {
-            nodes.insert(parent.clone());
+            nodes.insert(*parent);
         }
     }
 
