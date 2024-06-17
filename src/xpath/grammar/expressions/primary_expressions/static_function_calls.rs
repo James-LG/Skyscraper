@@ -7,13 +7,13 @@ use nom::error::context;
 use crate::{
     xpath::{
         grammar::{
-            data_model::{AnyAtomicType, Node, XpathItem},
+            data_model::{AnyAtomicType, XpathItem},
             expressions::common::{argument_list, ArgumentList},
             recipes::Res,
             types::{eq_name, EQName},
             whitespace_recipes::ws,
             xml_names::QName,
-            NonTreeXpathNode, XpathItemTreeNodeData,
+            XpathItemTreeNode,
         },
         xpath_item_set::XpathItemSet,
         ExpressionApplyError, XpathExpressionContext, XpathItemTree,
@@ -58,9 +58,7 @@ impl FunctionCall {
                     if prefixed_name.prefix == "fn" {
                         // Root function selects the root node of the tree.
                         if prefixed_name.local_part == "root" {
-                            return Ok(xpath_item_set![XpathItem::Node(Node::TreeNode(
-                                context.item_tree.root(),
-                            ))]);
+                            return Ok(xpath_item_set![XpathItem::Node(context.item_tree.root())]);
                         }
                     }
 
@@ -140,25 +138,20 @@ pub(crate) fn func_data<'tree>(
     fn atomize<'tree>(item: &XpathItem, item_tree: &'tree XpathItemTree) -> AnyAtomicType {
         match item {
             XpathItem::Node(node) => match node {
-                Node::TreeNode(tree_node) => match tree_node.data {
-                    XpathItemTreeNodeData::DocumentNode(_) => {
-                        AnyAtomicType::String(tree_node.all_text(item_tree))
-                    }
-                    XpathItemTreeNodeData::ElementNode(_) => {
-                        AnyAtomicType::String(tree_node.all_text(item_tree))
-                    }
-                    XpathItemTreeNodeData::PINode(_) => todo!("func_data PINode"),
-                    XpathItemTreeNodeData::CommentNode(_) => todo!("func_data CommentNode"),
-                    XpathItemTreeNodeData::TextNode(text) => {
-                        AnyAtomicType::String(text.content.clone())
-                    }
-                },
-                Node::NonTreeNode(non_tree_node) => match non_tree_node {
-                    NonTreeXpathNode::AttributeNode(attribute) => {
-                        AnyAtomicType::String(attribute.value.clone())
-                    }
-                    NonTreeXpathNode::NamespaceNode(_) => todo!("func_data NamespaceNode"),
-                },
+                XpathItemTreeNode::DocumentNode(_) => {
+                    AnyAtomicType::String(node.text_content(item_tree))
+                }
+                XpathItemTreeNode::ElementNode(_) => {
+                    AnyAtomicType::String(node.text_content(item_tree))
+                }
+                XpathItemTreeNode::PINode(_) => todo!("func_data PINode"),
+                XpathItemTreeNode::CommentNode(_) => todo!("func_data CommentNode"),
+                XpathItemTreeNode::TextNode(text) => {
+                    AnyAtomicType::String(text.content.clone())
+                }
+                &XpathItemTreeNode::AttributeNode(attribute) => {
+                    AnyAtomicType::String(attribute.value.clone())
+                }
             },
             XpathItem::Function(_) => todo!("func_data Function"),
             XpathItem::AnyAtomicType(atomic) => atomic.clone(),
@@ -169,23 +162,15 @@ pub(crate) fn func_data<'tree>(
 }
 
 /// https://www.w3.org/TR/xpath-functions-31/#func-string
-pub(crate) fn func_string<'tree>(
-    item: &XpathItem<'tree>,
-    item_tree: &'tree XpathItemTree,
-) -> String {
+pub(crate) fn func_string<'tree>(item: &XpathItem, item_tree: &'tree XpathItemTree) -> String {
     match item {
         XpathItem::Node(node) => match node {
-            Node::TreeNode(tree_node) => match tree_node.data {
-                XpathItemTreeNodeData::DocumentNode(_) => tree_node.all_text(item_tree),
-                XpathItemTreeNodeData::ElementNode(_) => tree_node.all_text(item_tree),
-                XpathItemTreeNodeData::PINode(_) => todo!("func_string PINode"),
-                XpathItemTreeNodeData::CommentNode(_) => todo!("func_string CommentNode"),
-                XpathItemTreeNodeData::TextNode(text) => text.content.clone(),
-            },
-            Node::NonTreeNode(non_tree_node) => match non_tree_node {
-                NonTreeXpathNode::AttributeNode(attribute) => attribute.value.clone(),
-                NonTreeXpathNode::NamespaceNode(_) => todo!("func_string NamespaceNode"),
-            },
+            XpathItemTreeNode::DocumentNode(_) => node.text_content(item_tree),
+            XpathItemTreeNode::ElementNode(_) => node.text_content(item_tree),
+            XpathItemTreeNode::PINode(_) => todo!("func_string PINode"),
+            XpathItemTreeNode::CommentNode(_) => todo!("func_string CommentNode"),
+            XpathItemTreeNode::TextNode(text) => text.content.clone(),
+            XpathItemTreeNode::AttributeNode(attribute) => attribute.value.clone(),
         },
         XpathItem::AnyAtomicType(atomic) => match atomic {
             AnyAtomicType::Boolean(b) => b.to_string(),

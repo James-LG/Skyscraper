@@ -1,4 +1,5 @@
 use skyscraper::html::trim_internal_whitespace;
+use skyscraper::xpath::grammar::data_model::TextNode;
 use skyscraper::xpath::grammar::XpathItemTreeNode;
 use skyscraper::{html, xpath};
 
@@ -20,13 +21,9 @@ fn xpath_github_sample1() {
     assert_eq!(nodes.len(), 1);
     let mut nodes = nodes.into_iter();
 
-    let tree_node = nodes
-        .next()
-        .unwrap()
-        .extract_into_node()
-        .extract_into_tree_node();
+    let tree_node = nodes.next().unwrap().extract_into_node();
 
-    let element = tree_node.data.extract_as_element_node();
+    let element = tree_node.extract_as_element_node();
     assert_eq!(element.name, "main")
 }
 
@@ -46,20 +43,21 @@ fn xpath_github_sample2() {
     assert_eq!(nodes.len(), 5);
     let mut nodes = nodes.into_iter();
 
-    let tree_node = nodes
-        .next()
-        .unwrap()
-        .extract_into_node()
-        .extract_into_tree_node();
+    let tree_node = nodes.next().unwrap().extract_into_node();
 
-    let element = tree_node.data.extract_as_element_node();
+    let element = tree_node.extract_as_element_node();
     assert_eq!(element.name, "a");
 
-    let children: Vec<XpathItemTreeNode> = tree_node.children(&xpath_item_tree).collect();
+    let children: Vec<&TextNode> = tree_node
+        .children(&xpath_item_tree)
+        .into_iter()
+        .filter_map(|x| x.as_text_node().ok())
+        .collect();
+
     assert_eq!(1, children.len());
     let mut children = children.into_iter();
 
-    let text = children.next().unwrap().data.extract_as_text_node();
+    let text = children.next().unwrap();
     assert_eq!(text.content, "refactor: Reorganize into workspace")
 }
 
@@ -80,20 +78,23 @@ fn xpath_github_sample3() {
     assert_eq!(nodes.len(), 1);
     let mut nodes = nodes.into_iter();
 
-    let tree_node = nodes
-        .next()
-        .unwrap()
-        .extract_into_node()
-        .extract_into_tree_node();
+    let tree_node = nodes.next().unwrap().extract_into_node();
 
-    let element = tree_node.data.extract_as_element_node();
+    let element = tree_node.extract_as_element_node();
     assert_eq!(element.name, "a");
 
-    let children: Vec<XpathItemTreeNode> = tree_node.children(&xpath_item_tree).collect();
-    assert_eq!(children.len(), 1);
+    let children: Vec<&XpathItemTreeNode> = tree_node.children(&xpath_item_tree);
+    assert_eq!(children.len(), 2);
     let mut children = children.into_iter();
 
-    let text = children.next().unwrap().data.extract_as_text_node();
+    let attribute = children.next().unwrap().extract_as_attribute_node();
+    assert_eq!(attribute.name, "href");
+    assert_eq!(
+        attribute.value,
+        "https://github.com/James-LG/Skyscraper/releases/new"
+    );
+
+    let text = children.next().unwrap().extract_as_text_node();
     assert_eq!(text.content, "Create a new release");
 }
 
@@ -129,13 +130,9 @@ fn xpath_github_get_text_sample() {
     assert_eq!(nodes.len(), 1);
     let mut nodes = nodes.into_iter();
 
-    let element = nodes
-        .next()
-        .unwrap()
-        .extract_into_node()
-        .extract_into_tree_node();
+    let element = nodes.next().unwrap().extract_into_node();
 
-    let text = element.all_text(&xpath_item_tree).trim().to_string();
+    let text = element.text_content(&xpath_item_tree).trim().to_string();
     let trimmed_text = trim_internal_whitespace(&text);
 
     assert_eq!(trimmed_text, "James-LG / Skyscraper Public");
@@ -205,15 +202,11 @@ fn xpath_github_get_attributes_sample() {
     assert_eq!(nodes.len(), 1);
     let mut nodes = nodes.into_iter();
 
-    let tree_node = nodes
-        .next()
-        .unwrap()
-        .extract_into_node()
-        .extract_into_tree_node();
-    let elem = tree_node.data.extract_as_element_node();
+    let tree_node = nodes.next().unwrap().extract_into_node();
+    let elem = tree_node.extract_as_element_node();
 
     assert_eq!(
-        elem.get_attribute("class").unwrap(),
+        elem.get_attribute(&xpath_item_tree, "class").unwrap(),
         "flex-auto min-width-0 width-fit mr-3"
     );
 }
@@ -234,13 +227,9 @@ fn xpath_github_root_search() {
     assert_eq!(nodes.len(), 1);
     let mut nodes = nodes.into_iter();
 
-    let tree_node = nodes
-        .next()
-        .unwrap()
-        .extract_into_node()
-        .extract_into_tree_node();
+    let tree_node = nodes.next().unwrap().extract_into_node();
 
-    let element = tree_node.data.extract_as_element_node();
+    let element = tree_node.extract_as_element_node();
     assert_eq!(element.name, "html");
 }
 
@@ -260,13 +249,9 @@ fn xpath_github_root_search_all() {
     assert_eq!(nodes.len(), 1);
     let mut nodes = nodes.into_iter();
 
-    let tree_node = nodes
-        .next()
-        .unwrap()
-        .extract_into_node()
-        .extract_into_tree_node();
+    let tree_node = nodes.next().unwrap().extract_into_node();
 
-    let element = tree_node.data.extract_as_element_node();
+    let element = tree_node.extract_as_element_node();
     assert_eq!(element.name, "html")
 }
 
@@ -286,28 +271,34 @@ fn xpath_github_root_wildcard() {
     assert_eq!(nodes.len(), 16);
 
     // assert first node
-    let tree_node = &nodes[0].extract_as_node().extract_as_tree_node();
-    let elem = tree_node.data.extract_as_element_node();
+    let tree_node = &nodes[0].extract_as_node();
+    let elem = tree_node.extract_as_element_node();
 
     assert_eq!(elem.name, "div");
 
     assert_eq!(
-        elem.get_attribute("class").unwrap(),
+        elem.get_attribute(&xpath_item_tree, "class").unwrap(),
         "position-relative js-header-wrapper "
     );
 
     // assert random node 4
-    let tree_node = &nodes[3].extract_as_node().extract_as_tree_node();
-    let elem = tree_node.data.extract_as_element_node();
+    let tree_node = &nodes[3].extract_as_node();
+    let elem = tree_node.extract_as_element_node();
 
     assert_eq!(elem.name, "include-fragment");
 
     // assert last node
-    let tree_node = &nodes[15].extract_as_node().extract_as_tree_node();
-    let elem = tree_node.data.extract_as_element_node();
+    let tree_node = &nodes[15].extract_as_node();
+    let elem = tree_node.extract_as_element_node();
 
     assert_eq!(elem.name, "div");
 
-    assert_eq!(elem.get_attribute("class").unwrap(), "sr-only");
-    assert_eq!(elem.get_attribute("aria-live").unwrap(), "polite")
+    assert_eq!(
+        elem.get_attribute(&xpath_item_tree, "class").unwrap(),
+        "sr-only"
+    );
+    assert_eq!(
+        elem.get_attribute(&xpath_item_tree, "aria-live").unwrap(),
+        "polite"
+    )
 }

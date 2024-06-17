@@ -4,7 +4,7 @@ use nom::error::VerboseError;
 use thiserror::Error;
 
 use self::{
-    grammar::{data_model::XpathItem, xpath, XpathItemTreeNode},
+    grammar::{data_model::XpathItem, xpath},
     xpath_item_set::XpathItemSet,
 };
 

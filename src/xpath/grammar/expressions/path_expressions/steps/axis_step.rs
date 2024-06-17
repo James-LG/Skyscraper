@@ -5,7 +5,7 @@ use nom::{branch::alt, error::context, sequence::tuple};
 
 use crate::xpath::{
     grammar::{
-        data_model::{Node, XpathItem},
+        data_model::XpathItem,
         expressions::{
             path_expressions::steps::{
                 forward_step::forward_step,
@@ -15,6 +15,7 @@ use crate::xpath::{
             postfix_expressions::Predicate,
         },
         recipes::Res,
+        XpathItemTreeNode,
     },
     ExpressionApplyError, XpathExpressionContext, XpathItemSet,
 };
@@ -114,7 +115,7 @@ impl AxisStepType {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XpathExpressionContext<'tree>,
-    ) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
+    ) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
         match self {
             AxisStepType::ReverseStep(step) => step.eval(context),
             AxisStepType::ForwardStep(step) => step.eval(context),

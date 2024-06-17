@@ -22,13 +22,9 @@ fn parent_axis_should_select_parent_node() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element = tree_node.data.extract_as_element_node();
+        let element = tree_node.extract_as_element_node();
         assert_eq!(element.name, "html");
     }
 }
@@ -66,28 +62,20 @@ fn parent_axis_should_select_parents_of_all_selected_nodes() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element = tree_node.data.extract_as_element_node();
+        let element = tree_node.extract_as_element_node();
         assert_eq!(element.name, "div");
-        assert_eq!(element.get_attribute("id"), Some("1"));
+        assert_eq!(element.get_attribute(&xpath_item_tree, "id"), Some("1"));
     }
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element = tree_node.data.extract_as_element_node();
+        let element = tree_node.extract_as_element_node();
         assert_eq!(element.name, "div");
-        assert_eq!(element.get_attribute("id"), Some("2"));
+        assert_eq!(element.get_attribute(&xpath_item_tree, "id"), Some("2"));
     }
 }
 
@@ -125,27 +113,19 @@ fn parent_axis_should_respect_node_test() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element = tree_node.data.extract_as_element_node();
+        let element = tree_node.extract_as_element_node();
         assert_eq!(element.name, "div");
-        assert_eq!(element.get_attribute("id"), Some("1"));
+        assert_eq!(element.get_attribute(&xpath_item_tree, "id"), Some("1"));
     }
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element = tree_node.data.extract_as_element_node();
+        let element = tree_node.extract_as_element_node();
         assert_eq!(element.name, "div");
-        assert_eq!(element.get_attribute("id"), Some("2"));
+        assert_eq!(element.get_attribute(&xpath_item_tree, "id"), Some("2"));
     }
 }

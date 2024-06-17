@@ -26,11 +26,11 @@ use self::{
 };
 
 use super::{
-    data_model::{Node, XpathItem},
+    data_model::XpathItem,
     recipes::Res,
     terminal_symbols::UriQualifiedName,
     xml_names::{nc_name, QName},
-    XpathItemTreeNode, XpathItemTreeNodeData,
+    XpathItemTreeNode,
 };
 
 pub mod array_test;
@@ -136,14 +136,18 @@ impl KindTest {
     pub(crate) fn filter<'tree>(
         &self,
         item_set: &XpathItemSet<'tree>,
-    ) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
+    ) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
         match self {
             KindTest::AnyKindTest => {
                 // AnyKindTest is `node()`.
                 // Select all node types.
                 let filtered_nodes = item_set.iter().filter_map(|item| {
                     if let XpathItem::Node(node) = item {
-                        Some(node.clone())
+                        if let XpathItemTreeNode::AttributeNode(_) = node {
+                            None
+                        } else {
+                            Some(*node)
+                        }
                     } else {
                         None
                     }
@@ -156,14 +160,8 @@ impl KindTest {
                 // Select all text nodes.
                 let filtered_nodes = item_set.iter().filter_map(|item| {
                     if let XpathItem::Node(node) = item {
-                        if matches!(
-                            node,
-                            Node::TreeNode(XpathItemTreeNode {
-                                data: XpathItemTreeNodeData::TextNode(_),
-                                ..
-                            })
-                        ) {
-                            return Some(node.clone());
+                        if matches!(node, XpathItemTreeNode::TextNode(_),) {
+                            return Some(*node);
                         }
                     }
 
@@ -181,8 +179,8 @@ impl KindTest {
 
                 for item in item_set {
                     if let XpathItem::Node(node) = item {
-                        if x.is_match(&node)? {
-                            filtered_nodes.insert(node.clone());
+                        if x.is_match(node)? {
+                            filtered_nodes.insert(*node);
                         }
                     }
                 }
@@ -257,7 +255,7 @@ impl DocumentTest {
     pub(crate) fn filter<'tree>(
         &self,
         item_set: &XpathItemSet<'tree>,
-    ) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
+    ) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
         match &self.value {
             // document-node() matches any document node.
             None => {
@@ -265,14 +263,8 @@ impl DocumentTest {
 
                 for item in item_set {
                     if let XpathItem::Node(node) = item {
-                        if matches!(
-                            node,
-                            Node::TreeNode(XpathItemTreeNode {
-                                data: XpathItemTreeNodeData::DocumentNode(_),
-                                ..
-                            })
-                        ) {
-                            filtered_nodes.insert(node.clone());
+                        if matches!(node, XpathItemTreeNode::DocumentNode(_),) {
+                            filtered_nodes.insert(*node);
                         }
                     }
                 }

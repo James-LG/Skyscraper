@@ -9,12 +9,12 @@ use nom::{
 use crate::{
     xpath::{
         grammar::{
-            data_model::{Node, XpathItem},
+            data_model::XpathItem,
             recipes::Res,
             terminal_symbols::braced_uri_literal,
             types::{eq_name, kind_test, EQName, KindTest},
             xml_names::{nc_name, QName},
-            NonTreeXpathNode, XpathItemTreeNode, XpathItemTreeNodeData,
+            XpathItemTreeNode,
         },
         ExpressionApplyError, XpathExpressionContext,
     },
@@ -57,13 +57,14 @@ impl NodeTest {
         &self,
         axis: BiDirectionalAxis,
         context: &XpathExpressionContext<'tree>,
-    ) -> Result<Option<Node<'tree>>, ExpressionApplyError> {
+    ) -> Result<Option<&'tree XpathItemTreeNode>, ExpressionApplyError> {
         match self {
             NodeTest::KindTest(test) => {
                 let filtered_nodes = test.filter(&xpath_item_set![context.item.clone()])?;
 
                 if !filtered_nodes.is_empty() {
-                    let node: Node<'_> = filtered_nodes.into_iter().next().unwrap();
+                    let node: &'tree XpathItemTreeNode =
+                        filtered_nodes.into_iter().next().unwrap();
                     Ok(Some(node))
                 } else {
                     Ok(None)
@@ -113,7 +114,7 @@ impl NameTest {
         &self,
         axis: BiDirectionalAxis,
         context: &XpathExpressionContext<'tree>,
-    ) -> Result<Option<Node<'tree>>, ExpressionApplyError> {
+    ) -> Result<Option<&'tree XpathItemTreeNode>, ExpressionApplyError> {
         let node = if let XpathItem::Node(node) = &context.item {
             node
         } else {
@@ -124,17 +125,12 @@ impl NameTest {
             NameTest::Name(expected_name) => {
                 // Get the name of the node, if available for the node type.
                 let node_name = match node {
-                    Node::TreeNode(tree_node) => match tree_node.data {
-                        XpathItemTreeNodeData::DocumentNode(_) => todo!(),
-                        XpathItemTreeNodeData::ElementNode(e) => Some(&e.name),
-                        XpathItemTreeNodeData::PINode(_) => todo!(),
-                        XpathItemTreeNodeData::CommentNode(_) => todo!(),
-                        XpathItemTreeNodeData::TextNode(_) => None, // Text nodes do not have a name.
-                    },
-                    Node::NonTreeNode(non_tree_node) => match non_tree_node {
-                        NonTreeXpathNode::AttributeNode(a) => Some(&a.name),
-                        NonTreeXpathNode::NamespaceNode(_) => todo!(),
-                    },
+                    XpathItemTreeNode::DocumentNode(_) => todo!(),
+                    XpathItemTreeNode::ElementNode(e) => Some(&e.name),
+                    XpathItemTreeNode::PINode(_) => todo!(),
+                    XpathItemTreeNode::CommentNode(_) => todo!(),
+                    XpathItemTreeNode::TextNode(_) => None, // Text nodes do not have a name.
+                    XpathItemTreeNode::AttributeNode(a) => Some(&a.name),
                 };
 
                 match node_name {
@@ -155,7 +151,7 @@ impl NameTest {
         };
 
         if is_match {
-            Ok(Some(node.clone()))
+            Ok(Some(*node))
         } else {
             Ok(None)
         }
@@ -216,27 +212,21 @@ impl Display for Wildcard {
 }
 
 impl Wildcard {
-    pub(crate) fn is_match<'tree>(&self, axis: BiDirectionalAxis, node: &Node<'tree>) -> bool {
+    pub(crate) fn is_match<'tree>(
+        &self,
+        axis: BiDirectionalAxis,
+        node: &'tree XpathItemTreeNode,
+    ) -> bool {
         // Wildcards only match context items that are the axis' principal node kind.
         // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#dt-principal-node-kind
         let is_principal_node_kind = match axis {
             BiDirectionalAxis::ForwardAxis(ForwardAxis::Attribute) => {
                 // For the attribute axis, the principal node kind is attribute.
-                matches!(node, Node::NonTreeNode(NonTreeXpathNode::AttributeNode(_)))
-            }
-            BiDirectionalAxis::ForwardAxis(ForwardAxis::Namespace) => {
-                // For the namespace axis, the principal node kind is namespace.
-                matches!(node, Node::NonTreeNode(NonTreeXpathNode::NamespaceNode(_)))
+                matches!(node, XpathItemTreeNode::AttributeNode(_))
             }
             _ => {
                 // For all other axes, the principal node kind is element.
-                matches!(
-                    node,
-                    Node::TreeNode(XpathItemTreeNode {
-                        data: XpathItemTreeNodeData::ElementNode(_),
-                        ..
-                    })
-                )
+                matches!(node, XpathItemTreeNode::ElementNode(_),)
             }
         };
 

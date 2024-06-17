@@ -8,7 +8,7 @@ use nom::{
 
 use crate::xpath::{
     grammar::{
-        data_model::Node, recipes::Res, types::common::attribute_name, whitespace_recipes::ws,
+        recipes::Res, types::common::attribute_name, whitespace_recipes::ws, XpathItemTreeNode,
     },
     ExpressionApplyError,
 };
@@ -58,7 +58,10 @@ impl Display for AttributeTest {
 }
 
 impl AttributeTest {
-    pub(crate) fn is_match<'tree>(&self, node: &Node<'tree>) -> Result<bool, ExpressionApplyError> {
+    pub(crate) fn is_match<'tree>(
+        &self,
+        node: &'tree XpathItemTreeNode,
+    ) -> Result<bool, ExpressionApplyError> {
         match &self.pair {
             Some(pair) => pair.is_match(node),
             // No value is equivalent to a wildcard.
@@ -90,7 +93,10 @@ impl Display for AttributeTestPair {
 }
 
 impl AttributeTestPair {
-    pub(crate) fn is_match<'tree>(&self, node: &Node<'tree>) -> Result<bool, ExpressionApplyError> {
+    pub(crate) fn is_match<'tree>(
+        &self,
+        node: &'tree XpathItemTreeNode,
+    ) -> Result<bool, ExpressionApplyError> {
         let is_match = self.name_or_wildcard.is_match(node)?;
 
         if let Some(_type_name) = &self.type_name {
@@ -137,7 +143,7 @@ impl Display for AttribNameOrWildcard {
 impl AttribNameOrWildcard {
     pub(crate) fn is_match<'tree>(
         &self,
-        _node: &Node<'tree>,
+        _node: &'tree XpathItemTreeNode,
     ) -> Result<bool, ExpressionApplyError> {
         match self {
             AttribNameOrWildcard::AttributeName(_) => {

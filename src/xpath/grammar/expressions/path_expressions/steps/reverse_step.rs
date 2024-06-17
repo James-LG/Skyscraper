@@ -5,13 +5,14 @@ use nom::{branch::alt, bytes::complete::tag, error::context};
 
 use crate::xpath::{
     grammar::{
-        data_model::{Node, XpathItem},
+        data_model::XpathItem,
         expressions::path_expressions::steps::{
             axes::reverse_axis::reverse_axis, node_tests::node_test,
         },
         recipes::Res,
         types::KindTest,
         whitespace_recipes::ws,
+        XpathItemTreeNode,
     },
     xpath_item_set::XpathItemSet,
     ExpressionApplyError, XpathExpressionContext,
@@ -59,7 +60,7 @@ impl ReverseStep {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XpathExpressionContext<'tree>,
-    ) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
+    ) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
         match self {
             ReverseStep::Full(axis, node_test) => eval_reverse_axis(context, *axis, node_test),
             ReverseStep::Abbreviated => {
@@ -78,8 +79,8 @@ fn eval_reverse_axis<'tree>(
     context: &XpathExpressionContext<'tree>,
     axis: ReverseAxis,
     node_test: &NodeTest,
-) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
-    let axis_nodes: IndexSet<Node> = match axis {
+) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
+    let axis_nodes: IndexSet<&'tree XpathItemTreeNode> = match axis {
         ReverseAxis::Parent => eval_reverse_axis_parent(context),
         ReverseAxis::Ancestor => todo!("eval_reverse_axis ReverseAxis::Ancestor"),
         ReverseAxis::PrecedingSibling => todo!("eval_reverse_axis ReverseAxis::PrecedingSibling"),
@@ -107,14 +108,14 @@ fn eval_reverse_axis<'tree>(
 /// Direct parent of the context node.
 fn eval_reverse_axis_parent<'tree>(
     context: &XpathExpressionContext<'tree>,
-) -> Result<IndexSet<Node<'tree>>, ExpressionApplyError> {
-    let mut nodes: IndexSet<Node<'tree>> = IndexSet::new();
+) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
+    let mut nodes: IndexSet<&'tree XpathItemTreeNode> = IndexSet::new();
 
     // Only tree items have parents
     // TODO: Technically an attribute's parent is an element, but there is no link to that ATM.
-    if let XpathItem::Node(Node::TreeNode(node)) = &context.item {
+    if let XpathItem::Node(node) = &context.item {
         if let Some(parent) = &node.parent(context.item_tree) {
-            nodes.insert(Node::TreeNode(parent.clone()));
+            nodes.insert(*parent);
         }
     }
 
