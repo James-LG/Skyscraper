@@ -19,13 +19,9 @@ fn abbrev_attribute_step_should_match_given_attribute() {
 
     // assert
     assert_eq!(nodes.len(), 1);
-    let attributes: Vec<AttributeNode> = nodes
+    let attributes: Vec<&AttributeNode> = nodes
         .into_iter()
-        .map(|item| {
-            item.extract_into_node()
-                .extract_into_non_tree_node()
-                .extract_into_attribute_node()
-        })
+        .map(|item| item.extract_into_node().extract_as_attribute_node())
         .collect();
 
     // assert attribute

@@ -15,7 +15,7 @@ use crate::xpath::{
         XpathItemTreeNodeData,
     },
     xpath_item_set::XpathItemSet,
-    ExpressionApplyError, XpathExpressionContext, XpathItemTreeNode,
+    ExpressionApplyError, XpathExpressionContext,
 };
 
 use super::{
@@ -61,7 +61,7 @@ impl ForwardStep {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XpathExpressionContext<'tree>,
-    ) -> Result<IndexSet<XpathItemTreeNode<'tree>>, ExpressionApplyError> {
+    ) -> Result<IndexSet<&'tree XpathItemTreeNodeData>, ExpressionApplyError> {
         match self {
             ForwardStep::Full(axis, node_test) => eval_forward_axis(context, *axis, node_test),
             ForwardStep::Abbreviated(step) => {
@@ -82,7 +82,7 @@ fn eval_forward_axis<'tree>(
     context: &XpathExpressionContext<'tree>,
     axis: ForwardAxis,
     node_test: &NodeTest,
-) -> Result<IndexSet<XpathItemTreeNode<'tree>>, ExpressionApplyError> {
+) -> Result<IndexSet<&'tree XpathItemTreeNodeData>, ExpressionApplyError> {
     let axis_nodes = match axis {
         ForwardAxis::Child => eval_forward_axis_child(context),
         ForwardAxis::Descendant => eval_forward_axis_descendant(context),
@@ -114,8 +114,8 @@ fn eval_forward_axis<'tree>(
 /// Direct children of the context nodes.
 fn eval_forward_axis_child<'tree>(
     context: &XpathExpressionContext<'tree>,
-) -> Result<IndexSet<XpathItemTreeNode<'tree>>, ExpressionApplyError> {
-    let mut nodes: IndexSet<XpathItemTreeNode<'tree>> = IndexSet::new();
+) -> Result<IndexSet<&'tree XpathItemTreeNodeData>, ExpressionApplyError> {
+    let mut nodes: IndexSet<&'tree XpathItemTreeNodeData> = IndexSet::new();
 
     // Only tree nodes have children
     if let XpathItem::Node(node) = &context.item {
@@ -130,14 +130,14 @@ fn eval_forward_axis_child<'tree>(
 /// All descendants of the context nodes.
 fn eval_forward_axis_descendant<'tree>(
     context: &XpathExpressionContext<'tree>,
-) -> Result<IndexSet<XpathItemTreeNode<'tree>>, ExpressionApplyError> {
-    let mut nodes: IndexSet<XpathItemTreeNode<'tree>> = IndexSet::new();
+) -> Result<IndexSet<&'tree XpathItemTreeNodeData>, ExpressionApplyError> {
+    let mut nodes: IndexSet<&'tree XpathItemTreeNodeData> = IndexSet::new();
 
     // Only tree nodes have children.
     if let XpathItem::Node(node) = &context.item {
         for child in node.children(context.item_tree) {
             // Add the child.
-            nodes.insert(child.clone());
+            nodes.insert(child);
 
             // Add the child's descendants.
             let child_eval_context = XpathExpressionContext::new_single(
@@ -156,7 +156,7 @@ fn eval_forward_axis_descendant<'tree>(
 /// All descendants of the context nodes including the context nodes.
 fn eval_forward_axis_self_or_descendant<'tree>(
     context: &XpathExpressionContext<'tree>,
-) -> Result<IndexSet<XpathItemTreeNode<'tree>>, ExpressionApplyError> {
+) -> Result<IndexSet<&'tree XpathItemTreeNodeData>, ExpressionApplyError> {
     let mut nodes = IndexSet::new();
 
     if let XpathItem::Node(node) = &context.item {
@@ -175,19 +175,16 @@ fn eval_forward_axis_self_or_descendant<'tree>(
 // All attributes of the context nodes.
 fn eval_forward_axis_attribute<'tree>(
     context: &XpathExpressionContext<'tree>,
-) -> Result<IndexSet<XpathItemTreeNode<'tree>>, ExpressionApplyError> {
-    let mut attributes: IndexSet<XpathItemTreeNode<'tree>> = IndexSet::new();
+) -> Result<IndexSet<&'tree XpathItemTreeNodeData>, ExpressionApplyError> {
+    let mut attributes: IndexSet<&'tree XpathItemTreeNodeData> = IndexSet::new();
 
     // Only elements have attributes.
-    if let XpathItem::Node(XpathItemTreeNode {
-        data: XpathItemTreeNodeData::ElementNode(element),
-        ..
-    }) = context.item
-    {
-        for attribute in element.attributes.iter() {
-            let attribute = attribute.clone();
-
-            attributes.insert(attribute);
+    if let XpathItem::Node(XpathItemTreeNodeData::ElementNode(element)) = context.item {
+        let element_tree_node = context.item_tree.get(element.id());
+        for child in element_tree_node.children(context.item_tree) {
+            if let XpathItemTreeNodeData::AttributeNode(_attribute) = &child {
+                attributes.insert(child);
+            }
         }
     }
 

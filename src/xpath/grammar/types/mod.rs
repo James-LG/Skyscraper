@@ -30,7 +30,7 @@ use super::{
     recipes::Res,
     terminal_symbols::UriQualifiedName,
     xml_names::{nc_name, QName},
-    XpathItemTreeNode, XpathItemTreeNodeData,
+    XpathItemTreeNodeData,
 };
 
 pub mod array_test;
@@ -136,7 +136,7 @@ impl KindTest {
     pub(crate) fn filter<'tree>(
         &self,
         item_set: &XpathItemSet<'tree>,
-    ) -> Result<IndexSet<XpathItemTreeNode<'tree>>, ExpressionApplyError> {
+    ) -> Result<IndexSet<&'tree XpathItemTreeNodeData>, ExpressionApplyError> {
         match self {
             KindTest::AnyKindTest => {
                 // AnyKindTest is `node()`.
@@ -156,13 +156,7 @@ impl KindTest {
                 // Select all text nodes.
                 let filtered_nodes = item_set.iter().filter_map(|item| {
                     if let XpathItem::Node(node) = item {
-                        if matches!(
-                            node,
-                            XpathItemTreeNode {
-                                data: XpathItemTreeNodeData::TextNode(_),
-                                ..
-                            }
-                        ) {
+                        if matches!(node, XpathItemTreeNodeData::TextNode(_),) {
                             return Some(node.clone());
                         }
                     }
@@ -257,7 +251,7 @@ impl DocumentTest {
     pub(crate) fn filter<'tree>(
         &self,
         item_set: &XpathItemSet<'tree>,
-    ) -> Result<IndexSet<XpathItemTreeNode<'tree>>, ExpressionApplyError> {
+    ) -> Result<IndexSet<&'tree XpathItemTreeNodeData>, ExpressionApplyError> {
         match &self.value {
             // document-node() matches any document node.
             None => {
@@ -265,13 +259,7 @@ impl DocumentTest {
 
                 for item in item_set {
                     if let XpathItem::Node(node) = item {
-                        if matches!(
-                            node,
-                            XpathItemTreeNode {
-                                data: XpathItemTreeNodeData::DocumentNode(_),
-                                ..
-                            }
-                        ) {
+                        if matches!(node, XpathItemTreeNodeData::DocumentNode(_),) {
                             filtered_nodes.insert(node.clone());
                         }
                     }

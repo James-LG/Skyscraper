@@ -29,13 +29,9 @@ fn class_equals_predicate_should_select_nodes_with_that_match() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element = tree_node.data.extract_as_element_node();
+        let element = tree_node.extract_as_element_node();
         assert_eq!(element.name, "div");
 
         assert_eq!(
@@ -71,13 +67,9 @@ fn predicate_on_double_leading_slash_should_select_nodes_with_that_match() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element = tree_node.data.extract_as_element_node();
+        let element = tree_node.extract_as_element_node();
         assert_eq!(element.name, "div");
 
         assert_eq!(
@@ -117,13 +109,9 @@ fn index_should_select_indexed_child_for_all_selected_parents() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element = tree_node.data.extract_as_element_node();
+        let element = tree_node.extract_as_element_node();
         assert_eq!(element.name, "p");
 
         assert_eq!(
@@ -134,13 +122,9 @@ fn index_should_select_indexed_child_for_all_selected_parents() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element = tree_node.data.extract_as_element_node();
+        let element = tree_node.extract_as_element_node();
         assert_eq!(element.name, "p");
 
         assert_eq!(
@@ -180,13 +164,9 @@ fn index_out_of_bounds_should_select_nothing_for_parent() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element = tree_node.data.extract_as_element_node();
+        let element = tree_node.extract_as_element_node();
         assert_eq!(element.name, "p");
 
         assert_eq!(

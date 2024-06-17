@@ -137,7 +137,7 @@ pub(crate) fn func_data<'tree>(
 ) -> Vec<AnyAtomicType> {
     fn atomize<'tree>(item: &XpathItem, item_tree: &'tree XpathItemTree) -> AnyAtomicType {
         match item {
-            XpathItem::Node(node) => match node.data {
+            XpathItem::Node(node) => match node {
                 XpathItemTreeNodeData::DocumentNode(_) => {
                     AnyAtomicType::String(node.all_text(item_tree))
                 }
@@ -162,12 +162,9 @@ pub(crate) fn func_data<'tree>(
 }
 
 /// https://www.w3.org/TR/xpath-functions-31/#func-string
-pub(crate) fn func_string<'tree>(
-    item: &XpathItem<'tree>,
-    item_tree: &'tree XpathItemTree,
-) -> String {
+pub(crate) fn func_string<'tree>(item: &XpathItem, item_tree: &'tree XpathItemTree) -> String {
     match item {
-        XpathItem::Node(node) => match node.data {
+        XpathItem::Node(node) => match node {
             XpathItemTreeNodeData::DocumentNode(_) => node.all_text(item_tree),
             XpathItemTreeNodeData::ElementNode(_) => node.all_text(item_tree),
             XpathItemTreeNodeData::PINode(_) => todo!("func_string PINode"),

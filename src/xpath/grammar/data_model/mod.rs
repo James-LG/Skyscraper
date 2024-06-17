@@ -6,7 +6,7 @@ use enum_extract_macro::EnumExtract;
 use indextree::NodeId;
 use ordered_float::OrderedFloat;
 
-use super::{XpathItemTree, XpathItemTreeNode, XpathItemTreeNodeData};
+use super::{XpathItemTree, XpathItemTreeNodeData};
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#dt-item
 #[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash, EnumExtract)]
@@ -14,7 +14,7 @@ pub enum XpathItem<'tree> {
     /// A node in the [`XpathItemTree`](crate::xpath::XpathItemTree).
     ///
     ///  https://www.w3.org/TR/xpath-datamodel-31/#dt-node
-    Node(XpathItemTreeNode<'tree>),
+    Node(&'tree XpathItemTreeNodeData),
 
     /// A function item.
     ///
@@ -27,18 +27,8 @@ pub enum XpathItem<'tree> {
     AnyAtomicType(AnyAtomicType),
 }
 
-impl Display for XpathItem<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            XpathItem::Node(node) => write!(f, "{}", node),
-            XpathItem::Function(function) => write!(f, "{}", function),
-            XpathItem::AnyAtomicType(atomic_type) => write!(f, "{}", atomic_type),
-        }
-    }
-}
-
-impl<'tree> From<XpathItemTreeNode<'tree>> for XpathItem<'tree> {
-    fn from(node: XpathItemTreeNode<'tree>) -> Self {
+impl<'tree> From<&'tree XpathItemTreeNodeData> for XpathItem<'tree> {
+    fn from(node: &'tree XpathItemTreeNodeData) -> Self {
         XpathItem::Node(node)
     }
 }
@@ -89,9 +79,43 @@ impl Display for Function {
 }
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#DocumentNode
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash, Clone)]
 pub struct XpathDocumentNode {}
 
+impl XpathDocumentNode {
+    pub fn all_text<'tree>(&self, tree: &'tree XpathItemTree) -> String {
+        let strings: Vec<String> = tree
+            .root_node
+            .children(&tree.arena)
+            .into_iter()
+            .map(|x| tree.get(x))
+            .map(|x| x.all_text(tree))
+            .collect();
+
+        let text = strings.join("");
+        text
+    }
+
+    pub fn text<'tree>(&self, tree: &'tree XpathItemTree) -> Option<String> {
+        let strings: Vec<String> = tree
+            .root_node
+            .children(&tree.arena)
+            .into_iter()
+            .map(|x| tree.get(x))
+            .map(|x| x.text(tree))
+            .filter_map(|x| x.map(|x| x.to_string()))
+            .collect();
+
+        strings.into_iter().next()
+    }
+
+    pub fn children<'tree>(&self, tree: &'tree XpathItemTree) -> Vec<&'tree XpathItemTreeNodeData> {
+        tree.root_node
+            .children(&tree.arena)
+            .map(|x| tree.get(x))
+            .collect()
+    }
+}
 impl Display for XpathDocumentNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "DocumentNode()")
@@ -111,29 +135,12 @@ pub struct ElementNode {
 
     /// The name of the element.
     pub name: String,
-
-    /// The attributes of the element.
-    pub attributes: Vec<AttributeNode>,
-}
-
-impl Display for ElementNode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<{}", self.name)?;
-        for attribute in &self.attributes {
-            write!(f, " {}", attribute)?;
-        }
-        write!(f, "/>")
-    }
 }
 
 impl ElementNode {
     /// Create a new element node.
-    pub(crate) fn new(name: String, attributes: Vec<AttributeNode>) -> Self {
-        Self {
-            id: None,
-            name,
-            attributes,
-        }
+    pub(crate) fn new(name: String) -> Self {
+        Self { id: None, name }
     }
 
     /// Set the ID of the element.
@@ -146,6 +153,24 @@ impl ElementNode {
         self.id.unwrap()
     }
 
+    /// Get all attributes of the element.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree containing the element.
+    ///
+    /// # Returns
+    ///
+    /// A vector of all attributes of the element.
+    pub fn attributes<'tree>(&self, tree: &'tree XpathItemTree) -> Vec<&'tree AttributeNode> {
+        self.children(tree)
+            .filter_map(|x| match x {
+                XpathItemTreeNodeData::AttributeNode(attr) => Some(attr),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// Get the value of an attribute.
     ///
     /// # Arguments
@@ -155,14 +180,18 @@ impl ElementNode {
     /// # Returns
     ///
     /// The value of the attribute if it exists, or `None` if it does not.
-    pub fn get_attribute(&self, name: &str) -> Option<&str> {
-        self.attributes
+    pub fn get_attribute<'tree>(
+        &self,
+        tree: &'tree XpathItemTree,
+        name: &str,
+    ) -> Option<&'tree str> {
+        self.attributes(tree)
             .iter()
             .find(|x| x.name == name)
             .map(|x| &*x.value)
     }
 
-    /// Get all direct child nodes of the element.
+    /// Get all direct child nodes of the given element.
     ///
     /// # Arguments
     ///
@@ -175,7 +204,7 @@ impl ElementNode {
         &self,
         tree: &'tree XpathItemTree,
     ) -> impl Iterator<Item = &'tree XpathItemTreeNodeData> {
-        tree.get(self.id()).children(tree).map(|x| x.data)
+        self.id().children(&tree.arena).map(|x| tree.get(x))
     }
 
     /// Get the parent of the element.
@@ -187,7 +216,10 @@ impl ElementNode {
     /// # Returns
     ///
     /// The parent of the element if it exists, or `None` if it does not.
-    pub fn parent<'tree>(&self, tree: &'tree XpathItemTree) -> Option<XpathItemTreeNode<'tree>> {
+    pub fn parent<'tree>(
+        &self,
+        tree: &'tree XpathItemTree,
+    ) -> Option<&'tree XpathItemTreeNodeData> {
         tree.get(self.id()).parent(tree)
     }
 
@@ -195,7 +227,10 @@ impl ElementNode {
     ///
     /// Includes whitespace text nodes.
     /// Text nodes are split by opening and closing tags contained in the current element.
-    pub fn itertext<'tree>(self, tree: &'tree XpathItemTree) -> ElementTextIter<'tree> {
+    pub fn itertext<'this, 'tree>(&'this self, tree: &'tree XpathItemTree) -> ElementTextIter<'this>
+    where
+        'tree: 'this,
+    {
         ElementTextIter::new(tree, self)
     }
 
@@ -278,7 +313,7 @@ pub struct ElementTextIter<'a> {
 }
 
 impl<'a> ElementTextIter<'a> {
-    pub(crate) fn new(tree: &'a XpathItemTree, node: ElementNode) -> ElementTextIter<'a> {
+    pub(crate) fn new(tree: &'a XpathItemTree, node: &'a ElementNode) -> ElementTextIter<'a> {
         let mut iter_chain: Box<dyn Iterator<Item = String>> = Box::new(iter::empty());
 
         for child in node.children(tree) {
@@ -287,9 +322,8 @@ impl<'a> ElementTextIter<'a> {
                     iter_chain = Box::new(iter_chain.chain(iter::once(text.content.clone())));
                 }
                 XpathItemTreeNodeData::ElementNode(child_element) => {
-                    iter_chain = Box::new(
-                        iter_chain.chain(ElementTextIter::new(tree, child_element.clone())),
-                    );
+                    iter_chain =
+                        Box::new(iter_chain.chain(ElementTextIter::new(tree, child_element)));
                 }
                 _ => {}
             }
@@ -312,11 +346,38 @@ impl<'a> Iterator for ElementTextIter<'a> {
 ///  https://www.w3.org/TR/xpath-datamodel-31/#AttributeNode
 #[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash)]
 pub struct AttributeNode {
+    /// The ID of the attribute.
+    ///
+    /// Optional to enable construction of the tree before assigning IDs.
+    /// Can be considered always Some in a valid tree.
+    id: Option<NodeId>,
+
     /// The name of the attribute.
     pub name: String,
 
     /// The value of the attribute.
     pub value: String,
+}
+
+impl AttributeNode {
+    /// Create a new attribute node.
+    pub(crate) fn new(name: String, value: String) -> Self {
+        Self {
+            id: None,
+            name,
+            value,
+        }
+    }
+
+    /// Set the ID of the attribute.
+    pub(crate) fn set_id(&mut self, id: NodeId) {
+        self.id = Some(id);
+    }
+
+    /// Get the ID of the attribute.
+    pub(crate) fn id(&self) -> NodeId {
+        self.id.unwrap()
+    }
 }
 
 impl Display for AttributeNode {
@@ -326,7 +387,7 @@ impl Display for AttributeNode {
 }
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#ProcessingInstructionNode
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash, Clone)]
 pub struct PINode {
     // TODO
 }
@@ -338,7 +399,7 @@ impl Display for PINode {
 }
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#CommentNode
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash, Clone)]
 pub struct CommentNode {
     /// The value of the comment.
     pub content: String,

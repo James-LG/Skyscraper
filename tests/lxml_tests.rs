@@ -67,16 +67,15 @@ fn skyscraper_to_lxml_elements(
     let mut lxml_elements = Vec::new();
     for item in item_set.into_iter() {
         let node = item.extract_into_node();
-        let tree_node = node.extract_into_tree_node();
-        let element = tree_node.data.extract_as_element_node();
-        let text = tree_node.text(&xpath_tree);
-        let itertext = tree_node.itertext(&xpath_tree).collect();
+        let element = node.extract_as_element_node();
+        let text = element.text(&xpath_tree);
+        let itertext = element.itertext(&xpath_tree).collect();
 
         lxml_elements.push(LxmlElement {
             tag: element.name.to_string(),
             text,
             attrib: element
-                .attributes
+                .attributes(&xpath_tree)
                 .iter()
                 .map(|x| (x.name.clone(), x.value.clone()))
                 .collect(),
@@ -209,9 +208,12 @@ fn test_text_handling3() {
 fn debug_xpath_tree(xpath_item_tree: &XpathItemTree) {
     let xpath_iter = xpath_item_tree.iter();
     for node in xpath_iter {
-        if let Ok(element) = node.data.as_element_node() {
+        if let Ok(element) = node.as_element_node() {
             if element.name == "h2" {
-                println!("{:?}", node.itertext(&xpath_item_tree).collect::<Vec<_>>());
+                println!(
+                    "{:?}",
+                    element.itertext(&xpath_item_tree).collect::<Vec<_>>()
+                );
             }
         }
     }

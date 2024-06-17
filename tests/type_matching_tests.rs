@@ -36,7 +36,7 @@ fn text_test_should_match_all_text() {
     // filter out whitespace nodes before testing since they vary by HTML parser.
     let nodes: Vec<_> = nodes
         .into_iter()
-        .filter(|n| match n.extract_as_node().extract_as_tree_node().data {
+        .filter(|n| match n.extract_as_node() {
             XpathItemTreeNodeData::TextNode(text) => !text.only_whitespace,
             _ => true,
         })
@@ -47,73 +47,49 @@ fn text_test_should_match_all_text() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let text_node = tree_node.data.extract_as_text_node();
+        let text_node = tree_node.extract_as_text_node();
         assert_eq!(text_node.content, "1");
     }
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let text_node = tree_node.data.extract_as_text_node();
+        let text_node = tree_node.extract_as_text_node();
         assert_eq!(text_node.content, "2");
     }
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let text_node = tree_node.data.extract_as_text_node();
+        let text_node = tree_node.extract_as_text_node();
         assert_eq!(text_node.content, "3");
     }
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let text_node = tree_node.data.extract_as_text_node();
+        let text_node = tree_node.extract_as_text_node();
         assert_eq!(text_node.content, "4");
     }
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let text_node = tree_node.data.extract_as_text_node();
+        let text_node = tree_node.extract_as_text_node();
         assert_eq!(text_node.content, "5");
     }
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let text_node = tree_node.data.extract_as_text_node();
+        let text_node = tree_node.extract_as_text_node();
         assert_eq!(text_node.content, "6");
     }
 }
@@ -134,14 +110,9 @@ fn attribute_test_should_match_all_attributes() {
 
     // assert
     assert_eq!(nodes.len(), 3);
-    let attributes: Vec<AttributeNode> = nodes
+    let attributes: Vec<&AttributeNode> = nodes
         .into_iter()
-        .filter_map(|x| {
-            x.extract_into_node()
-                .extract_into_non_tree_node()
-                .into_attribute_node()
-                .ok()
-        })
+        .filter_map(|x| x.extract_into_node().as_attribute_node().ok())
         .collect();
 
     // assert attribute

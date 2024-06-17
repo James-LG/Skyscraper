@@ -20,10 +20,7 @@ use self::{
     logical_expressions::OrExpr, quantified_expressions::QuantifiedExpr,
 };
 
-use super::{
-    data_model::{Node, XpathItem},
-    recipes::Res,
-};
+use super::{data_model::XpathItem, recipes::Res};
 
 pub mod arithmetic_expressions;
 pub mod arrow_operator;
@@ -81,7 +78,7 @@ impl Xpath {
     ///
     /// ```rust
     /// use skyscraper::html;
-    /// use skyscraper::xpath::{self, XpathItemTree, grammar::{XpathItemTreeNodeData, data_model::{Node, XpathItem}}};
+    /// use skyscraper::xpath::{self, XpathItemTree, grammar::{XpathItemTreeNodeData, data_model::XpathItem}};
     /// use std::error::Error;
     ///
     /// fn main() -> Result<(), Box<dyn Error>> {
@@ -108,8 +105,6 @@ impl Xpath {
     ///
     ///     let element = node
     ///         .as_node()?
-    ///         .as_tree_node()?
-    ///         .data
     ///         .as_element_node()?;
     ///
     ///     assert_eq!(element.name, "div");
@@ -120,11 +115,8 @@ impl Xpath {
         &self,
         item_tree: &'tree XpathItemTree,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
-        let context = XpathExpressionContext::new_single(
-            item_tree,
-            XpathItem::Node(Node::TreeNode(item_tree.root())),
-            true,
-        );
+        let context =
+            XpathExpressionContext::new_single(item_tree, XpathItem::Node(item_tree.root()), true);
         let mut item_set = self.eval(&context)?;
         item_set.sort();
         Ok(item_set)
@@ -146,7 +138,7 @@ impl Xpath {
     ///
     /// ```rust
     /// use skyscraper::html::{self, trim_internal_whitespace};
-    /// use skyscraper::xpath::{self, XpathItemTree, grammar::{XpathItemTreeNodeData, data_model::{Node, XpathItem}}};
+    /// use skyscraper::xpath::{self, XpathItemTree, grammar::{XpathItemTreeNodeData, data_model::{XpathItem}}};
     /// use std::error::Error;
     ///
     /// fn main() -> Result<(), Box<dyn Error>> {
@@ -172,11 +164,9 @@ impl Xpath {
     ///
     ///     let item = items.next().unwrap();
     ///     let tree_node = item
-    ///         .as_node()?
-    ///         .as_tree_node()?;
+    ///         .as_node()?;
     ///
     ///     let element = tree_node
-    ///         .data
     ///         .as_element_node()?;
     ///
     ///     assert_eq!(element.name, "span");

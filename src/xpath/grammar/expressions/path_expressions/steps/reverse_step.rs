@@ -12,7 +12,7 @@ use crate::xpath::{
         recipes::Res,
         types::KindTest,
         whitespace_recipes::ws,
-        XpathItemTreeNode,
+        XpathItemTreeNodeData,
     },
     xpath_item_set::XpathItemSet,
     ExpressionApplyError, XpathExpressionContext,
@@ -60,7 +60,7 @@ impl ReverseStep {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XpathExpressionContext<'tree>,
-    ) -> Result<IndexSet<XpathItemTreeNode<'tree>>, ExpressionApplyError> {
+    ) -> Result<IndexSet<&'tree XpathItemTreeNodeData>, ExpressionApplyError> {
         match self {
             ReverseStep::Full(axis, node_test) => eval_reverse_axis(context, *axis, node_test),
             ReverseStep::Abbreviated => {
@@ -79,8 +79,8 @@ fn eval_reverse_axis<'tree>(
     context: &XpathExpressionContext<'tree>,
     axis: ReverseAxis,
     node_test: &NodeTest,
-) -> Result<IndexSet<XpathItemTreeNode<'tree>>, ExpressionApplyError> {
-    let axis_nodes: IndexSet<XpathItemTreeNode> = match axis {
+) -> Result<IndexSet<&'tree XpathItemTreeNodeData>, ExpressionApplyError> {
+    let axis_nodes: IndexSet<&'tree XpathItemTreeNodeData> = match axis {
         ReverseAxis::Parent => eval_reverse_axis_parent(context),
         ReverseAxis::Ancestor => todo!("eval_reverse_axis ReverseAxis::Ancestor"),
         ReverseAxis::PrecedingSibling => todo!("eval_reverse_axis ReverseAxis::PrecedingSibling"),
@@ -108,8 +108,8 @@ fn eval_reverse_axis<'tree>(
 /// Direct parent of the context node.
 fn eval_reverse_axis_parent<'tree>(
     context: &XpathExpressionContext<'tree>,
-) -> Result<IndexSet<XpathItemTreeNode<'tree>>, ExpressionApplyError> {
-    let mut nodes: IndexSet<XpathItemTreeNode<'tree>> = IndexSet::new();
+) -> Result<IndexSet<&'tree XpathItemTreeNodeData>, ExpressionApplyError> {
+    let mut nodes: IndexSet<&'tree XpathItemTreeNodeData> = IndexSet::new();
 
     // Only tree items have parents
     // TODO: Technically an attribute's parent is an element, but there is no link to that ATM.

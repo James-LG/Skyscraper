@@ -14,7 +14,7 @@ use crate::{
             terminal_symbols::braced_uri_literal,
             types::{eq_name, kind_test, EQName, KindTest},
             xml_names::{nc_name, QName},
-            XpathItemTreeNode, XpathItemTreeNodeData,
+            XpathItemTreeNodeData,
         },
         ExpressionApplyError, XpathExpressionContext,
     },
@@ -57,13 +57,14 @@ impl NodeTest {
         &self,
         axis: BiDirectionalAxis,
         context: &XpathExpressionContext<'tree>,
-    ) -> Result<Option<XpathItemTreeNode<'tree>>, ExpressionApplyError> {
+    ) -> Result<Option<&'tree XpathItemTreeNodeData>, ExpressionApplyError> {
         match self {
             NodeTest::KindTest(test) => {
                 let filtered_nodes = test.filter(&xpath_item_set![context.item.clone()])?;
 
                 if !filtered_nodes.is_empty() {
-                    let node: XpathItemTreeNode<'_> = filtered_nodes.into_iter().next().unwrap();
+                    let node: &'tree XpathItemTreeNodeData =
+                        filtered_nodes.into_iter().next().unwrap();
                     Ok(Some(node))
                 } else {
                     Ok(None)
@@ -113,7 +114,7 @@ impl NameTest {
         &self,
         axis: BiDirectionalAxis,
         context: &XpathExpressionContext<'tree>,
-    ) -> Result<Option<XpathItemTreeNode<'tree>>, ExpressionApplyError> {
+    ) -> Result<Option<&'tree XpathItemTreeNodeData>, ExpressionApplyError> {
         let node = if let XpathItem::Node(node) = &context.item {
             node
         } else {
@@ -123,7 +124,7 @@ impl NameTest {
         let is_match = match self {
             NameTest::Name(expected_name) => {
                 // Get the name of the node, if available for the node type.
-                let node_name = match node.data {
+                let node_name = match node {
                     XpathItemTreeNodeData::DocumentNode(_) => todo!(),
                     XpathItemTreeNodeData::ElementNode(e) => Some(&e.name),
                     XpathItemTreeNodeData::PINode(_) => todo!(),
@@ -214,24 +215,18 @@ impl Wildcard {
     pub(crate) fn is_match<'tree>(
         &self,
         axis: BiDirectionalAxis,
-        node: &XpathItemTreeNode<'tree>,
+        node: &'tree XpathItemTreeNodeData,
     ) -> bool {
         // Wildcards only match context items that are the axis' principal node kind.
         // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#dt-principal-node-kind
         let is_principal_node_kind = match axis {
             BiDirectionalAxis::ForwardAxis(ForwardAxis::Attribute) => {
                 // For the attribute axis, the principal node kind is attribute.
-                matches!(node.data, XpathItemTreeNodeData::AttributeNode(_))
+                matches!(node, XpathItemTreeNodeData::AttributeNode(_))
             }
             _ => {
                 // For all other axes, the principal node kind is element.
-                matches!(
-                    node,
-                    XpathItemTreeNode {
-                        data: XpathItemTreeNodeData::ElementNode(_),
-                        ..
-                    }
-                )
+                matches!(node, XpathItemTreeNodeData::ElementNode(_),)
             }
         };
 

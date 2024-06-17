@@ -25,13 +25,9 @@ fn leading_slash_should_select_html_node() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element = tree_node.data.extract_as_element_node();
+        let element = tree_node.extract_as_element_node();
         assert_eq!(element.name, "html");
     }
 }
@@ -68,13 +64,9 @@ fn leading_double_slash_should_select_all() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element = tree_node.data.extract_as_element_node();
+        let element = tree_node.extract_as_element_node();
         assert_eq!(element.name, "p");
 
         assert_eq!(tree_node.text(&xpath_item_tree), Some("1".to_string()));
@@ -82,13 +74,9 @@ fn leading_double_slash_should_select_all() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element = tree_node.data.extract_as_element_node();
+        let element = tree_node.extract_as_element_node();
         assert_eq!(element.name, "p");
 
         assert_eq!(tree_node.text(&xpath_item_tree), Some("2".to_string()));
@@ -96,13 +84,9 @@ fn leading_double_slash_should_select_all() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element = tree_node.data.extract_as_element_node();
+        let element = tree_node.extract_as_element_node();
         assert_eq!(element.name, "p");
 
         assert_eq!(tree_node.text(&xpath_item_tree), Some("3".to_string()));
@@ -110,13 +94,9 @@ fn leading_double_slash_should_select_all() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element = tree_node.data.extract_as_element_node();
+        let element = tree_node.extract_as_element_node();
         assert_eq!(element.name, "p");
 
         assert_eq!(tree_node.text(&xpath_item_tree), Some("4".to_string()));
@@ -124,13 +104,9 @@ fn leading_double_slash_should_select_all() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element = tree_node.data.extract_as_element_node();
+        let element = tree_node.extract_as_element_node();
         assert_eq!(element.name, "p");
 
         assert_eq!(tree_node.text(&xpath_item_tree), Some("5".to_string()));
@@ -138,13 +114,9 @@ fn leading_double_slash_should_select_all() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element = tree_node.data.extract_as_element_node();
+        let element = tree_node.extract_as_element_node();
         assert_eq!(element.name, "p");
 
         assert_eq!(tree_node.text(&xpath_item_tree), Some("6".to_string()));
@@ -187,13 +159,9 @@ fn double_slash_should_select_all() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element = tree_node.data.extract_as_element_node();
+        let element = tree_node.extract_as_element_node();
         assert_eq!(element.name, "p");
 
         assert_eq!(tree_node.text(&xpath_item_tree), Some("4".to_string()));
@@ -201,13 +169,9 @@ fn double_slash_should_select_all() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element = tree_node.data.extract_as_element_node();
+        let element = tree_node.extract_as_element_node();
         assert_eq!(element.name, "p");
 
         assert_eq!(tree_node.text(&xpath_item_tree), Some("5".to_string()));
@@ -215,13 +179,9 @@ fn double_slash_should_select_all() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element = tree_node.data.extract_as_element_node();
+        let element = tree_node.extract_as_element_node();
         assert_eq!(element.name, "p");
 
         assert_eq!(tree_node.text(&xpath_item_tree), Some("6".to_string()));
@@ -255,13 +215,9 @@ fn document_order_preserved_in_results() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element_node = tree_node.data.extract_as_element_node();
+        let element_node = tree_node.extract_as_element_node();
 
         assert_eq!(element_node.name, "span");
 
@@ -270,13 +226,9 @@ fn document_order_preserved_in_results() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element_node = tree_node.data.extract_as_element_node();
+        let element_node = tree_node.extract_as_element_node();
 
         assert_eq!(element_node.name, "span");
 
@@ -288,13 +240,9 @@ fn document_order_preserved_in_results() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        let element_node = tree_node.data.extract_as_element_node();
+        let element_node = tree_node.extract_as_element_node();
 
         assert_eq!(element_node.name, "span");
 

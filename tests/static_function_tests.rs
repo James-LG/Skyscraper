@@ -22,12 +22,8 @@ fn root_should_select_root_node() {
 
     // assert node
     {
-        let tree_node = nodes
-            .next()
-            .unwrap()
-            .extract_into_node()
-            .extract_into_tree_node();
+        let tree_node = nodes.next().unwrap().extract_into_node();
 
-        tree_node.data.extract_as_document_node();
+        tree_node.extract_as_document_node();
     }
 }
