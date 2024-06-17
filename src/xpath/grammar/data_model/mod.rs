@@ -6,7 +6,7 @@ use enum_extract_macro::EnumExtract;
 use indextree::NodeId;
 use ordered_float::OrderedFloat;
 
-use super::{XpathItemTree, XpathItemTreeNodeData};
+use super::{TextIter, XpathItemTree, XpathItemTreeNodeData};
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#dt-item
 #[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash, EnumExtract)]
@@ -256,11 +256,11 @@ impl ElementNode {
     ///
     /// Includes whitespace text nodes.
     /// Text nodes are split by opening and closing tags contained in the current element.
-    pub fn itertext<'this, 'tree>(&'this self, tree: &'tree XpathItemTree) -> ElementTextIter<'this>
+    pub fn itertext<'this, 'tree>(&'this self, tree: &'tree XpathItemTree) -> TextIter<'this>
     where
         'tree: 'this,
     {
-        ElementTextIter::new(tree, self)
+        TextIter::new(tree, tree.get(self.id()))
     }
 
     /// Get all text contained in this element and its descendants.
@@ -323,40 +323,6 @@ impl ElementNode {
                 }
                 v
             })
-    }
-}
-
-/// An iterator over all text contained in a element and its descendants.
-pub struct ElementTextIter<'a> {
-    iter_chain: Box<dyn Iterator<Item = String> + 'a>,
-}
-
-impl<'a> ElementTextIter<'a> {
-    pub(crate) fn new(tree: &'a XpathItemTree, node: &'a ElementNode) -> ElementTextIter<'a> {
-        let mut iter_chain: Box<dyn Iterator<Item = String>> = Box::new(iter::empty());
-
-        for child in node.children(tree) {
-            match child {
-                XpathItemTreeNodeData::TextNode(text) => {
-                    iter_chain = Box::new(iter_chain.chain(iter::once(text.content.clone())));
-                }
-                XpathItemTreeNodeData::ElementNode(child_element) => {
-                    iter_chain =
-                        Box::new(iter_chain.chain(ElementTextIter::new(tree, child_element)));
-                }
-                _ => {}
-            }
-        }
-
-        ElementTextIter { iter_chain }
-    }
-}
-
-impl<'a> Iterator for ElementTextIter<'a> {
-    type Item = String;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter_chain.next()
     }
 }
 

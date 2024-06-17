@@ -12,6 +12,8 @@ mod types;
 mod whitespace_recipes;
 mod xml_names;
 
+use std::iter;
+
 use enum_extract_macro::EnumExtract;
 pub(crate) use expressions::xpath;
 pub use expressions::Xpath;
@@ -96,6 +98,17 @@ impl XpathItemTreeNodeData {
         })
     }
 
+    /// Get an iterator over all text contained in this node and its descendants.
+    ///
+    /// Includes whitespace text nodes.
+    /// Text nodes are split by opening and closing tags contained in the current node.
+    pub fn itertext<'this, 'tree>(&'this self, tree: &'tree XpathItemTree) -> TextIter<'this>
+    where
+        'tree: 'this,
+    {
+        TextIter::new(tree, self)
+    }
+
     /// Get all text contained in this element and its descendants.
     ///
     /// # Arguments
@@ -136,6 +149,39 @@ impl XpathItemTreeNodeData {
             XpathItemTreeNodeData::TextNode(node) => Some(node.content.to_string()),
             XpathItemTreeNodeData::AttributeNode(_) => None,
         }
+    }
+}
+
+/// An iterator over all text contained in a element and its descendants.
+pub struct TextIter<'a> {
+    iter_chain: Box<dyn Iterator<Item = String> + 'a>,
+}
+
+impl<'a> TextIter<'a> {
+    pub(crate) fn new(tree: &'a XpathItemTree, node: &'a XpathItemTreeNodeData) -> TextIter<'a> {
+        let mut iter_chain: Box<dyn Iterator<Item = String>> = Box::new(iter::empty());
+
+        for child in node.children(tree) {
+            match child {
+                XpathItemTreeNodeData::TextNode(text) => {
+                    iter_chain = Box::new(iter_chain.chain(iter::once(text.content.clone())));
+                }
+                XpathItemTreeNodeData::ElementNode(child_element) => {
+                    iter_chain = Box::new(iter_chain.chain(TextIter::new(tree, child)));
+                }
+                _ => {}
+            }
+        }
+
+        TextIter { iter_chain }
+    }
+}
+
+impl<'a> Iterator for TextIter<'a> {
+    type Item = String;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter_chain.next()
     }
 }
 
