@@ -15,7 +15,7 @@ use crate::xpath::{
             postfix_expressions::Predicate,
         },
         recipes::Res,
-        XpathItemTreeNodeData,
+        XpathItemTreeNode,
     },
     ExpressionApplyError, XpathExpressionContext, XpathItemSet,
 };
@@ -115,7 +115,7 @@ impl AxisStepType {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XpathExpressionContext<'tree>,
-    ) -> Result<IndexSet<&'tree XpathItemTreeNodeData>, ExpressionApplyError> {
+    ) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
         match self {
             AxisStepType::ReverseStep(step) => step.eval(context),
             AxisStepType::ForwardStep(step) => step.eval(context),

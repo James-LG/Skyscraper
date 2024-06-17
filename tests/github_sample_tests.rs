@@ -1,6 +1,6 @@
 use skyscraper::html::trim_internal_whitespace;
 use skyscraper::xpath::grammar::data_model::TextNode;
-use skyscraper::xpath::grammar::XpathItemTreeNodeData;
+use skyscraper::xpath::grammar::XpathItemTreeNode;
 use skyscraper::{html, xpath};
 
 static HTML: &'static str = include_str!("samples/James-LG_Skyscraper.html");
@@ -83,7 +83,7 @@ fn xpath_github_sample3() {
     let element = tree_node.extract_as_element_node();
     assert_eq!(element.name, "a");
 
-    let children: Vec<&XpathItemTreeNodeData> = tree_node.children(&xpath_item_tree);
+    let children: Vec<&XpathItemTreeNode> = tree_node.children(&xpath_item_tree);
     assert_eq!(children.len(), 2);
     let mut children = children.into_iter();
 

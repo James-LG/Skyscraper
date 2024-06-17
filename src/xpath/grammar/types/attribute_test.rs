@@ -8,7 +8,7 @@ use nom::{
 
 use crate::xpath::{
     grammar::{
-        recipes::Res, types::common::attribute_name, whitespace_recipes::ws, XpathItemTreeNodeData,
+        recipes::Res, types::common::attribute_name, whitespace_recipes::ws, XpathItemTreeNode,
     },
     ExpressionApplyError,
 };
@@ -60,7 +60,7 @@ impl Display for AttributeTest {
 impl AttributeTest {
     pub(crate) fn is_match<'tree>(
         &self,
-        node: &'tree XpathItemTreeNodeData,
+        node: &'tree XpathItemTreeNode,
     ) -> Result<bool, ExpressionApplyError> {
         match &self.pair {
             Some(pair) => pair.is_match(node),
@@ -95,7 +95,7 @@ impl Display for AttributeTestPair {
 impl AttributeTestPair {
     pub(crate) fn is_match<'tree>(
         &self,
-        node: &'tree XpathItemTreeNodeData,
+        node: &'tree XpathItemTreeNode,
     ) -> Result<bool, ExpressionApplyError> {
         let is_match = self.name_or_wildcard.is_match(node)?;
 
@@ -143,7 +143,7 @@ impl Display for AttribNameOrWildcard {
 impl AttribNameOrWildcard {
     pub(crate) fn is_match<'tree>(
         &self,
-        _node: &'tree XpathItemTreeNodeData,
+        _node: &'tree XpathItemTreeNode,
     ) -> Result<bool, ExpressionApplyError> {
         match self {
             AttribNameOrWildcard::AttributeName(_) => {

@@ -30,7 +30,7 @@ use super::{
     recipes::Res,
     terminal_symbols::UriQualifiedName,
     xml_names::{nc_name, QName},
-    XpathItemTreeNodeData,
+    XpathItemTreeNode,
 };
 
 pub mod array_test;
@@ -136,14 +136,14 @@ impl KindTest {
     pub(crate) fn filter<'tree>(
         &self,
         item_set: &XpathItemSet<'tree>,
-    ) -> Result<IndexSet<&'tree XpathItemTreeNodeData>, ExpressionApplyError> {
+    ) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
         match self {
             KindTest::AnyKindTest => {
                 // AnyKindTest is `node()`.
                 // Select all node types.
                 let filtered_nodes = item_set.iter().filter_map(|item| {
                     if let XpathItem::Node(node) = item {
-                        if let XpathItemTreeNodeData::AttributeNode(_) = node {
+                        if let XpathItemTreeNode::AttributeNode(_) = node {
                             None
                         } else {
                             Some(*node)
@@ -160,7 +160,7 @@ impl KindTest {
                 // Select all text nodes.
                 let filtered_nodes = item_set.iter().filter_map(|item| {
                     if let XpathItem::Node(node) = item {
-                        if matches!(node, XpathItemTreeNodeData::TextNode(_),) {
+                        if matches!(node, XpathItemTreeNode::TextNode(_),) {
                             return Some(*node);
                         }
                     }
@@ -255,7 +255,7 @@ impl DocumentTest {
     pub(crate) fn filter<'tree>(
         &self,
         item_set: &XpathItemSet<'tree>,
-    ) -> Result<IndexSet<&'tree XpathItemTreeNodeData>, ExpressionApplyError> {
+    ) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
         match &self.value {
             // document-node() matches any document node.
             None => {
@@ -263,7 +263,7 @@ impl DocumentTest {
 
                 for item in item_set {
                     if let XpathItem::Node(node) = item {
-                        if matches!(node, XpathItemTreeNodeData::DocumentNode(_),) {
+                        if matches!(node, XpathItemTreeNode::DocumentNode(_),) {
                             filtered_nodes.insert(*node);
                         }
                     }

@@ -78,7 +78,7 @@ impl Xpath {
     ///
     /// ```rust
     /// use skyscraper::html;
-    /// use skyscraper::xpath::{self, XpathItemTree, grammar::{XpathItemTreeNodeData, data_model::XpathItem}};
+    /// use skyscraper::xpath::{self, XpathItemTree, grammar::{XpathItemTreeNode, data_model::XpathItem}};
     /// use std::error::Error;
     ///
     /// fn main() -> Result<(), Box<dyn Error>> {
@@ -138,7 +138,7 @@ impl Xpath {
     ///
     /// ```rust
     /// use skyscraper::html::{self, trim_internal_whitespace};
-    /// use skyscraper::xpath::{self, XpathItemTree, grammar::{XpathItemTreeNodeData, data_model::{XpathItem}}};
+    /// use skyscraper::xpath::{self, XpathItemTree, grammar::{XpathItemTreeNode, data_model::{XpathItem}}};
     /// use std::error::Error;
     ///
     /// fn main() -> Result<(), Box<dyn Error>> {

@@ -29,7 +29,7 @@ use crate::{
 
 /// Nodes that are part of the [`XpathItemTree`].
 #[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash, EnumExtract, Clone)]
-pub enum XpathItemTreeNodeData {
+pub enum XpathItemTreeNode {
     /// The root node of the document.
     DocumentNode(XpathDocumentNode),
 
@@ -51,7 +51,7 @@ pub enum XpathItemTreeNodeData {
     AttributeNode(AttributeNode),
 }
 
-impl XpathItemTreeNodeData {
+impl XpathItemTreeNode {
     /// Get all children of the document.
     ///
     /// # Arguments
@@ -61,14 +61,14 @@ impl XpathItemTreeNodeData {
     /// # Returns
     ///
     /// A vector of all children of the document.
-    pub fn children<'tree>(&self, tree: &'tree XpathItemTree) -> Vec<&'tree XpathItemTreeNodeData> {
+    pub fn children<'tree>(&self, tree: &'tree XpathItemTree) -> Vec<&'tree XpathItemTreeNode> {
         match self {
-            XpathItemTreeNodeData::DocumentNode(node) => node.children(tree),
-            XpathItemTreeNodeData::ElementNode(node) => node.children(tree).collect(),
-            XpathItemTreeNodeData::PINode(_) => vec![],
-            XpathItemTreeNodeData::CommentNode(_) => vec![],
-            XpathItemTreeNodeData::TextNode(_) => vec![],
-            XpathItemTreeNodeData::AttributeNode(_) => vec![],
+            XpathItemTreeNode::DocumentNode(node) => node.children(tree),
+            XpathItemTreeNode::ElementNode(node) => node.children(tree).collect(),
+            XpathItemTreeNode::PINode(_) => vec![],
+            XpathItemTreeNode::CommentNode(_) => vec![],
+            XpathItemTreeNode::TextNode(_) => vec![],
+            XpathItemTreeNode::AttributeNode(_) => vec![],
         }
     }
 
@@ -81,14 +81,11 @@ impl XpathItemTreeNodeData {
     /// # Returns
     ///
     /// The parent of the element if it exists, or `None` if it does not.
-    pub fn parent<'tree>(
-        &self,
-        tree: &'tree XpathItemTree,
-    ) -> Option<&'tree XpathItemTreeNodeData> {
+    pub fn parent<'tree>(&self, tree: &'tree XpathItemTree) -> Option<&'tree XpathItemTreeNode> {
         let id = match self {
-            XpathItemTreeNodeData::ElementNode(e) => Some(e.id()),
-            XpathItemTreeNodeData::TextNode(t) => Some(t.id()),
-            XpathItemTreeNodeData::AttributeNode(a) => Some(a.id()),
+            XpathItemTreeNode::ElementNode(e) => Some(e.id()),
+            XpathItemTreeNode::TextNode(t) => Some(t.id()),
+            XpathItemTreeNode::AttributeNode(a) => Some(a.id()),
             _ => None,
         };
 
@@ -120,12 +117,12 @@ impl XpathItemTreeNodeData {
     /// A string of all text contained in this element and its descendants.
     pub fn text_content<'tree>(&self, tree: &'tree XpathItemTree) -> String {
         match self {
-            XpathItemTreeNodeData::DocumentNode(node) => node.text_content(tree),
-            XpathItemTreeNodeData::ElementNode(node) => node.text_content(tree),
-            XpathItemTreeNodeData::PINode(_) => String::from(""),
-            XpathItemTreeNodeData::CommentNode(_) => String::from(""),
-            XpathItemTreeNodeData::TextNode(node) => node.content.to_string(),
-            XpathItemTreeNodeData::AttributeNode(_) => String::from(""),
+            XpathItemTreeNode::DocumentNode(node) => node.text_content(tree),
+            XpathItemTreeNode::ElementNode(node) => node.text_content(tree),
+            XpathItemTreeNode::PINode(_) => String::from(""),
+            XpathItemTreeNode::CommentNode(_) => String::from(""),
+            XpathItemTreeNode::TextNode(node) => node.content.to_string(),
+            XpathItemTreeNode::AttributeNode(_) => String::from(""),
         }
     }
 
@@ -142,12 +139,12 @@ impl XpathItemTreeNodeData {
     /// A string of all text contained in this element.
     pub fn text<'tree>(&self, tree: &'tree XpathItemTree) -> Option<String> {
         match self {
-            XpathItemTreeNodeData::DocumentNode(node) => node.text(tree),
-            XpathItemTreeNodeData::ElementNode(node) => node.text(tree),
-            XpathItemTreeNodeData::PINode(_) => None,
-            XpathItemTreeNodeData::CommentNode(_) => None,
-            XpathItemTreeNodeData::TextNode(node) => Some(node.content.to_string()),
-            XpathItemTreeNodeData::AttributeNode(_) => None,
+            XpathItemTreeNode::DocumentNode(node) => node.text(tree),
+            XpathItemTreeNode::ElementNode(node) => node.text(tree),
+            XpathItemTreeNode::PINode(_) => None,
+            XpathItemTreeNode::CommentNode(_) => None,
+            XpathItemTreeNode::TextNode(node) => Some(node.content.to_string()),
+            XpathItemTreeNode::AttributeNode(_) => None,
         }
     }
 }
@@ -158,15 +155,15 @@ pub struct TextIter<'a> {
 }
 
 impl<'a> TextIter<'a> {
-    pub(crate) fn new(tree: &'a XpathItemTree, node: &'a XpathItemTreeNodeData) -> TextIter<'a> {
+    pub(crate) fn new(tree: &'a XpathItemTree, node: &'a XpathItemTreeNode) -> TextIter<'a> {
         let mut iter_chain: Box<dyn Iterator<Item = String>> = Box::new(iter::empty());
 
         for child in node.children(tree) {
             match child {
-                XpathItemTreeNodeData::TextNode(text) => {
+                XpathItemTreeNode::TextNode(text) => {
                     iter_chain = Box::new(iter_chain.chain(iter::once(text.content.clone())));
                 }
-                XpathItemTreeNodeData::ElementNode(child_element) => {
+                XpathItemTreeNode::ElementNode(_child_element) => {
                     iter_chain = Box::new(iter_chain.chain(TextIter::new(tree, child)));
                 }
                 _ => {}
@@ -188,31 +185,31 @@ impl<'a> Iterator for TextIter<'a> {
 /// A tree of [`XpathItemTreeNode`]s.
 pub struct XpathItemTree {
     /// The index tree that stores the nodes.
-    arena: Arena<XpathItemTreeNodeData>,
+    arena: Arena<XpathItemTreeNode>,
 
     /// The root node of the document.
     root_node: NodeId,
 }
 
 impl XpathItemTree {
-    fn get_index_node(&self, id: NodeId) -> &indextree::Node<XpathItemTreeNodeData> {
+    fn get_index_node(&self, id: NodeId) -> &indextree::Node<XpathItemTreeNode> {
         self.arena
             .get(id)
             .expect("xpath item node missing from tree")
     }
 
-    fn get(&self, id: NodeId) -> &XpathItemTreeNodeData {
+    fn get(&self, id: NodeId) -> &XpathItemTreeNode {
         let indextree_node = self.get_index_node(id);
 
         indextree_node.get()
     }
 
-    fn root(&self) -> &XpathItemTreeNodeData {
+    fn root(&self) -> &XpathItemTreeNode {
         self.get(self.root_node)
     }
 
     /// Get an iterator over all nodes in the tree.
-    pub fn iter(&self) -> impl Iterator<Item = &XpathItemTreeNodeData> {
+    pub fn iter(&self) -> impl Iterator<Item = &XpathItemTreeNode> {
         self.arena.iter().map(|node| {
             let id = self.arena.get_node_id(node).unwrap();
             self.get(id)
@@ -225,7 +222,7 @@ impl From<&HtmlDocument> for XpathItemTree {
         fn internal_from(
             current_html_node: &DocumentNode,
             html_document: &HtmlDocument,
-            item_arena: &mut Arena<XpathItemTreeNodeData>,
+            item_arena: &mut Arena<XpathItemTreeNode>,
         ) -> NodeId {
             let html_node = html_document
                 .get_html_node(&current_html_node)
@@ -234,7 +231,7 @@ impl From<&HtmlDocument> for XpathItemTree {
             let root_item_id = match html_node {
                 HtmlNode::Tag(tag) => {
                     let node =
-                        XpathItemTreeNodeData::ElementNode(ElementNode::new(tag.name.to_string()));
+                        XpathItemTreeNode::ElementNode(ElementNode::new(tag.name.to_string()));
 
                     let item_id = item_arena.new_node(node);
                     item_arena
@@ -254,7 +251,7 @@ impl From<&HtmlDocument> for XpathItemTree {
                         .collect();
 
                     for attribute in attributes {
-                        let attribute_node = XpathItemTreeNodeData::AttributeNode(attribute);
+                        let attribute_node = XpathItemTreeNode::AttributeNode(attribute);
                         let attribute_id = item_arena.new_node(attribute_node);
 
                         item_id.append(attribute_id, item_arena);
@@ -271,7 +268,7 @@ impl From<&HtmlDocument> for XpathItemTree {
                     item_id
                 }
                 HtmlNode::Text(text) => {
-                    let node = XpathItemTreeNodeData::TextNode(TextNode::new(
+                    let node = XpathItemTreeNode::TextNode(TextNode::new(
                         text.value.to_string(),
                         text.only_whitespace,
                     ));
@@ -297,9 +294,9 @@ impl From<&HtmlDocument> for XpathItemTree {
             root_item_id
         }
 
-        let mut item_arena = Arena::<XpathItemTreeNodeData>::new();
+        let mut item_arena = Arena::<XpathItemTreeNode>::new();
         let root_node_id =
-            item_arena.new_node(XpathItemTreeNodeData::DocumentNode(XpathDocumentNode {}));
+            item_arena.new_node(XpathItemTreeNode::DocumentNode(XpathDocumentNode {}));
         let first_child = internal_from(&html_document.root_node, &html_document, &mut item_arena);
         root_node_id.append(first_child, &mut item_arena);
 

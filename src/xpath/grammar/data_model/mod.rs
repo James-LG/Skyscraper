@@ -1,12 +1,12 @@
 //! https://www.w3.org/TR/xpath-datamodel-31/#intro
 
-use std::{fmt::Display, iter};
+use std::fmt::Display;
 
 use enum_extract_macro::EnumExtract;
 use indextree::NodeId;
 use ordered_float::OrderedFloat;
 
-use super::{TextIter, XpathItemTree, XpathItemTreeNodeData};
+use super::{TextIter, XpathItemTree, XpathItemTreeNode};
 
 /// https://www.w3.org/TR/xpath-datamodel-31/#dt-item
 #[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash, EnumExtract)]
@@ -14,7 +14,7 @@ pub enum XpathItem<'tree> {
     /// A node in the [`XpathItemTree`](crate::xpath::XpathItemTree).
     ///
     ///  https://www.w3.org/TR/xpath-datamodel-31/#dt-node
-    Node(&'tree XpathItemTreeNodeData),
+    Node(&'tree XpathItemTreeNode),
 
     /// A function item.
     ///
@@ -27,8 +27,8 @@ pub enum XpathItem<'tree> {
     AnyAtomicType(AnyAtomicType),
 }
 
-impl<'tree> From<&'tree XpathItemTreeNodeData> for XpathItem<'tree> {
-    fn from(node: &'tree XpathItemTreeNodeData) -> Self {
+impl<'tree> From<&'tree XpathItemTreeNode> for XpathItem<'tree> {
+    fn from(node: &'tree XpathItemTreeNode) -> Self {
         XpathItem::Node(node)
     }
 }
@@ -138,7 +138,7 @@ impl XpathDocumentNode {
     /// # Returns
     ///
     /// A vector of all children of the document.
-    pub fn children<'tree>(&self, tree: &'tree XpathItemTree) -> Vec<&'tree XpathItemTreeNodeData> {
+    pub fn children<'tree>(&self, tree: &'tree XpathItemTree) -> Vec<&'tree XpathItemTreeNode> {
         tree.root_node
             .children(&tree.arena)
             .map(|x| tree.get(x))
@@ -194,7 +194,7 @@ impl ElementNode {
     pub fn attributes<'tree>(&self, tree: &'tree XpathItemTree) -> Vec<&'tree AttributeNode> {
         self.children(tree)
             .filter_map(|x| match x {
-                XpathItemTreeNodeData::AttributeNode(attr) => Some(attr),
+                XpathItemTreeNode::AttributeNode(attr) => Some(attr),
                 _ => None,
             })
             .collect()
@@ -232,7 +232,7 @@ impl ElementNode {
     pub fn children<'tree>(
         &self,
         tree: &'tree XpathItemTree,
-    ) -> impl Iterator<Item = &'tree XpathItemTreeNodeData> {
+    ) -> impl Iterator<Item = &'tree XpathItemTreeNode> {
         self.id().children(&tree.arena).map(|x| tree.get(x))
     }
 
@@ -245,10 +245,7 @@ impl ElementNode {
     /// # Returns
     ///
     /// The parent of the element if it exists, or `None` if it does not.
-    pub fn parent<'tree>(
-        &self,
-        tree: &'tree XpathItemTree,
-    ) -> Option<&'tree XpathItemTreeNodeData> {
+    pub fn parent<'tree>(&self, tree: &'tree XpathItemTree) -> Option<&'tree XpathItemTreeNode> {
         tree.get(self.id()).parent(tree)
     }
 
@@ -309,13 +306,13 @@ impl ElementNode {
             // Combine all the direct and indirect children into a Vec.
             .fold(Vec::new(), |mut v, child| {
                 match child {
-                    XpathItemTreeNodeData::ElementNode(child_element) => {
+                    XpathItemTreeNode::ElementNode(child_element) => {
                         if recurse {
                             // If this child is an element node, get all the text nodes in it.
                             v.extend(Self::get_all_text_nodes(tree, &child_element, recurse));
                         }
                     }
-                    XpathItemTreeNodeData::TextNode(text) => {
+                    XpathItemTreeNode::TextNode(text) => {
                         // If this child is a text node, push it to the Vec.
                         v.push(text.clone());
                     }
