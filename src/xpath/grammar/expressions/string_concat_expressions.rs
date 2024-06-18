@@ -1,4 +1,4 @@
-//! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-string-concat-expr
+//! <https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-string-concat-expr>
 
 use std::fmt::Display;
 

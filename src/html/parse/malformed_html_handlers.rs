@@ -46,7 +46,7 @@ pub struct MismatchedTagHandlerContext<'a> {
 ///     ```
 #[cfg_attr(test, automock)]
 pub trait MismatchedTagHandler {
-    /// Performs the handling by (optionally) changing the [ParserState](crate::html::parse::ParserState).
+    /// Performs the handling by (optionally) changing the [ParserState].
     ///
     /// If the result is Ok, the parser will continue. If the result is Err, it will return the error immediately.
     fn invoke<'a>(&self, context: MismatchedTagHandlerContext<'a>) -> Result<(), ParseError>;

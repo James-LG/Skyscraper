@@ -1,4 +1,4 @@
-//! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-context-item-expression
+//! <https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-context-item-expression>
 
 use std::fmt::Display;
 
@@ -146,9 +146,7 @@ pub(crate) fn func_data<'tree>(
                 }
                 XpathItemTreeNode::PINode(_) => todo!("func_data PINode"),
                 XpathItemTreeNode::CommentNode(_) => todo!("func_data CommentNode"),
-                XpathItemTreeNode::TextNode(text) => {
-                    AnyAtomicType::String(text.content.clone())
-                }
+                XpathItemTreeNode::TextNode(text) => AnyAtomicType::String(text.content.clone()),
                 &XpathItemTreeNode::AttributeNode(attribute) => {
                     AnyAtomicType::String(attribute.value.clone())
                 }

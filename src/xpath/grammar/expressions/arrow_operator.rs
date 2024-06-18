@@ -1,4 +1,4 @@
-//! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-arrow-operator
+//! <https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-arrow-operator>
 
 use std::fmt::Display;
 

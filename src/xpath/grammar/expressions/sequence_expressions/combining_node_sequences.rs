@@ -1,4 +1,4 @@
-//! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#combining_seq
+//! <https://www.w3.org/TR/2017/REC-xpath-31-20170321/#combining_seq>
 
 use std::fmt::Display;
 

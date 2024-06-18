@@ -45,8 +45,9 @@ type TagAttributes = HashMap<String, String>;
 pub struct HtmlTag {
     /// Name of the tag.
     pub name: String,
+
     /// Map of the tag's attributes and their corresponding values.
-    /// Example: Attributes of <div class="hello" id="world"/>
+    /// Example: Attributes of `<div class="hello" id="world"></div>`
     pub attributes: TagAttributes,
 }
 

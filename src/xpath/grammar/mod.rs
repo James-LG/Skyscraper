@@ -1,5 +1,5 @@
 //! This module contains the grammar for the XPath language.
-//! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-grammar
+//! <https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-grammar>
 
 // Helpful links:
 // https://github.com/rust-bakery/nom/blob/main/doc/making_a_new_parser_from_scratch.md
@@ -183,6 +183,23 @@ impl<'a> Iterator for TextIter<'a> {
 }
 
 /// A tree of [`XpathItemTreeNode`]s.
+///
+/// This tree can be searched using an [`Xpath`] expression.
+///
+/// This tree is created from an [`HtmlDocument`],
+/// and bridges the gap between the [html](crate::html) and [xpath](crate::xpath) modules.
+///
+/// # Example
+///
+/// ```rust
+/// use skyscraper::html;
+/// use skyscraper::xpath::{self, XpathItemTree};
+///
+/// let text = "<html></html";
+///
+/// let document = html::parse(text).unwrap();
+/// let xpath_item_tree = XpathItemTree::from(&document);
+/// ```
 pub struct XpathItemTree {
     /// The index tree that stores the nodes.
     arena: Arena<XpathItemTreeNode>,

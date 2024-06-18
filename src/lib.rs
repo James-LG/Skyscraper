@@ -2,6 +2,13 @@
 //! It can then traverse the tree and select nodes using standard XPath expressions either
 //! created programatically or parsed from XPath string literals.
 //!
+//! This crate is split into two main modules: [html] and [xpath].
+//!
+//! For more information on HTML documents and nodes, including how to get text or attributes from nodes,
+//! see the [html] module documentation.
+//!
+//! For more information on XPath expressions, see the [xpath] module documentation.
+//!
 //! # Example: parse an HTML document and use an XPath expression
 //! ```rust
 //! # use std::error::Error;
@@ -32,10 +39,7 @@
 //!     .expect("xpath is invalid");
 //!
 //! // Apply the XPath expression to our HTML document
-//! let result = xpath.apply(&xpath_item_tree)?;
-//!
-//! // The xpath expression that was used always returns an item set.
-//! let items = result;
+//! let items = xpath.apply(&xpath_item_tree)?;
 //!
 //! assert_eq!(items.len(), 1);
 //!
@@ -89,11 +93,6 @@
 //!     Ok(())
 //! }
 //! ```
-//!
-//! For more information on HTML documents and nodes, including how to get text or attributes from nodes,
-//! see the [html] module documentation.
-//!
-//! For more information on XPath expressions, see the [xpath] module documentation.
 
 #![warn(missing_docs)]
 

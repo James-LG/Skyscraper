@@ -97,7 +97,7 @@ impl<'tree> XpathItemSet<'tree> {
 
     /// Return the effective boolean value of the result.
     ///
-    /// https://www.w3.org/TR/2017/REC-xpath-31-20170321/#dt-ebv
+    /// <https://www.w3.org/TR/2017/REC-xpath-31-20170321/#dt-ebv>
     pub fn boolean(&self) -> bool {
         // If this is a singleton value, check for the effective boolean value of that value.
         if self.index_set.len() == 1 {

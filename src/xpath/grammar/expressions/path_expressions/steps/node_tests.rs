@@ -1,4 +1,4 @@
-//! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#node-tests
+//! <https://www.w3.org/TR/2017/REC-xpath-31-20170321/#node-tests>
 
 use std::fmt::Display;
 
@@ -63,8 +63,7 @@ impl NodeTest {
                 let filtered_nodes = test.filter(&xpath_item_set![context.item.clone()])?;
 
                 if !filtered_nodes.is_empty() {
-                    let node: &'tree XpathItemTreeNode =
-                        filtered_nodes.into_iter().next().unwrap();
+                    let node: &'tree XpathItemTreeNode = filtered_nodes.into_iter().next().unwrap();
                     Ok(Some(node))
                 } else {
                     Ok(None)

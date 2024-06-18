@@ -1,8 +1,8 @@
-//! Create options for [parse_opts](super::parse_opts).
+//! Create options for [Parser](super::Parser).
 
 use super::malformed_html_handlers::{ErrorMismatchedTagHandler, MismatchedTagHandler};
 
-/// Options for [parse_opts](super::parse_opts).
+/// Options for [Parser](super::Parser).
 pub struct ParseOptions {
     /// Defines the method for handling an end tag that doesn't match the currently opened tag.
     pub mismatched_tag_handler: Box<dyn MismatchedTagHandler>,

@@ -1,4 +1,4 @@
-//! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-enclosed-expr
+//! <https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-enclosed-expr>
 
 use nom::{character::complete::char, combinator::opt, error::context};
 
