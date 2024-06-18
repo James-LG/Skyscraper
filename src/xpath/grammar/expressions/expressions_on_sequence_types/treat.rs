@@ -1,4 +1,4 @@
-//! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-treat
+//! <https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-treat>
 
 use std::fmt::Display;
 

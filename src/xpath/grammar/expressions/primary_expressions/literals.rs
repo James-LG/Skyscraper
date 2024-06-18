@@ -1,4 +1,4 @@
-//! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-literals
+//! <https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-literals>
 
 use std::fmt::Display;
 
@@ -114,7 +114,7 @@ mod test {
         assert_eq!(next_input, "");
         assert_eq!(res.to_string(), "0.25");
     }
-    
+
     #[test]
     fn numeric_literal_should_match_double() {
         // arrange

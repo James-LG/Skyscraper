@@ -1,4 +1,4 @@
-//! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-expressions
+//! <https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-expressions>
 
 use std::fmt::Display;
 
@@ -93,17 +93,17 @@ impl Xpath {
     ///     let xpath_item_tree = XpathItemTree::from(&document);
     ///     let xpath = xpath::parse("//div")?;
     ///    
-    ///     let nodes = xpath.apply(&xpath_item_tree)?;
+    ///     let items = xpath.apply(&xpath_item_tree)?;
     ///    
-    ///     assert_eq!(nodes.len(), 1);
+    ///     assert_eq!(items.len(), 1);
     ///    
-    ///     let mut nodes = nodes.into_iter();
+    ///     let mut items = items.into_iter();
     ///    
-    ///     let node = nodes
+    ///     let item = items
     ///         .next()
     ///         .unwrap();
     ///
-    ///     let element = node
+    ///     let element = item
     ///         .as_node()?
     ///         .as_element_node()?;
     ///

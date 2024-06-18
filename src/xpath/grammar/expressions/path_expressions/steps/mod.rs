@@ -1,4 +1,4 @@
-//! https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-steps
+//! <https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-steps>
 
 use nom::{error::context, multi::many0};
 
