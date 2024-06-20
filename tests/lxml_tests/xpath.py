@@ -29,6 +29,9 @@ class OutputElement:
 def test_xpath():
     parser = argparse.ArgumentParser()
     parser.add_argument("xpath", help="XPath to search for")
+    
+    # add boolean flag to only count the number of elements
+    parser.add_argument("-c", "--count-only", action="store_true", help="Only count the number of elements")
 
     args = parser.parse_args()
 
@@ -38,6 +41,10 @@ def test_xpath():
 
     tree = lxml.html.fromstring(html)
     results = tree.xpath(args.xpath)
+
+    if args.count_only:
+        print(len(results))
+        return
 
     output_list = [OutputElement.from_lxml_element(result) for result in results]
     output = jsons.dumps(output_list, jdkwargs={'indent':4})

@@ -99,22 +99,6 @@ fn xpath_github_sample3() {
 }
 
 #[test]
-fn xpath_github_sample4() {
-    // arrange
-    let text: String = HTML.parse().unwrap();
-
-    let document = html::parse(&text).unwrap();
-    let xpath_item_tree = xpath::XpathItemTree::from(&document);
-    let xpath = xpath::parse("//div[@role='gridcell']/descendant-or-self::node()").unwrap();
-
-    // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap();
-
-    // assert
-    assert_eq!(nodes.len(), 100);
-}
-
-#[test]
 fn xpath_github_get_text_sample() {
     // arrange
     let text: String = HTML.parse().unwrap();

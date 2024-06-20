@@ -20,12 +20,12 @@ struct LxmlElement {
     pub itertext: Vec<String>,
 }
 
-fn get_lxml_elements(xpath: &str, html_text: String) -> Vec<LxmlElement> {
+fn get_lxml_output(xpath: &str, html_text: String, count_only: bool) -> std::process::Output {
     let mut lxml_python_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     lxml_python_path.push("tests/lxml_tests/xpath.py");
 
-    let mut cmd = Command::new("python3")
-        .stdin(Stdio::piped())
+    let mut cmd = Command::new("python3");
+    cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .arg(
             lxml_python_path
@@ -34,21 +34,30 @@ fn get_lxml_elements(xpath: &str, html_text: String) -> Vec<LxmlElement> {
                 .into_string()
                 .unwrap(),
         )
-        .arg(xpath)
-        .spawn()
-        .expect("failed to spawn process");
+        .arg(xpath);
 
-    let mut stdin = cmd.stdin.take().expect("Failed to open stdin");
+    if count_only {
+        cmd.arg("--count-only");
+    }
+
+    let mut process = cmd.spawn().expect("failed to spawn process");
+
+    let mut stdin = process.stdin.take().expect("Failed to open stdin");
     std::thread::spawn(move || {
         stdin
             .write_all(html_text.as_bytes())
             .expect("Failed to write to stdin");
     });
 
-    let output = cmd
+    let output = process
         .wait_with_output()
         .expect("failed to execute stack overflow tests");
 
+    output
+}
+
+fn get_lxml_elements(xpath: &str, html_text: String) -> Vec<LxmlElement> {
+    let output = get_lxml_output(xpath, html_text, false);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         output.status.success(),
@@ -205,6 +214,26 @@ fn test_text_handling3() {
         skyscraper_to_lxml_elements(&xpath_item_tree, skyscraper_elements);
 
     compare_skyscraper_to_lxml(lxml_elements, converted_skyscraper_elems);
+}
+
+#[test]
+fn test_item_count1() {
+    // arrange
+    let html_text = GITHUB_HTML.to_string();
+    let xpath = "//div[@class='flex-auto min-width-0 width-fit mr-3']";
+
+    let html_document = html::parse(&html_text).unwrap();
+    let xpath_item_tree = XpathItemTree::from(&html_document);
+    let xpath_expr = xpath::parse(xpath).unwrap();
+
+    // act
+    let lxml_output = get_lxml_output(xpath, html_text, true);
+    let skyscraper_elements = xpath_expr.apply(&xpath_item_tree).unwrap();
+
+    // assert
+    let output = String::from_utf8_lossy(&lxml_output.stdout);
+    let lxml_count = output.trim().parse::<usize>().unwrap();
+    assert_eq!(lxml_count, skyscraper_elements.len());
 }
 
 #[allow(dead_code)]
