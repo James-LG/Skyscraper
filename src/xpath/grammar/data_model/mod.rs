@@ -321,6 +321,11 @@ impl ElementNode {
                 v
             })
     }
+
+    /// Get the [XpathItem] representation of the element.
+    pub fn to_item<'tree>(&self, tree: &'tree XpathItemTree) -> XpathItem<'tree> {
+        XpathItem::Node(tree.get(self.id()))
+    }
 }
 
 /// An attribute node.

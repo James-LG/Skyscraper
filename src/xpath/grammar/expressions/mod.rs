@@ -20,7 +20,10 @@ use self::{
     logical_expressions::OrExpr, quantified_expressions::QuantifiedExpr,
 };
 
-use super::{data_model::XpathItem, recipes::Res};
+use super::{
+    data_model::{ElementNode, XpathItem},
+    recipes::Res,
+};
 
 pub mod arithmetic_expressions;
 pub mod arrow_operator;
@@ -138,7 +141,7 @@ impl Xpath {
     ///
     /// ```rust
     /// use skyscraper::html::{self, trim_internal_whitespace};
-    /// use skyscraper::xpath::{self, XpathItemTree, grammar::{XpathItemTreeNode, data_model::{XpathItem}}};
+    /// use skyscraper::xpath::{self, XpathItemTree, grammar::{data_model::{XpathItem}}};
     /// use std::error::Error;
     ///
     /// fn main() -> Result<(), Box<dyn Error>> {
@@ -163,14 +166,12 @@ impl Xpath {
     ///     let mut items = items.into_iter();
     ///
     ///     let item = items.next().unwrap();
-    ///     let tree_node = item
-    ///         .as_node()?;
-    ///
-    ///     let element = tree_node
+    ///     let element = item
+    ///         .as_node()?
     ///         .as_element_node()?;
     ///
     ///     assert_eq!(element.name, "span");
-    ///     assert_eq!(trim_internal_whitespace(&tree_node.text(&xpath_item_tree).unwrap()), "world");
+    ///     assert_eq!(trim_internal_whitespace(&element.text(&xpath_item_tree).unwrap()), "world");
     ///     
     ///     Ok(())
     /// }
@@ -180,6 +181,67 @@ impl Xpath {
         item_tree: &'tree XpathItemTree,
         item: XpathItem<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
+        let context = XpathExpressionContext::new_single(item_tree, item, false);
+        self.eval(&context)
+    }
+
+    /// Apply the XPath expression to the given element.
+    /// The expression will be evaluated relative to the given element.
+    ///
+    /// # Arguments
+    ///
+    /// * `item_tree` - The item tree.
+    /// * `element` - The element to apply the expression to.
+    ///
+    /// # Returns
+    ///
+    /// The result of applying the expression to the element.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use skyscraper::html::{self, trim_internal_whitespace};
+    /// use skyscraper::xpath::{self, XpathItemTree, grammar::{XpathItemTreeNode, data_model::{XpathItem}}};
+    /// use std::error::Error;
+    ///
+    /// fn main() -> Result<(), Box<dyn Error>> {
+    ///     let html_text = r##"
+    ///     <html>
+    ///         <body>
+    ///             <div id="1"><span>Hello</span></div>
+    ///             <div id="2"><span>world</span></div>
+    ///         </body>
+    ///     </html>"##;
+    ///
+    ///     let document = html::parse(html_text)?;
+    ///     let xpath_item_tree = XpathItemTree::from(&document);
+    ///     let xpath = xpath::parse(r#"//div[@id="2"]"#)?;
+    ///    
+    ///     let items = xpath.find_elements(&xpath_item_tree)?;
+    ///    
+    ///     assert_eq!(items.len(), 1);
+    ///
+    ///     let relative_xpath = xpath::parse("/span")?;
+    ///     let items = relative_xpath.apply_to_element(&xpath_item_tree, items[0])?;
+    ///     let mut items = items.into_iter();
+    ///
+    ///     let item = items.next().unwrap();
+    ///     let element = item
+    ///         .as_node()?
+    ///         .as_element_node()?;
+    ///
+    ///     assert_eq!(element.name, "span");
+    ///     assert_eq!(trim_internal_whitespace(&element.text(&xpath_item_tree).unwrap()), "world");
+    ///     
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn apply_to_element<'tree>(
+        &self,
+        item_tree: &'tree XpathItemTree,
+        element: &'tree ElementNode,
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
+        let item = element.to_item(item_tree);
         let context = XpathExpressionContext::new_single(item_tree, item, false);
         self.eval(&context)
     }

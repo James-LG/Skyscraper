@@ -180,8 +180,7 @@ fn eval_forward_axis_attribute<'tree>(
 
     // Only elements have attributes.
     if let XpathItem::Node(XpathItemTreeNode::ElementNode(element)) = context.item {
-        let element_tree_node = context.item_tree.get(element.id());
-        for child in element_tree_node.children(context.item_tree) {
+        for child in element.children(context.item_tree) {
             if let XpathItemTreeNode::AttributeNode(_attribute) = &child {
                 attributes.insert(child);
             }
