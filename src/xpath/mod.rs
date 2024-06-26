@@ -172,7 +172,6 @@
 //! # }
 //! ```
 
-use nom::error::VerboseError;
 use thiserror::Error;
 
 use self::{
@@ -181,9 +180,17 @@ use self::{
 };
 
 pub mod grammar;
+pub mod query;
 pub mod xpath_item_set;
 
 pub use self::grammar::{Xpath, XpathItemTree};
+
+/// Error that occurs when parsing an [Xpath] expression.
+#[derive(PartialEq, Debug, Error)]
+#[error("Error parsing expression: {msg}")]
+pub struct ExpressionParseError {
+    msg: String,
+}
 
 /// Parse a string into an [Xpath] expression.
 ///
@@ -195,8 +202,10 @@ pub use self::grammar::{Xpath, XpathItemTree};
 /// let xpath = parse("//div[@class='yes']/parent::div/div[@class='duplicate']")
 ///    .expect("xpath is invalid");
 /// ```
-pub fn parse(input: &str) -> Result<Xpath, nom::Err<VerboseError<&str>>> {
-    xpath(input).map(|x| x.1)
+pub fn parse(input: &str) -> Result<Xpath, ExpressionParseError> {
+    xpath(input).map(|x| x.1).map_err(|e| ExpressionParseError {
+        msg: format!("{}", e),
+    })
 }
 
 /// Error that occurs when applying an [Xpath] expression to an [XpathItemTree].
@@ -204,6 +213,12 @@ pub fn parse(input: &str) -> Result<Xpath, nom::Err<VerboseError<&str>>> {
 #[error("Error applying expression {msg}")]
 pub struct ExpressionApplyError {
     msg: String,
+}
+
+impl ExpressionApplyError {
+    pub(crate) fn new(msg: String) -> Self {
+        Self { msg }
+    }
 }
 
 pub(crate) struct XpathExpressionContext<'tree> {
