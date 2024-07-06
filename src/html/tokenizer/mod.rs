@@ -60,9 +60,6 @@ pub fn lex(text: &str) -> Result<Vec<Token>, LexError> {
             symbols.push(s);
         } else {
             if let Some(c) = pointer.current() {
-                if *c != ' ' {
-                    println!("Unknown symbol {}", c);
-                }
                 if !c.is_whitespace() {
                     // Unknown symbol, move on ¯\_(ツ)_/¯
                     error!("Unknown HTML symbol {}", c);
