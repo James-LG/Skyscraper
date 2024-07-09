@@ -22,6 +22,7 @@ ordered-float = "4.2.0"
 once_cell = "1.19.0"
 enum-extract-macro = "0.1.1"
 enum-extract-error = "0.1.1"
+regex = "1.10.3"
 
 [dev-dependencies]
 criterion = "0.5.1"
