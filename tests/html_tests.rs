@@ -36,7 +36,7 @@ fn text_should_include_text_before_between_and_after_child_element() {
 #[test]
 fn text_should_unescape_characters() {
     // arrange
-    let text = r##"<div>&amp;&quot;&#39;&lt;&gt;</div>"##;
+    let text = r##"<div>&amp;&quot;&#39;&lt;&gt;&#96;</div>"##;
 
     // act
     let document = html::parse(text).unwrap();
@@ -47,7 +47,7 @@ fn text_should_unescape_characters() {
 
     let child = children.next().unwrap();
     let html_text = document.get_html_node(&child).unwrap().extract_as_text();
-    assert_eq!(html_text.value, r##"&"'<>"##);
+    assert_eq!(html_text.value, r##"&"'<>`"##);
 }
 
 #[test]

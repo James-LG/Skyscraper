@@ -27,6 +27,7 @@ use std::{
 use enum_extract_macro::EnumExtract;
 use indextree::{Arena, NodeId};
 use once_cell::sync::Lazy;
+use regex::{Captures, Regex};
 
 pub use crate::html::parse::parse;
 
@@ -156,11 +157,20 @@ impl HtmlText {
 /// - `&quot;` becomes `"`
 /// - `&#39;` becomes `'`
 pub fn unescape_characters(text: &str) -> String {
+    let re = Regex::new(r"&#(\d+);").unwrap();
+    let text = re.replace_all(text, |caps: &Captures| {
+        if let Some(num) = caps.get(1) {
+            if let Ok(num) = num.as_str().parse::<u32>() {
+                return char::from_u32(num).unwrap().to_string();
+            }
+        }
+        return String::new();
+    });
+
     text.replace("&amp;", "&")
         .replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&quot;", r#"""#)
-        .replace("&#39;", "'")
 }
 
 /// Escapes commonly escaped characters in HTML text.
