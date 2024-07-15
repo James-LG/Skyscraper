@@ -202,26 +202,31 @@ impl<'a> Iterator for TextIter<'a> {
 /// ```
 pub struct XpathItemTree {
     /// The index tree that stores the nodes.
-    arena: Arena<XpathItemTreeNode>,
+    pub(crate) arena: Arena<XpathItemTreeNode>,
 
     /// The root node of the document.
-    root_node: NodeId,
+    pub(crate) root_node: NodeId,
 }
 
 impl XpathItemTree {
-    fn get_index_node(&self, id: NodeId) -> &indextree::Node<XpathItemTreeNode> {
+    pub(crate) fn new(arena: Arena<XpathItemTreeNode>, root_node: NodeId) -> Self {
+        XpathItemTree { arena, root_node }
+    }
+
+    pub(crate) fn get_index_node(&self, id: NodeId) -> &indextree::Node<XpathItemTreeNode> {
         self.arena
             .get(id)
             .expect("xpath item node missing from tree")
     }
 
-    fn get(&self, id: NodeId) -> &XpathItemTreeNode {
+    pub(crate) fn get(&self, id: NodeId) -> &XpathItemTreeNode {
         let indextree_node = self.get_index_node(id);
 
         indextree_node.get()
     }
 
-    fn root(&self) -> &XpathItemTreeNode {
+    /// Get the document's root node.
+    pub fn root(&self) -> &XpathItemTreeNode {
         self.get(self.root_node)
     }
 

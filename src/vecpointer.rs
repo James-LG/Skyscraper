@@ -25,6 +25,19 @@ impl<'a, T> VecPointerRef<'a, T> {
         self.current()
     }
 
+    pub fn prev(&mut self) -> Option<&T> {
+        self.prev_sub(1)
+    }
+
+    pub fn prev_sub(&mut self, i: usize) -> Option<&T> {
+        if i > self.index {
+            return None;
+        } else {
+            self.index -= i;
+        }
+        self.current()
+    }
+
     pub fn peek(&self) -> Option<&T> {
         self.peek_add(1)
     }

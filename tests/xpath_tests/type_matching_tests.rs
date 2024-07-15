@@ -26,11 +26,10 @@ fn text_test_should_match_all_text() {
         </html>"###;
 
     let document = html::parse(&text).unwrap();
-    let xpath_item_tree = xpath::XpathItemTree::from(&document);
     let xpath = xpath::parse("//text()").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap();
+    let nodes = xpath.apply(&document).unwrap();
 
     // assert
     // filter out whitespace nodes before testing since they vary by HTML parser.
@@ -102,11 +101,10 @@ fn attribute_test_should_match_all_attributes() {
         </html>"###;
 
     let document = html::parse(&text).unwrap();
-    let xpath_item_tree = xpath::XpathItemTree::from(&document);
     let xpath = xpath::parse("/html/attribute::*").unwrap();
 
     // act
-    let nodes = xpath.apply(&xpath_item_tree).unwrap();
+    let nodes = xpath.apply(&document).unwrap();
 
     // assert
     assert_eq!(nodes.len(), 3);

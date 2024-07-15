@@ -2,6 +2,8 @@
 
 use std::collections::HashMap;
 
+use thiserror::Error;
+
 use crate::vecpointer::VecPointerRef;
 
 use super::{HtmlParseError, HtmlParseErrorType, ParseErrorHandler};
@@ -12,7 +14,7 @@ pub enum HtmlToken {
     DocType,
     StartTag(TagToken),
     EndTag(TagToken),
-    Comment,
+    Comment(CommentToken),
     Character(char),
     EndOfFile,
 }
@@ -21,6 +23,10 @@ pub struct TagToken {
     pub tag_name: String,
     pub self_closing: bool,
     pub attributes: HashMap<String, String>,
+}
+
+pub struct CommentToken {
+    pub data: String,
 }
 
 impl TagToken {
@@ -116,8 +122,18 @@ enum TokenizerState {
     NumericCharacterReferenceEnd,
 }
 
+#[derive(Debug, Error)]
 pub(crate) enum TokenizerError {
+    #[error("unexpected null character")]
     UnexpectedNullCharacter,
+    #[error("unexpected question mark instead of tag name")]
+    UnexpectedQuestionMarkInsteadOfTagName,
+    #[error("invalid first character of tag name")]
+    InvalidFirstCharacterOfTagName,
+    #[error("eof before tag name")]
+    EofBeforeTagName,
+    #[error("eof in tag")]
+    EofInTag,
 }
 
 pub(crate) trait TokenizerErrorHandler {
@@ -141,12 +157,15 @@ impl TokenizerErrorHandler for DefaultTokenizerErrorHandler {
                 // In general, NULL code points are ignored.
                 Ok(())
             }
+            _ => Err(HtmlParseError {
+                message: format!("{:?}", error),
+            }),
         }
     }
 }
 
 pub(crate) trait TokenizerObserver {
-    fn token_emitted(&self, tokens: &[HtmlToken]);
+    fn token_emitted(&mut self, token: HtmlToken) -> Result<(), HtmlParseError>;
 }
 
 pub struct Tokenizer<'a> {
@@ -154,8 +173,10 @@ pub struct Tokenizer<'a> {
     return_state: Option<TokenizerState>,
     temporary_buffer: Vec<char>,
     input_stream: VecPointerRef<'a, char>,
-    observer: Option<Box<&'a dyn TokenizerObserver>>,
+    observer: Option<Box<&'a mut dyn TokenizerObserver>>,
     error_handler: Option<Box<&'a dyn TokenizerErrorHandler>>,
+    comment_token: Option<CommentToken>,
+    tag_token: Option<TagToken>,
 }
 
 impl<'a> Tokenizer<'a> {
@@ -167,10 +188,12 @@ impl<'a> Tokenizer<'a> {
             input_stream,
             observer: None,
             error_handler: None,
+            comment_token: None,
+            tag_token: None,
         }
     }
 
-    pub fn set_observer(&mut self, observer: Box<&'a dyn TokenizerObserver>) {
+    pub fn set_observer(&mut self, observer: Box<&'a mut dyn TokenizerObserver>) {
         self.observer = Some(observer);
     }
 
@@ -178,9 +201,9 @@ impl<'a> Tokenizer<'a> {
         self.error_handler = Some(error_handler);
     }
 
-    pub fn emit(&self, tokens: Vec<HtmlToken>) {
-        if let Some(observer) = &self.observer {
-            observer.token_emitted(&tokens);
+    pub fn emit(&mut self, token: HtmlToken) {
+        if let Some(observer) = &mut self.observer {
+            observer.token_emitted(token);
         }
     }
 
@@ -192,16 +215,39 @@ impl<'a> Tokenizer<'a> {
         Ok(())
     }
 
+    pub fn reconsume(&mut self) {
+        self.input_stream.prev();
+    }
+
+    pub fn reconsume_in_state(&mut self, state: TokenizerState) -> Result<(), HtmlParseError> {
+        self.reconsume();
+        self.state = state;
+        self.step()
+    }
+
+    pub fn emit_current_tag_token(&mut self) {
+        if let Some(tag_token) = self.tag_token.take() {
+            self.emit(HtmlToken::StartTag(tag_token));
+            self.tag_token = None;
+        }
+    }
+
+    pub fn current_tag_token_mut(&mut self) -> Result<&mut TagToken, HtmlParseError> {
+        self.tag_token
+            .as_mut()
+            .ok_or(HtmlParseError::new("no current tag found"))
+    }
+
     pub fn step(&mut self) -> Result<(), HtmlParseError> {
         match self.state {
             TokenizerState::Data => self.data_state(),
-            TokenizerState::RCDATA => todo!(),
-            TokenizerState::RAWTEXT => todo!(),
+            TokenizerState::RCDATA => self.rcdata_state(),
+            TokenizerState::RAWTEXT => self.rawtext_state(),
             TokenizerState::ScriptData => todo!(),
             TokenizerState::PLAINTEXT => todo!(),
-            TokenizerState::TagOpen => todo!(),
+            TokenizerState::TagOpen => self.tag_open_state(),
             TokenizerState::EndTagOpen => todo!(),
-            TokenizerState::TagName => todo!(),
+            TokenizerState::TagName => self.tag_name_state(),
             TokenizerState::RCDATALessThanSign => todo!(),
             TokenizerState::RCDATAEndTagOpen => todo!(),
             TokenizerState::RCDATAEndTagName => todo!(),
@@ -275,5 +321,9 @@ impl<'a> Tokenizer<'a> {
             TokenizerState::DecimalCharacterReference => todo!(),
             TokenizerState::NumericCharacterReferenceEnd => todo!(),
         }
+    }
+
+    pub fn is_terminated(&self) -> bool {
+        !self.input_stream.has_next()
     }
 }
