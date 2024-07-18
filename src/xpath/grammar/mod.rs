@@ -290,10 +290,7 @@ impl From<&HtmlDocument> for XpathItemTree {
                     item_id
                 }
                 HtmlNode::Text(text) => {
-                    let node = XpathItemTreeNode::TextNode(TextNode::new(
-                        text.value.to_string(),
-                        text.only_whitespace,
-                    ));
+                    let node = XpathItemTreeNode::TextNode(TextNode::new(text.value.to_string()));
 
                     let item_id = item_arena.new_node(node);
                     item_arena

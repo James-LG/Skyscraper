@@ -3,7 +3,7 @@
 use std::fmt::Display;
 
 use enum_extract_macro::EnumExtract;
-use indextree::NodeId;
+use indextree::{Arena, NodeId};
 use ordered_float::OrderedFloat;
 
 use super::{TextIter, XpathItemTree, XpathItemTreeNode};
@@ -200,6 +200,18 @@ impl ElementNode {
             .collect()
     }
 
+    pub(crate) fn attributes_arena<'arena>(
+        &self,
+        arena: &'arena Arena<XpathItemTreeNode>,
+    ) -> Vec<&'arena AttributeNode> {
+        self.children_arena(arena)
+            .filter_map(|x| match x {
+                XpathItemTreeNode::AttributeNode(attr) => Some(attr),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// Get the value of an attribute.
     ///
     /// # Arguments
@@ -220,6 +232,20 @@ impl ElementNode {
             .map(|x| &*x.value)
     }
 
+    pub(crate) fn add_attribute<'arena>(
+        &self,
+        arena: &mut Arena<XpathItemTreeNode>,
+        name: String,
+        value: String,
+    ) -> NodeId {
+        let attr = arena.new_node(XpathItemTreeNode::AttributeNode(AttributeNode::new(
+            name, value,
+        )));
+        self.id().append(attr, arena);
+
+        attr
+    }
+
     /// Get all direct child nodes of the given element.
     ///
     /// # Arguments
@@ -234,6 +260,15 @@ impl ElementNode {
         tree: &'tree XpathItemTree,
     ) -> impl Iterator<Item = &'tree XpathItemTreeNode> {
         self.id().children(&tree.arena).map(|x| tree.get(x))
+    }
+
+    pub(crate) fn children_arena<'arena>(
+        &self,
+        arena: &'arena Arena<XpathItemTreeNode>,
+    ) -> impl Iterator<Item = &'arena XpathItemTreeNode> {
+        self.id()
+            .children(arena)
+            .map(|x| arena.get(x).expect("node missing from arena").get())
     }
 
     /// Get the parent of the element.
@@ -409,19 +444,12 @@ pub struct TextNode {
 
     /// The value of the text node.
     pub content: String,
-
-    /// Whether the text node contains only whitespace.
-    pub only_whitespace: bool,
 }
 
 impl TextNode {
     /// Create a new text node.
-    pub(crate) fn new(content: String, only_whitespace: bool) -> Self {
-        Self {
-            id: None,
-            content,
-            only_whitespace,
-        }
+    pub(crate) fn new(content: String) -> Self {
+        Self { id: None, content }
     }
 
     /// Set the ID of the text node.
@@ -432,6 +460,11 @@ impl TextNode {
     /// Get the ID of the text node.
     pub(crate) fn id(&self) -> NodeId {
         self.id.unwrap()
+    }
+
+    /// Whether the text contains only whitespace.
+    pub fn is_whitespace(&self) -> bool {
+        self.content.trim().is_empty()
     }
 }
 

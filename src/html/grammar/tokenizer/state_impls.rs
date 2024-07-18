@@ -1,4 +1,4 @@
-use crate::html::grammar::{chars, HtmlParseError, HtmlParseErrorType};
+use crate::html::grammar::{chars, HtmlParseError};
 
 use super::{CommentToken, HtmlToken, TagToken, Tokenizer, TokenizerError, TokenizerState};
 
@@ -18,14 +18,14 @@ impl<'a> Tokenizer<'a> {
                     let current_input_character = *c;
                     self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
 
-                    self.emit(HtmlToken::Character(current_input_character));
+                    self.emit(HtmlToken::Character(current_input_character))?;
                 }
                 _ => {
                     let current_input_character = *c;
-                    self.emit(HtmlToken::Character(current_input_character));
+                    self.emit(HtmlToken::Character(current_input_character))?;
                 }
             },
-            None => self.emit(HtmlToken::EndOfFile),
+            None => self.emit(HtmlToken::EndOfFile)?,
         };
 
         Ok(())
@@ -45,14 +45,14 @@ impl<'a> Tokenizer<'a> {
                 &chars::NULL => {
                     self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
 
-                    self.emit(HtmlToken::Character(chars::FEED_REPLACEMENT_CHARACTER));
+                    self.emit(HtmlToken::Character(chars::FEED_REPLACEMENT_CHARACTER))?;
                 }
                 _ => {
                     let current_input_character = *c;
-                    self.emit(HtmlToken::Character(current_input_character));
+                    self.emit(HtmlToken::Character(current_input_character))?;
                 }
             },
-            None => self.emit(HtmlToken::EndOfFile),
+            None => self.emit(HtmlToken::EndOfFile)?,
         };
 
         Ok(())
@@ -68,14 +68,14 @@ impl<'a> Tokenizer<'a> {
                 &chars::NULL => {
                     self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
 
-                    self.emit(HtmlToken::Character(chars::FEED_REPLACEMENT_CHARACTER));
+                    self.emit(HtmlToken::Character(chars::FEED_REPLACEMENT_CHARACTER))?;
                 }
                 _ => {
                     let current_input_character = *c;
-                    self.emit(HtmlToken::Character(current_input_character));
+                    self.emit(HtmlToken::Character(current_input_character))?;
                 }
             },
-            None => self.emit(HtmlToken::EndOfFile),
+            None => self.emit(HtmlToken::EndOfFile)?,
         };
 
         Ok(())
@@ -105,15 +105,47 @@ impl<'a> Tokenizer<'a> {
                 _ => {
                     self.handle_error(TokenizerError::InvalidFirstCharacterOfTagName)?;
 
-                    self.emit(HtmlToken::Character('<'));
-                    self.emit(HtmlToken::EndOfFile);
+                    self.emit(HtmlToken::Character('<'))?;
+                    self.emit(HtmlToken::EndOfFile)?;
                 }
             },
             None => {
                 self.handle_error(TokenizerError::EofBeforeTagName)?;
 
-                self.emit(HtmlToken::Character('<'));
+                self.emit(HtmlToken::Character('<'))?;
                 self.reconsume_in_state(TokenizerState::Data)?
+            }
+        };
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#end-tag-open-state>
+    pub(super) fn end_tag_open_state(&mut self) -> Result<(), HtmlParseError> {
+        match self.input_stream.next() {
+            Some(c) => match c {
+                _ if c.is_ascii_alphabetic() => {
+                    self.tag_token = Some(TagToken::new(String::new()));
+                    self.reconsume_in_state(TokenizerState::TagName)?;
+                }
+                '>' => {
+                    self.handle_error(TokenizerError::MissingEndTagName)?;
+
+                    self.state = TokenizerState::Data;
+                }
+                _ => {
+                    self.handle_error(TokenizerError::InvalidFirstCharacterOfTagName)?;
+
+                    self.comment_token = Some(CommentToken::new(String::new()));
+                    self.reconsume_in_state(TokenizerState::BogusComment)?;
+                }
+            },
+            None => {
+                self.handle_error(TokenizerError::EofBeforeTagName)?;
+
+                self.emit(HtmlToken::Character('<'))?;
+                self.emit(HtmlToken::Character('/'))?;
+                self.reconsume_in_state(TokenizerState::Data)?;
             }
         };
 
@@ -156,7 +188,7 @@ impl<'a> Tokenizer<'a> {
             None => {
                 self.handle_error(TokenizerError::EofInTag)?;
 
-                self.emit(HtmlToken::EndOfFile);
+                self.emit(HtmlToken::EndOfFile)?;
             }
         };
 

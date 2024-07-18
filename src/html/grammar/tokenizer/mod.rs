@@ -10,6 +10,7 @@ use super::{HtmlParseError, HtmlParseErrorType, ParseErrorHandler};
 
 mod state_impls;
 
+#[derive(Debug)]
 pub enum HtmlToken {
     DocType,
     StartTag(TagToken),
@@ -19,14 +20,11 @@ pub enum HtmlToken {
     EndOfFile,
 }
 
+#[derive(Debug)]
 pub struct TagToken {
     pub tag_name: String,
     pub self_closing: bool,
     pub attributes: HashMap<String, String>,
-}
-
-pub struct CommentToken {
-    pub data: String,
 }
 
 impl TagToken {
@@ -36,6 +34,17 @@ impl TagToken {
             self_closing: false,
             attributes: HashMap::new(),
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct CommentToken {
+    pub data: String,
+}
+
+impl CommentToken {
+    pub fn new(data: String) -> Self {
+        CommentToken { data }
     }
 }
 
@@ -134,6 +143,8 @@ pub(crate) enum TokenizerError {
     EofBeforeTagName,
     #[error("eof in tag")]
     EofInTag,
+    #[error("missing end tag name")]
+    MissingEndTagName,
 }
 
 pub(crate) trait TokenizerErrorHandler {
@@ -201,10 +212,13 @@ impl<'a> Tokenizer<'a> {
         self.error_handler = Some(error_handler);
     }
 
-    pub fn emit(&mut self, token: HtmlToken) {
+    pub fn emit(&mut self, token: HtmlToken) -> Result<(), HtmlParseError> {
+        println!("emitting token: {:?}", token);
         if let Some(observer) = &mut self.observer {
-            observer.token_emitted(token);
+            observer.token_emitted(token)?;
         }
+
+        Ok(())
     }
 
     pub fn handle_error(&mut self, error: TokenizerError) -> Result<(), HtmlParseError> {
@@ -246,7 +260,7 @@ impl<'a> Tokenizer<'a> {
             TokenizerState::ScriptData => todo!(),
             TokenizerState::PLAINTEXT => todo!(),
             TokenizerState::TagOpen => self.tag_open_state(),
-            TokenizerState::EndTagOpen => todo!(),
+            TokenizerState::EndTagOpen => self.end_tag_open_state(),
             TokenizerState::TagName => self.tag_name_state(),
             TokenizerState::RCDATALessThanSign => todo!(),
             TokenizerState::RCDATAEndTagOpen => todo!(),
