@@ -5,7 +5,7 @@ use crate::xpath::grammar::{
 
 use super::{
     chars,
-    tokenizer::{HtmlToken, TagToken, TokenizerObserver},
+    tokenizer::{HtmlToken, TagToken, TagTokenType, TokenizerObserver},
     HtmlParseError, HtmlParser, HtmlParserError, InsertionMode, HTML_NAMESPACE,
 };
 
@@ -56,7 +56,7 @@ impl HtmlParser {
             ) => {
                 // ignore
             }
-            HtmlToken::StartTag(token) if token.tag_name == "html" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
                 let node_id = self.create_an_element_for_the_token(token, HTML_NAMESPACE, None)?;
 
                 self.open_elements.push(node_id);
@@ -64,12 +64,12 @@ impl HtmlParser {
                 // make it the document root
                 self.root_node = Some(node_id);
             }
-            HtmlToken::EndTag(TagToken { tag_name, .. })
+            HtmlToken::TagToken(TagTokenType::EndTag(TagToken { tag_name, .. }))
                 if ["head", "body", "html", "br"].contains(&tag_name.as_ref()) =>
             {
                 todo!()
             }
-            HtmlToken::EndTag(_) => {
+            HtmlToken::TagToken(TagTokenType::EndTag(_)) => {
                 todo!()
             }
             _ => {
@@ -118,18 +118,18 @@ impl HtmlParser {
             }
             HtmlToken::Comment(_) => todo!(),
             HtmlToken::DocType => todo!(),
-            HtmlToken::StartTag(token) if token.tag_name == "html" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "head" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "head" => {
                 todo!()
             }
-            HtmlToken::EndTag(token)
+            HtmlToken::TagToken(TagTokenType::EndTag(token))
                 if ["head", "body", "html", "br"].contains(&token.tag_name.as_ref()) =>
             {
                 todo!()
             }
-            HtmlToken::EndTag(_) => {
+            HtmlToken::TagToken(TagTokenType::EndTag(_)) => {
                 todo!()
             }
             _ => anything_else(self, token)?,
@@ -155,49 +155,49 @@ impl HtmlParser {
             }
             HtmlToken::Comment(_) => todo!(),
             HtmlToken::DocType => todo!(),
-            HtmlToken::StartTag(token) if token.tag_name == "html" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
                 todo!()
             }
-            HtmlToken::StartTag(token)
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if ["base", "basefont", "bgsound", "link"].contains(&token.tag_name.as_str()) =>
             {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "meta" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "meta" => {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "title" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "title" => {
                 todo!()
             }
-            HtmlToken::StartTag(token)
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if ["noframes", "style"].contains(&token.tag_name.as_str()) =>
             {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "noscript" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "noscript" => {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "script" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "script" => {
                 todo!()
             }
-            HtmlToken::EndTag(token) if token.tag_name == "head" => {
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "head" => {
                 todo!()
             }
-            HtmlToken::EndTag(token)
+            HtmlToken::TagToken(TagTokenType::EndTag(token))
                 if ["body", "html", "br"].contains(&token.tag_name.as_str()) =>
             {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "template" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "template" => {
                 todo!()
             }
-            HtmlToken::EndTag(token) if token.tag_name == "template" => {
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "template" => {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "head" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "head" => {
                 todo!()
             }
-            HtmlToken::EndTag(_) => {
+            HtmlToken::TagToken(TagTokenType::EndTag(_)) => {
                 todo!()
             }
             _ => {
@@ -229,20 +229,20 @@ impl HtmlParser {
             }
             HtmlToken::Comment(_) => todo!(),
             HtmlToken::DocType => todo!(),
-            HtmlToken::StartTag(token) if token.tag_name == "html" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "body" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "body" => {
                 self.insert_an_html_element(token)?;
 
                 self.frameset_ok = false;
 
                 self.insertion_mode = InsertionMode::InBody;
             }
-            HtmlToken::StartTag(token) if token.tag_name == "frameset" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "frameset" => {
                 todo!()
             }
-            HtmlToken::StartTag(token)
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if [
                     "base", "basefont", "bgsound", "link", "meta", "noframes", "script", "style",
                     "template", "title",
@@ -251,18 +251,18 @@ impl HtmlParser {
             {
                 todo!()
             }
-            HtmlToken::EndTag(token) if token.tag_name == "template" => {
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "template" => {
                 todo!()
             }
-            HtmlToken::EndTag(token)
+            HtmlToken::TagToken(TagTokenType::EndTag(token))
                 if ["body", "html", "br"].contains(&token.tag_name.as_str()) =>
             {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "head" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "head" => {
                 todo!()
             }
-            HtmlToken::EndTag(_) => {
+            HtmlToken::TagToken(TagTokenType::EndTag(_)) => {
                 todo!()
             }
             _ => {
@@ -332,7 +332,7 @@ impl HtmlParser {
             HtmlToken::DocType => {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "html" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
                 self.handle_error(HtmlParserError::MinorError(String::from(
                     "html start tag inside body",
                 )))?;
@@ -379,7 +379,7 @@ impl HtmlParser {
                     }
                 }
             }
-            HtmlToken::StartTag(token)
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if [
                     "base", "basefont", "bgsound", "link", "meta", "noframes", "script", "style",
                     "template", "title",
@@ -388,10 +388,10 @@ impl HtmlParser {
             {
                 todo!()
             }
-            HtmlToken::EndTag(token) if token.tag_name == "template" => {
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "template" => {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "body" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "body" => {
                 if !self.has_an_element_in_scope("body") {
                     self.handle_error(HtmlParserError::MinorError(String::from(
                         "open elements has no body element in scope",
@@ -402,19 +402,19 @@ impl HtmlParser {
 
                 self.insertion_mode = InsertionMode::AfterBody;
             }
-            HtmlToken::StartTag(token) if token.tag_name == "frameset" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "frameset" => {
                 todo!()
             }
             HtmlToken::EndOfFile => {
                 todo!()
             }
-            HtmlToken::EndTag(token) if token.tag_name == "body" => {
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "body" => {
                 todo!()
             }
-            HtmlToken::EndTag(token) if token.tag_name == "html" => {
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "html" => {
                 todo!()
             }
-            HtmlToken::StartTag(token)
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if [
                     "address",
                     "article",
@@ -450,30 +450,34 @@ impl HtmlParser {
 
                 self.insert_an_html_element(token)?;
             }
-            HtmlToken::StartTag(token)
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if ["h1", "h2", "h3", "h4", "h5", "h6"].contains(&token.tag_name.as_str()) =>
             {
                 todo!()
             }
-            HtmlToken::StartTag(token) if ["pre", "listing"].contains(&token.tag_name.as_str()) => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
+                if ["pre", "listing"].contains(&token.tag_name.as_str()) =>
+            {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "form" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "form" => {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "li" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "li" => {
                 todo!()
             }
-            HtmlToken::StartTag(token) if ["dd", "dt"].contains(&token.tag_name.as_str()) => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
+                if ["dd", "dt"].contains(&token.tag_name.as_str()) =>
+            {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "plaintext" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "plaintext" => {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "button" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "button" => {
                 todo!()
             }
-            HtmlToken::EndTag(token)
+            HtmlToken::TagToken(TagTokenType::EndTag(token))
                 if [
                     "address",
                     "article",
@@ -506,31 +510,33 @@ impl HtmlParser {
             {
                 todo!()
             }
-            HtmlToken::EndTag(token) if token.tag_name == "form" => {
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "form" => {
                 todo!()
             }
-            HtmlToken::EndTag(token) if token.tag_name == "p" => {
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "p" => {
                 todo!()
             }
-            HtmlToken::EndTag(token) if token.tag_name == "li" => {
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "li" => {
                 todo!()
             }
-            HtmlToken::EndTag(token) if ["dd", "dt"].contains(&token.tag_name.as_str()) => {
+            HtmlToken::TagToken(TagTokenType::EndTag(token))
+                if ["dd", "dt"].contains(&token.tag_name.as_str()) =>
+            {
                 todo!()
             }
-            HtmlToken::EndTag(token)
+            HtmlToken::TagToken(TagTokenType::EndTag(token))
                 if ["h1", "h2", "h3", "h4", "h5", "h6"].contains(&token.tag_name.as_str()) =>
             {
                 todo!()
             }
-            HtmlToken::EndTag(token) if token.tag_name == "sarcasm" => {
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "sarcasm" => {
                 // "Take a deep breath, then act as described in the 'any other end tag' entry below." lol
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "a" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "a" => {
                 todo!()
             }
-            HtmlToken::StartTag(token)
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if [
                     "b", "big", "code", "em", "font", "i", "s", "small", "strike", "strong", "tt",
                     "u",
@@ -539,10 +545,10 @@ impl HtmlParser {
             {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "nobr" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "nobr" => {
                 todo!()
             }
-            HtmlToken::EndTag(token)
+            HtmlToken::TagToken(TagTokenType::EndTag(token))
                 if [
                     "a", "b", "big", "code", "em", "font", "i", "nobr", "s", "small", "strike",
                     "strong", "tt", "u",
@@ -551,77 +557,81 @@ impl HtmlParser {
             {
                 todo!()
             }
-            HtmlToken::StartTag(token)
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if ["applet", "marquee", "object"].contains(&token.tag_name.as_str()) =>
             {
                 todo!()
             }
-            HtmlToken::EndTag(token)
+            HtmlToken::TagToken(TagTokenType::EndTag(token))
                 if ["applet", "marquee", "object"].contains(&token.tag_name.as_str()) =>
             {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "table" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "table" => {
                 todo!()
             }
-            HtmlToken::EndTag(token) if token.tag_name == "br" => {
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "br" => {
                 todo!()
             }
-            HtmlToken::StartTag(token)
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if ["area", "br", "embed", "img", "keygen", "wbr"]
                     .contains(&token.tag_name.as_str()) =>
             {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "input" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "input" => {
                 todo!()
             }
-            HtmlToken::StartTag(token)
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if ["param", "source", "track"].contains(&token.tag_name.as_str()) =>
             {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "hr" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "hr" => {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "image" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "image" => {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "textarea" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "textarea" => {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "xmp" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "xmp" => {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "iframe" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "iframe" => {
                 todo!()
             }
-            HtmlToken::StartTag(token)
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if ["noembed", "noscript"].contains(&token.tag_name.as_str()) =>
             {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "select" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "select" => {
                 todo!()
             }
-            HtmlToken::StartTag(token)
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if ["optgroup", "option"].contains(&token.tag_name.as_str()) =>
             {
                 todo!()
             }
-            HtmlToken::StartTag(token) if ["rb", "rtc"].contains(&token.tag_name.as_str()) => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
+                if ["rb", "rtc"].contains(&token.tag_name.as_str()) =>
+            {
                 todo!()
             }
-            HtmlToken::StartTag(token) if ["rp", "rt"].contains(&token.tag_name.as_str()) => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
+                if ["rp", "rt"].contains(&token.tag_name.as_str()) =>
+            {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "math" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "math" => {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "svg" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "svg" => {
                 todo!()
             }
-            HtmlToken::StartTag(token)
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if [
                     "caption", "col", "colgroup", "frame", "head", "tbody", "td", "tfoot", "th",
                     "thead", "tr",
@@ -630,10 +640,10 @@ impl HtmlParser {
             {
                 todo!()
             }
-            HtmlToken::StartTag(token) => {
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) => {
                 todo!()
             }
-            HtmlToken::EndTag(token) => {
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) => {
                 todo!()
             }
         }
@@ -665,10 +675,13 @@ impl HtmlParser {
             HtmlToken::DocType => {
                 todo!()
             }
-            HtmlToken::StartTag(token) if token.tag_name == "html" => {
-                self.using_the_rules_for(HtmlToken::StartTag(token), InsertionMode::InBody)?;
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
+                self.using_the_rules_for(
+                    HtmlToken::TagToken(TagTokenType::StartTag(token)),
+                    InsertionMode::InBody,
+                )?;
             }
-            HtmlToken::EndTag(token) if token.tag_name == "html" => {
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "html" => {
                 todo!()
             }
             HtmlToken::EndOfFile => {

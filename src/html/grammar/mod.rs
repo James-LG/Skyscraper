@@ -609,6 +609,8 @@ mod tests {
         let document = parse(&text).unwrap();
 
         // assert
+        assert_eq!(document.iter().count(), 16);
+        assert_eq!(document.to_string(), text);
         assert_eq!(document.root().children(&document).len(), 1);
     }
 }

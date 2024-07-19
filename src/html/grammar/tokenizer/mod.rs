@@ -13,11 +13,32 @@ mod state_impls;
 #[derive(Debug)]
 pub enum HtmlToken {
     DocType,
-    StartTag(TagToken),
-    EndTag(TagToken),
+    TagToken(TagTokenType),
     Comment(CommentToken),
     Character(char),
     EndOfFile,
+}
+
+#[derive(Debug)]
+pub enum TagTokenType {
+    StartTag(TagToken),
+    EndTag(TagToken),
+}
+
+impl TagTokenType {
+    pub fn tag_name(&self) -> &str {
+        match self {
+            TagTokenType::StartTag(tag) => &tag.tag_name,
+            TagTokenType::EndTag(tag) => &tag.tag_name,
+        }
+    }
+
+    pub fn tag_name_mut(&mut self) -> &mut String {
+        match self {
+            TagTokenType::StartTag(tag) => &mut tag.tag_name,
+            TagTokenType::EndTag(tag) => &mut tag.tag_name,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -187,7 +208,7 @@ pub struct Tokenizer<'a> {
     observer: Option<Box<&'a mut dyn TokenizerObserver>>,
     error_handler: Option<Box<&'a dyn TokenizerErrorHandler>>,
     comment_token: Option<CommentToken>,
-    tag_token: Option<TagToken>,
+    tag_token: Option<TagTokenType>,
 }
 
 impl<'a> Tokenizer<'a> {
@@ -241,12 +262,12 @@ impl<'a> Tokenizer<'a> {
 
     pub fn emit_current_tag_token(&mut self) {
         if let Some(tag_token) = self.tag_token.take() {
-            self.emit(HtmlToken::StartTag(tag_token));
+            self.emit(HtmlToken::TagToken(tag_token));
             self.tag_token = None;
         }
     }
 
-    pub fn current_tag_token_mut(&mut self) -> Result<&mut TagToken, HtmlParseError> {
+    pub fn current_tag_token_mut(&mut self) -> Result<&mut TagTokenType, HtmlParseError> {
         self.tag_token
             .as_mut()
             .ok_or(HtmlParseError::new("no current tag found"))

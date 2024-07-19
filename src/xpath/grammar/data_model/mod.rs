@@ -1,6 +1,6 @@
 //! <https://www.w3.org/TR/xpath-datamodel-31/#intro>
 
-use std::fmt::Display;
+use std::{arch::x86_64, fmt::Display};
 
 use enum_extract_macro::EnumExtract;
 use indextree::{Arena, NodeId};
@@ -143,6 +143,18 @@ impl XpathDocumentNode {
             .children(&tree.arena)
             .map(|x| tree.get(x))
             .collect()
+    }
+
+    pub fn display<'tree>(&self, tree: &'tree XpathItemTree) -> String {
+        let children = self.children(tree);
+
+        let element_strings: Vec<String> = children
+            .iter()
+            .filter_map(|x| x.as_element_node().ok())
+            .map(|x| x.display(tree))
+            .collect();
+
+        element_strings.join("\n")
     }
 }
 impl Display for XpathDocumentNode {
@@ -361,6 +373,12 @@ impl ElementNode {
     pub fn to_item<'tree>(&self, tree: &'tree XpathItemTree) -> XpathItem<'tree> {
         XpathItem::Node(tree.get(self.id()))
     }
+
+    pub fn display<'tree>(&self, tree: &'tree XpathItemTree) -> String {
+        let children = self.children(tree);
+        let children: Vec<String> = children.map(|x| x.display(tree)).collect();
+        format!("<{}>\n{}\n</{}>", self.name, children.join("\n"), self.name)
+    }
 }
 
 /// An attribute node.
@@ -470,6 +488,6 @@ impl TextNode {
 
 impl Display for TextNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "\"{}\"", self.content)
+        write!(f, "{}", self.content)
     }
 }

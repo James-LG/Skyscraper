@@ -1,6 +1,8 @@
 use crate::html::grammar::{chars, HtmlParseError};
 
-use super::{CommentToken, HtmlToken, TagToken, Tokenizer, TokenizerError, TokenizerState};
+use super::{
+    CommentToken, HtmlToken, TagToken, TagTokenType, Tokenizer, TokenizerError, TokenizerState,
+};
 
 impl<'a> Tokenizer<'a> {
     /// <https://html.spec.whatwg.org/multipage/parsing.html#data-state>
@@ -99,7 +101,7 @@ impl<'a> Tokenizer<'a> {
                     });
                 }
                 _ if c.is_ascii_alphabetic() => {
-                    self.tag_token = Some(TagToken::new(String::new()));
+                    self.tag_token = Some(TagTokenType::StartTag(TagToken::new(String::new())));
                     self.reconsume_in_state(TokenizerState::TagName)?;
                 }
                 _ => {
@@ -125,7 +127,7 @@ impl<'a> Tokenizer<'a> {
         match self.input_stream.next() {
             Some(c) => match c {
                 _ if c.is_ascii_alphabetic() => {
-                    self.tag_token = Some(TagToken::new(String::new()));
+                    self.tag_token = Some(TagTokenType::EndTag(TagToken::new(String::new())));
                     self.reconsume_in_state(TokenizerState::TagName)?;
                 }
                 '>' => {
@@ -173,16 +175,16 @@ impl<'a> Tokenizer<'a> {
                     self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
 
                     self.current_tag_token_mut()?
-                        .tag_name
+                        .tag_name_mut()
                         .push(chars::FEED_REPLACEMENT_CHARACTER);
                 }
                 _ if c.is_ascii_uppercase() => {
                     let c = c.to_ascii_lowercase();
-                    self.current_tag_token_mut()?.tag_name.push(c);
+                    self.current_tag_token_mut()?.tag_name_mut().push(c);
                 }
                 _ => {
                     let c = *c;
-                    self.current_tag_token_mut()?.tag_name.push(c);
+                    self.current_tag_token_mut()?.tag_name_mut().push(c);
                 }
             },
             None => {

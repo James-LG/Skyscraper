@@ -12,7 +12,7 @@ mod types;
 mod whitespace_recipes;
 mod xml_names;
 
-use std::iter;
+use std::{fmt::Display, iter};
 
 use enum_extract_macro::EnumExtract;
 pub(crate) use expressions::xpath;
@@ -147,6 +147,17 @@ impl XpathItemTreeNode {
             XpathItemTreeNode::AttributeNode(_) => None,
         }
     }
+
+    pub fn display(&self, tree: &XpathItemTree) -> String {
+        match self {
+            XpathItemTreeNode::DocumentNode(node) => node.display(tree),
+            XpathItemTreeNode::ElementNode(node) => node.display(tree),
+            XpathItemTreeNode::PINode(node) => node.to_string(),
+            XpathItemTreeNode::CommentNode(node) => node.to_string(),
+            XpathItemTreeNode::TextNode(node) => node.to_string(),
+            XpathItemTreeNode::AttributeNode(node) => node.to_string(),
+        }
+    }
 }
 
 /// An iterator over all text contained in a element and its descendants.
@@ -236,6 +247,12 @@ impl XpathItemTree {
             let id = self.arena.get_node_id(node).unwrap();
             self.get(id)
         })
+    }
+}
+
+impl Display for XpathItemTree {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.root().display(self))
     }
 }
 
