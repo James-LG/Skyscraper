@@ -20,6 +20,8 @@ use crate::{
 mod chars;
 mod document_builder;
 mod insertion_mode_impls;
+#[cfg(test)]
+mod test_framework;
 mod tokenizer;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -692,6 +694,6 @@ mod tests {
             .build()
             .unwrap();
 
-        assert_eq!(document, expected);
+        assert!(test_framework::compare_documents(expected, document, true));
     }
 }

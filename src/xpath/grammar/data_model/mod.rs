@@ -9,7 +9,7 @@ use ordered_float::OrderedFloat;
 use super::{TextIter, XpathItemTree, XpathItemTreeNode};
 
 /// <https://www.w3.org/TR/xpath-datamodel-31/#dt-item>
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash, EnumExtract)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash, EnumExtract)]
 pub enum XpathItem<'tree> {
     /// A node in the [`XpathItemTree`].
     ///
@@ -166,7 +166,7 @@ impl Display for XpathDocumentNode {
 /// An element node such as an HTML tag.
 ///
 /// <https://www.w3.org/TR/xpath-datamodel-31/#ElementNode>
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash, Clone)]
+#[derive(Eq, Debug, Hash, Clone)]
 pub struct ElementNode {
     /// The ID of the element.
     ///
@@ -176,6 +176,12 @@ pub struct ElementNode {
 
     /// The name of the element.
     pub name: String,
+}
+
+impl PartialEq for ElementNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
 }
 
 impl ElementNode {

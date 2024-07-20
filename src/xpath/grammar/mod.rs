@@ -28,7 +28,7 @@ use crate::{
 };
 
 /// Nodes that are part of the [`XpathItemTree`].
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash, EnumExtract, Clone)]
+#[derive(PartialEq, Eq, Debug, Hash, EnumExtract, Clone)]
 pub enum XpathItemTreeNode {
     /// The root node of the document.
     DocumentNode(XpathDocumentNode),

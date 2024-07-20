@@ -88,6 +88,15 @@ impl<'arena> ElementBuilder<'arena> {
         let child_id = self
             .arena
             .new_node(XpathItemTreeNode::AttributeNode(attribute));
+
+        self.arena
+            .get_mut(child_id)
+            .unwrap()
+            .get_mut()
+            .as_attribute_node_mut()
+            .unwrap()
+            .set_id(child_id);
+
         self.children.push(child_id);
 
         self
@@ -108,6 +117,14 @@ impl<'arena> ElementBuilder<'arena> {
             .new_node(XpathItemTreeNode::ElementNode(ElementNode::new(
                 self.tag_name,
             )));
+
+        self.arena
+            .get_mut(element_id)
+            .unwrap()
+            .get_mut()
+            .as_element_node_mut()
+            .unwrap()
+            .set_id(element_id);
 
         for child_id in self.children {
             element_id.append(child_id, self.arena);
