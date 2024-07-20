@@ -72,6 +72,24 @@ impl XpathItemTreeNode {
         }
     }
 
+    /// Get all descendants of the element.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree containing the element.
+    ///
+    /// # Returns
+    ///
+    /// An iterator over all descendants of the element.
+    pub fn descendants<'tree>(
+        &'tree self,
+        tree: &'tree XpathItemTree,
+    ) -> impl Iterator<Item = &'tree XpathItemTreeNode> + 'tree {
+        tree.root_node
+            .descendants(&tree.arena)
+            .map(|node_id| tree.get(node_id))
+    }
+
     /// Get the parent of the element.
     ///
     /// # Arguments

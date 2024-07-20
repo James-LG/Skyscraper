@@ -1,37 +1,34 @@
 use skyscraper::html;
 
-// #[test]
-// fn text_should_include_text_before_between_and_after_child_element() {
-//     // arrange
-//     let text = r##"
-//         <div>
-//             hello
-//             <span>my</span>
-//             friend
-//         </div>"##;
+#[test]
+fn text_should_include_text_before_between_and_after_child_element() {
+    // arrange
+    let text = r##"
+        <div>
+            hello
+            <span>my</span>
+            friend
+        </div>"##;
 
-//     // act
-//     let document = html::parse(text).unwrap();
+    // act
+    let document = html::parse(text).unwrap();
 
-//     // assert
-//     let root_node = document.root_node;
-//     let mut children = root_node.children(&document);
+    // assert
+    let root_node = document.root();
+    let mut children = root_node.children(&document).into_iter();
 
-//     let child = children.next().unwrap();
-//     let html_text = document.get_html_node(&child).unwrap().extract_as_text();
-//     assert_eq!(html_text.value, "\n            hello\n            ");
+    let child = children.next().unwrap();
+    let html_text = child.extract_as_text_node();
+    assert_eq!(html_text.content, "\n            hello\n            ");
 
-//     let child = children.next().unwrap();
-//     let html_text = document
-//         .get_html_node(&child.children(&document).next().unwrap())
-//         .unwrap()
-//         .extract_as_text();
-//     assert_eq!(html_text.value, "my");
+    let child = children.next().unwrap();
+    let html_text = child.extract_as_text_node();
+    assert_eq!(html_text.content, "my");
 
-//     let child = children.next().unwrap();
-//     let html_text = document.get_html_node(&child).unwrap().extract_as_text();
-//     assert_eq!(html_text.value, "\n            friend\n        ");
-// }
+    let child = children.next().unwrap();
+    let html_text = child.extract_as_text_node();
+    assert_eq!(html_text.content, "\n            friend\n        ");
+}
 
 // #[test]
 // fn text_should_unescape_characters() {
