@@ -18,6 +18,7 @@ use crate::{
 };
 
 mod chars;
+mod document_builder;
 mod insertion_mode_impls;
 mod tokenizer;
 
@@ -129,6 +130,11 @@ pub(crate) static GENERATE_IMPLIED_END_TAG_TYPES: [&str; 10] = [
     "dd", "dt", "li", "optgroup", "option", "p", "rb", "rp", "rt", "rtc",
 ];
 
+pub(crate) struct CreateAnElementForTheTokenResult {
+    element: ElementNode,
+    attributes: Vec<AttributeNode>,
+}
+
 pub struct HtmlParser {
     insertion_mode: InsertionMode,
     open_elements: Vec<NodeId>,
@@ -139,6 +145,8 @@ pub struct HtmlParser {
     frameset_ok: bool,
     active_formatting_elements: Vec<NodeId>,
     stack_of_template_insertion_modes: Vec<InsertionMode>,
+    head_element_pointer: Option<NodeId>,
+    form_element_pointer: Option<NodeId>,
 }
 
 impl HtmlParser {
@@ -153,6 +161,8 @@ impl HtmlParser {
             frameset_ok: true,
             active_formatting_elements: Vec::new(),
             stack_of_template_insertion_modes: Vec::new(),
+            head_element_pointer: None,
+            form_element_pointer: None,
         }
     }
 
@@ -185,6 +195,13 @@ impl HtmlParser {
             .map(|id| self.arena.get(*id).unwrap().get())
     }
 
+    pub(crate) fn current_node_as_element(&self) -> Option<&ElementNode> {
+        self.current_node().and_then(|node| match node {
+            XpathItemTreeNode::ElementNode(element) => Some(element),
+            _ => None,
+        })
+    }
+
     pub(crate) fn top_node(&self) -> Option<&XpathItemTreeNode> {
         self.open_elements
             .first()
@@ -204,6 +221,31 @@ impl HtmlParser {
         } else {
             self.current_node()
         }
+    }
+
+    pub(crate) fn new_node(&mut self, node: XpathItemTreeNode) -> NodeId {
+        println!("new node: {:?}", node);
+        let is_element = node.is_element_node();
+        let is_attribute = node.is_attribute_node();
+        let id = self.arena.new_node(node);
+
+        if is_element {
+            self.arena
+                .get_mut(id)
+                .unwrap()
+                .get_mut()
+                .extract_as_element_node_mut()
+                .set_id(id);
+        } else if is_attribute {
+            self.arena
+                .get_mut(id)
+                .unwrap()
+                .get_mut()
+                .extract_as_attribute_node_mut()
+                .set_id(id);
+        }
+
+        id
     }
 
     pub(crate) fn open_elements_as_nodes(&self) -> Vec<&XpathItemTreeNode> {
@@ -230,9 +272,7 @@ impl HtmlParser {
         value: String,
     ) -> Result<(), HtmlParseError> {
         let attribute = AttributeNode::new(name, value);
-        let item_id = self
-            .arena
-            .new_node(XpathItemTreeNode::AttributeNode(attribute));
+        let item_id = self.new_node(XpathItemTreeNode::AttributeNode(attribute));
 
         element_id.append(item_id, &mut self.arena);
 
@@ -260,8 +300,30 @@ impl HtmlParser {
             Some(self.appropriate_place_for_inserting_a_node(None)?)
         };
 
-        let element_id =
-            self.create_an_element_for_the_token(token, namespace, adjusted_insertion_location)?;
+        let result = self.create_an_element_for_the_token(token, namespace)?;
+
+        // insert the result
+        let element_id = self.insert_create_an_element_for_the_token_result(result)?;
+
+        // append the element to the adjusted insertion location
+        if let Some(adjusted_insertion_location) = adjusted_insertion_location {
+            adjusted_insertion_location.append(element_id, &mut self.arena);
+        }
+
+        Ok(element_id)
+    }
+
+    pub(crate) fn insert_create_an_element_for_the_token_result(
+        &mut self,
+        result: CreateAnElementForTheTokenResult,
+    ) -> Result<NodeId, HtmlParseError> {
+        // add the element to the arena
+        let element_id = self.new_node(XpathItemTreeNode::ElementNode(result.element));
+
+        // add the attributes to the element
+        for attribute in result.attributes {
+            self.add_attribute_to_element(element_id, attribute.name, attribute.value)?;
+        }
 
         self.open_elements.push(element_id);
 
@@ -288,6 +350,7 @@ impl HtmlParser {
         let target = if let Some(override_target) = override_target {
             override_target
         } else {
+            println!("open elements: {:?}", self.open_elements.len());
             self.open_elements
                 .last()
                 .cloned()
@@ -328,21 +391,21 @@ impl HtmlParser {
         &mut self,
         token: TagToken,
         namespace: &str,
-        parent_id: Option<NodeId>,
-    ) -> Result<NodeId, HtmlParseError> {
+    ) -> Result<CreateAnElementForTheTokenResult, HtmlParseError> {
         let local_name = token.tag_name;
-        let element_id = self.create_element(local_name, namespace, None, None)?;
-
-        if let Some(parent_id) = parent_id {
-            parent_id.append(element_id, &mut self.arena);
-        }
+        let element = self.create_element(local_name, namespace, None, None)?;
 
         // add the attributes
-        for (name, value) in token.attributes {
-            self.add_attribute_to_element(element_id, name, value)?;
-        }
+        let attributes: Vec<AttributeNode> = token
+            .attributes
+            .into_iter()
+            .map(|(name, value)| AttributeNode::new(name, value))
+            .collect();
 
-        Ok(element_id)
+        Ok(CreateAnElementForTheTokenResult {
+            element,
+            attributes,
+        })
     }
 
     /// <https://dom.spec.whatwg.org/#concept-create-element>
@@ -352,23 +415,11 @@ impl HtmlParser {
         namespace: &str,
         prefix: Option<&str>,
         is: Option<&str>,
-    ) -> Result<NodeId, HtmlParseError> {
+    ) -> Result<ElementNode, HtmlParseError> {
         // TODO: namespace?
         let element = ElementNode::new(local_name);
 
-        let item_id = self.arena.new_node(XpathItemTreeNode::ElementNode(element));
-
-        self.arena
-            .get_mut(item_id)
-            .unwrap()
-            .get_mut()
-            .as_element_node_mut()
-            .unwrap()
-            .set_id(item_id);
-
-        self.open_elements.push(item_id);
-
-        Ok(item_id)
+        Ok(element)
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#reconstruct-the-active-formatting-elements>
@@ -396,11 +447,14 @@ impl HtmlParser {
             return Ok(());
         }
 
+        // the adjusted insertion location in this implementation returns the parent node id
+        // where we are expected to insert the new node as the last child of this parent node.
+        // this means the previous sibling of the adjusted insertion location is the current last child of the parent node before inserting the new node.
         let prev_sibling_id = self
             .arena
             .get(adjusted_insertion_location_id)
             .unwrap()
-            .previous_sibling();
+            .last_child();
 
         let prev_sibling: Option<&mut XpathItemTreeNode> =
             prev_sibling_id.map(|id| self.arena.get_mut(id).unwrap().get_mut());
@@ -412,7 +466,7 @@ impl HtmlParser {
             // Otherwise, insert a new Text node with the data as its data.
             let string = data.iter().collect::<String>();
             let text = XpathItemTreeNode::TextNode(TextNode::new(string));
-            let text_id = self.arena.new_node(text);
+            let text_id = self.new_node(text);
 
             adjusted_insertion_location_id.append(text_id, &mut self.arena);
         }
@@ -458,7 +512,7 @@ impl HtmlParser {
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#close-a-p-element>
     pub(crate) fn close_a_p_element(&mut self) -> Result<(), HtmlParseError> {
-        self.generate_implied_end_tags("p")?;
+        self.generate_implied_end_tags(Some("p"))?;
 
         // If the current node is not a p element, then this is a parse error.
         if let Some(node) = self.current_node() {
@@ -472,28 +526,39 @@ impl HtmlParser {
         }
 
         // Pop elements until a p element is popped.
+        self.pop_until_tag_name("p")?;
+        Ok(())
+    }
+
+    pub(crate) fn pop_until_tag_name(&mut self, tag_name: &str) -> Result<(), HtmlParseError> {
         while let Some(node) = self.current_node() {
             if let XpathItemTreeNode::ElementNode(element) = node {
-                if element.name == "p" {
+                if element.name == tag_name {
                     self.open_elements.pop();
                     break;
                 }
             }
         }
+
         Ok(())
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#generate-implied-end-tags>
     pub(crate) fn generate_implied_end_tags(
         &mut self,
-        exclude_element: &str,
+        exclude_element: Option<&str>,
     ) -> Result<(), HtmlParseError> {
         while let Some(node) = self.current_node() {
             if let XpathItemTreeNode::ElementNode(element) = node {
-                // if the element is excluded, or it is not in the list of implied end tag types, then stop
-                if element.name == exclude_element
-                    || !GENERATE_IMPLIED_END_TAG_TYPES.contains(&element.name.as_str())
-                {
+                // if the element is excluded, then stop
+                if let Some(exclude_element) = exclude_element {
+                    if element.name == exclude_element {
+                        break;
+                    }
+                }
+
+                // if it is not in the list of implied end tag types, then stop
+                if !GENERATE_IMPLIED_END_TAG_TYPES.contains(&element.name.as_str()) {
                     break;
                 }
             }
@@ -562,7 +627,7 @@ impl TokenizerObserver for HtmlParser {
             InsertionMode::AfterBody => self.after_body_insertion_mode(token),
             InsertionMode::InFrameset => todo!(),
             InsertionMode::AfterFrameset => todo!(),
-            InsertionMode::AfterAfterBody => todo!(),
+            InsertionMode::AfterAfterBody => self.after_after_body_insertion_mode(token),
             InsertionMode::AfterAfterFrameset => todo!(),
         }
     }
@@ -584,6 +649,10 @@ impl ParseErrorHandler for DefaultParseErrorHandler {
 
 #[cfg(test)]
 mod tests {
+    use document_builder::DocumentBuilder;
+
+    use crate::html;
+
     use super::*;
 
     #[test]
@@ -609,8 +678,20 @@ mod tests {
         let document = parse(&text).unwrap();
 
         // assert
-        assert_eq!(document.iter().count(), 16);
-        assert_eq!(document.to_string(), text);
-        assert_eq!(document.root().children(&document).len(), 1);
+        let expected = DocumentBuilder::new()
+            .with_root("html", |html| {
+                html.add_element("head", |head| head)
+                    .add_element("body", |body| {
+                        body.add_element("div", |div| {
+                            div.add_element("p", |p| p.add_text("1"))
+                                .add_element("p", |p| p.add_text("2"))
+                                .add_element("p", |p| p.add_text("3"))
+                        })
+                    })
+            })
+            .build()
+            .unwrap();
+
+        assert_eq!(document, expected);
     }
 }

@@ -57,11 +57,12 @@ impl HtmlParser {
                 // ignore
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
-                let node_id = self.create_an_element_for_the_token(token, HTML_NAMESPACE, None)?;
+                let result = self.create_an_element_for_the_token(token, HTML_NAMESPACE)?;
 
-                self.open_elements.push(node_id);
+                // insert the result
+                let node_id = self.insert_create_an_element_for_the_token_result(result)?;
 
-                // make it the document root
+                // set it as the root node
                 self.root_node = Some(node_id);
             }
             HtmlToken::TagToken(TagTokenType::EndTag(TagToken { tag_name, .. }))
@@ -73,13 +74,14 @@ impl HtmlParser {
                 todo!()
             }
             _ => {
-                let node_id =
+                let result =
                     self.create_element(String::from("html"), HTML_NAMESPACE, None, None)?;
 
-                self.open_elements.push(node_id);
-
-                // make it the document root
+                // append the node to the document
+                let node_id = self.new_node(XpathItemTreeNode::ElementNode(result));
                 self.root_node = Some(node_id);
+
+                self.open_elements.push(node_id);
 
                 self.insertion_mode = InsertionMode::BeforeHead;
                 self.token_emitted(token)?;
@@ -95,10 +97,9 @@ impl HtmlParser {
         token: HtmlToken,
     ) -> Result<(), HtmlParseError> {
         fn anything_else(parser: &mut HtmlParser, token: HtmlToken) -> Result<(), HtmlParseError> {
-            let node_id =
-                parser.create_element(String::from("head"), HTML_NAMESPACE, None, None)?;
+            let node_id = parser.insert_an_html_element(TagToken::new(String::from("head")))?;
 
-            parser.open_elements.push(node_id);
+            parser.head_element_pointer = Some(node_id);
 
             parser.insertion_mode = InsertionMode::InHead;
             parser.token_emitted(token)?;
@@ -370,9 +371,9 @@ impl HtmlParser {
                 for (name, value) in token.attributes.into_iter() {
                     // if the element doesn't already have the attribute, add it
                     if !top_element_attrs.contains(&name) {
-                        let top_node_id = self.open_elements.first().unwrap();
+                        let top_node_id = *self.open_elements.first().unwrap();
 
-                        let attr_node_id = self.arena.new_node(XpathItemTreeNode::AttributeNode(
+                        let attr_node_id = self.new_node(XpathItemTreeNode::AttributeNode(
                             AttributeNode::new(name, value),
                         ));
                         top_node_id.append(attr_node_id, &mut self.arena);
@@ -409,7 +410,15 @@ impl HtmlParser {
                 todo!()
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "body" => {
-                todo!()
+                if self.has_an_element_in_scope("body") {
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "open elements has body element in scope",
+                    )))?;
+                } else {
+                    ensure_open_elements_has_valid_element(&self)?;
+                }
+
+                self.insertion_mode = InsertionMode::AfterBody;
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "html" => {
                 todo!()
@@ -508,13 +517,36 @@ impl HtmlParser {
                 ]
                 .contains(&token.tag_name.as_str()) =>
             {
-                todo!()
+                if !self.has_an_element_in_scope(&token.tag_name) {
+                    self.handle_error(HtmlParserError::MinorError(String::from(format!(
+                        "open elements has {} element in scope",
+                        token.tag_name
+                    ))))?;
+                } else {
+                    self.generate_implied_end_tags(None)?;
+
+                    if self.current_node_as_element().unwrap().name != token.tag_name {
+                        self.handle_error(HtmlParserError::MinorError(String::from(
+                            "current node is not the same as the token tag name",
+                        )))?;
+                    }
+
+                    self.pop_until_tag_name(&token.tag_name)?;
+                }
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "form" => {
                 todo!()
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "p" => {
-                todo!()
+                if !self.has_an_element_in_button_scope("p") {
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "open elements has no p element in button scope",
+                    )))?;
+
+                    self.insert_an_html_element(TagToken::new(String::from("p")))?;
+                }
+
+                self.close_a_p_element()?;
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "li" => {
                 todo!()
@@ -682,13 +714,56 @@ impl HtmlParser {
                 )?;
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "html" => {
-                todo!()
+                // TODO: If parser was created as part of the HTML fragment parsing algorithm...
+
+                self.insertion_mode = InsertionMode::AfterAfterBody;
             }
             HtmlToken::EndOfFile => {
                 self.stop_parsing()?;
             }
             _ => {
                 todo!()
+            }
+        }
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#the-after-after-body-insertion-mode>
+    pub(super) fn after_after_body_insertion_mode(
+        &mut self,
+        token: HtmlToken,
+    ) -> Result<(), HtmlParseError> {
+        match token {
+            HtmlToken::Comment(_) => {
+                todo!()
+            }
+            HtmlToken::DocType
+            | HtmlToken::Character(
+                chars::CHARACTER_TABULATION
+                | chars::LINE_FEED
+                | chars::FORM_FEED
+                | chars::CARRIAGE_RETURN
+                | chars::SPACE,
+            ) => {
+                self.using_the_rules_for(token, InsertionMode::InBody)?;
+            }
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
+                self.using_the_rules_for(
+                    HtmlToken::TagToken(TagTokenType::StartTag(token)),
+                    InsertionMode::InBody,
+                )?;
+            }
+            HtmlToken::EndOfFile => {
+                self.stop_parsing()?;
+            }
+            _ => {
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "unexpected token after after body",
+                )))?;
+
+                self.insertion_mode = InsertionMode::InBody;
+                self.token_emitted(token)?;
             }
         }
 

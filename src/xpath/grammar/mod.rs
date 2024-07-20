@@ -211,6 +211,7 @@ impl<'a> Iterator for TextIter<'a> {
 /// let document = html::parse(text).unwrap();
 /// let xpath_item_tree = XpathItemTree::from(&document);
 /// ```
+#[derive(Debug, PartialEq)]
 pub struct XpathItemTree {
     /// The index tree that stores the nodes.
     pub(crate) arena: Arena<XpathItemTreeNode>,
