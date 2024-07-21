@@ -24,6 +24,8 @@ pub fn compare_documents(
 
     for (expected_node, actual_node) in expected_root_descendants.zip(actual_root_descendants) {
         if expected_node != actual_node {
+            println!("Expected document: {}", expected);
+            println!("Actual document: {}", actual);
             print_differences(expected_node, &expected, actual_node, &actual);
             return false;
         }
@@ -42,14 +44,25 @@ pub fn print_differences(
         println!("Expected: {:?}", expected);
         println!("Actual: {:?}", actual);
 
-        if let XpathItemTreeNode::ElementNode(expected) = expected {
-            let expected_parent = expected.parent(expected_doc);
-            println!("Expected parent: {:?}", expected_parent);
-        }
+        print_parent("Expected", expected, expected_doc);
+        print_parent("Actual", actual, actual_doc);
+    }
+}
 
-        if let XpathItemTreeNode::ElementNode(actual) = actual {
-            let actual_parent = actual.parent(actual_doc);
-            println!("Actual parent: {:?}", actual_parent);
+fn print_parent(name: &str, node: &XpathItemTreeNode, doc: &XpathItemTree) {
+    match node {
+        XpathItemTreeNode::ElementNode(element) => {
+            let parent = element.parent(doc);
+            println!("{} Parent: {:?}", name, parent);
         }
+        XpathItemTreeNode::TextNode(text) => {
+            let parent = text.parent(doc);
+            println!("{} Parent: {:?}", name, parent);
+        }
+        XpathItemTreeNode::AttributeNode(attribute) => {
+            let parent = attribute.parent(doc);
+            println!("{} Parent: {:?}", name, parent);
+        }
+        _ => {}
     }
 }

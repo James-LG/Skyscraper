@@ -1,6 +1,9 @@
-use crate::xpath::grammar::{
-    data_model::{AttributeNode, ElementNode},
-    XpathItemTreeNode,
+use crate::{
+    html::grammar::SPECIAL_ELEMENTS,
+    xpath::grammar::{
+        data_model::{AttributeNode, ElementNode},
+        XpathItemTreeNode,
+    },
 };
 
 use super::{
@@ -267,7 +270,11 @@ impl HtmlParser {
                 todo!()
             }
             _ => {
-                todo!()
+                self.insert_an_html_element(TagToken::new(String::from("body")))?;
+
+                self.insertion_mode = InsertionMode::InBody;
+
+                self.token_emitted(token)?;
             }
         }
 
@@ -407,7 +414,12 @@ impl HtmlParser {
                 todo!()
             }
             HtmlToken::EndOfFile => {
-                todo!()
+                if !self.stack_of_template_insertion_modes.is_empty() {
+                    self.using_the_rules_for(token, InsertionMode::InTemplate)?;
+                } else {
+                    ensure_open_elements_has_valid_element(&self)?;
+                    self.stop_parsing()?;
+                }
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "body" => {
                 if self.has_an_element_in_scope("body") {
@@ -673,12 +685,56 @@ impl HtmlParser {
                 todo!()
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) => {
-                todo!()
+                self.reconstruct_the_active_formatting_elements()?;
+
+                self.insert_an_html_element(token)?;
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token)) => {
-                todo!()
+                let node = self.current_node_as_element_error()?.clone();
+
+                self.in_body_other_end_tag_loop(&node, token)?;
             }
         }
+
+        Ok(())
+    }
+
+    fn in_body_other_end_tag_loop(
+        &mut self,
+        node: &ElementNode,
+        token: TagToken,
+    ) -> Result<(), HtmlParseError> {
+        while node.name == token.tag_name {
+            self.generate_implied_end_tags(Some(&token.tag_name))?;
+
+            if node != self.current_node_as_element().unwrap() {
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "node is not the same as the current node",
+                )))?;
+            }
+
+            // pop all nodes from the current node up to node
+            while node != self.current_node_as_element_error()? {
+                self.open_elements.pop();
+            }
+
+            // should now be the same as node, pop it as well
+            self.open_elements.pop();
+
+            // stop these steps
+            return Ok(());
+        }
+
+        // if node is in special category, parse error and ignore token
+        if SPECIAL_ELEMENTS.contains(&node.name.as_str()) {
+            self.handle_error(HtmlParserError::MinorError(String::from(
+                "node is in special category",
+            )))?;
+            return Ok(());
+        }
+
+        let node = self.current_node_as_element_error()?.clone();
+        self.in_body_other_end_tag_loop(&node, token)?;
 
         Ok(())
     }

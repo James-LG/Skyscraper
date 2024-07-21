@@ -130,6 +130,93 @@ pub(crate) static GENERATE_IMPLIED_END_TAG_TYPES: [&str; 10] = [
     "dd", "dt", "li", "optgroup", "option", "p", "rb", "rp", "rt", "rtc",
 ];
 
+/// <https://html.spec.whatwg.org/multipage/parsing.html#special>
+pub(crate) static SPECIAL_ELEMENTS: [&str; 83] = [
+    "address",
+    "applet",
+    "area",
+    "article",
+    "aside",
+    "base",
+    "basefont",
+    "bgsound",
+    "blockquote",
+    "body",
+    "br",
+    "button",
+    "caption",
+    "center",
+    "col",
+    "colgroup",
+    "dd",
+    "details",
+    "dir",
+    "div",
+    "dl",
+    "dt",
+    "embed",
+    "fieldset",
+    "figcaption",
+    "figure",
+    "footer",
+    "form",
+    "frame",
+    "frameset",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "head",
+    "header",
+    "hgroup",
+    "hr",
+    "html",
+    "iframe",
+    "img",
+    "input",
+    "keygen",
+    "li",
+    "link",
+    "listing",
+    "main",
+    "marquee",
+    "menu",
+    "meta",
+    "nav",
+    "noembed",
+    "noframes",
+    "noscript",
+    "object",
+    "ol",
+    "p",
+    "param",
+    "plaintext",
+    "pre",
+    "script",
+    "search",
+    "section",
+    "select",
+    "source",
+    "style",
+    "summary",
+    "table",
+    "tbody",
+    "td",
+    "template",
+    "textarea",
+    "tfoot",
+    "th",
+    "thead",
+    "title",
+    "tr",
+    "track",
+    "ul",
+    "wbr",
+    "xmp",
+];
+
 pub(crate) struct CreateAnElementForTheTokenResult {
     element: ElementNode,
     attributes: Vec<AttributeNode>,
@@ -200,6 +287,11 @@ impl HtmlParser {
             XpathItemTreeNode::ElementNode(element) => Some(element),
             _ => None,
         })
+    }
+
+    pub(crate) fn current_node_as_element_error(&self) -> Result<&ElementNode, HtmlParseError> {
+        self.current_node_as_element()
+            .ok_or(HtmlParseError::new("current node is not an element"))
     }
 
     pub(crate) fn top_node(&self) -> Option<&XpathItemTreeNode> {
@@ -467,6 +559,14 @@ impl HtmlParser {
             let string = data.iter().collect::<String>();
             let text = XpathItemTreeNode::TextNode(TextNode::new(string));
             let text_id = self.new_node(text);
+
+            self.arena
+                .get_mut(text_id)
+                .unwrap()
+                .get_mut()
+                .as_text_node_mut()
+                .unwrap()
+                .set_id(text_id);
 
             adjusted_insertion_location_id.append(text_id, &mut self.arena);
         }

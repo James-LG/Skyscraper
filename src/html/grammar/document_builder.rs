@@ -53,8 +53,7 @@ impl DocumentBuilder {
 pub struct ElementBuilder<'arena> {
     parent_id: Option<NodeId>,
     arena: &'arena mut Arena<XpathItemTreeNode>,
-    children: Vec<NodeId>,
-    children_funcs: Vec<(String, Box<dyn FnOnce(ElementBuilder) -> ElementBuilder>)>,
+    funcs: Vec<Box<dyn FnOnce(&mut Arena<XpathItemTreeNode>) -> NodeId>>,
     tag_name: String,
 }
 
@@ -67,8 +66,7 @@ impl<'arena> ElementBuilder<'arena> {
         Self {
             parent_id,
             arena,
-            children: Vec::new(),
-            children_funcs: Vec::new(),
+            funcs: Vec::new(),
             tag_name: tag_name.to_string(),
         }
     }
@@ -78,40 +76,63 @@ impl<'arena> ElementBuilder<'arena> {
         tag_name: &str,
         f: impl FnOnce(ElementBuilder) -> ElementBuilder + 'static,
     ) -> Self {
-        self.children_funcs
-            .push((tag_name.to_string(), Box::new(f)));
+        let tag_name = tag_name.to_string();
+        self.funcs.push(Box::new(move |arena| {
+            let child_id =
+                arena.new_node(XpathItemTreeNode::ElementNode(ElementNode::new(tag_name)));
+
+            arena
+                .get_mut(child_id)
+                .unwrap()
+                .get_mut()
+                .as_element_node_mut()
+                .unwrap()
+                .set_id(child_id);
+
+            child_id
+        }));
 
         self
     }
 
     pub fn add_attribute(mut self, attribute: AttributeNode) -> Self {
-        let child_id = self
-            .arena
-            .new_node(XpathItemTreeNode::AttributeNode(attribute));
+        self.funcs.push(Box::new(move |arena| {
+            let child_id = arena.new_node(XpathItemTreeNode::AttributeNode(attribute));
 
-        self.arena
-            .get_mut(child_id)
-            .unwrap()
-            .get_mut()
-            .as_attribute_node_mut()
-            .unwrap()
-            .set_id(child_id);
+            arena
+                .get_mut(child_id)
+                .unwrap()
+                .get_mut()
+                .as_attribute_node_mut()
+                .unwrap()
+                .set_id(child_id);
 
-        self.children.push(child_id);
+            child_id
+        }));
 
         self
     }
 
     pub fn add_text(mut self, text: &str) -> Self {
-        let child_id = self
-            .arena
-            .new_node(XpathItemTreeNode::TextNode(TextNode::new(text.to_string())));
-        self.children.push(child_id);
+        let text = text.to_string();
+        self.funcs.push(Box::new(move |arena| {
+            let child_id = arena.new_node(XpathItemTreeNode::TextNode(TextNode::new(text)));
+
+            arena
+                .get_mut(child_id)
+                .unwrap()
+                .get_mut()
+                .as_text_node_mut()
+                .unwrap()
+                .set_id(child_id);
+
+            child_id
+        }));
 
         self
     }
 
-    pub fn build(self) -> Result<NodeId, DocumentBuilderError> {
+    pub fn build(mut self) -> Result<NodeId, DocumentBuilderError> {
         let element_id = self
             .arena
             .new_node(XpathItemTreeNode::ElementNode(ElementNode::new(
@@ -126,14 +147,9 @@ impl<'arena> ElementBuilder<'arena> {
             .unwrap()
             .set_id(element_id);
 
-        for child_id in self.children {
-            element_id.append(child_id, self.arena);
-        }
-
-        for (tag_name, f) in self.children_funcs {
-            let child_id =
-                f(ElementBuilder::new(tag_name, Some(element_id), self.arena)).build()?;
-            element_id.append(child_id, self.arena);
+        for func in self.funcs {
+            let child_id = func(&mut self.arena);
+            element_id.append(child_id, &mut self.arena);
         }
 
         if let Some(parent_id) = self.parent_id {

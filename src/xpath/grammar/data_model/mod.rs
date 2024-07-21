@@ -390,7 +390,7 @@ impl ElementNode {
 /// An attribute node.
 ///
 /// <https://www.w3.org/TR/xpath-datamodel-31/#AttributeNode>
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash)]
+#[derive(Eq, Debug, Clone, Hash)]
 pub struct AttributeNode {
     /// The ID of the attribute.
     ///
@@ -424,11 +424,30 @@ impl AttributeNode {
     pub(crate) fn id(&self) -> NodeId {
         self.id.unwrap()
     }
+
+    /// Get the parent of the attribute.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree containing the attribute.
+    ///
+    /// # Returns
+    ///
+    /// The parent of the attribute if it exists, or `None` if it does not.
+    pub fn parent<'tree>(&self, tree: &'tree XpathItemTree) -> Option<&'tree XpathItemTreeNode> {
+        tree.get(self.id()).parent(tree)
+    }
 }
 
 impl Display for AttributeNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}=\"{}\"", self.name, self.value)
+    }
+}
+
+impl PartialEq for AttributeNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.value == other.value
     }
 }
 
@@ -458,7 +477,7 @@ impl Display for CommentNode {
 }
 
 /// <https://www.w3.org/TR/xpath-datamodel-31/#TextNode>
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash, Clone)]
+#[derive(Eq, Debug, Hash, Clone)]
 pub struct TextNode {
     /// The ID of the text node.
     ///
@@ -489,6 +508,25 @@ impl TextNode {
     /// Whether the text contains only whitespace.
     pub fn is_whitespace(&self) -> bool {
         self.content.trim().is_empty()
+    }
+
+    /// Get the parent of the text.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree containing the text.
+    ///
+    /// # Returns
+    ///
+    /// The parent of the text if it exists, or `None` if it does not.
+    pub fn parent<'tree>(&self, tree: &'tree XpathItemTree) -> Option<&'tree XpathItemTreeNode> {
+        tree.get(self.id()).parent(tree)
+    }
+}
+
+impl PartialEq for TextNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.content == other.content
     }
 }
 

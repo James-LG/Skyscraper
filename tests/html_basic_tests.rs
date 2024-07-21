@@ -41,3 +41,34 @@ fn parse_should_return_document() {
 
     assert!(test_framework::compare_documents(expected, document, true));
 }
+
+#[test]
+fn text_should_include_text_before_between_and_after_child_element() {
+    // arrange
+    let text = r##"
+        <div>
+            hello
+            <span>my</span>
+            friend
+        </div>"##;
+
+    // act
+    let document = html::parse(text).unwrap();
+
+    // assert
+    let expected = DocumentBuilder::new()
+        .with_root("html", |html| {
+            html.add_element("head", |head| head)
+                .add_element("body", |body| {
+                    body.add_element("div", |div| {
+                        div.add_text("\n            hello\n            ")
+                            .add_element("span", |span| span.add_text("my"))
+                            .add_text("\n            friend\n        ")
+                    })
+                })
+        })
+        .build()
+        .unwrap();
+
+    assert!(test_framework::compare_documents(expected, document, true));
+}
