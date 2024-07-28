@@ -491,7 +491,7 @@ impl HtmlParser {
         let attributes: Vec<AttributeNode> = token
             .attributes
             .into_iter()
-            .map(|(name, value)| AttributeNode::new(name, value))
+            .map(|attribute| AttributeNode::new(attribute.name, attribute.value))
             .collect();
 
         Ok(CreateAnElementForTheTokenResult {

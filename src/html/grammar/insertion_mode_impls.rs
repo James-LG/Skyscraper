@@ -375,13 +375,13 @@ impl HtmlParser {
                     .map(|attr| attr.name.to_string())
                     .collect::<Vec<String>>();
 
-                for (name, value) in token.attributes.into_iter() {
+                for attribute in token.attributes.into_iter() {
                     // if the element doesn't already have the attribute, add it
-                    if !top_element_attrs.contains(&name) {
+                    if !top_element_attrs.contains(&attribute.name) {
                         let top_node_id = *self.open_elements.first().unwrap();
 
                         let attr_node_id = self.new_node(XpathItemTreeNode::AttributeNode(
-                            AttributeNode::new(name, value),
+                            AttributeNode::new(attribute.name, attribute.value),
                         ));
                         top_node_id.append(attr_node_id, &mut self.arena);
                     }

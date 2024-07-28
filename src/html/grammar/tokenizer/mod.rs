@@ -1,6 +1,6 @@
 //! <https://html.spec.whatwg.org/multipage/parsing.html#tokenization>
 
-use std::collections::HashMap;
+use std::collections::{hash_map::Entry, HashMap};
 
 use thiserror::Error;
 
@@ -8,6 +8,7 @@ use crate::vecpointer::VecPointerRef;
 
 use super::{HtmlParseError, HtmlParseErrorType, ParseErrorHandler};
 
+mod named_character_references;
 mod state_impls;
 
 #[derive(Debug)]
@@ -39,13 +40,27 @@ impl TagTokenType {
             TagTokenType::EndTag(tag) => &mut tag.tag_name,
         }
     }
+
+    pub fn attributes(&self) -> &Vec<Attribute> {
+        match self {
+            TagTokenType::StartTag(tag) => &tag.attributes,
+            TagTokenType::EndTag(tag) => &tag.attributes,
+        }
+    }
+
+    pub fn attributes_mut(&mut self) -> &mut Vec<Attribute> {
+        match self {
+            TagTokenType::StartTag(tag) => &mut tag.attributes,
+            TagTokenType::EndTag(tag) => &mut tag.attributes,
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct TagToken {
     pub tag_name: String,
     pub self_closing: bool,
-    pub attributes: HashMap<String, String>,
+    pub attributes: Vec<Attribute>,
 }
 
 impl TagToken {
@@ -53,9 +68,15 @@ impl TagToken {
         TagToken {
             tag_name,
             self_closing: false,
-            attributes: HashMap::new(),
+            attributes: Vec::new(),
         }
     }
+}
+
+#[derive(Debug)]
+pub struct Attribute {
+    pub name: String,
+    pub value: String,
 }
 
 #[derive(Debug)]
@@ -69,6 +90,7 @@ impl CommentToken {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum TokenizerState {
     Data,
     RCDATA,
@@ -166,6 +188,22 @@ pub(crate) enum TokenizerError {
     EofInTag,
     #[error("missing end tag name")]
     MissingEndTagName,
+    #[error("missing semicolon after character reference")]
+    MissingSemicolonAfterCharacterReference,
+    #[error("unknown named character reference")]
+    UnknownNamedCharacterReference,
+    #[error("absence of digits in numeric character reference")]
+    AbsenceOfDigitsInNumericCharacterReference,
+    #[error("null character reference")]
+    NullCharacterReference,
+    #[error("character reference outside unicode range")]
+    CharacterReferenceOutsideUnicodeRange,
+    #[error("surrogate character reference")]
+    SurrogateCharacterReference,
+    #[error("noncharacter character reference")]
+    NoncharacterCharacterReference,
+    #[error("control character reference")]
+    ControlCharacterReference,
 }
 
 pub(crate) trait TokenizerErrorHandler {
@@ -209,6 +247,8 @@ pub struct Tokenizer<'a> {
     error_handler: Option<Box<&'a dyn TokenizerErrorHandler>>,
     comment_token: Option<CommentToken>,
     tag_token: Option<TagTokenType>,
+    attribute_name: Option<String>,
+    character_reference_code: u32,
 }
 
 impl<'a> Tokenizer<'a> {
@@ -222,6 +262,8 @@ impl<'a> Tokenizer<'a> {
             error_handler: None,
             comment_token: None,
             tag_token: None,
+            attribute_name: None,
+            character_reference_code: 0,
         }
     }
 
@@ -250,6 +292,31 @@ impl<'a> Tokenizer<'a> {
         Ok(())
     }
 
+    pub fn current_attribute_mut(&mut self) -> Result<&mut Attribute, HtmlParseError> {
+        let current_tag_token = self
+            .tag_token
+            .as_mut()
+            .ok_or(HtmlParseError::new("no current tag found"))?;
+
+        let current_attribute_name = self
+            .attribute_name
+            .as_ref()
+            .ok_or(HtmlParseError::new("no current attribute name found"))?;
+
+        let entry = current_tag_token
+            .attributes_mut()
+            .into_iter()
+            .find(|x| x.name == *current_attribute_name)
+            .ok_or(HtmlParseError::new("no current attribute found"))?;
+
+        Ok(entry)
+    }
+
+    pub fn current_return_state(&self) -> Result<TokenizerState, HtmlParseError> {
+        self.return_state
+            .ok_or(HtmlParseError::new("no return state found"))
+    }
+
     pub fn reconsume(&mut self) {
         self.input_stream.prev();
     }
@@ -271,6 +338,32 @@ impl<'a> Tokenizer<'a> {
         self.tag_token
             .as_mut()
             .ok_or(HtmlParseError::new("no current tag found"))
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#charref-in-attribute>
+    pub fn charref_in_attribute(&self) -> bool {
+        match self.return_state {
+            Some(TokenizerState::AttributeValueDoubleQuoted)
+            | Some(TokenizerState::AttributeValueSingleQuoted)
+            | Some(TokenizerState::AttributeValueUnquoted) => true,
+            _ => false,
+        }
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#flush-code-points-consumed-as-a-character-reference>
+    pub fn flush_code_points_consumed_as_character_reference(
+        &mut self,
+    ) -> Result<(), HtmlParseError> {
+        let code_points: Vec<char> = self.temporary_buffer.drain(..).collect();
+        for c in code_points.into_iter() {
+            if self.charref_in_attribute() {
+                self.current_attribute_mut()?.value.push(c);
+            } else {
+                self.emit(HtmlToken::Character(c))?;
+            }
+        }
+
+        Ok(())
     }
 
     pub fn step(&mut self) -> Result<(), HtmlParseError> {
@@ -346,15 +439,19 @@ impl<'a> Tokenizer<'a> {
             TokenizerState::CDATASection => todo!(),
             TokenizerState::CDATASectionBracket => todo!(),
             TokenizerState::CDATASectionEnd => todo!(),
-            TokenizerState::CharacterReference => todo!(),
-            TokenizerState::NamedCharacterReference => todo!(),
-            TokenizerState::AmbiguousAmpersand => todo!(),
-            TokenizerState::NumericCharacterReference => todo!(),
+            TokenizerState::CharacterReference => self.character_reference_state(),
+            TokenizerState::NamedCharacterReference => self.named_character_reference_state(),
+            TokenizerState::AmbiguousAmpersand => self.ambiguous_ampersand_state(),
+            TokenizerState::NumericCharacterReference => self.numeric_character_reference_state(),
             TokenizerState::HexadecimalCharacterReferenceStart => todo!(),
-            TokenizerState::DecimalCharacterReferenceStart => todo!(),
+            TokenizerState::DecimalCharacterReferenceStart => {
+                self.decimal_character_reference_start_state()
+            }
             TokenizerState::HexadecimalCharacterReference => todo!(),
-            TokenizerState::DecimalCharacterReference => todo!(),
-            TokenizerState::NumericCharacterReferenceEnd => todo!(),
+            TokenizerState::DecimalCharacterReference => self.decimal_character_reference_state(),
+            TokenizerState::NumericCharacterReferenceEnd => {
+                self.numeric_character_reference_end_state()
+            }
         }
     }
 
