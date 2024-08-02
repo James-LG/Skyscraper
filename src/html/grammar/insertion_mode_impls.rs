@@ -778,7 +778,12 @@ impl HtmlParser {
                 self.stop_parsing()?;
             }
             _ => {
-                todo!()
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "unexpected token after body",
+                )))?;
+
+                self.insertion_mode = InsertionMode::InBody;
+                self.token_emitted(token)?;
             }
         }
 

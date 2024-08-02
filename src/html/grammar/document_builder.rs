@@ -95,6 +95,10 @@ impl<'arena> ElementBuilder<'arena> {
         self
     }
 
+    pub fn add_attribute_str(mut self, name: &str, value: &str) -> Self {
+        self.add_attribute(AttributeNode::new(name.to_string(), value.to_string()))
+    }
+
     pub fn add_attribute(mut self, attribute: AttributeNode) -> Self {
         self.funcs.push(Box::new(move |arena| {
             let child_id = arena.new_node(XpathItemTreeNode::AttributeNode(attribute));

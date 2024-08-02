@@ -350,7 +350,7 @@ impl HtmlParser {
     pub(crate) fn handle_error(&self, error: HtmlParserError) -> Result<(), HtmlParseError> {
         match error {
             HtmlParserError::MinorError(err) => {
-                warn!("{}", err);
+                println!("minor error: {}", err);
                 Ok(())
             }
             HtmlParserError::FatalError(err) => Err(HtmlParseError::new(&err)),

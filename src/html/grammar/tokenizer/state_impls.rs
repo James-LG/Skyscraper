@@ -3,11 +3,15 @@ use std::collections::HashMap;
 use nom::AsChar;
 use once_cell::sync::Lazy;
 
-use crate::html::grammar::{chars, HtmlParseError};
+use crate::{
+    html::grammar::{chars, HtmlParseError},
+    xpath::grammar::data_model::AttributeNode,
+};
 
 use super::{
     named_character_references::{NAMED_CHARACTER_REFS, NAMED_CHARACTER_REFS_MAX_LENGTH},
-    CommentToken, HtmlToken, TagToken, TagTokenType, Tokenizer, TokenizerError, TokenizerState,
+    Attribute, CommentToken, HtmlToken, TagToken, TagTokenType, Tokenizer, TokenizerError,
+    TokenizerState,
 };
 
 impl<'a> Tokenizer<'a> {
@@ -199,6 +203,310 @@ impl<'a> Tokenizer<'a> {
                 self.emit(HtmlToken::EndOfFile)?;
             }
         };
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#before-attribute-name-state>
+    pub(super) fn before_attribute_name_state(&mut self) -> Result<(), HtmlParseError> {
+        match self.input_stream.next() {
+            Some(
+                &chars::CHARACTER_TABULATION
+                | &chars::LINE_FEED
+                | &chars::FORM_FEED
+                | &chars::SPACE,
+            ) => {
+                // ignore
+            }
+            Some(c) if ['/', '>'].contains(c) => {
+                self.reconsume_in_state(TokenizerState::AfterAttributeName)?;
+            }
+            Some('=') => {
+                self.handle_error(TokenizerError::UnexpectedEqualsSignBeforeAttributeName)?;
+                let attribute = Attribute::new(String::from('='), String::new());
+                self.create_new_attribute(attribute)?;
+                self.state = TokenizerState::AttributeName;
+            }
+            None => {
+                // TODO: Does reconsuming an EOF work?
+                self.reconsume_in_state(TokenizerState::AfterAttributeName)?;
+            }
+            Some(c) => {
+                let attribute = Attribute::new(String::from(*c), String::new());
+                self.create_new_attribute(attribute)?;
+                self.reconsume_in_state(TokenizerState::AttributeName)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#attribute-name-state>
+    pub(super) fn attribute_name_state(&mut self) -> Result<(), HtmlParseError> {
+        match self.input_stream.next() {
+            Some(
+                &chars::CHARACTER_TABULATION
+                | &chars::LINE_FEED
+                | &chars::FORM_FEED
+                | &chars::SPACE
+                | '/'
+                | '>',
+            ) => {
+                self.reconsume_in_state(TokenizerState::AfterAttributeName)?;
+            }
+            None => {
+                self.reconsume_in_state(TokenizerState::AfterAttributeName)?;
+            }
+            Some('=') => {
+                self.state = TokenizerState::BeforeAttributeValue;
+            }
+            Some(c) if c.is_ascii_uppercase() => {
+                let c = c.to_ascii_lowercase();
+                self.push_char_to_attribute_name(c)?;
+            }
+            Some(&chars::NULL) => {
+                self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
+
+                self.push_char_to_attribute_name(chars::FEED_REPLACEMENT_CHARACTER)?;
+            }
+            Some(c) if ['"', '\'', '<'].contains(c) => {
+                let c = *c;
+                self.handle_error(TokenizerError::UnexpectedCharacterInAttributeName)?;
+
+                self.push_char_to_attribute_name(c)?;
+            }
+            Some(c) => {
+                let c = *c;
+                self.push_char_to_attribute_name(c)?;
+            }
+        }
+
+        // TODO: check for duplicate attribtue names before emitting
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#after-attribute-name-state>
+    pub(super) fn after_attribute_name_state(&mut self) -> Result<(), HtmlParseError> {
+        match self.input_stream.next() {
+            Some(
+                &chars::CHARACTER_TABULATION
+                | &chars::LINE_FEED
+                | &chars::FORM_FEED
+                | &chars::SPACE,
+            ) => {
+                // ignore
+            }
+            Some('/') => {
+                self.state = TokenizerState::SelfClosingStartTag;
+            }
+            Some('=') => {
+                self.state = TokenizerState::BeforeAttributeValue;
+            }
+            Some('>') => {
+                self.state = TokenizerState::Data;
+                self.emit_current_tag_token();
+            }
+            None => {
+                self.handle_error(TokenizerError::EofInTag)?;
+
+                self.emit(HtmlToken::EndOfFile)?;
+            }
+            Some(_) => {
+                let attribute = Attribute::new(String::new(), String::new());
+                self.create_new_attribute(attribute)?;
+                self.reconsume_in_state(TokenizerState::AttributeName)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#before-attribute-value-state>
+    pub(super) fn before_attribute_value_state(&mut self) -> Result<(), HtmlParseError> {
+        match self.input_stream.next() {
+            Some(
+                &chars::CHARACTER_TABULATION
+                | &chars::LINE_FEED
+                | &chars::FORM_FEED
+                | &chars::SPACE,
+            ) => {
+                // ignore
+            }
+            Some('"') => {
+                self.state = TokenizerState::AttributeValueDoubleQuoted;
+            }
+            Some('\'') => {
+                self.state = TokenizerState::AttributeValueSingleQuoted;
+            }
+            Some('>') => {
+                self.handle_error(TokenizerError::MissingAttributeValue)?;
+
+                self.state = TokenizerState::Data;
+                self.emit_current_tag_token();
+            }
+            Some(_) | None => {
+                self.reconsume_in_state(TokenizerState::AttributeValueUnquoted)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(double-quoted)-state>
+    pub(super) fn attribute_value_double_quoted_state(&mut self) -> Result<(), HtmlParseError> {
+        match self.input_stream.next() {
+            Some('"') => {
+                self.state = TokenizerState::AfterAttributeValueQuoted;
+            }
+            Some('&') => {
+                self.return_state = Some(TokenizerState::AttributeValueDoubleQuoted);
+                self.state = TokenizerState::CharacterReference;
+            }
+            Some(&chars::NULL) => {
+                self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
+
+                self.push_char_to_attribute_value(chars::FEED_REPLACEMENT_CHARACTER)?;
+            }
+            None => {
+                self.handle_error(TokenizerError::EofInTag)?;
+
+                self.emit(HtmlToken::EndOfFile)?;
+            }
+            Some(c) => {
+                let c = *c;
+                self.push_char_to_attribute_value(c)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(single-quoted)-state>
+    pub(super) fn attribute_value_single_quoted_state(&mut self) -> Result<(), HtmlParseError> {
+        match self.input_stream.next() {
+            Some('\'') => {
+                self.state = TokenizerState::AfterAttributeValueQuoted;
+            }
+            Some('&') => {
+                self.return_state = Some(TokenizerState::AttributeValueSingleQuoted);
+                self.state = TokenizerState::CharacterReference;
+            }
+            Some(&chars::NULL) => {
+                self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
+
+                self.push_char_to_attribute_value(chars::FEED_REPLACEMENT_CHARACTER)?;
+            }
+            None => {
+                self.handle_error(TokenizerError::EofInTag)?;
+
+                self.emit(HtmlToken::EndOfFile)?;
+            }
+            Some(c) => {
+                let c = *c;
+                self.push_char_to_attribute_value(c)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(unquoted)-state>
+    pub(super) fn attribute_value_unquoted_state(&mut self) -> Result<(), HtmlParseError> {
+        match self.input_stream.next() {
+            Some(
+                &chars::CHARACTER_TABULATION
+                | &chars::LINE_FEED
+                | &chars::FORM_FEED
+                | &chars::SPACE,
+            ) => {
+                self.state = TokenizerState::BeforeAttributeName;
+            }
+            Some('&') => {
+                self.return_state = Some(TokenizerState::AttributeValueUnquoted);
+                self.state = TokenizerState::CharacterReference;
+            }
+            Some('>') => {
+                self.state = TokenizerState::Data;
+                self.emit_current_tag_token();
+            }
+            Some(&chars::NULL) => {
+                self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
+
+                self.push_char_to_attribute_value(chars::FEED_REPLACEMENT_CHARACTER)?;
+            }
+            Some(c) if ['"', '\'', '<', '=', '`'].contains(c) => {
+                let c = *c;
+                self.handle_error(TokenizerError::UnexpectedCharacterInUnquotedAttributeValue)?;
+
+                self.push_char_to_attribute_value(c)?;
+            }
+            None => {
+                self.handle_error(TokenizerError::EofInTag)?;
+
+                self.emit(HtmlToken::EndOfFile)?;
+            }
+            Some(c) => {
+                let c = *c;
+                self.push_char_to_attribute_value(c)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#after-attribute-value-(quoted)-state>
+    pub(super) fn after_attribute_value_quoted_state(&mut self) -> Result<(), HtmlParseError> {
+        match self.input_stream.next() {
+            Some(
+                &chars::CHARACTER_TABULATION
+                | &chars::LINE_FEED
+                | &chars::FORM_FEED
+                | &chars::SPACE,
+            ) => {
+                self.state = TokenizerState::BeforeAttributeName;
+            }
+            Some('/') => {
+                self.state = TokenizerState::SelfClosingStartTag;
+            }
+            Some('>') => {
+                self.state = TokenizerState::Data;
+                self.emit_current_tag_token();
+            }
+            None => {
+                self.handle_error(TokenizerError::EofInTag)?;
+
+                self.emit(HtmlToken::EndOfFile)?;
+            }
+            Some(_) => {
+                self.handle_error(TokenizerError::MissingWhitespaceBetweenAttributes)?;
+
+                self.reconsume_in_state(TokenizerState::BeforeAttributeName)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#self-closing-start-tag-state>
+    pub(super) fn self_closing_start_tag_state(&mut self) -> Result<(), HtmlParseError> {
+        match self.input_stream.next() {
+            Some('>') => {
+                *self.current_tag_token_mut()?.self_closing_mut() = true;
+                self.state = TokenizerState::Data;
+                self.emit_current_tag_token();
+            }
+            None => {
+                self.handle_error(TokenizerError::EofInTag)?;
+
+                self.emit(HtmlToken::EndOfFile)?;
+            }
+            Some(_) => {
+                self.handle_error(TokenizerError::UnexpectedSolidusInTag)?;
+
+                self.reconsume_in_state(TokenizerState::BeforeAttributeName)?;
+            }
+        }
 
         Ok(())
     }

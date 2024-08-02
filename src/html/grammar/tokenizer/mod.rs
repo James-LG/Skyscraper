@@ -54,6 +54,13 @@ impl TagTokenType {
             TagTokenType::EndTag(tag) => &mut tag.attributes,
         }
     }
+
+    pub fn self_closing_mut(&mut self) -> &mut bool {
+        match self {
+            TagTokenType::StartTag(tag) => &mut tag.self_closing,
+            TagTokenType::EndTag(tag) => &mut tag.self_closing,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -77,6 +84,12 @@ impl TagToken {
 pub struct Attribute {
     pub name: String,
     pub value: String,
+}
+
+impl Attribute {
+    pub fn new(name: String, value: String) -> Self {
+        Attribute { name, value }
+    }
 }
 
 #[derive(Debug)]
@@ -204,6 +217,18 @@ pub(crate) enum TokenizerError {
     NoncharacterCharacterReference,
     #[error("control character reference")]
     ControlCharacterReference,
+    #[error("unexpected equals sign before attribute name")]
+    UnexpectedEqualsSignBeforeAttributeName,
+    #[error("unexpected character in attribute name")]
+    UnexpectedCharacterInAttributeName,
+    #[error("missing attribute value")]
+    MissingAttributeValue,
+    #[error("unexpected character in unquoted attribute value")]
+    UnexpectedCharacterInUnquotedAttributeValue,
+    #[error("missing whitespace between attributes")]
+    MissingWhitespaceBetweenAttributes,
+    #[error("unexpected solidus in tag")]
+    UnexpectedSolidusInTag,
 }
 
 pub(crate) trait TokenizerErrorHandler {
@@ -307,9 +332,40 @@ impl<'a> Tokenizer<'a> {
             .attributes_mut()
             .into_iter()
             .find(|x| x.name == *current_attribute_name)
-            .ok_or(HtmlParseError::new("no current attribute found"))?;
+            .ok_or_else(|| {
+                HtmlParseError::new(&format!(
+                    "could not find attribute {} on current tag",
+                    current_attribute_name
+                ))
+            })?;
 
         Ok(entry)
+    }
+
+    pub fn create_new_attribute(&mut self, attribute: Attribute) -> Result<(), HtmlParseError> {
+        self.attribute_name = Some(attribute.name.clone());
+        self.current_tag_token_mut()?
+            .attributes_mut()
+            .push(attribute);
+
+        Ok(())
+    }
+
+    pub fn push_char_to_attribute_name(&mut self, c: char) -> Result<(), HtmlParseError> {
+        self.current_attribute_mut()?.name.push(c);
+
+        if let Some(attribute_name) = self.attribute_name.as_mut() {
+            attribute_name.push(c);
+            Ok(())
+        } else {
+            Err(HtmlParseError::new("no current attribute name found"))
+        }
+    }
+
+    pub fn push_char_to_attribute_value(&mut self, c: char) -> Result<(), HtmlParseError> {
+        self.current_attribute_mut()?.value.push(c);
+
+        Ok(())
     }
 
     pub fn current_return_state(&self) -> Result<TokenizerState, HtmlParseError> {
@@ -399,15 +455,19 @@ impl<'a> Tokenizer<'a> {
             TokenizerState::ScriptDataDoubleEscapedDashDash => todo!(),
             TokenizerState::ScriptDataDoubleEscapedLessThanSign => todo!(),
             TokenizerState::ScriptDataDoubleEscapeEnd => todo!(),
-            TokenizerState::BeforeAttributeName => todo!(),
-            TokenizerState::AttributeName => todo!(),
-            TokenizerState::AfterAttributeName => todo!(),
-            TokenizerState::BeforeAttributeValue => todo!(),
-            TokenizerState::AttributeValueDoubleQuoted => todo!(),
-            TokenizerState::AttributeValueSingleQuoted => todo!(),
-            TokenizerState::AttributeValueUnquoted => todo!(),
-            TokenizerState::AfterAttributeValueQuoted => todo!(),
-            TokenizerState::SelfClosingStartTag => todo!(),
+            TokenizerState::BeforeAttributeName => self.before_attribute_name_state(),
+            TokenizerState::AttributeName => self.attribute_name_state(),
+            TokenizerState::AfterAttributeName => self.after_attribute_name_state(),
+            TokenizerState::BeforeAttributeValue => self.before_attribute_value_state(),
+            TokenizerState::AttributeValueDoubleQuoted => {
+                self.attribute_value_double_quoted_state()
+            }
+            TokenizerState::AttributeValueSingleQuoted => {
+                self.attribute_value_single_quoted_state()
+            }
+            TokenizerState::AttributeValueUnquoted => self.attribute_value_unquoted_state(),
+            TokenizerState::AfterAttributeValueQuoted => self.after_attribute_value_quoted_state(),
+            TokenizerState::SelfClosingStartTag => self.self_closing_start_tag_state(),
             TokenizerState::BogusComment => todo!(),
             TokenizerState::MarkupDeclarationOpen => todo!(),
             TokenizerState::CommentStart => todo!(),

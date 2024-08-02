@@ -1,4 +1,7 @@
-use skyscraper::html::{self, grammar::document_builder::DocumentBuilder};
+use skyscraper::{
+    html::{self, grammar::document_builder::DocumentBuilder},
+    xpath::grammar::data_model::AttributeNode,
+};
 
 mod test_framework;
 
@@ -71,4 +74,28 @@ fn text_should_include_text_before_between_and_after_child_element() {
         .unwrap();
 
     assert!(test_framework::compare_documents(expected, document, true));
+}
+
+#[test]
+fn sample1_should_parse() {
+    // arrange
+    let text = r#"<html><body><div id="example">Example 1</div></body></html>"#;
+
+    // act
+    let document = html::parse(text).unwrap();
+
+    // assert
+    let expected = DocumentBuilder::new()
+        .with_root("html", |html| {
+            html.add_element("head", |head| head)
+                .add_element("body", |body| {
+                    body.add_element("div", |div| {
+                        div.add_text("Example 1").add_attribute_str("id", "example")
+                    })
+                })
+        })
+        .build()
+        .unwrap();
+
+    assert!(test_framework::compare_documents(expected, document, false));
 }
