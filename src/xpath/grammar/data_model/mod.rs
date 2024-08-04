@@ -83,6 +83,10 @@ impl Display for Function {
 pub struct XpathDocumentNode {}
 
 impl XpathDocumentNode {
+    pub(crate) fn new() -> Self {
+        Self {}
+    }
+
     /// Get all text contained in this element and its descendants.
     ///
     /// # Arguments
@@ -155,11 +159,6 @@ impl XpathDocumentNode {
             .collect();
 
         element_strings.join("\n")
-    }
-}
-impl Display for XpathDocumentNode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DocumentNode()")
     }
 }
 
@@ -265,6 +264,7 @@ impl ElementNode {
     }
 
     /// Get all direct child nodes of the given element.
+    /// Note this _does_ include attribute nodes.
     ///
     /// # Arguments
     ///
@@ -381,9 +381,30 @@ impl ElementNode {
     }
 
     pub fn display<'tree>(&self, tree: &'tree XpathItemTree) -> String {
-        let children = self.children(tree);
-        let children: Vec<String> = children.map(|x| x.display(tree)).collect();
-        format!("<{}>\n{}\n</{}>", self.name, children.join("\n"), self.name)
+        let children_without_attributes = self.children(tree).filter(|x| !x.is_attribute_node());
+        let displayed_children: Vec<String> = children_without_attributes
+            .map(|x| x.display(tree))
+            .collect();
+
+        let attributes = self.attributes(tree);
+        let displayed_attributes: Vec<String> = attributes.iter().map(|x| x.to_string()).collect();
+
+        if displayed_attributes.is_empty() {
+            format!(
+                "<{}>\n{}\n</{}>",
+                self.name,
+                displayed_children.join("\n"),
+                self.name
+            )
+        } else {
+            format!(
+                "<{} {}>\n{}\n</{}>",
+                self.name,
+                displayed_attributes.join(" "),
+                displayed_children.join("\n"),
+                self.name
+            )
+        }
     }
 }
 

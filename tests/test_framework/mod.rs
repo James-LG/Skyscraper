@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use skyscraper::xpath::{grammar::XpathItemTreeNode, XpathItemTree};
 
 pub fn compare_documents(
@@ -22,10 +23,30 @@ pub fn compare_documents(
         true
     });
 
-    for (expected_node, actual_node) in expected_root_descendants.zip(actual_root_descendants) {
+    for eb in expected_root_descendants.zip_longest(actual_root_descendants) {
+        let (expected_node, actual_node) = eb.left_and_right();
+
+        println!("Expected node: {:?}", expected_node);
+        println!("Actual node: {:?}", actual_node);
+
         if expected_node != actual_node {
-            println!("Expected document: {}", expected);
-            println!("Actual document: {}", actual);
+            println!(
+                "Expected node display:\n{}",
+                expected_node.map_or(String::new(), |n| n.display(&expected))
+            );
+            println!(
+                "Actual node display:\n{}",
+                actual_node.map_or(String::new(), |n| n.display(&actual))
+            );
+
+            println!(
+                "---------------\nExpected document:\n{}\n---------------",
+                expected
+            );
+            println!(
+                "---------------\nActual document:\n{}\n---------------",
+                actual
+            );
             print_differences(expected_node, &expected, actual_node, &actual);
             return false;
         }
@@ -35,17 +56,22 @@ pub fn compare_documents(
 }
 
 pub fn print_differences(
-    expected: &XpathItemTreeNode,
+    expected: Option<&XpathItemTreeNode>,
     expected_doc: &XpathItemTree,
-    actual: &XpathItemTreeNode,
+    actual: Option<&XpathItemTreeNode>,
     actual_doc: &XpathItemTree,
 ) {
     if expected != actual {
         println!("Expected: {:?}", expected);
         println!("Actual: {:?}", actual);
 
-        print_parent("Expected", expected, expected_doc);
-        print_parent("Actual", actual, actual_doc);
+        if let Some(expected) = expected {
+            print_parent("Expected", expected, expected_doc);
+        }
+
+        if let Some(actual) = actual {
+            print_parent("Actual", actual, actual_doc);
+        }
     }
 }
 

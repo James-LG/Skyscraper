@@ -17,6 +17,8 @@ use crate::{
     },
 };
 
+use super::DocumentNode;
+
 mod chars;
 pub mod document_builder;
 mod insertion_mode_impls;
@@ -270,8 +272,16 @@ impl HtmlParser {
             tokenizer.step()?;
         }
 
+        let document_node_id = self
+            .arena
+            .new_node(XpathItemTreeNode::DocumentNode(XpathDocumentNode::new()));
+
+        if let Some(root_node) = self.root_node {
+            document_node_id.append(root_node, &mut self.arena);
+        }
+
         let arena = std::mem::replace(&mut self.arena, Arena::new());
-        let document = XpathItemTree::new(arena, self.root_node.expect("root node not set"));
+        let document = XpathItemTree::new(arena, document_node_id);
         Ok(document)
     }
 

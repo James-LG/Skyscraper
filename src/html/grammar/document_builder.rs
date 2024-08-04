@@ -3,7 +3,7 @@ use thiserror::Error;
 
 use crate::xpath::{
     grammar::{
-        data_model::{AttributeNode, ElementNode, TextNode, XpathItem},
+        data_model::{AttributeNode, ElementNode, TextNode, XpathDocumentNode, XpathItem},
         XpathItemTreeNode,
     },
     XpathItemTree,
@@ -43,8 +43,13 @@ impl DocumentBuilder {
         })?;
 
         let root_id = f(ElementBuilder::new(tag_name, None, &mut self.arena)).build()?;
+        let document_node_id = self
+            .arena
+            .new_node(XpathItemTreeNode::DocumentNode(XpathDocumentNode::new()));
 
-        let document = XpathItemTree::new(self.arena, root_id);
+        document_node_id.append(root_id, &mut self.arena);
+
+        let document = XpathItemTree::new(self.arena, document_node_id);
 
         Ok(document)
     }
@@ -53,7 +58,14 @@ impl DocumentBuilder {
 pub struct ElementBuilder<'arena> {
     parent_id: Option<NodeId>,
     arena: &'arena mut Arena<XpathItemTreeNode>,
-    funcs: Vec<Box<dyn FnOnce(&mut Arena<XpathItemTreeNode>) -> NodeId>>,
+    funcs: Vec<
+        Box<
+            dyn FnOnce(
+                &mut Arena<XpathItemTreeNode>,
+                NodeId,
+            ) -> Result<NodeId, DocumentBuilderError>,
+        >,
+    >,
     tag_name: String,
 }
 
@@ -77,19 +89,13 @@ impl<'arena> ElementBuilder<'arena> {
         f: impl FnOnce(ElementBuilder) -> ElementBuilder + 'static,
     ) -> Self {
         let tag_name = tag_name.to_string();
-        self.funcs.push(Box::new(move |arena| {
-            let child_id =
-                arena.new_node(XpathItemTreeNode::ElementNode(ElementNode::new(tag_name)));
-
-            arena
-                .get_mut(child_id)
-                .unwrap()
-                .get_mut()
-                .as_element_node_mut()
-                .unwrap()
-                .set_id(child_id);
-
-            child_id
+        self.funcs.push(Box::new(move |arena, parent_id| {
+            f(ElementBuilder::new(
+                tag_name.clone(),
+                Some(parent_id),
+                arena,
+            ))
+            .build()
         }));
 
         self
@@ -100,7 +106,7 @@ impl<'arena> ElementBuilder<'arena> {
     }
 
     pub fn add_attribute(mut self, attribute: AttributeNode) -> Self {
-        self.funcs.push(Box::new(move |arena| {
+        self.funcs.push(Box::new(move |arena, _| {
             let child_id = arena.new_node(XpathItemTreeNode::AttributeNode(attribute));
 
             arena
@@ -111,7 +117,7 @@ impl<'arena> ElementBuilder<'arena> {
                 .unwrap()
                 .set_id(child_id);
 
-            child_id
+            Ok(child_id)
         }));
 
         self
@@ -119,7 +125,7 @@ impl<'arena> ElementBuilder<'arena> {
 
     pub fn add_text(mut self, text: &str) -> Self {
         let text = text.to_string();
-        self.funcs.push(Box::new(move |arena| {
+        self.funcs.push(Box::new(move |arena, _| {
             let child_id = arena.new_node(XpathItemTreeNode::TextNode(TextNode::new(text)));
 
             arena
@@ -130,7 +136,7 @@ impl<'arena> ElementBuilder<'arena> {
                 .unwrap()
                 .set_id(child_id);
 
-            child_id
+            Ok(child_id)
         }));
 
         self
@@ -152,7 +158,7 @@ impl<'arena> ElementBuilder<'arena> {
             .set_id(element_id);
 
         for func in self.funcs {
-            let child_id = func(&mut self.arena);
+            let child_id = func(&mut self.arena, element_id)?;
             element_id.append(child_id, &mut self.arena);
         }
 
