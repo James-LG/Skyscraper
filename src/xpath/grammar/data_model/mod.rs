@@ -165,7 +165,7 @@ impl XpathDocumentNode {
 /// An element node such as an HTML tag.
 ///
 /// <https://www.w3.org/TR/xpath-datamodel-31/#ElementNode>
-#[derive(Eq, Debug, Hash, Clone)]
+#[derive(Eq, Hash, Clone)]
 pub struct ElementNode {
     /// The ID of the element.
     ///
@@ -175,6 +175,15 @@ pub struct ElementNode {
 
     /// The name of the element.
     pub name: String,
+}
+
+impl std::fmt::Debug for ElementNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // ignore id in debug output
+        f.debug_struct("ElementNode")
+            .field("name", &self.name)
+            .finish()
+    }
 }
 
 impl PartialEq for ElementNode {

@@ -3,7 +3,7 @@ use skyscraper::{
     xpath::grammar::data_model::AttributeNode,
 };
 
-mod test_framework;
+use crate::test_framework;
 
 #[test]
 fn parse_should_return_document() {

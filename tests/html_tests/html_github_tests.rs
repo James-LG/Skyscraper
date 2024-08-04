@@ -1,6 +1,6 @@
 use skyscraper::html::{self, grammar::document_builder::DocumentBuilder};
 
-mod test_framework;
+use crate::test_framework;
 
 #[test]
 fn text_should_unescape_characters() {
