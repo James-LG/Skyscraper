@@ -4,14 +4,14 @@ use nom::AsChar;
 use once_cell::sync::Lazy;
 
 use crate::{
-    html::grammar::{chars, HtmlParseError},
-    xpath::grammar::data_model::AttributeNode,
+    html::grammar::{chars, HtmlParseError, HTML_NAMESPACE},
+    xpath::grammar::{data_model::AttributeNode, XpathItemTreeNode},
 };
 
 use super::{
     named_character_references::{NAMED_CHARACTER_REFS, NAMED_CHARACTER_REFS_MAX_LENGTH},
-    Attribute, CommentToken, HtmlToken, TagToken, TagTokenType, Tokenizer, TokenizerError,
-    TokenizerState,
+    Attribute, CommentToken, DoctypeToken, HtmlToken, TagToken, TagTokenType, Tokenizer,
+    TokenizerError, TokenizerState,
 };
 
 impl<'a> Tokenizer<'a> {
@@ -505,6 +505,240 @@ impl<'a> Tokenizer<'a> {
                 self.handle_error(TokenizerError::UnexpectedSolidusInTag)?;
 
                 self.reconsume_in_state(TokenizerState::BeforeAttributeName)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#markup-declaration-open-state>
+    pub(super) fn markup_declaration_open_state(&mut self) -> Result<(), HtmlParseError> {
+        // if the next two characters are hyphens
+        let next_two_chars = self
+            .input_stream
+            .peek_current_and_multiple(2)
+            .into_iter()
+            .collect::<String>();
+
+        if next_two_chars == "--" {
+            self.input_stream.next_add(2);
+            self.comment_token = Some(CommentToken::new(String::new()));
+            self.state = TokenizerState::CommentStart;
+            return Ok(());
+        }
+
+        // if the next seven characters are case-insensitive "DOCTYPE"
+        let next_seven_chars = self
+            .input_stream
+            .peek_current_and_multiple(7)
+            .into_iter()
+            .collect::<String>();
+
+        if next_seven_chars.eq_ignore_ascii_case("DOCTYPE") {
+            self.input_stream.next_add(7);
+            self.state = TokenizerState::DOCTYPE;
+            return Ok(());
+        }
+
+        // if the next seven characters are case-sensitive "[CDATA["
+        if next_seven_chars == "[CDATA[" {
+            self.input_stream.next_add(7);
+
+            // if there is an adjusted current node
+            if let Some(node) = self.parser.adjusted_current_node() {
+                // ... and it is an element
+                if let XpathItemTreeNode::ElementNode(element) = node {
+                    // ... not in the html namespace
+                    if element.namespace.as_ref().map(String::as_str) != Some(HTML_NAMESPACE) {
+                        self.state = TokenizerState::CDATASection;
+                    }
+                }
+            }
+
+            // otherwise, this is a parse error
+            self.handle_error(TokenizerError::CdataInHtmlContent)?;
+
+            self.comment_token = Some(CommentToken::new(String::from("[CDATA[")));
+            self.state = TokenizerState::BogusComment;
+        }
+
+        // anything else is a parse error
+        self.handle_error(TokenizerError::IncorrectlyOpenedComment)?;
+
+        self.comment_token = Some(CommentToken::new(String::new()));
+        self.state = TokenizerState::BogusComment;
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#doctype-state>
+    pub(super) fn doctype_state(&mut self) -> Result<(), HtmlParseError> {
+        match self.input_stream.next() {
+            Some(&chars::CHARACTER_TABULATION)
+            | Some(&chars::LINE_FEED)
+            | Some(&chars::FORM_FEED)
+            | Some(&chars::SPACE) => {
+                self.state = TokenizerState::BeforeDOCTYPEName;
+            }
+            Some('>') => {
+                self.reconsume_in_state(TokenizerState::DOCTYPEName)?;
+            }
+            None => {
+                self.handle_error(TokenizerError::EofInDoctype)?;
+
+                let mut doctype_token = DoctypeToken::new(String::new());
+                doctype_token.force_quirks = true;
+                self.doctype_token = Some(doctype_token);
+                self.emit_current_token();
+                self.emit(HtmlToken::EndOfFile)?;
+            }
+            Some(_) => {
+                self.handle_error(TokenizerError::MissingWhitespaceBeforeDoctypeName)?;
+
+                self.reconsume_in_state(TokenizerState::BeforeDOCTYPEName)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#before-doctype-name-state>
+    pub(super) fn before_doctype_name(&mut self) -> Result<(), HtmlParseError> {
+        match self.input_stream.next() {
+            Some(&chars::CHARACTER_TABULATION)
+            | Some(&chars::LINE_FEED)
+            | Some(&chars::FORM_FEED)
+            | Some(&chars::SPACE) => {
+                // ignore
+            }
+            Some(c) if c.is_ascii_uppercase() => {
+                self.doctype_token = Some(DoctypeToken::new(String::from(c.to_ascii_lowercase())));
+                self.state = TokenizerState::DOCTYPEName;
+            }
+            Some(&chars::NULL) => {
+                self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
+
+                self.doctype_token = Some(DoctypeToken::new(String::from(
+                    chars::FEED_REPLACEMENT_CHARACTER,
+                )));
+                self.state = TokenizerState::DOCTYPEName;
+            }
+            Some('>') => {
+                self.handle_error(TokenizerError::MissingDoctypeName)?;
+
+                let mut doctype_token = DoctypeToken::new(String::new());
+                doctype_token.force_quirks = true;
+                self.doctype_token = Some(doctype_token);
+
+                self.emit_current_token();
+                self.state = TokenizerState::Data;
+            }
+            None => {
+                self.handle_error(TokenizerError::EofInDoctype)?;
+
+                let mut doctype_token = DoctypeToken::new(String::new());
+                doctype_token.force_quirks = true;
+                self.doctype_token = Some(doctype_token);
+
+                self.emit_current_token();
+                self.emit(HtmlToken::EndOfFile)?;
+            }
+            Some(c) => {
+                self.doctype_token = Some(DoctypeToken::new(String::from(*c)));
+                self.state = TokenizerState::DOCTYPEName;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#doctype-name-state>
+    pub(super) fn doctype_name_state(&mut self) -> Result<(), HtmlParseError> {
+        match self.input_stream.next() {
+            Some(&chars::CHARACTER_TABULATION)
+            | Some(&chars::LINE_FEED)
+            | Some(&chars::FORM_FEED)
+            | Some(&chars::SPACE) => {
+                self.state = TokenizerState::AfterDOCTYPEName;
+            }
+            Some('>') => {
+                self.emit_current_doctype_token()?;
+                self.state = TokenizerState::Data;
+            }
+            Some(c) if c.is_ascii_uppercase() => {
+                let c = *c;
+                self.current_doctype_token_mut()?
+                    .name
+                    .push(c.to_ascii_lowercase());
+            }
+            Some(&chars::NULL) => {
+                self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
+
+                self.current_doctype_token_mut()?
+                    .name
+                    .push(chars::FEED_REPLACEMENT_CHARACTER);
+            }
+            None => {
+                self.handle_error(TokenizerError::EofInDoctype)?;
+
+                self.current_doctype_token_mut()?.force_quirks = true;
+
+                self.emit_current_doctype_token();
+                self.emit(HtmlToken::EndOfFile)?;
+            }
+            Some(c) => {
+                let c = *c;
+                self.current_doctype_token_mut()?.name.push(c);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#after-doctype-name-state>
+    pub(super) fn after_doctype_name_state(&mut self) -> Result<(), HtmlParseError> {
+        match self.input_stream.next() {
+            Some(&chars::CHARACTER_TABULATION)
+            | Some(&chars::LINE_FEED)
+            | Some(&chars::FORM_FEED)
+            | Some(&chars::SPACE) => {
+                // ignore
+            }
+            Some('>') => {
+                self.emit_current_doctype_token()?;
+                self.state = TokenizerState::Data;
+            }
+            None => {
+                self.handle_error(TokenizerError::EofInDoctype)?;
+
+                self.current_doctype_token_mut()?.force_quirks = true;
+
+                self.emit_current_doctype_token();
+                self.emit(HtmlToken::EndOfFile)?;
+            }
+            Some(_) => {
+                let next_six_chars = self
+                    .input_stream
+                    .peek_current_and_multiple(6)
+                    .into_iter()
+                    .collect::<String>();
+
+                if next_six_chars.eq_ignore_ascii_case("PUBLIC") {
+                    self.input_stream.next_add(5);
+                    self.state = TokenizerState::AfterDOCTYPEPublicKeyword;
+                    return Ok(());
+                }
+
+                if next_six_chars.eq_ignore_ascii_case("SYSTEM") {
+                    self.input_stream.next_add(5);
+                    self.state = TokenizerState::AfterDOCTYPESystemKeyword;
+                    return Ok(());
+                }
+
+                self.handle_error(TokenizerError::InvalidCharacterSequenceAfterDoctypeName)?;
+
+                self.current_doctype_token_mut()?.force_quirks = true;
+                self.reconsume_in_state(TokenizerState::BogusDOCTYPE)?;
             }
         }
 

@@ -4,7 +4,7 @@ use std::collections::{hash_map::Entry, HashMap};
 
 use thiserror::Error;
 
-use crate::vecpointer::VecPointerRef;
+use crate::{vecpointer::VecPointerRef, xpath::grammar::XpathItemTreeNode};
 
 use super::{HtmlParseError, HtmlParseErrorType, ParseErrorHandler};
 
@@ -13,11 +13,26 @@ mod state_impls;
 
 #[derive(Debug)]
 pub enum HtmlToken {
-    DocType,
+    DocType(DoctypeToken),
     TagToken(TagTokenType),
     Comment(CommentToken),
     Character(char),
     EndOfFile,
+}
+
+#[derive(Debug)]
+pub struct DoctypeToken {
+    pub name: String,
+    pub force_quirks: bool,
+}
+
+impl DoctypeToken {
+    pub fn new(name: String) -> Self {
+        DoctypeToken {
+            name,
+            force_quirks: false,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -229,6 +244,18 @@ pub(crate) enum TokenizerError {
     MissingWhitespaceBetweenAttributes,
     #[error("unexpected solidus in tag")]
     UnexpectedSolidusInTag,
+    #[error("CDATA in html content")]
+    CdataInHtmlContent,
+    #[error("incorrectly opened comment")]
+    IncorrectlyOpenedComment,
+    #[error("eof in doctype")]
+    EofInDoctype,
+    #[error("missing whitespace before doctype name")]
+    MissingWhitespaceBeforeDoctypeName,
+    #[error("missing doctype name")]
+    MissingDoctypeName,
+    #[error("invalid character sequence after doctype name")]
+    InvalidCharacterSequenceAfterDoctypeName,
 }
 
 pub(crate) trait TokenizerErrorHandler {
@@ -259,8 +286,9 @@ impl TokenizerErrorHandler for DefaultTokenizerErrorHandler {
     }
 }
 
-pub(crate) trait TokenizerObserver {
+pub(crate) trait Parser {
     fn token_emitted(&mut self, token: HtmlToken) -> Result<(), HtmlParseError>;
+    fn adjusted_current_node(&self) -> Option<&XpathItemTreeNode>;
 }
 
 pub struct Tokenizer<'a> {
@@ -268,32 +296,30 @@ pub struct Tokenizer<'a> {
     return_state: Option<TokenizerState>,
     temporary_buffer: Vec<char>,
     input_stream: VecPointerRef<'a, char>,
-    observer: Option<Box<&'a mut dyn TokenizerObserver>>,
+    parser: Box<&'a mut dyn Parser>,
     error_handler: Option<Box<&'a dyn TokenizerErrorHandler>>,
     comment_token: Option<CommentToken>,
+    doctype_token: Option<DoctypeToken>,
     tag_token: Option<TagTokenType>,
     attribute_name: Option<String>,
     character_reference_code: u32,
 }
 
 impl<'a> Tokenizer<'a> {
-    pub fn new(input_stream: VecPointerRef<'a, char>) -> Self {
+    pub fn new(input_stream: VecPointerRef<'a, char>, parser: Box<&'a mut dyn Parser>) -> Self {
         Tokenizer {
             state: TokenizerState::Data,
             return_state: None,
             temporary_buffer: Vec::new(),
             input_stream,
-            observer: None,
+            parser,
             error_handler: None,
             comment_token: None,
             tag_token: None,
+            doctype_token: None,
             attribute_name: None,
             character_reference_code: 0,
         }
-    }
-
-    pub fn set_observer(&mut self, observer: Box<&'a mut dyn TokenizerObserver>) {
-        self.observer = Some(observer);
     }
 
     pub fn set_error_handler(&mut self, error_handler: Box<&'a dyn TokenizerErrorHandler>) {
@@ -302,9 +328,7 @@ impl<'a> Tokenizer<'a> {
 
     pub fn emit(&mut self, token: HtmlToken) -> Result<(), HtmlParseError> {
         println!("emitting token: {:?}", token);
-        if let Some(observer) = &mut self.observer {
-            observer.token_emitted(token)?;
-        }
+        self.parser.token_emitted(token)?;
 
         Ok(())
     }
@@ -383,17 +407,56 @@ impl<'a> Tokenizer<'a> {
         self.step()
     }
 
-    pub fn emit_current_tag_token(&mut self) {
+    pub fn emit_current_tag_token(&mut self) -> Result<(), HtmlParseError> {
         if let Some(tag_token) = self.tag_token.take() {
-            self.emit(HtmlToken::TagToken(tag_token));
+            self.emit(HtmlToken::TagToken(tag_token))?;
             self.tag_token = None;
         }
+
+        Ok(())
+    }
+
+    pub fn emit_current_comment_token(&mut self) -> Result<(), HtmlParseError> {
+        if let Some(comment_token) = self.comment_token.take() {
+            self.emit(HtmlToken::Comment(comment_token))?;
+            self.comment_token = None;
+        }
+
+        Ok(())
+    }
+
+    pub fn emit_current_doctype_token(&mut self) -> Result<(), HtmlParseError> {
+        if let Some(doctype_token) = self.doctype_token.take() {
+            self.emit(HtmlToken::DocType(doctype_token))?;
+            self.doctype_token = None;
+        }
+
+        Ok(())
+    }
+
+    pub fn emit_current_token(&mut self) -> Result<(), HtmlParseError> {
+        // this is an abritrary order, unclear if it is the correct behaviour
+        if self.comment_token.is_some() {
+            self.emit_current_comment_token()?;
+        } else if self.doctype_token.is_some() {
+            self.emit_current_doctype_token()?;
+        } else if self.tag_token.is_some() {
+            self.emit_current_token()?;
+        }
+
+        Ok(())
     }
 
     pub fn current_tag_token_mut(&mut self) -> Result<&mut TagTokenType, HtmlParseError> {
         self.tag_token
             .as_mut()
             .ok_or(HtmlParseError::new("no current tag found"))
+    }
+
+    pub fn current_doctype_token_mut(&mut self) -> Result<&mut DoctypeToken, HtmlParseError> {
+        self.doctype_token
+            .as_mut()
+            .ok_or(HtmlParseError::new("no current doctype found"))
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#charref-in-attribute>
@@ -469,7 +532,7 @@ impl<'a> Tokenizer<'a> {
             TokenizerState::AfterAttributeValueQuoted => self.after_attribute_value_quoted_state(),
             TokenizerState::SelfClosingStartTag => self.self_closing_start_tag_state(),
             TokenizerState::BogusComment => todo!(),
-            TokenizerState::MarkupDeclarationOpen => todo!(),
+            TokenizerState::MarkupDeclarationOpen => self.markup_declaration_open_state(),
             TokenizerState::CommentStart => todo!(),
             TokenizerState::CommentStartDash => todo!(),
             TokenizerState::Comment => todo!(),
@@ -480,10 +543,10 @@ impl<'a> Tokenizer<'a> {
             TokenizerState::CommentEndDash => todo!(),
             TokenizerState::CommentEnd => todo!(),
             TokenizerState::CommentEndBang => todo!(),
-            TokenizerState::DOCTYPE => todo!(),
-            TokenizerState::BeforeDOCTYPEName => todo!(),
-            TokenizerState::DOCTYPEName => todo!(),
-            TokenizerState::AfterDOCTYPEName => todo!(),
+            TokenizerState::DOCTYPE => self.doctype_state(),
+            TokenizerState::BeforeDOCTYPEName => self.before_doctype_name(),
+            TokenizerState::DOCTYPEName => self.doctype_name_state(),
+            TokenizerState::AfterDOCTYPEName => self.after_doctype_name_state(),
             TokenizerState::AfterDOCTYPEPublicKeyword => todo!(),
             TokenizerState::BeforeDOCTYPEPublicIdentifier => todo!(),
             TokenizerState::DOCTYPEPublicIdentifierDoubleQuoted => todo!(),

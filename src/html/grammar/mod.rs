@@ -4,7 +4,7 @@ use indextree::{Arena, NodeId};
 use log::warn;
 use nom::error;
 use thiserror::Error;
-use tokenizer::{HtmlToken, TagToken, TokenizerObserver};
+use tokenizer::{HtmlToken, Parser, TagToken};
 
 use crate::{
     vecpointer::VecPointerRef,
@@ -260,12 +260,11 @@ impl HtmlParser {
 
         let chars: Vec<char> = text.chars().collect();
         let input_stream = VecPointerRef::new(&chars);
-        let mut tokenizer = tokenizer::Tokenizer::new(input_stream);
+        let mut tokenizer = tokenizer::Tokenizer::new(input_stream, Box::new(self));
         let mut tokenizer_error_handler = tokenizer::DefaultTokenizerErrorHandler;
 
         let mut error_handler = DefaultParseErrorHandler;
 
-        tokenizer.set_observer(Box::new(self));
         tokenizer.set_error_handler(Box::new(&tokenizer_error_handler));
 
         while !tokenizer.is_terminated() {
@@ -314,15 +313,6 @@ impl HtmlParser {
         self.open_elements
             .first()
             .map(|id| self.arena.get_mut(*id).unwrap().get_mut())
-    }
-
-    /// <https://html.spec.whatwg.org/multipage/parsing.html#adjusted-current-node>
-    pub(crate) fn adjusted_current_node(&self) -> Option<&XpathItemTreeNode> {
-        if self.context_element.is_some() && self.open_elements.len() == 1 {
-            self.context_element.as_ref()
-        } else {
-            self.current_node()
-        }
     }
 
     pub(crate) fn new_node(&mut self, node: XpathItemTreeNode) -> NodeId {
@@ -713,7 +703,7 @@ pub enum HtmlParserError {
     FatalError(String),
 }
 
-impl TokenizerObserver for HtmlParser {
+impl Parser for HtmlParser {
     fn token_emitted(&mut self, token: HtmlToken) -> Result<(), HtmlParseError> {
         match self.insertion_mode {
             InsertionMode::Initial => self.initial_insertion_mode(token),
@@ -739,6 +729,15 @@ impl TokenizerObserver for HtmlParser {
             InsertionMode::AfterFrameset => todo!(),
             InsertionMode::AfterAfterBody => self.after_after_body_insertion_mode(token),
             InsertionMode::AfterAfterFrameset => todo!(),
+        }
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#adjusted-current-node>
+    fn adjusted_current_node(&self) -> Option<&XpathItemTreeNode> {
+        if self.context_element.is_some() && self.open_elements.len() == 1 {
+            self.context_element.as_ref()
+        } else {
+            self.current_node()
         }
     }
 }

@@ -8,7 +8,7 @@ use crate::{
 
 use super::{
     chars,
-    tokenizer::{HtmlToken, TagToken, TagTokenType, TokenizerObserver},
+    tokenizer::{HtmlToken, Parser, TagToken, TagTokenType},
     HtmlParseError, HtmlParser, HtmlParserError, InsertionMode, HTML_NAMESPACE,
 };
 
@@ -29,7 +29,10 @@ impl HtmlParser {
                 // ignore
             }
             HtmlToken::Comment(_) => todo!(),
-            HtmlToken::DocType => todo!(),
+            HtmlToken::DocType(_) => {
+                // TODO: Implement this section. No-op is good enough for now, but there's lots to do here.
+                self.insertion_mode = InsertionMode::BeforeHtml;
+            }
             _ => {
                 // TODO: If the document is not an iframe srcdoc document, then this is a parse error;
                 //       if the parser cannot change the mode flag is false, set the Document to quirks mode.
@@ -48,7 +51,7 @@ impl HtmlParser {
         token: HtmlToken,
     ) -> Result<(), HtmlParseError> {
         match token {
-            HtmlToken::DocType => todo!(),
+            HtmlToken::DocType(_) => todo!(),
             HtmlToken::Comment(_) => todo!(),
             HtmlToken::Character(
                 chars::CHARACTER_TABULATION
@@ -121,7 +124,7 @@ impl HtmlParser {
                 // ignore
             }
             HtmlToken::Comment(_) => todo!(),
-            HtmlToken::DocType => todo!(),
+            HtmlToken::DocType(_) => todo!(),
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
                 todo!()
             }
@@ -158,7 +161,7 @@ impl HtmlParser {
                 todo!()
             }
             HtmlToken::Comment(_) => todo!(),
-            HtmlToken::DocType => todo!(),
+            HtmlToken::DocType(_) => todo!(),
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
                 todo!()
             }
@@ -232,7 +235,7 @@ impl HtmlParser {
                 todo!()
             }
             HtmlToken::Comment(_) => todo!(),
-            HtmlToken::DocType => todo!(),
+            HtmlToken::DocType(_) => todo!(),
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
                 todo!()
             }
@@ -337,7 +340,7 @@ impl HtmlParser {
             HtmlToken::Comment(_) => {
                 todo!()
             }
-            HtmlToken::DocType => {
+            HtmlToken::DocType(_) => {
                 todo!()
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
@@ -760,7 +763,7 @@ impl HtmlParser {
             HtmlToken::Comment(_) => {
                 todo!()
             }
-            HtmlToken::DocType => {
+            HtmlToken::DocType(_) => {
                 todo!()
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
@@ -799,7 +802,7 @@ impl HtmlParser {
             HtmlToken::Comment(_) => {
                 todo!()
             }
-            HtmlToken::DocType
+            HtmlToken::DocType(_)
             | HtmlToken::Character(
                 chars::CHARACTER_TABULATION
                 | chars::LINE_FEED

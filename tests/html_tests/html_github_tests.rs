@@ -24,21 +24,29 @@ fn text_should_unescape_characters() {
     assert!(test_framework::compare_documents(expected, document, true));
 }
 
-// #[test]
-// fn doctype_should_skip_regular_doctype() {
-//     // arrange
-//     let text = r##"
-//         <!DOCTYPE html>
-//         <div>hi</div>"##;
+#[test]
+fn doctype_should_handle_regular_doctype() {
+    // arrange
+    let text = r##"
+        <!DOCTYPE html>
+        <div>hi</div>"##;
 
-//     // act
-//     let document = html::parse(text).unwrap();
+    // act
+    let document = html::parse(text).unwrap();
 
-//     // assert
-//     let root_node = document.root_node;
-//     let html_tag = document.get_html_node(&root_node).unwrap().extract_as_tag();
-//     assert_eq!(html_tag.name, "div");
-// }
+    // assert
+    let expected = DocumentBuilder::new()
+        .with_root("html", |html| {
+            html.add_element("head", |head| head)
+                .add_element("body", |body| {
+                    body.add_element("div", |div| div.add_text("hi"))
+                })
+        })
+        .build()
+        .unwrap();
+
+    assert!(test_framework::compare_documents(expected, document, true));
+}
 
 // #[test]
 // fn doctype_should_skip_verbose_doctype() {

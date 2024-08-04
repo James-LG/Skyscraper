@@ -175,6 +175,9 @@ pub struct ElementNode {
 
     /// The name of the element.
     pub name: String,
+
+    /// The namespace of the element.
+    pub namespace: Option<String>,
 }
 
 impl std::fmt::Debug for ElementNode {
@@ -195,7 +198,11 @@ impl PartialEq for ElementNode {
 impl ElementNode {
     /// Create a new element node.
     pub(crate) fn new(name: String) -> Self {
-        Self { id: None, name }
+        Self {
+            id: None,
+            name,
+            namespace: None,
+        }
     }
 
     /// Set the ID of the element.

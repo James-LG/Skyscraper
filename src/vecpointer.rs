@@ -59,6 +59,18 @@ impl<'a, T> VecPointerRef<'a, T> {
         result
     }
 
+    pub fn peek_current_and_multiple(&self, i: usize) -> Vec<&T> {
+        let mut result = Vec::new();
+        for j in 0..i {
+            if let Some(value) = self.peek_add(j) {
+                result.push(value);
+            } else {
+                break;
+            }
+        }
+        result
+    }
+
     fn get(&self, index: usize) -> Option<&T> {
         if index >= self.values.len() {
             return None;
