@@ -2,19 +2,28 @@ use itertools::Itertools;
 use skyscraper::xpath::{grammar::XpathItemTreeNode, XpathItemTree};
 
 pub fn compare_documents(
-    expected: XpathItemTree,
-    actual: XpathItemTree,
+    expected_doc: XpathItemTree,
+    actual_doc: XpathItemTree,
     ignore_whitespace: bool,
 ) -> bool {
-    let expected_root_descendants = expected.root().descendants(&expected).filter(|node| {
-        if ignore_whitespace {
-            if let XpathItemTreeNode::TextNode(text_node) = node {
-                return !text_node.content.trim().is_empty();
+    let expected_root_descendants = expected_doc
+        .root()
+        .descendants(&expected_doc)
+        .filter(|node| {
+            if node.is_attribute_node() {
+                return false;
             }
+            if ignore_whitespace {
+                if let XpathItemTreeNode::TextNode(text_node) = node {
+                    return !text_node.content.trim().is_empty();
+                }
+            }
+            true
+        });
+    let actual_root_descendants = actual_doc.root().descendants(&actual_doc).filter(|node| {
+        if node.is_attribute_node() {
+            return false;
         }
-        true
-    });
-    let actual_root_descendants = actual.root().descendants(&actual).filter(|node| {
         if ignore_whitespace {
             if let XpathItemTreeNode::TextNode(text_node) = node {
                 return !text_node.content.trim().is_empty();
@@ -29,25 +38,29 @@ pub fn compare_documents(
         println!("Expected node: {:?}", expected_node);
         println!("Actual node: {:?}", actual_node);
 
-        if expected_node != actual_node {
-            println!(
-                "Expected node display:\n{}",
-                expected_node.map_or(String::new(), |n| n.display(&expected))
-            );
-            println!(
-                "Actual node display:\n{}",
-                actual_node.map_or(String::new(), |n| n.display(&actual))
-            );
+        if let (
+            Some(XpathItemTreeNode::ElementNode(expected_element)),
+            Some(XpathItemTreeNode::ElementNode(actual_element)),
+        ) = (expected_node, actual_node)
+        {
+            let expected_element_attributes = expected_element.attributes(&expected_doc);
+            let actual_element_attributes = actual_element.attributes(&actual_doc);
 
-            println!(
-                "---------------\nExpected document:\n{}\n---------------",
-                expected
-            );
-            println!(
-                "---------------\nActual document:\n{}\n---------------",
-                actual
-            );
-            print_differences(expected_node, &expected, actual_node, &actual);
+            for ab in expected_element_attributes
+                .into_iter()
+                .zip_longest(actual_element_attributes)
+            {
+                let (expected_attribute, actual_attribute) = ab.left_and_right();
+
+                if expected_attribute != actual_attribute {
+                    print_differences(expected_node, &expected_doc, actual_node, &actual_doc);
+                    return false;
+                }
+            }
+        }
+
+        if expected_node != actual_node {
+            print_differences(expected_node, &expected_doc, actual_node, &actual_doc);
             return false;
         }
     }
@@ -56,22 +69,38 @@ pub fn compare_documents(
 }
 
 pub fn print_differences(
-    expected: Option<&XpathItemTreeNode>,
+    expected_node: Option<&XpathItemTreeNode>,
     expected_doc: &XpathItemTree,
-    actual: Option<&XpathItemTreeNode>,
+    actual_node: Option<&XpathItemTreeNode>,
     actual_doc: &XpathItemTree,
 ) {
-    if expected != actual {
-        println!("Expected: {:?}", expected);
-        println!("Actual: {:?}", actual);
+    println!(
+        "Expected node display:\n{}",
+        expected_node.map_or(String::new(), |n| n.display(&expected_doc))
+    );
+    println!(
+        "Actual node display:\n{}",
+        actual_node.map_or(String::new(), |n| n.display(&actual_doc))
+    );
 
-        if let Some(expected) = expected {
-            print_parent("Expected", expected, expected_doc);
-        }
+    println!(
+        "---------------\nExpected document:\n{}\n---------------",
+        expected_doc
+    );
+    println!(
+        "---------------\nActual document:\n{}\n---------------",
+        actual_doc
+    );
 
-        if let Some(actual) = actual {
-            print_parent("Actual", actual, actual_doc);
-        }
+    println!("Expected: {:?}", expected_node);
+    println!("Actual: {:?}", actual_node);
+
+    if let Some(expected) = expected_node {
+        print_parent("Expected", expected, expected_doc);
+    }
+
+    if let Some(actual) = actual_node {
+        print_parent("Actual", actual, actual_doc);
     }
 }
 

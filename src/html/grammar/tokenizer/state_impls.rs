@@ -231,8 +231,8 @@ impl<'a> Tokenizer<'a> {
                 // TODO: Does reconsuming an EOF work?
                 self.reconsume_in_state(TokenizerState::AfterAttributeName)?;
             }
-            Some(c) => {
-                let attribute = Attribute::new(String::from(*c), String::new());
+            Some(_) => {
+                let attribute = Attribute::new(String::new(), String::new());
                 self.create_new_attribute(attribute)?;
                 self.reconsume_in_state(TokenizerState::AttributeName)?;
             }

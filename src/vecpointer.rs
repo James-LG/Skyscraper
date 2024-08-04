@@ -21,8 +21,9 @@ impl<'a, T> VecPointerRef<'a, T> {
     }
 
     pub fn next_add(&mut self, i: usize) -> Option<&T> {
+        let index = self.index;
         self.index += i;
-        self.current()
+        self.get(index)
     }
 
     pub fn prev(&mut self) -> Option<&T> {
