@@ -554,7 +554,7 @@ impl<'a> Tokenizer<'a> {
             Ok(())
         }
 
-        let mut chars: Vec<char> = Vec::new();
+        let mut chars: Vec<char> = vec!['&'];
 
         if let Some(c) = self.input_stream.current() {
             chars.push(*c);
@@ -580,7 +580,7 @@ impl<'a> Tokenizer<'a> {
                 let length = char_ref.len();
 
                 // consume the characters
-                self.input_stream.next_add(length);
+                self.input_stream.next_add(length - 1); // subtract 1 for the & character
 
                 // append the char_ref characters to the temporary buffer
                 for code_point in char_ref.chars() {
@@ -612,6 +612,8 @@ impl<'a> Tokenizer<'a> {
                     self.handle_error(TokenizerError::MissingSemicolonAfterCharacterReference)?;
                 }
 
+                // TODO: this will always be true since it's not matching character by character and every
+                // known named character reference ends with a semicolon
                 self.temporary_buffer.clear();
                 let char_ref_characters = NAMED_CHARACTER_REFS.get(&char_ref.as_ref()).unwrap();
 
