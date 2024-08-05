@@ -50,6 +50,21 @@ impl HtmlParser {
         &mut self,
         token: HtmlToken,
     ) -> Result<(), HtmlParseError> {
+        fn anything_else(parser: &mut HtmlParser, token: HtmlToken) -> Result<(), HtmlParseError> {
+            let result = parser.create_element(String::from("html"), HTML_NAMESPACE, None, None)?;
+
+            // append the node to the document
+            let node_id = parser.new_node(XpathItemTreeNode::ElementNode(result));
+            parser.root_node = Some(node_id);
+
+            parser.open_elements.push(node_id);
+
+            parser.insertion_mode = InsertionMode::BeforeHead;
+            parser.token_emitted(token)?;
+
+            Ok(())
+        }
+
         match token {
             HtmlToken::DocType(_) => todo!(),
             HtmlToken::Comment(_) => todo!(),
@@ -74,23 +89,16 @@ impl HtmlParser {
             HtmlToken::TagToken(TagTokenType::EndTag(TagToken { tag_name, .. }))
                 if ["head", "body", "html", "br"].contains(&tag_name.as_ref()) =>
             {
-                todo!()
+                anything_else(
+                    self,
+                    HtmlToken::TagToken(TagTokenType::EndTag(TagToken::new(tag_name))),
+                )?;
             }
             HtmlToken::TagToken(TagTokenType::EndTag(_)) => {
                 todo!()
             }
             _ => {
-                let result =
-                    self.create_element(String::from("html"), HTML_NAMESPACE, None, None)?;
-
-                // append the node to the document
-                let node_id = self.new_node(XpathItemTreeNode::ElementNode(result));
-                self.root_node = Some(node_id);
-
-                self.open_elements.push(node_id);
-
-                self.insertion_mode = InsertionMode::BeforeHead;
-                self.token_emitted(token)?;
+                anything_else(self, token)?;
             }
         }
 
@@ -134,7 +142,7 @@ impl HtmlParser {
             HtmlToken::TagToken(TagTokenType::EndTag(token))
                 if ["head", "body", "html", "br"].contains(&token.tag_name.as_ref()) =>
             {
-                todo!()
+                anything_else(self, HtmlToken::TagToken(TagTokenType::EndTag(token)))?;
             }
             HtmlToken::TagToken(TagTokenType::EndTag(_)) => {
                 todo!()
@@ -150,6 +158,15 @@ impl HtmlParser {
         &mut self,
         token: HtmlToken,
     ) -> Result<(), HtmlParseError> {
+        fn anything_else(parser: &mut HtmlParser, token: HtmlToken) -> Result<(), HtmlParseError> {
+            parser.open_elements.pop().expect("open elements is empty");
+
+            parser.insertion_mode = InsertionMode::AfterHead;
+
+            parser.token_emitted(token)?;
+
+            Ok(())
+        }
         match token {
             HtmlToken::Character(
                 chars::CHARACTER_TABULATION
@@ -193,7 +210,7 @@ impl HtmlParser {
             HtmlToken::TagToken(TagTokenType::EndTag(token))
                 if ["body", "html", "br"].contains(&token.tag_name.as_str()) =>
             {
-                todo!()
+                anything_else(self, HtmlToken::TagToken(TagTokenType::EndTag(token)))?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "template" => {
                 todo!()
@@ -208,11 +225,7 @@ impl HtmlParser {
                 todo!()
             }
             _ => {
-                self.open_elements.pop().expect("open elements is empty");
-
-                self.insertion_mode = InsertionMode::AfterHead;
-
-                self.token_emitted(token)?;
+                anything_else(self, token)?;
             }
         }
 
@@ -224,6 +237,15 @@ impl HtmlParser {
         &mut self,
         token: HtmlToken,
     ) -> Result<(), HtmlParseError> {
+        fn anything_else(parser: &mut HtmlParser, token: HtmlToken) -> Result<(), HtmlParseError> {
+            parser.insert_an_html_element(TagToken::new(String::from("body")))?;
+
+            parser.insertion_mode = InsertionMode::InBody;
+
+            parser.token_emitted(token)?;
+
+            Ok(())
+        }
         match token {
             HtmlToken::Character(
                 chars::CHARACTER_TABULATION
@@ -264,7 +286,7 @@ impl HtmlParser {
             HtmlToken::TagToken(TagTokenType::EndTag(token))
                 if ["body", "html", "br"].contains(&token.tag_name.as_str()) =>
             {
-                todo!()
+                anything_else(self, HtmlToken::TagToken(TagTokenType::EndTag(token)))?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "head" => {
                 todo!()
@@ -273,11 +295,7 @@ impl HtmlParser {
                 todo!()
             }
             _ => {
-                self.insert_an_html_element(TagToken::new(String::from("body")))?;
-
-                self.insertion_mode = InsertionMode::InBody;
-
-                self.token_emitted(token)?;
+                anything_else(self, token)?;
             }
         }
 
@@ -425,7 +443,7 @@ impl HtmlParser {
                 }
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "body" => {
-                if self.has_an_element_in_scope("body") {
+                if !self.has_an_element_in_scope("body") {
                     self.handle_error(HtmlParserError::MinorError(String::from(
                         "open elements has body element in scope",
                     )))?;
@@ -436,7 +454,17 @@ impl HtmlParser {
                 self.insertion_mode = InsertionMode::AfterBody;
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "html" => {
-                todo!()
+                if !self.has_an_element_in_scope("body") {
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "open elements has body element in scope",
+                    )))?;
+                } else {
+                    ensure_open_elements_has_valid_element(&self)?;
+                }
+
+                self.insertion_mode = InsertionMode::AfterBody;
+
+                self.token_emitted(HtmlToken::TagToken(TagTokenType::EndTag(token)))?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if [

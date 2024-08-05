@@ -36,7 +36,7 @@ fn text_test_should_match_all_text() {
     let nodes: Vec<_> = nodes
         .into_iter()
         .filter(|n| match n.extract_as_node() {
-            XpathItemTreeNode::TextNode(text) => !text.only_whitespace,
+            XpathItemTreeNode::TextNode(text) => !text.is_whitespace(),
             _ => true,
         })
         .collect();

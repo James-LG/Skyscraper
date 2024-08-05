@@ -43,6 +43,13 @@ pub fn compare_documents(
             Some(XpathItemTreeNode::ElementNode(actual_element)),
         ) = (expected_node, actual_node)
         {
+            // first check element names
+            if expected_element.name != actual_element.name {
+                print_differences(expected_node, &expected_doc, actual_node, &actual_doc);
+                return false;
+            }
+
+            // next check attributes
             let expected_element_attributes = expected_element.attributes(&expected_doc);
             let actual_element_attributes = actual_element.attributes(&actual_doc);
 
@@ -57,11 +64,11 @@ pub fn compare_documents(
                     return false;
                 }
             }
-        }
-
-        if expected_node != actual_node {
-            print_differences(expected_node, &expected_doc, actual_node, &actual_doc);
-            return false;
+        } else {
+            if expected_node != actual_node {
+                print_differences(expected_node, &expected_doc, actual_node, &actual_doc);
+                return false;
+            }
         }
     }
 

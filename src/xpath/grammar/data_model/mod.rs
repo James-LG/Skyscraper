@@ -1,6 +1,6 @@
 //! <https://www.w3.org/TR/xpath-datamodel-31/#intro>
 
-use std::{arch::x86_64, fmt::Display};
+use std::fmt::{Debug, Display};
 
 use enum_extract_macro::EnumExtract;
 use indextree::{Arena, NodeId};
@@ -165,7 +165,7 @@ impl XpathDocumentNode {
 /// An element node such as an HTML tag.
 ///
 /// <https://www.w3.org/TR/xpath-datamodel-31/#ElementNode>
-#[derive(Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone)]
 pub struct ElementNode {
     /// The ID of the element.
     ///
@@ -186,12 +186,6 @@ impl std::fmt::Debug for ElementNode {
         f.debug_struct("ElementNode")
             .field("name", &self.name)
             .finish()
-    }
-}
-
-impl PartialEq for ElementNode {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
     }
 }
 
@@ -514,7 +508,7 @@ impl Display for CommentNode {
 }
 
 /// <https://www.w3.org/TR/xpath-datamodel-31/#TextNode>
-#[derive(Eq, Debug, Hash, Clone)]
+#[derive(Eq, Hash, Clone)]
 pub struct TextNode {
     /// The ID of the text node.
     ///
@@ -524,6 +518,15 @@ pub struct TextNode {
 
     /// The value of the text node.
     pub content: String,
+}
+
+impl Debug for TextNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // ignore id in debug output
+        f.debug_struct("TextNode")
+            .field("content", &self.content)
+            .finish()
+    }
 }
 
 impl TextNode {
