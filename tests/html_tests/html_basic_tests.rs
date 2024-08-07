@@ -1,7 +1,4 @@
-use skyscraper::{
-    html::{self, grammar::document_builder::DocumentBuilder},
-    xpath::grammar::data_model::AttributeNode,
-};
+use skyscraper::html::{self, grammar::document_builder::DocumentBuilder};
 
 use crate::test_framework;
 
@@ -90,7 +87,6 @@ fn sample1_should_parse() {
 
     // act
     let document = html::parse(text).unwrap();
-    println!("{}", document);
 
     // assert
     let expected = DocumentBuilder::new()
@@ -101,6 +97,31 @@ fn sample1_should_parse() {
                         div.add_text("Example 1").add_attribute_str("id", "example")
                     })
                 })
+        })
+        .build()
+        .unwrap();
+
+    assert!(test_framework::compare_documents(expected, document, false));
+}
+
+#[test]
+fn sample2_should_parse() {
+    // arrange
+    let text = r###"
+        <html id="foo" class="bar" style="baz">
+        </html>"###;
+
+    // act
+    let document = html::parse(text).unwrap();
+
+    // assert
+    let expected = DocumentBuilder::new()
+        .with_root("html", |html| {
+            html.add_element("head", |head| head)
+                .add_element("body", |body| body)
+                .add_attribute_str("id", "foo")
+                .add_attribute_str("class", "bar")
+                .add_attribute_str("style", "baz")
         })
         .build()
         .unwrap();

@@ -441,7 +441,7 @@ impl<'a> Tokenizer<'a> {
         } else if self.doctype_token.is_some() {
             self.emit_current_doctype_token()?;
         } else if self.tag_token.is_some() {
-            self.emit_current_token()?;
+            self.emit_current_tag_token()?;
         }
 
         Ok(())

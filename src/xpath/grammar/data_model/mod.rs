@@ -421,7 +421,7 @@ impl ElementNode {
 /// An attribute node.
 ///
 /// <https://www.w3.org/TR/xpath-datamodel-31/#AttributeNode>
-#[derive(Eq, Debug, Clone, Hash)]
+#[derive(Eq, Clone, Hash)]
 pub struct AttributeNode {
     /// The ID of the attribute.
     ///
@@ -434,6 +434,16 @@ pub struct AttributeNode {
 
     /// The value of the attribute.
     pub value: String,
+}
+
+impl Debug for AttributeNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // ignore id in debug output
+        f.debug_struct("AttributeNode")
+            .field("name", &self.name)
+            .field("value", &self.value)
+            .finish()
+    }
 }
 
 impl AttributeNode {

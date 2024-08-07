@@ -85,6 +85,8 @@ impl HtmlParser {
 
                 // set it as the root node
                 self.root_node = Some(node_id);
+
+                self.insertion_mode = InsertionMode::BeforeHead;
             }
             HtmlToken::TagToken(TagTokenType::EndTag(TagToken { tag_name, .. }))
                 if ["head", "body", "html", "br"].contains(&tag_name.as_ref()) =>

@@ -1,5 +1,7 @@
 //! <https://html.spec.whatwg.org/multipage/parsing.html>
 
+use std::f32::consts::E;
+
 use indextree::{Arena, NodeId};
 use log::warn;
 use nom::error;
@@ -317,24 +319,17 @@ impl HtmlParser {
 
     pub(crate) fn new_node(&mut self, node: XpathItemTreeNode) -> NodeId {
         println!("new node: {:?}", node);
-        let is_element = node.is_element_node();
-        let is_attribute = node.is_attribute_node();
         let id = self.arena.new_node(node);
 
-        if is_element {
-            self.arena
-                .get_mut(id)
-                .unwrap()
-                .get_mut()
-                .extract_as_element_node_mut()
-                .set_id(id);
-        } else if is_attribute {
-            self.arena
-                .get_mut(id)
-                .unwrap()
-                .get_mut()
-                .extract_as_attribute_node_mut()
-                .set_id(id);
+        let node: &mut XpathItemTreeNode = self.arena.get_mut(id).unwrap().get_mut();
+
+        if let XpathItemTreeNode::ElementNode(element) = node {
+            if element.name == "html" {
+                println!("insterting html node");
+            }
+            element.set_id(id);
+        } else if let XpathItemTreeNode::AttributeNode(attribute) = node {
+            attribute.set_id(id);
         }
 
         id
@@ -409,6 +404,10 @@ impl HtmlParser {
         &mut self,
         result: CreateAnElementForTheTokenResult,
     ) -> Result<NodeId, HtmlParseError> {
+        println!(
+            "inserting element: {:?} with attributes {:?}",
+            result.element, result.attributes
+        );
         // add the element to the arena
         let element_id = self.new_node(XpathItemTreeNode::ElementNode(result.element));
 
