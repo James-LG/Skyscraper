@@ -63,14 +63,14 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line | Feature |
 |------|---------|
-| 370 | Comment token handling |
-| 371 | DOCTYPE token handling |
-| 373 | `<html>` start tag (process using InBody rules) |
-| 383 | `<frameset>` start tag |
-| 392 | Head-level elements after head (`<base>`, `<link>`, `<meta>`, `<script>`, `<style>`, `<template>`, `<title>`, etc.) |
-| 395 | `</template>` end tag |
-| 403 | Duplicate `<head>` start tag (parse error) |
-| 406 | Unexpected end tags (parse error) |
+| ~~370~~ | ~~Comment token handling~~ **DONE** |
+| ~~371~~ | ~~DOCTYPE token handling~~ **DONE** |
+| ~~373~~ | ~~`<html>` start tag (process using InBody rules)~~ **DONE** |
+| ~~383~~ | ~~`<frameset>` start tag~~ **DONE** |
+| ~~392~~ | ~~Head-level elements after head (`<base>`, `<link>`, `<meta>`, `<script>`, `<style>`, `<template>`, `<title>`, etc.)~~ **DONE** |
+| ~~395~~ | ~~`</template>` end tag~~ **DONE** |
+| ~~403~~ | ~~Duplicate `<head>` start tag (parse error)~~ **DONE** |
+| ~~406~~ | ~~Unexpected end tags (parse error)~~ **DONE** |
 
 ## HTML Parser — InBody Insertion Mode
 

@@ -475,10 +475,17 @@ impl HtmlParser {
             {
                 self.insert_character(vec![c])?;
             }
-            HtmlToken::Comment(_) => todo!(),
-            HtmlToken::DocType(_) => todo!(),
+            HtmlToken::Comment(comment) => {
+                // A comment token: Insert a comment.
+                self.insert_a_comment(comment, None)?;
+            }
+            HtmlToken::DocType(_) => {
+                // A DOCTYPE token: Parse error. Ignore the token.
+            }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
-                todo!()
+                // Process the token using the rules for the "in body" insertion mode.
+                return self
+                    .in_body_insertion_mode(HtmlToken::TagToken(TagTokenType::StartTag(token)));
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "body" => {
                 self.insert_an_html_element(token)?;
@@ -498,21 +505,39 @@ impl HtmlParser {
                 ]
                 .contains(&token.tag_name.as_str()) =>
             {
-                todo!()
+                // Parse error.
+                // Push the node pointed to by the head element pointer onto the stack of open
+                // elements.
+                let head_node_id = self
+                    .head_element_pointer
+                    .ok_or(HtmlParseError::new("head element pointer is None"))?;
+                self.open_elements.push(head_node_id);
+
+                // Process the token using the rules for the "in head" insertion mode.
+                let ack =
+                    self.in_head_insertion_mode(HtmlToken::TagToken(TagTokenType::StartTag(token)));
+
+                // Remove the node pointed to by the head element pointer from the stack of open
+                // elements. (It might not be the current node at this point.)
+                self.open_elements.retain(|&id| id != head_node_id);
+
+                return ack;
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "template" => {
-                todo!()
+                // Process the token using the rules for the "in head" insertion mode.
+                return self
+                    .in_head_insertion_mode(HtmlToken::TagToken(TagTokenType::EndTag(token)));
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token))
                 if ["body", "html", "br"].contains(&token.tag_name.as_str()) =>
             {
                 anything_else(self, HtmlToken::TagToken(TagTokenType::EndTag(token)))?;
             }
-            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "head" => {
-                todo!()
+            HtmlToken::TagToken(TagTokenType::StartTag(_token)) if _token.tag_name == "head" => {
+                // A start tag whose tag name is "head": Parse error. Ignore the token.
             }
             HtmlToken::TagToken(TagTokenType::EndTag(_)) => {
-                todo!()
+                // Any other end tag: Parse error. Ignore the token.
             }
             _ => {
                 anything_else(self, token)?;
