@@ -11,19 +11,64 @@ use nom::{
     sequence::tuple,
 };
 
-use crate::xpath::{
-    grammar::{
-        expressions::sequence_expressions::combining_node_sequences::union_expr, recipes::Res,
-        terminal_symbols::symbol_separator, whitespace_recipes::ws,
+use ordered_float::OrderedFloat;
+
+use crate::{
+    xpath::{
+        grammar::{
+            data_model::{AnyAtomicType, XpathItem},
+            expressions::sequence_expressions::combining_node_sequences::union_expr,
+            recipes::Res,
+            terminal_symbols::symbol_separator,
+            whitespace_recipes::ws,
+        },
+        xpath_item_set::XpathItemSet,
+        ExpressionApplyError, XpathExpressionContext,
     },
-    xpath_item_set::XpathItemSet,
-    ExpressionApplyError, XpathExpressionContext,
+    xpath_item_set,
 };
 
 use super::{
+    primary_expressions::static_function_calls::func_data,
     sequence_expressions::combining_node_sequences::UnionExpr,
     simple_map_operator::{simple_map_expr, SimpleMapExpr},
 };
+
+/// Convert an atomic value to f64 for arithmetic operations.
+fn to_f64(val: &AnyAtomicType) -> Result<f64, ExpressionApplyError> {
+    match val {
+        AnyAtomicType::Integer(n) => Ok(*n as f64),
+        AnyAtomicType::Float(n) => Ok(n.into_inner() as f64),
+        AnyAtomicType::Double(n) => Ok(n.into_inner()),
+        AnyAtomicType::String(s) => s.trim().parse::<f64>().map_err(|_| ExpressionApplyError {
+            msg: format!("err:FORG0001 Cannot cast '{}' to xs:double", s),
+        }),
+        AnyAtomicType::Boolean(_) => Err(ExpressionApplyError {
+            msg: String::from(
+                "err:XPTY0004 Arithmetic operators are not defined for boolean values",
+            ),
+        }),
+    }
+}
+
+/// Atomize a result set to a single atomic value for arithmetic.
+/// Returns `Ok(None)` for empty sequences, `Ok(Some(val))` for single values,
+/// and `Err` for sequences with more than one item.
+fn atomize_single<'tree>(
+    result: &XpathItemSet<'tree>,
+    context: &XpathExpressionContext<'tree>,
+) -> Result<Option<AnyAtomicType>, ExpressionApplyError> {
+    let atomized = func_data(result, &context.item_tree);
+    if atomized.is_empty() {
+        return Ok(None);
+    }
+    if atomized.len() > 1 {
+        return Err(ExpressionApplyError {
+            msg: String::from("err:XPTY0004 Arithmetic operand must be a single atomic value"),
+        });
+    }
+    Ok(Some(atomized.into_iter().next().unwrap()))
+}
 
 pub fn additive_expr(input: &str) -> Res<&str, AdditiveExpr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-AdditiveExpr
@@ -83,8 +128,45 @@ impl AdditiveExpr {
             return Ok(result);
         }
 
-        // Otherwise, do the operation.
-        todo!("AdditiveExpr::eval additive operator")
+        // Atomize the first operand.
+        let mut left = match atomize_single(&result, context)? {
+            Some(val) => val,
+            None => return Ok(XpathItemSet::new()),
+        };
+
+        for pair in &self.items {
+            let right_result = pair.1.eval(context)?;
+            let right = match atomize_single(&right_result, context)? {
+                Some(val) => val,
+                None => return Ok(XpathItemSet::new()),
+            };
+
+            left = match (&left, &right) {
+                (AnyAtomicType::Integer(a), AnyAtomicType::Integer(b)) => match pair.0 {
+                    AdditiveExprOperator::Plus => AnyAtomicType::Integer(
+                        a.checked_add(*b).ok_or_else(|| ExpressionApplyError {
+                            msg: String::from("err:FOAR0002 Integer overflow"),
+                        })?,
+                    ),
+                    AdditiveExprOperator::Minus => AnyAtomicType::Integer(
+                        a.checked_sub(*b).ok_or_else(|| ExpressionApplyError {
+                            msg: String::from("err:FOAR0002 Integer overflow"),
+                        })?,
+                    ),
+                },
+                _ => {
+                    let a = to_f64(&left)?;
+                    let b = to_f64(&right)?;
+                    let res = match pair.0 {
+                        AdditiveExprOperator::Plus => a + b,
+                        AdditiveExprOperator::Minus => a - b,
+                    };
+                    AnyAtomicType::Double(OrderedFloat(res))
+                }
+            };
+        }
+
+        Ok(xpath_item_set![XpathItem::AnyAtomicType(left)])
     }
 }
 
@@ -182,8 +264,88 @@ impl MultiplicativeExpr {
             return Ok(result);
         }
 
-        // Otherwise, do the operation.
-        todo!("MultiplicativeExpr::eval multiplicative operator")
+        // Atomize the first operand.
+        let mut left = match atomize_single(&result, context)? {
+            Some(val) => val,
+            None => return Ok(XpathItemSet::new()),
+        };
+
+        for pair in &self.items {
+            let right_result = pair.1.eval(context)?;
+            let right = match atomize_single(&right_result, context)? {
+                Some(val) => val,
+                None => return Ok(XpathItemSet::new()),
+            };
+
+            left = match pair.0 {
+                MultiplicativeExprOperator::Star => match (&left, &right) {
+                    (AnyAtomicType::Integer(a), AnyAtomicType::Integer(b)) => {
+                        AnyAtomicType::Integer(
+                            a.checked_mul(*b).ok_or_else(|| ExpressionApplyError {
+                                msg: String::from("err:FOAR0002 Integer overflow"),
+                            })?,
+                        )
+                    }
+                    _ => {
+                        let a = to_f64(&left)?;
+                        let b = to_f64(&right)?;
+                        AnyAtomicType::Double(OrderedFloat(a * b))
+                    }
+                },
+                MultiplicativeExprOperator::Div => {
+                    match (&left, &right) {
+                        (AnyAtomicType::Integer(_), AnyAtomicType::Integer(b)) if *b == 0 => {
+                            return Err(ExpressionApplyError {
+                                msg: String::from("err:FOAR0002 Division by zero"),
+                            });
+                        }
+                        _ => {}
+                    }
+                    let a = to_f64(&left)?;
+                    let b = to_f64(&right)?;
+                    AnyAtomicType::Double(OrderedFloat(a / b))
+                }
+                MultiplicativeExprOperator::IntegerDiv => {
+                    match (&left, &right) {
+                        (AnyAtomicType::Integer(a), AnyAtomicType::Integer(b)) => {
+                            if *b == 0 {
+                                return Err(ExpressionApplyError {
+                                    msg: String::from("err:FOAR0002 Division by zero"),
+                                });
+                            }
+                            AnyAtomicType::Integer(a / b)
+                        }
+                        _ => {
+                            let a = to_f64(&left)?;
+                            let b = to_f64(&right)?;
+                            if b == 0.0 {
+                                return Err(ExpressionApplyError {
+                                    msg: String::from("err:FOAR0002 Division by zero"),
+                                });
+                            }
+                            AnyAtomicType::Integer((a / b).trunc() as i64)
+                        }
+                    }
+                }
+                MultiplicativeExprOperator::Modulus => match (&left, &right) {
+                    (AnyAtomicType::Integer(a), AnyAtomicType::Integer(b)) => {
+                        if *b == 0 {
+                            return Err(ExpressionApplyError {
+                                msg: String::from("err:FOAR0002 Division by zero"),
+                            });
+                        }
+                        AnyAtomicType::Integer(a % b)
+                    }
+                    _ => {
+                        let a = to_f64(&left)?;
+                        let b = to_f64(&right)?;
+                        AnyAtomicType::Double(OrderedFloat(a % b))
+                    }
+                },
+            };
+        }
+
+        Ok(xpath_item_set![XpathItem::AnyAtomicType(left)])
     }
 }
 
@@ -263,13 +425,44 @@ impl UnaryExpr {
         // Evaluate the first expression.
         let result = self.expr.eval(context)?;
 
-        // If there's only one parameter, return it's eval.
+        // If there are no leading symbols, return the eval as-is.
         if self.leading_symbols.is_empty() {
             return Ok(result);
         }
 
-        // Otherwise, do the operation.
-        todo!("UnaryExpr::eval unary operator")
+        // Atomize the operand.
+        let val = match atomize_single(&result, context)? {
+            Some(val) => val,
+            None => return Ok(XpathItemSet::new()),
+        };
+
+        // Count the number of minus signs to determine if negation is needed.
+        let negate = self
+            .leading_symbols
+            .iter()
+            .filter(|s| matches!(s, UnarySymbol::Minus))
+            .count()
+            % 2
+            == 1;
+
+        if !negate {
+            // Even number of minus signs (or all plus) — validate numeric, return as-is.
+            let _ = to_f64(&val)?;
+            return Ok(xpath_item_set![XpathItem::AnyAtomicType(val)]);
+        }
+
+        // Negate the value.
+        let negated = match val {
+            AnyAtomicType::Integer(n) => AnyAtomicType::Integer(-n),
+            AnyAtomicType::Float(n) => AnyAtomicType::Float(OrderedFloat(-n.into_inner())),
+            AnyAtomicType::Double(n) => AnyAtomicType::Double(OrderedFloat(-n.into_inner())),
+            other => {
+                let n = to_f64(&other)?;
+                AnyAtomicType::Double(OrderedFloat(-n))
+            }
+        };
+
+        Ok(xpath_item_set![XpathItem::AnyAtomicType(negated)])
     }
 }
 

@@ -143,9 +143,9 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line | Feature |
 |------|---------|
-| 87 | Additive operators (`+`, `-`) |
-| 186 | Multiplicative operators (`*`, `div`, `idiv`, `mod`) |
-| 272 | Unary operators (`+`, `-` prefix) |
+| ~~87~~ | ~~Additive operators (`+`, `-`)~~ **DONE** |
+| ~~186~~ | ~~Multiplicative operators (`*`, `div`, `idiv`, `mod`)~~ **DONE** |
+| ~~272~~ | ~~Unary operators (`+`, `-` prefix)~~ **DONE** |
 
 ### String Concat Expression
 
