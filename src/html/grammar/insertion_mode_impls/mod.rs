@@ -739,4 +739,746 @@ impl HtmlParser {
 
         Ok(Acknowledgement::no())
     }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intable>
+    pub(super) fn in_table_insertion_mode(
+        &mut self,
+        token: HtmlToken,
+    ) -> Result<Acknowledgement, HtmlParseError> {
+        match token {
+            // A character token, if the current node is table, tbody, template, tfoot, thead, or tr element:
+            HtmlToken::Character(c) => {
+                let is_table_text_element = self
+                    .current_node_as_element()
+                    .map(|el| {
+                        matches!(
+                            el.name.as_str(),
+                            "table" | "tbody" | "template" | "tfoot" | "thead" | "tr"
+                        )
+                    })
+                    .unwrap_or(false);
+
+                if is_table_text_element {
+                    // Let the pending table character tokens be an empty list of tokens.
+                    self.pending_table_character_tokens = Vec::new();
+                    // Let the original insertion mode be the current insertion mode.
+                    self.original_insertion_mode = Some(self.insertion_mode);
+                    // Switch the insertion mode to "in table text" and reprocess the token.
+                    self.insertion_mode = InsertionMode::InTableText;
+                    self.token_emitted(HtmlToken::Character(c))?;
+                } else {
+                    // Anything else
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "unexpected character token in table",
+                    )))?;
+                    self.foster_parenting = true;
+                    self.using_the_rules_for(HtmlToken::Character(c), InsertionMode::InBody)?;
+                    self.foster_parenting = false;
+                }
+            }
+            // A comment token
+            HtmlToken::Comment(comment) => {
+                self.insert_a_comment(comment, None)?;
+            }
+            // A DOCTYPE token
+            HtmlToken::DocType(_) => {
+                // Parse error. Ignore the token.
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "unexpected DOCTYPE in table",
+                )))?;
+            }
+            // A start tag whose tag name is "caption"
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "caption" => {
+                self.clear_the_stack_back_to_a_table_context();
+                self.active_formatting_elements
+                    .push(NodeOrMarker::Marker);
+                self.insert_an_html_element(token)?;
+                self.insertion_mode = InsertionMode::InCaption;
+            }
+            // A start tag whose tag name is "colgroup"
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
+                if token.tag_name == "colgroup" =>
+            {
+                self.clear_the_stack_back_to_a_table_context();
+                self.insert_an_html_element(token)?;
+                self.insertion_mode = InsertionMode::InColumnGroup;
+            }
+            // A start tag whose tag name is "col"
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "col" => {
+                self.clear_the_stack_back_to_a_table_context();
+                self.insert_an_html_element(TagToken::new(String::from("colgroup")))?;
+                self.insertion_mode = InsertionMode::InColumnGroup;
+                self.token_emitted(HtmlToken::TagToken(TagTokenType::StartTag(token)))?;
+            }
+            // A start tag whose tag name is one of: "tbody", "tfoot", "thead"
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
+                if ["tbody", "tfoot", "thead"].contains(&token.tag_name.as_str()) =>
+            {
+                self.clear_the_stack_back_to_a_table_context();
+                self.insert_an_html_element(token)?;
+                self.insertion_mode = InsertionMode::InTableBody;
+            }
+            // A start tag whose tag name is one of: "td", "th", "tr"
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
+                if ["td", "th", "tr"].contains(&token.tag_name.as_str()) =>
+            {
+                self.clear_the_stack_back_to_a_table_context();
+                self.insert_an_html_element(TagToken::new(String::from("tbody")))?;
+                self.insertion_mode = InsertionMode::InTableBody;
+                self.token_emitted(HtmlToken::TagToken(TagTokenType::StartTag(token)))?;
+            }
+            // A start tag whose tag name is "table"
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "table" => {
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "nested table start tag",
+                )))?;
+
+                if !self.has_an_element_in_table_scope("table") {
+                    // Ignore the token.
+                } else {
+                    self.pop_until_tag_name("table")?;
+                    self.reset_the_insertion_mode_appropriately()?;
+                    self.token_emitted(HtmlToken::TagToken(TagTokenType::StartTag(token)))?;
+                }
+            }
+            // An end tag whose tag name is "table"
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "table" => {
+                if !self.has_an_element_in_table_scope("table") {
+                    // Parse error. Ignore the token.
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "table end tag without table in scope",
+                    )))?;
+                } else {
+                    self.pop_until_tag_name("table")?;
+                    self.reset_the_insertion_mode_appropriately()?;
+                }
+            }
+            // An end tag whose tag name is one of: "body", "caption", "col", "colgroup", "html",
+            // "tbody", "td", "tfoot", "th", "thead", "tr"
+            HtmlToken::TagToken(TagTokenType::EndTag(token))
+                if [
+                    "body", "caption", "col", "colgroup", "html", "tbody", "td", "tfoot", "th",
+                    "thead", "tr",
+                ]
+                .contains(&token.tag_name.as_str()) =>
+            {
+                // Parse error. Ignore the token.
+                self.handle_error(HtmlParserError::MinorError(format!(
+                    "unexpected end tag </{}> in table",
+                    token.tag_name
+                )))?;
+            }
+            // A start tag whose tag name is one of: "style", "script", "template"
+            // An end tag whose tag name is "template"
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
+                if ["style", "script", "template"].contains(&token.tag_name.as_str()) =>
+            {
+                return self
+                    .in_head_insertion_mode(HtmlToken::TagToken(TagTokenType::StartTag(token)));
+            }
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "template" => {
+                return self
+                    .in_head_insertion_mode(HtmlToken::TagToken(TagTokenType::EndTag(token)));
+            }
+            // A start tag whose tag name is "input"
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "input" => {
+                let is_hidden_input = token.attributes.iter().any(|attr| {
+                    attr.name.eq_ignore_ascii_case("type")
+                        && attr.value.eq_ignore_ascii_case("hidden")
+                });
+
+                if !is_hidden_input {
+                    // Anything else
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "unexpected input in table (not hidden)",
+                    )))?;
+                    self.foster_parenting = true;
+                    self.using_the_rules_for(
+                        HtmlToken::TagToken(TagTokenType::StartTag(token)),
+                        InsertionMode::InBody,
+                    )?;
+                    self.foster_parenting = false;
+                } else {
+                    // Parse error.
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "input type=hidden in table",
+                    )))?;
+                    self.insert_an_html_element(token)?;
+                    self.open_elements.pop();
+                    // Acknowledge the token's self-closing flag, if it is set.
+                    return Ok(Acknowledgement::yes());
+                }
+            }
+            // A start tag whose tag name is "form"
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "form" => {
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "form start tag in table",
+                )))?;
+
+                if self.open_elements_has_element("template")
+                    || self.form_element_pointer.is_some()
+                {
+                    // Ignore the token.
+                } else {
+                    let form_id = self.insert_an_html_element(token)?;
+                    self.form_element_pointer = Some(form_id);
+                    self.open_elements.pop();
+                }
+            }
+            // An end-of-file token
+            HtmlToken::EndOfFile => {
+                return self.in_body_insertion_mode(HtmlToken::EndOfFile);
+            }
+            // Anything else
+            _ => {
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "unexpected token in table, foster parenting",
+                )))?;
+                self.foster_parenting = true;
+                self.using_the_rules_for(token, InsertionMode::InBody)?;
+                self.foster_parenting = false;
+            }
+        }
+
+        Ok(Acknowledgement::no())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intabletext>
+    pub(super) fn in_table_text_insertion_mode(
+        &mut self,
+        token: HtmlToken,
+    ) -> Result<Acknowledgement, HtmlParseError> {
+        match token {
+            // A character token that is U+0000 NULL
+            HtmlToken::Character('\0') => {
+                // Parse error. Ignore the token.
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "null character in table text",
+                )))?;
+            }
+            // Any other character token
+            HtmlToken::Character(c) => {
+                self.pending_table_character_tokens
+                    .push(HtmlToken::Character(c));
+            }
+            // Anything else
+            _ => {
+                // If any of the tokens in the pending table character tokens list
+                // are character tokens that are not ASCII whitespace:
+                let has_non_whitespace = self.pending_table_character_tokens.iter().any(|t| {
+                    if let HtmlToken::Character(c) = t {
+                        ![
+                            chars::CHARACTER_TABULATION,
+                            chars::LINE_FEED,
+                            chars::FORM_FEED,
+                            chars::CARRIAGE_RETURN,
+                            chars::SPACE,
+                        ]
+                        .contains(c)
+                    } else {
+                        false
+                    }
+                });
+
+                let pending_tokens = std::mem::take(&mut self.pending_table_character_tokens);
+
+                if has_non_whitespace {
+                    // This is a parse error. Reprocess the character tokens using
+                    // the rules for the "anything else" entry in the "in table" insertion mode.
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "non-whitespace character in table text",
+                    )))?;
+                    for pending_token in pending_tokens {
+                        self.foster_parenting = true;
+                        self.using_the_rules_for(pending_token, InsertionMode::InBody)?;
+                        self.foster_parenting = false;
+                    }
+                } else {
+                    // Otherwise, insert the characters given by the pending table character
+                    // tokens list.
+                    for pending_token in pending_tokens {
+                        if let HtmlToken::Character(c) = pending_token {
+                            self.insert_character(vec![c])?;
+                        }
+                    }
+                }
+
+                // Switch the insertion mode to the original insertion mode and reprocess the token.
+                self.insertion_mode = self
+                    .original_insertion_mode
+                    .expect("original insertion mode is None");
+                self.token_emitted(token)?;
+            }
+        }
+
+        Ok(Acknowledgement::no())
+    }
+
+    /// Close the caption element: generate implied end tags, pop until caption,
+    /// clear active formatting elements, and switch to InTable.
+    /// Returns true if the caption was closed, false if no caption was in table scope.
+    fn close_the_caption(&mut self) -> Result<bool, HtmlParseError> {
+        if !self.has_an_element_in_table_scope("caption") {
+            self.handle_error(HtmlParserError::MinorError(String::from(
+                "no caption in table scope",
+            )))?;
+            return Ok(false);
+        }
+
+        self.generate_implied_end_tags(None)?;
+
+        if let Some(el) = self.current_node_as_element() {
+            if el.name != "caption" {
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "current node is not caption when closing caption",
+                )))?;
+            }
+        }
+
+        self.pop_until_tag_name("caption")?;
+        self.clear_the_list_of_active_formatting_elements_up_to_the_last_marker()?;
+        self.insertion_mode = InsertionMode::InTable;
+        Ok(true)
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incaption>
+    pub(super) fn in_caption_insertion_mode(
+        &mut self,
+        token: HtmlToken,
+    ) -> Result<Acknowledgement, HtmlParseError> {
+        match token {
+            // An end tag whose tag name is "caption"
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "caption" => {
+                self.close_the_caption()?;
+            }
+            // A start tag whose tag name is one of: "caption", "col", "colgroup", "tbody", "td",
+            // "tfoot", "th", "thead", "tr"
+            // An end tag whose tag name is "table"
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
+                if [
+                    "caption", "col", "colgroup", "tbody", "td", "tfoot", "th", "thead", "tr",
+                ]
+                .contains(&token.tag_name.as_str()) =>
+            {
+                if self.close_the_caption()? {
+                    self.token_emitted(HtmlToken::TagToken(TagTokenType::StartTag(token)))?;
+                }
+            }
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "table" => {
+                if self.close_the_caption()? {
+                    self.token_emitted(HtmlToken::TagToken(TagTokenType::EndTag(token)))?;
+                }
+            }
+            // An end tag whose tag name is one of: "body", "col", "colgroup", "html", "tbody",
+            // "td", "tfoot", "th", "thead", "tr"
+            HtmlToken::TagToken(TagTokenType::EndTag(token))
+                if [
+                    "body", "col", "colgroup", "html", "tbody", "td", "tfoot", "th", "thead",
+                    "tr",
+                ]
+                .contains(&token.tag_name.as_str()) =>
+            {
+                // Parse error. Ignore the token.
+                self.handle_error(HtmlParserError::MinorError(format!(
+                    "unexpected end tag </{}> in caption",
+                    token.tag_name
+                )))?;
+            }
+            // Anything else: process using InBody rules
+            _ => {
+                return self.in_body_insertion_mode(token);
+            }
+        }
+
+        Ok(Acknowledgement::no())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incolumngroup>
+    pub(super) fn in_column_group_insertion_mode(
+        &mut self,
+        token: HtmlToken,
+    ) -> Result<Acknowledgement, HtmlParseError> {
+        match token {
+            // A character token that is whitespace
+            HtmlToken::Character(c)
+                if [
+                    chars::CHARACTER_TABULATION,
+                    chars::LINE_FEED,
+                    chars::FORM_FEED,
+                    chars::CARRIAGE_RETURN,
+                    chars::SPACE,
+                ]
+                .contains(&c) =>
+            {
+                self.insert_character(vec![c])?;
+            }
+            // A comment token
+            HtmlToken::Comment(comment) => {
+                self.insert_a_comment(comment, None)?;
+            }
+            // A DOCTYPE token
+            HtmlToken::DocType(_) => {
+                // Parse error. Ignore.
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "unexpected DOCTYPE in column group",
+                )))?;
+            }
+            // A start tag whose tag name is "html"
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
+                return self
+                    .in_body_insertion_mode(HtmlToken::TagToken(TagTokenType::StartTag(token)));
+            }
+            // A start tag whose tag name is "col"
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "col" => {
+                self.insert_an_html_element(token)?;
+                self.open_elements.pop();
+                return Ok(Acknowledgement::yes());
+            }
+            // An end tag whose tag name is "colgroup"
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "colgroup" => {
+                let is_colgroup = self
+                    .current_node_as_element()
+                    .map(|el| el.name == "colgroup")
+                    .unwrap_or(false);
+
+                if !is_colgroup {
+                    // Parse error. Ignore.
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "current node is not colgroup",
+                    )))?;
+                } else {
+                    self.open_elements.pop();
+                    self.insertion_mode = InsertionMode::InTable;
+                }
+            }
+            // An end tag whose tag name is "col"
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "col" => {
+                // Parse error. Ignore.
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "unexpected </col> end tag",
+                )))?;
+            }
+            // A start tag whose tag name is "template"
+            // An end tag whose tag name is "template"
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
+                if token.tag_name == "template" =>
+            {
+                return self
+                    .in_head_insertion_mode(HtmlToken::TagToken(TagTokenType::StartTag(token)));
+            }
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "template" => {
+                return self
+                    .in_head_insertion_mode(HtmlToken::TagToken(TagTokenType::EndTag(token)));
+            }
+            // An end-of-file token
+            HtmlToken::EndOfFile => {
+                return self.in_body_insertion_mode(HtmlToken::EndOfFile);
+            }
+            // Anything else
+            _ => {
+                let is_colgroup = self
+                    .current_node_as_element()
+                    .map(|el| el.name == "colgroup")
+                    .unwrap_or(false);
+
+                if !is_colgroup {
+                    // Parse error. Ignore.
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "current node is not colgroup, ignoring token",
+                    )))?;
+                } else {
+                    self.open_elements.pop();
+                    self.insertion_mode = InsertionMode::InTable;
+                    self.token_emitted(token)?;
+                }
+            }
+        }
+
+        Ok(Acknowledgement::no())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intablebody>
+    pub(super) fn in_table_body_insertion_mode(
+        &mut self,
+        token: HtmlToken,
+    ) -> Result<Acknowledgement, HtmlParseError> {
+        match token {
+            // A start tag whose tag name is "tr"
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "tr" => {
+                self.clear_the_stack_back_to_a_table_body_context();
+                self.insert_an_html_element(token)?;
+                self.insertion_mode = InsertionMode::InRow;
+            }
+            // A start tag whose tag name is one of: "th", "td"
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
+                if ["th", "td"].contains(&token.tag_name.as_str()) =>
+            {
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "td/th start tag directly in table body",
+                )))?;
+                self.clear_the_stack_back_to_a_table_body_context();
+                self.insert_an_html_element(TagToken::new(String::from("tr")))?;
+                self.insertion_mode = InsertionMode::InRow;
+                self.token_emitted(HtmlToken::TagToken(TagTokenType::StartTag(token)))?;
+            }
+            // An end tag whose tag name is one of: "tbody", "tfoot", "thead"
+            HtmlToken::TagToken(TagTokenType::EndTag(ref end_token))
+                if ["tbody", "tfoot", "thead"].contains(&end_token.tag_name.as_str()) =>
+            {
+                if !self.has_an_element_in_table_scope(&end_token.tag_name) {
+                    self.handle_error(HtmlParserError::MinorError(format!(
+                        "no {} in table scope",
+                        end_token.tag_name
+                    )))?;
+                } else {
+                    self.clear_the_stack_back_to_a_table_body_context();
+                    self.open_elements.pop();
+                    self.insertion_mode = InsertionMode::InTable;
+                }
+            }
+            // A start tag whose tag name is one of: "caption", "col", "colgroup", "tbody",
+            // "tfoot", "thead"
+            // An end tag whose tag name is "table"
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
+                if ["caption", "col", "colgroup", "tbody", "tfoot", "thead"]
+                    .contains(&token.tag_name.as_str()) =>
+            {
+                if !self.has_an_element_in_table_scope("tbody")
+                    && !self.has_an_element_in_table_scope("thead")
+                    && !self.has_an_element_in_table_scope("tfoot")
+                {
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "no tbody/thead/tfoot in table scope",
+                    )))?;
+                } else {
+                    self.clear_the_stack_back_to_a_table_body_context();
+                    self.open_elements.pop();
+                    self.insertion_mode = InsertionMode::InTable;
+                    self.token_emitted(HtmlToken::TagToken(TagTokenType::StartTag(token)))?;
+                }
+            }
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "table" => {
+                if !self.has_an_element_in_table_scope("tbody")
+                    && !self.has_an_element_in_table_scope("thead")
+                    && !self.has_an_element_in_table_scope("tfoot")
+                {
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "no tbody/thead/tfoot in table scope",
+                    )))?;
+                } else {
+                    self.clear_the_stack_back_to_a_table_body_context();
+                    self.open_elements.pop();
+                    self.insertion_mode = InsertionMode::InTable;
+                    self.token_emitted(HtmlToken::TagToken(TagTokenType::EndTag(token)))?;
+                }
+            }
+            // An end tag whose tag name is one of: "body", "caption", "col", "colgroup", "html",
+            // "td", "th", "tr"
+            HtmlToken::TagToken(TagTokenType::EndTag(token))
+                if [
+                    "body", "caption", "col", "colgroup", "html", "td", "th", "tr",
+                ]
+                .contains(&token.tag_name.as_str()) =>
+            {
+                // Parse error. Ignore the token.
+                self.handle_error(HtmlParserError::MinorError(format!(
+                    "unexpected end tag </{}> in table body",
+                    token.tag_name
+                )))?;
+            }
+            // Anything else: process using InTable rules
+            _ => {
+                return self.in_table_insertion_mode(token);
+            }
+        }
+
+        Ok(Acknowledgement::no())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inrow>
+    pub(super) fn in_row_insertion_mode(
+        &mut self,
+        token: HtmlToken,
+    ) -> Result<Acknowledgement, HtmlParseError> {
+        match token {
+            // A start tag whose tag name is one of: "th", "td"
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
+                if ["th", "td"].contains(&token.tag_name.as_str()) =>
+            {
+                self.clear_the_stack_back_to_a_table_row_context();
+                self.insert_an_html_element(token)?;
+                self.insertion_mode = InsertionMode::InCell;
+                self.active_formatting_elements
+                    .push(NodeOrMarker::Marker);
+            }
+            // An end tag whose tag name is "tr"
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "tr" => {
+                if !self.has_an_element_in_table_scope("tr") {
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "no tr in table scope",
+                    )))?;
+                } else {
+                    self.clear_the_stack_back_to_a_table_row_context();
+                    self.open_elements.pop(); // pop the tr
+                    self.insertion_mode = InsertionMode::InTableBody;
+                }
+            }
+            // A start tag whose tag name is one of: "caption", "col", "colgroup", "tbody",
+            // "tfoot", "thead", "tr"
+            // An end tag whose tag name is "table"
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
+                if [
+                    "caption", "col", "colgroup", "tbody", "tfoot", "thead", "tr",
+                ]
+                .contains(&token.tag_name.as_str()) =>
+            {
+                if !self.has_an_element_in_table_scope("tr") {
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "no tr in table scope",
+                    )))?;
+                } else {
+                    self.clear_the_stack_back_to_a_table_row_context();
+                    self.open_elements.pop(); // pop the tr
+                    self.insertion_mode = InsertionMode::InTableBody;
+                    self.token_emitted(HtmlToken::TagToken(TagTokenType::StartTag(token)))?;
+                }
+            }
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "table" => {
+                if !self.has_an_element_in_table_scope("tr") {
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "no tr in table scope",
+                    )))?;
+                } else {
+                    self.clear_the_stack_back_to_a_table_row_context();
+                    self.open_elements.pop(); // pop the tr
+                    self.insertion_mode = InsertionMode::InTableBody;
+                    self.token_emitted(HtmlToken::TagToken(TagTokenType::EndTag(token)))?;
+                }
+            }
+            // An end tag whose tag name is one of: "tbody", "tfoot", "thead"
+            HtmlToken::TagToken(TagTokenType::EndTag(ref end_token))
+                if ["tbody", "tfoot", "thead"].contains(&end_token.tag_name.as_str()) =>
+            {
+                if !self.has_an_element_in_table_scope(&end_token.tag_name) {
+                    self.handle_error(HtmlParserError::MinorError(format!(
+                        "no {} in table scope",
+                        end_token.tag_name
+                    )))?;
+                } else if !self.has_an_element_in_table_scope("tr") {
+                    // Ignore the token.
+                } else {
+                    self.clear_the_stack_back_to_a_table_row_context();
+                    self.open_elements.pop(); // pop the tr
+                    self.insertion_mode = InsertionMode::InTableBody;
+                    self.token_emitted(token)?;
+                }
+            }
+            // An end tag whose tag name is one of: "body", "caption", "col", "colgroup", "html",
+            // "td", "th"
+            HtmlToken::TagToken(TagTokenType::EndTag(token))
+                if ["body", "caption", "col", "colgroup", "html", "td", "th"]
+                    .contains(&token.tag_name.as_str()) =>
+            {
+                // Parse error. Ignore the token.
+                self.handle_error(HtmlParserError::MinorError(format!(
+                    "unexpected end tag </{}> in row",
+                    token.tag_name
+                )))?;
+            }
+            // Anything else: process using InTable rules
+            _ => {
+                return self.in_table_insertion_mode(token);
+            }
+        }
+
+        Ok(Acknowledgement::no())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incell>
+    pub(super) fn in_cell_insertion_mode(
+        &mut self,
+        token: HtmlToken,
+    ) -> Result<Acknowledgement, HtmlParseError> {
+        match token {
+            // An end tag whose tag name is one of: "td", "th"
+            HtmlToken::TagToken(TagTokenType::EndTag(ref end_token))
+                if ["td", "th"].contains(&end_token.tag_name.as_str()) =>
+            {
+                if !self.has_an_element_in_table_scope(&end_token.tag_name) {
+                    self.handle_error(HtmlParserError::MinorError(format!(
+                        "no {} in table scope",
+                        end_token.tag_name
+                    )))?;
+                } else {
+                    self.generate_implied_end_tags(None)?;
+
+                    if let Some(el) = self.current_node_as_element() {
+                        if el.name != end_token.tag_name {
+                            self.handle_error(HtmlParserError::MinorError(format!(
+                                "current node is not {}",
+                                end_token.tag_name
+                            )))?;
+                        }
+                    }
+
+                    let tag_name = end_token.tag_name.clone();
+                    self.pop_until_tag_name(&tag_name)?;
+                    self.clear_the_list_of_active_formatting_elements_up_to_the_last_marker()?;
+                    self.insertion_mode = InsertionMode::InRow;
+                }
+            }
+            // A start tag whose tag name is one of: "caption", "col", "colgroup", "tbody", "td",
+            // "tfoot", "th", "thead", "tr"
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
+                if [
+                    "caption", "col", "colgroup", "tbody", "td", "tfoot", "th", "thead", "tr",
+                ]
+                .contains(&token.tag_name.as_str()) =>
+            {
+                // Assert: stack has td or th in table scope
+                if !self.has_an_element_in_table_scope("td")
+                    && !self.has_an_element_in_table_scope("th")
+                {
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "no td or th in table scope",
+                    )))?;
+                } else {
+                    self.close_the_cell()?;
+                    self.token_emitted(HtmlToken::TagToken(TagTokenType::StartTag(token)))?;
+                }
+            }
+            // An end tag whose tag name is one of: "body", "caption", "col", "colgroup", "html"
+            HtmlToken::TagToken(TagTokenType::EndTag(token))
+                if ["body", "caption", "col", "colgroup", "html"]
+                    .contains(&token.tag_name.as_str()) =>
+            {
+                // Parse error. Ignore the token.
+                self.handle_error(HtmlParserError::MinorError(format!(
+                    "unexpected end tag </{}> in cell",
+                    token.tag_name
+                )))?;
+            }
+            // An end tag whose tag name is one of: "table", "tbody", "tfoot", "thead", "tr"
+            HtmlToken::TagToken(TagTokenType::EndTag(ref end_token))
+                if ["table", "tbody", "tfoot", "thead", "tr"]
+                    .contains(&end_token.tag_name.as_str()) =>
+            {
+                if !self.has_an_element_in_table_scope(&end_token.tag_name) {
+                    self.handle_error(HtmlParserError::MinorError(format!(
+                        "no {} in table scope",
+                        end_token.tag_name
+                    )))?;
+                } else {
+                    self.close_the_cell()?;
+                    self.token_emitted(token)?;
+                }
+            }
+            // Anything else: process using InBody rules
+            _ => {
+                return self.in_body_insertion_mode(token);
+            }
+        }
+
+        Ok(Acknowledgement::no())
+    }
 }

@@ -310,6 +310,7 @@ pub struct HtmlParser {
     active_formatting_elements: Vec<NodeOrMarker>,
     head_element_pointer: Option<NodeId>,
     form_element_pointer: Option<NodeId>,
+    pending_table_character_tokens: Vec<HtmlToken>,
 }
 
 impl HtmlParser {
@@ -328,6 +329,7 @@ impl HtmlParser {
             active_formatting_elements: Vec::new(),
             head_element_pointer: None,
             form_element_pointer: None,
+            pending_table_character_tokens: Vec::new(),
         }
     }
 
@@ -970,6 +972,70 @@ impl HtmlParser {
         self.has_an_element_in_the_specific_scope(vec![tag_name], element_types)
     }
 
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-table-scope>
+    pub(crate) fn has_an_element_in_table_scope(&self, tag_name: &str) -> bool {
+        let element_types = vec!["html", "table", "template"];
+        self.has_an_element_in_the_specific_scope(vec![tag_name], element_types)
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#clear-the-stack-back-to-a-table-context>
+    pub(crate) fn clear_the_stack_back_to_a_table_context(&mut self) {
+        while let Some(node) = self.current_node() {
+            if let XpathItemTreeNode::ElementNode(element) = node {
+                if matches!(element.name.as_str(), "table" | "template" | "html") {
+                    break;
+                }
+            }
+            self.open_elements.pop();
+        }
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#clear-the-stack-back-to-a-table-body-context>
+    pub(crate) fn clear_the_stack_back_to_a_table_body_context(&mut self) {
+        while let Some(node) = self.current_node() {
+            if let XpathItemTreeNode::ElementNode(element) = node {
+                if matches!(
+                    element.name.as_str(),
+                    "tbody" | "tfoot" | "thead" | "template" | "html"
+                ) {
+                    break;
+                }
+            }
+            self.open_elements.pop();
+        }
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#clear-the-stack-back-to-a-table-row-context>
+    pub(crate) fn clear_the_stack_back_to_a_table_row_context(&mut self) {
+        while let Some(node) = self.current_node() {
+            if let XpathItemTreeNode::ElementNode(element) = node {
+                if matches!(element.name.as_str(), "tr" | "template" | "html") {
+                    break;
+                }
+            }
+            self.open_elements.pop();
+        }
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#close-the-cell>
+    pub(crate) fn close_the_cell(&mut self) -> Result<(), HtmlParseError> {
+        self.generate_implied_end_tags(None)?;
+
+        if let Some(node) = self.current_node_as_element() {
+            if !matches!(node.name.as_str(), "td" | "th") {
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "expected td or th as current node when closing cell",
+                )))?;
+            }
+        }
+
+        self.pop_until_tag_name_one_of(vec!["td", "th"])?;
+        self.clear_the_list_of_active_formatting_elements_up_to_the_last_marker()?;
+        self.insertion_mode = InsertionMode::InRow;
+
+        Ok(())
+    }
+
     /// <https://html.spec.whatwg.org/multipage/parsing.html#close-a-p-element>
     pub(crate) fn close_a_p_element(&mut self) -> Result<(), HtmlParseError> {
         self.generate_implied_end_tags(Some("p"))?;
@@ -1450,13 +1516,13 @@ impl HtmlParser {
             InsertionMode::AfterHead => self.after_head_insertion_mode(token),
             InsertionMode::InBody => self.in_body_insertion_mode(token),
             InsertionMode::Text => self.text_insertion_mode(token),
-            InsertionMode::InTable => todo!(),
-            InsertionMode::InTableText => todo!(),
-            InsertionMode::InCaption => todo!(),
-            InsertionMode::InColumnGroup => todo!(),
-            InsertionMode::InTableBody => todo!(),
-            InsertionMode::InRow => todo!(),
-            InsertionMode::InCell => todo!(),
+            InsertionMode::InTable => self.in_table_insertion_mode(token),
+            InsertionMode::InTableText => self.in_table_text_insertion_mode(token),
+            InsertionMode::InCaption => self.in_caption_insertion_mode(token),
+            InsertionMode::InColumnGroup => self.in_column_group_insertion_mode(token),
+            InsertionMode::InTableBody => self.in_table_body_insertion_mode(token),
+            InsertionMode::InRow => self.in_row_insertion_mode(token),
+            InsertionMode::InCell => self.in_cell_insertion_mode(token),
             InsertionMode::InSelect => todo!(),
             InsertionMode::InSelectInTable => todo!(),
             InsertionMode::InTemplate => self.in_template_insertion_mode(token),

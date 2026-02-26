@@ -12,13 +12,13 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 |---------|---------|----------------|
 | ~~528~~ | ~~Foster parenting — adjusted insertion location logic~~ | ~~[13.2.6.1](https://html.spec.whatwg.org/multipage/parsing.html#appropriate-place-for-inserting-a-node)~~ **DONE** |
 | ~~1334~~ | ~~InHeadNoscript insertion mode~~ | ~~[13.2.6.4.5](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inheadnoscript)~~ **DONE** |
-| 1338 | InTable insertion mode | [13.2.6.4.9](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intable) |
-| 1339 | InTableText insertion mode | [13.2.6.4.10](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intabletext) |
-| 1340 | InCaption insertion mode | [13.2.6.4.11](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incaption) |
-| 1341 | InColumnGroup insertion mode | [13.2.6.4.12](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incolumngroup) |
-| 1342 | InTableBody insertion mode | [13.2.6.4.13](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intablebody) |
-| 1343 | InRow insertion mode | [13.2.6.4.14](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inrow) |
-| 1344 | InCell insertion mode | [13.2.6.4.15](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incell) |
+| ~~1338~~ | ~~InTable insertion mode~~ | ~~[13.2.6.4.9](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intable)~~ **DONE** |
+| ~~1339~~ | ~~InTableText insertion mode~~ | ~~[13.2.6.4.10](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intabletext)~~ **DONE** |
+| ~~1340~~ | ~~InCaption insertion mode~~ | ~~[13.2.6.4.11](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incaption)~~ **DONE** |
+| ~~1341~~ | ~~InColumnGroup insertion mode~~ | ~~[13.2.6.4.12](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incolumngroup)~~ **DONE** |
+| ~~1342~~ | ~~InTableBody insertion mode~~ | ~~[13.2.6.4.13](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intablebody)~~ **DONE** |
+| ~~1343~~ | ~~InRow insertion mode~~ | ~~[13.2.6.4.14](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inrow)~~ **DONE** |
+| ~~1344~~ | ~~InCell insertion mode~~ | ~~[13.2.6.4.15](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incell)~~ **DONE** |
 | 1345 | InSelect insertion mode | [13.2.6.4.16](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inselect) |
 | 1346 | InSelectInTable insertion mode | [13.2.6.4.17](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inselectintable) |
 | 1349 | InFrameset insertion mode | [13.2.6.4.19](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inframeset) |
@@ -89,7 +89,7 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 | 578 | `<nobr>` start tag |
 | 592 | `<applet>` / `<marquee>` / `<object>` start tags |
 | 597 | `</applet>` / `</marquee>` / `</object>` end tags |
-| 600 | `<table>` start tag |
+| ~~600~~ | ~~`<table>` start tag~~ **DONE** |
 | 608 | Void elements: `<area>`, `<br>`, `<embed>`, `<img>` etc. — some missing branches |
 | 658 | `<param>` / `<source>` / `<track>` start tags |
 | 661 | `<hr>` start tag |

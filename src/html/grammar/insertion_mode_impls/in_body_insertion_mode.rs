@@ -597,7 +597,14 @@ impl HtmlParser {
                 todo!()
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "table" => {
-                todo!()
+                // TODO: If the Document is not set to quirks mode, and ...
+                if self.has_an_element_in_button_scope("p") {
+                    self.close_a_p_element()?;
+                }
+
+                self.insert_an_html_element(token)?;
+                self.frameset_ok = false;
+                self.insertion_mode = InsertionMode::InTable;
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "br" => {
                 self.handle_error(HtmlParserError::MinorError(String::from(
