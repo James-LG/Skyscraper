@@ -257,6 +257,37 @@ fn dt_end_tag_closes_dt() {
     );
 }
 
+/// A <nobr> start tag should insert a nobr element and push it onto the
+/// list of active formatting elements (WHATWG 13.2.6.4.7).
+#[test]
+fn nobr_start_tag_inserts_element() {
+    let text = "<html><body><nobr>no break</nobr></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<nobr>no break</nobr>"),
+        "nobr element should be present: {output:?}"
+    );
+}
+
+/// Nested <nobr> tags should trigger the adoption agency algorithm to close
+/// the first one before opening the second (WHATWG 13.2.6.4.7).
+#[test]
+fn nested_nobr_triggers_adoption_agency() {
+    let text = "<html><body><nobr>first<nobr>second</nobr></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    // The first nobr should be closed by the adoption agency when the second appears.
+    assert!(
+        output.contains("first"),
+        "first text should be preserved: {output:?}"
+    );
+    assert!(
+        output.contains("second"),
+        "second text should be preserved: {output:?}"
+    );
+}
+
 /// A </sarcasm> end tag should use the "any other end tag" logic (WHATWG 13.2.6.4.7).
 /// The spec joke says: "Take a deep breath, then act as described in the
 /// 'any other end tag' entry below."

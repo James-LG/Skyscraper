@@ -752,7 +752,19 @@ impl HtmlParser {
                 self.push_onto_the_list_of_active_formatting_elements(element_id, token)?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "nobr" => {
-                todo!()
+                self.reconstruct_the_active_formatting_elements()?;
+
+                if self.has_an_element_in_scope("nobr") {
+                    // Parse error.
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "nobr element already in scope",
+                    )))?;
+                    self.adoption_agency_algorithm(&token)?;
+                    self.reconstruct_the_active_formatting_elements()?;
+                }
+
+                let element_id = self.insert_an_html_element(token.clone())?;
+                self.push_onto_the_list_of_active_formatting_elements(element_id, token)?;
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token))
                 if [
