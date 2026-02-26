@@ -706,8 +706,8 @@ impl HtmlParser {
                 self.pop_until_tag_name_one_of(vec!["h1", "h2", "h3", "h4", "h5", "h6"])?;
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "sarcasm" => {
-                // "Take a deep breath, then act as described in the 'any other end tag' entry below." lol
-                todo!()
+                // "Take a deep breath, then act as described in the 'any other end tag' entry below."
+                self.any_other_end_tag(&token)?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "a" => {
                 // Check if there's already an <a> in active formatting elements

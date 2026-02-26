@@ -257,6 +257,21 @@ fn dt_end_tag_closes_dt() {
     );
 }
 
+/// A </sarcasm> end tag should use the "any other end tag" logic (WHATWG 13.2.6.4.7).
+/// The spec joke says: "Take a deep breath, then act as described in the
+/// 'any other end tag' entry below."
+#[test]
+fn sarcasm_end_tag_uses_any_other_end_tag() {
+    // </sarcasm> without a matching open element should be ignored (any other end tag logic).
+    let text = "<html><body><p>text</sarcasm></p></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<p>text</p>"),
+        "Content should be preserved: {output:?}"
+    );
+}
+
 /// A <plaintext> start tag should close p in button scope, insert the element,
 /// and switch the tokenizer to PLAINTEXT state (WHATWG 13.2.6.4.7).
 /// Everything after <plaintext> is treated as raw text (no end tag).
