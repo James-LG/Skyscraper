@@ -134,8 +134,8 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line | Feature |
 |------|---------|
-| 124 | Value comparisons (`eq`, `ne`, `lt`, `le`, `gt`, `ge`) |
-| 126 | Node comparisons (`is`, `<<`, `>>`) |
+| ~~124~~ | ~~Value comparisons (`eq`, `ne`, `lt`, `le`, `gt`, `ge`)~~ **DONE** |
+| ~~126~~ | ~~Node comparisons (`is`, `<<`, `>>`)~~ **DONE** |
 
 ### Arithmetic Expressions
 

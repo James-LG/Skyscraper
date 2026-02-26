@@ -11,6 +11,7 @@ use crate::{
     xpath::{
         grammar::{
             data_model::{AnyAtomicType, XpathItem},
+            XpathItemTreeNode,
             expressions::string_concat_expressions::string_concat_expr,
             recipes::Res,
             terminal_symbols::symbol_separator,
@@ -121,9 +122,32 @@ impl ComparisonExpr {
         }
 
         let bool_value = match comparison.0 {
-            ComparisonType::ValueComp(_) => todo!("ComparisonType::ValueComp"),
+            ComparisonType::ValueComp(comp) => comp.is_match(&atomized1[0], &atomized2[0]),
             ComparisonType::GeneralComp(comp) => comp.is_match(&atomized1[0], &atomized2[0]),
-            ComparisonType::NodeComp(_) => todo!("ComparisonType::NodeComp"),
+            ComparisonType::NodeComp(comp) => {
+                // Node comparisons require both operands to be nodes.
+                let node1 = match &result[0] {
+                    XpathItem::Node(n) => n,
+                    _ => {
+                        return Err(ExpressionApplyError {
+                            msg: String::from(
+                                "err:XPTY0004 Node comparison requires node operands",
+                            ),
+                        })
+                    }
+                };
+                let node2 = match &second_result[0] {
+                    XpathItem::Node(n) => n,
+                    _ => {
+                        return Err(ExpressionApplyError {
+                            msg: String::from(
+                                "err:XPTY0004 Node comparison requires node operands",
+                            ),
+                        })
+                    }
+                };
+                comp.is_match(node1, node2)
+            }
         };
 
         Ok(xpath_item_set![XpathItem::AnyAtomicType(
@@ -222,6 +246,19 @@ impl Display for ValueComp {
             ValueComp::LessThanEqualTo => write!(f, " le "),
             ValueComp::GreaterThan => write!(f, " gt "),
             ValueComp::GreaterThanEqualTo => write!(f, " ge "),
+        }
+    }
+}
+
+impl ValueComp {
+    pub(crate) fn is_match(&self, first: &AnyAtomicType, second: &AnyAtomicType) -> bool {
+        match self {
+            ValueComp::Equal => first == second,
+            ValueComp::NotEqual => first != second,
+            ValueComp::LessThan => first < second,
+            ValueComp::LessThanEqualTo => first <= second,
+            ValueComp::GreaterThan => first > second,
+            ValueComp::GreaterThanEqualTo => first >= second,
         }
     }
 }
@@ -342,6 +379,24 @@ impl Display for NodeComp {
             NodeComp::Is => write!(f, " is "),
             NodeComp::Precedes => write!(f, "<<"),
             NodeComp::Follows => write!(f, ">>"),
+        }
+    }
+}
+
+impl NodeComp {
+    pub(crate) fn is_match(
+        &self,
+        first: &XpathItemTreeNode,
+        second: &XpathItemTreeNode,
+    ) -> bool {
+        match (first.node_id(), second.node_id()) {
+            (Some(id1), Some(id2)) => match self {
+                NodeComp::Is => id1 == id2,
+                NodeComp::Precedes => id1 < id2,
+                NodeComp::Follows => id1 > id2,
+            },
+            // If either operand has no node_id, the comparison is false.
+            _ => false,
         }
     }
 }
