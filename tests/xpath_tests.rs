@@ -6,6 +6,7 @@ mod xpath_tests {
     mod comparison_expression_tests;
     mod contains_tests;
     mod for_expression_tests;
+    mod let_expression_tests;
     mod forward_step_tests;
     mod github_sample_tests;
     mod logical_expression_tests;

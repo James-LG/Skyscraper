@@ -10,10 +10,14 @@ use nom::{
     sequence::tuple,
 };
 
-use crate::xpath::grammar::{
-    recipes::Res,
-    terminal_symbols::symbol_separator,
-    whitespace_recipes::{sep, ws},
+use crate::xpath::{
+    grammar::{
+        recipes::Res,
+        terminal_symbols::symbol_separator,
+        whitespace_recipes::{sep, ws},
+    },
+    xpath_item_set::XpathItemSet,
+    ExpressionApplyError, XpathExpressionContext,
 };
 
 use super::{
@@ -44,6 +48,46 @@ pub fn let_expr(input: &str) -> Res<&str, LetExpr> {
 pub struct LetExpr {
     pub clause: SimpleLetClause,
     pub expr: ExprSingle,
+}
+
+impl LetExpr {
+    pub(crate) fn eval<'tree>(
+        &self,
+        context: &XpathExpressionContext<'tree>,
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
+        // Collect all bindings (first + extras) into a single list.
+        let mut bindings = vec![&self.clause.binding];
+        bindings.extend(self.clause.extras.iter());
+
+        // Sequentially evaluate bindings, each seeing the previous variables.
+        // For `let $x := E1, $y := E2 return E3`,
+        // this is equivalent to `let $x := E1 return (let $y := E2 return E3)`.
+        Self::eval_bindings(context, &bindings, &self.expr)
+    }
+
+    fn eval_bindings<'tree>(
+        context: &XpathExpressionContext<'tree>,
+        bindings: &[&SimpleLetBinding],
+        return_expr: &ExprSingle,
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
+        let (binding, rest) = match bindings.split_first() {
+            Some(pair) => pair,
+            None => {
+                // No more bindings — evaluate the return expression.
+                return return_expr.eval(context);
+            }
+        };
+
+        // Evaluate the binding's expression to get the value.
+        let value = binding.expr.eval(context)?;
+
+        // Bind the variable to the entire result (unlike `for` which iterates).
+        let var_name = binding.var.to_string();
+        let inner_context = context.with_variable(var_name, value);
+
+        // Evaluate remaining bindings with the new variable in scope.
+        Self::eval_bindings(&inner_context, rest, return_expr)
+    }
 }
 
 impl Display for LetExpr {
