@@ -97,6 +97,65 @@ fn frameset_in_body_replaces_body_when_frameset_ok() {
     );
 }
 
+/// A <pre> start tag should close an open <p> element, insert the <pre>,
+/// set frameset-ok to "not ok", and skip a leading newline (WHATWG 13.2.6.4.7).
+#[test]
+fn pre_start_tag_closes_p_and_inserts() {
+    let text = "<html><body><p>para<pre>code</pre></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<pre>"),
+        "pre element should be present: {output:?}"
+    );
+    // The p should be closed before pre.
+    assert!(
+        !output.contains("<p><pre>"),
+        "p should not contain pre: {output:?}"
+    );
+}
+
+/// A <listing> start tag should behave identically to <pre> (WHATWG 13.2.6.4.7).
+#[test]
+fn listing_start_tag_closes_p_and_inserts() {
+    let text = "<html><body><p>para<listing>code</listing></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<listing>"),
+        "listing element should be present: {output:?}"
+    );
+    assert!(
+        !output.contains("<p><listing>"),
+        "p should not contain listing: {output:?}"
+    );
+}
+
+/// A newline immediately following <pre> should be stripped (WHATWG 13.2.6.4.7).
+#[test]
+fn pre_strips_leading_newline() {
+    let text = "<html><body><pre>\nhello</pre></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    // The leading newline after <pre> should be stripped, leaving just "hello".
+    assert!(
+        output.contains("<pre>hello</pre>"),
+        "Leading newline should be stripped: {output:?}"
+    );
+}
+
+/// A non-LF character immediately following <pre> should NOT be stripped.
+#[test]
+fn pre_does_not_strip_non_lf() {
+    let text = "<html><body><pre>hello</pre></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<pre>hello</pre>"),
+        "Non-LF content should be preserved: {output:?}"
+    );
+}
+
 /// A DOCTYPE token encountered in the "in body" insertion mode should be
 /// treated as a parse error and ignored (WHATWG 13.2.6.4.7).
 ///

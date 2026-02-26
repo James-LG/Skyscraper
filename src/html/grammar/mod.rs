@@ -311,6 +311,7 @@ pub struct HtmlParser {
     head_element_pointer: Option<NodeId>,
     form_element_pointer: Option<NodeId>,
     pending_table_character_tokens: Vec<HtmlToken>,
+    skip_next_line_feed: bool,
 }
 
 impl HtmlParser {
@@ -330,6 +331,7 @@ impl HtmlParser {
             head_element_pointer: None,
             form_element_pointer: None,
             pending_table_character_tokens: Vec::new(),
+            skip_next_line_feed: false,
         }
     }
 
@@ -1596,6 +1598,15 @@ impl Acknowledgement {
 
 impl Parser for HtmlParser {
     fn token_emitted(&mut self, token: HtmlToken) -> Result<Acknowledgement, HtmlParseError> {
+        // If the skip_next_line_feed flag is set and the next token is a LF character,
+        // ignore it (used by <pre>, <listing>, <textarea> per WHATWG spec).
+        if self.skip_next_line_feed {
+            self.skip_next_line_feed = false;
+            if matches!(token, HtmlToken::Character(chars::LINE_FEED)) {
+                return Ok(Acknowledgement::no());
+            }
+        }
+
         self.handle_token(token, self.insertion_mode)
     }
 

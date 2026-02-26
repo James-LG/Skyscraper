@@ -81,7 +81,7 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 | ~~47~~ | ~~NULL character handling~~ **DONE** |
 | ~~74~~ | ~~DOCTYPE token handling~~ **DONE** |
 | ~~153~~ | ~~`<frameset>` start tag~~ **DONE** |
-| 244 | `<pre>` / `<listing>` start tags |
+| ~~244~~ | ~~`<pre>` / `<listing>` start tags~~ **DONE** |
 | 348 | `<dd>` / `<dt>` start tags |
 | 351 | `<plaintext>` start tag |
 | 507 | `</dd>` / `</dt>` end tags |

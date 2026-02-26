@@ -287,7 +287,16 @@ impl HtmlParser {
             HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if ["pre", "listing"].contains(&token.tag_name.as_str()) =>
             {
-                todo!()
+                if self.has_an_element_in_button_scope("p") {
+                    self.close_a_p_element()?;
+                }
+
+                self.insert_an_html_element(token)?;
+
+                // If the next token is a U+000A LINE FEED character token, ignore it.
+                self.skip_next_line_feed = true;
+
+                self.frameset_ok = false;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "form" => {
                 if self.form_element_pointer.is_some()
@@ -719,7 +728,8 @@ impl HtmlParser {
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "textarea" => {
                 self.insert_an_html_element(token)?;
 
-                // TODO: if next token is line feed character token, ignore it
+                // If the next token is a U+000A LINE FEED character token, ignore it.
+                self.skip_next_line_feed = true;
 
                 self.original_insertion_mode = Some(self.insertion_mode);
                 self.insertion_mode = InsertionMode::Text;
