@@ -227,6 +227,58 @@ pub(crate) static SPECIAL_ELEMENTS: [&str; 83] = [
     "xmp",
 ];
 
+/// Represents a position in the tree where a new node should be inserted.
+///
+/// This is used by the "appropriate place for inserting a node" algorithm
+/// to communicate the exact insertion point, which can be either appending
+/// as the last child of a parent node or inserting before a specific sibling.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum InsertionPosition {
+    /// Insert as the last child of the given node.
+    LastChildOf(NodeId),
+    /// Insert before the given sibling node (used in foster parenting).
+    BeforeSibling(NodeId),
+}
+
+impl InsertionPosition {
+    /// Insert a node at this insertion position.
+    pub(crate) fn insert(self, new_node: NodeId, arena: &mut Arena<XpathItemTreeNode>) {
+        match self {
+            InsertionPosition::LastChildOf(parent) => {
+                parent.append(new_node, arena);
+            }
+            InsertionPosition::BeforeSibling(sibling) => {
+                sibling.insert_before(new_node, arena);
+            }
+        }
+    }
+
+    /// Get the parent node of this insertion position.
+    pub(crate) fn parent(self, arena: &Arena<XpathItemTreeNode>) -> Option<NodeId> {
+        match self {
+            InsertionPosition::LastChildOf(parent) => Some(parent),
+            InsertionPosition::BeforeSibling(sibling) => {
+                arena.get(sibling).and_then(|node| node.parent())
+            }
+        }
+    }
+
+    /// Get the node that would be the previous sibling of a newly inserted node.
+    ///
+    /// For `LastChildOf`, this is the current last child of the parent.
+    /// For `BeforeSibling`, this is the node before the sibling.
+    pub(crate) fn previous_sibling(self, arena: &Arena<XpathItemTreeNode>) -> Option<NodeId> {
+        match self {
+            InsertionPosition::LastChildOf(parent) => {
+                arena.get(parent).and_then(|node| node.last_child())
+            }
+            InsertionPosition::BeforeSibling(sibling) => {
+                arena.get(sibling).and_then(|node| node.previous_sibling())
+            }
+        }
+    }
+}
+
 pub(crate) struct CreateAnElementForTheTokenResult {
     element: ElementNode,
     attributes: Vec<AttributeNode>,
@@ -434,10 +486,12 @@ impl HtmlParser {
         if let Some(adjusted_insertion_location) = adjusted_insertion_location {
             #[cfg(feature = "debug_prints")]
             {
-                let element = self.arena.get(adjusted_insertion_location).unwrap().get();
-                println!("child of: {:?}", element);
+                if let Some(parent_id) = adjusted_insertion_location.parent(&self.arena) {
+                    let element = self.arena.get(parent_id).unwrap().get();
+                    println!("child of: {:?}", element);
+                }
             }
-            adjusted_insertion_location.append(element_id, &mut self.arena);
+            adjusted_insertion_location.insert(element_id, &mut self.arena);
         }
 
         Ok(element_id)
@@ -470,7 +524,7 @@ impl HtmlParser {
     ) -> Result<(), HtmlParseError> {
         let adjusted_insertion_location = self.appropriate_place_for_inserting_a_node(None)?;
 
-        adjusted_insertion_location.append(element_id, &mut self.arena);
+        adjusted_insertion_location.insert(element_id, &mut self.arena);
 
         Ok(())
     }
@@ -484,12 +538,12 @@ impl HtmlParser {
         let comment_id = CommentNode::create(comment.data, &mut self.arena);
 
         let adjusted_insertion_location = if let Some(parent) = parent_override {
-            parent
+            InsertionPosition::LastChildOf(parent)
         } else {
             self.appropriate_place_for_inserting_a_node(None)?
         };
 
-        adjusted_insertion_location.append(comment_id, &mut self.arena);
+        adjusted_insertion_location.insert(comment_id, &mut self.arena);
 
         Ok(())
     }
@@ -498,7 +552,9 @@ impl HtmlParser {
     pub(crate) fn appropriate_place_for_inserting_a_node(
         &self,
         override_target: Option<NodeId>,
-    ) -> Result<NodeId, HtmlParseError> {
+    ) -> Result<InsertionPosition, HtmlParseError> {
+        // 1. If there was an override target specified, then let target be the override target.
+        //    Otherwise, let target be the current node.
         let target = if let Some(override_target) = override_target {
             override_target
         } else {
@@ -519,18 +575,85 @@ impl HtmlParser {
                 .ok_or(HtmlParseError::new("no current node to insert a node into"))?
         };
 
-        let adjusted_insertion_location = if self.foster_parenting {
+        // 2. Determine the adjusted insertion location using the first matching steps.
+        let adjusted_insertion_location = if self.foster_parenting
+            && self.is_foster_parenting_target(target)
+        {
+            // If foster parenting is enabled and target is a table, tbody, tfoot, thead, or tr element:
             let last_template = self.get_last_element_by_tag_name("template");
             let last_table = self.get_last_element_by_tag_name("table");
 
-            // if there is a last template element and either there is no last table element or the last table element is lower in the stack of open elements than the last template element
-            // then the adjusted insertion location is inside the last template element's template contents.
-            todo!()
+            match (last_template, last_table) {
+                // If there is a last template and either there is no last table, or there is one,
+                // but last template is lower in the stack (i.e., was inserted more recently):
+                (Some((_template_idx, template_id)), None) => {
+                    // No last table — template wins.
+                    // Adjusted insertion location is inside last template's template contents.
+                    InsertionPosition::LastChildOf(template_id)
+                }
+                (Some((template_idx, template_id)), Some((table_idx, _)))
+                    if template_idx > table_idx =>
+                {
+                    // Last template is lower (more recent) than last table.
+                    InsertionPosition::LastChildOf(template_id)
+                }
+                (_, None) => {
+                    // No last template AND no last table.
+                    // Fragment case: insert inside the first element in the stack (the html element).
+                    let first_element = self.open_elements.first().cloned().ok_or(
+                        HtmlParseError::new("foster parenting: stack of open elements is empty"),
+                    )?;
+                    InsertionPosition::LastChildOf(first_element)
+                }
+                (_, Some((table_idx, table_id))) => {
+                    // There is a last table.
+                    if self.arena.get(table_id).and_then(|n| n.parent()).is_some() {
+                        // If last table has a parent node:
+                        // Insert inside last table's parent, immediately before last table.
+                        InsertionPosition::BeforeSibling(table_id)
+                    } else {
+                        // Let previous element be the element immediately above last table
+                        // in the stack of open elements.
+                        let previous_element = if table_idx > 0 {
+                            self.open_elements[table_idx - 1]
+                        } else {
+                            return Err(HtmlParseError::new(
+                                "foster parenting: no element above last table in stack",
+                            ));
+                        };
+                        InsertionPosition::LastChildOf(previous_element)
+                    }
+                }
+            }
         } else {
-            target
+            // Otherwise: adjusted insertion location is inside target, after its last child.
+            InsertionPosition::LastChildOf(target)
         };
 
+        // 3. If the adjusted insertion location is inside a template element,
+        //    let it instead be inside the template element's template contents.
+        // TODO: When template contents (document fragment) support is added,
+        // this step must redirect insertion into the template's content fragment.
+        // Currently a no-op since template contents are the template element itself.
+
         Ok(adjusted_insertion_location)
+    }
+
+    /// Returns true if the node is a table, tbody, tfoot, thead, or tr element.
+    ///
+    /// These are the element types that trigger foster parenting when they are the
+    /// target in the "appropriate place for inserting a node" algorithm.
+    /// See: <https://html.spec.whatwg.org/multipage/parsing.html#appropriate-place-for-inserting-a-node>
+    fn is_foster_parenting_target(&self, node_id: NodeId) -> bool {
+        if let Some(node) = self.arena.get(node_id) {
+            if let XpathItemTreeNode::ElementNode(element) = node.get() {
+                return matches!(
+                    element.name.as_str(),
+                    "table" | "tbody" | "tfoot" | "thead" | "tr"
+                );
+            }
+        }
+        false
     }
 
     fn get_last_element_by_tag_name(&self, tag_name: &str) -> Option<(usize, NodeId)> {
@@ -691,32 +814,24 @@ impl HtmlParser {
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#insert-a-character>
     pub(crate) fn insert_character(&mut self, data: Vec<char>) -> Result<(), HtmlParseError> {
-        let adjusted_insertion_location_id = self.appropriate_place_for_inserting_a_node(None)?;
-        let node = self
-            .arena
-            .get(adjusted_insertion_location_id)
-            .unwrap()
-            .get();
+        let adjusted_insertion_location = self.appropriate_place_for_inserting_a_node(None)?;
 
-        if let XpathItemTreeNode::DocumentNode(_) = node {
-            // The DOM will no let Document nodes have Text node children, so they are dropped on the floor.
-            return Ok(());
+        // Check if the parent is a Document node — DOM doesn't allow Document nodes to have Text children.
+        if let Some(parent_id) = adjusted_insertion_location.parent(&self.arena) {
+            let node = self.arena.get(parent_id).unwrap().get();
+            if let XpathItemTreeNode::DocumentNode(_) = node {
+                return Ok(());
+            }
         }
 
-        // the adjusted insertion location in this implementation returns the parent node id
-        // where we are expected to insert the new node as the last child of this parent node.
-        // this means the previous sibling of the adjusted insertion location is the current last child of the parent node before inserting the new node.
-        let prev_sibling_id = self
-            .arena
-            .get(adjusted_insertion_location_id)
-            .unwrap()
-            .last_child();
+        // Get the previous sibling at the insertion point to check for text node merging.
+        let prev_sibling_id = adjusted_insertion_location.previous_sibling(&self.arena);
 
         let prev_sibling: Option<&mut XpathItemTreeNode> =
             prev_sibling_id.map(|id| self.arena.get_mut(id).unwrap().get_mut());
 
         if let Some(&mut XpathItemTreeNode::TextNode(ref mut text)) = prev_sibling {
-            // If the adjusted insertion location's last child is a Text node, append the data to that Text node.
+            // If the previous sibling is a Text node, append the data to that Text node.
             text.content.extend(data.iter());
         } else {
             // Otherwise, insert a new Text node with the data as its data.
@@ -732,7 +847,7 @@ impl HtmlParser {
                 .unwrap()
                 .set_id(text_id);
 
-            adjusted_insertion_location_id.append(text_id, &mut self.arena);
+            adjusted_insertion_location.insert(text_id, &mut self.arena);
         }
 
         Ok(())
@@ -1423,5 +1538,484 @@ impl ParseErrorHandler for DefaultParseErrorHandler {
         Err(HtmlParseError {
             message: format!("{:?}", error),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::xpath::grammar::data_model::ElementNode;
+
+    /// Helper to create a parser with a tree structure suitable for foster parenting tests.
+    /// Returns the parser and node IDs for the elements.
+    fn setup_parser_with_table() -> (HtmlParser, NodeId, NodeId, NodeId, NodeId) {
+        let mut parser = HtmlParser::new();
+
+        // Create root document node
+        let doc_id = parser
+            .arena
+            .new_node(XpathItemTreeNode::DocumentNode(XpathDocumentNode::new()));
+        parser.root_node = Some(doc_id);
+
+        // Create html element
+        let html_node = XpathItemTreeNode::ElementNode(ElementNode::new("html".to_string()));
+        let html_id = parser.new_node(html_node);
+        doc_id.append(html_id, &mut parser.arena);
+
+        // Create body element
+        let body_node = XpathItemTreeNode::ElementNode(ElementNode::new("body".to_string()));
+        let body_id = parser.new_node(body_node);
+        html_id.append(body_id, &mut parser.arena);
+
+        // Create table element
+        let table_node = XpathItemTreeNode::ElementNode(ElementNode::new("table".to_string()));
+        let table_id = parser.new_node(table_node);
+        body_id.append(table_id, &mut parser.arena);
+
+        // Push open elements: html, body, table
+        parser.open_elements.push(html_id);
+        parser.open_elements.push(body_id);
+        parser.open_elements.push(table_id);
+
+        (parser, html_id, body_id, table_id, doc_id)
+    }
+
+    #[test]
+    fn foster_parenting_disabled_returns_last_child_of_current_node() {
+        let (parser, _, _, table_id, _) = setup_parser_with_table();
+        // foster_parenting is false by default
+
+        let result = parser.appropriate_place_for_inserting_a_node(None).unwrap();
+        // Should return LastChildOf(table_id) since table is the current node (last on stack)
+        match result {
+            InsertionPosition::LastChildOf(id) => assert_eq!(id, table_id),
+            InsertionPosition::BeforeSibling(_) => {
+                panic!("Expected LastChildOf, got BeforeSibling")
+            }
+        }
+    }
+
+    #[test]
+    fn foster_parenting_with_table_parent_inserts_before_table() {
+        let (mut parser, _, body_id, table_id, _) = setup_parser_with_table();
+        parser.foster_parenting = true;
+
+        let result = parser.appropriate_place_for_inserting_a_node(None).unwrap();
+        // Table has a parent (body), so insert before table
+        match result {
+            InsertionPosition::BeforeSibling(id) => assert_eq!(id, table_id),
+            InsertionPosition::LastChildOf(_) => {
+                panic!("Expected BeforeSibling, got LastChildOf")
+            }
+        }
+
+        // Verify that inserting works correctly
+        let new_node = XpathItemTreeNode::ElementNode(ElementNode::new("span".to_string()));
+        let new_id = parser.new_node(new_node);
+        result.insert(new_id, &mut parser.arena);
+
+        // The span should now be before the table, as a child of body
+        let body_children: Vec<NodeId> = body_id.children(&parser.arena).collect();
+        assert_eq!(body_children.len(), 2);
+        assert_eq!(body_children[0], new_id); // span is before table
+        assert_eq!(body_children[1], table_id); // table is after span
+    }
+
+    #[test]
+    fn foster_parenting_table_without_parent_uses_element_above() {
+        let mut parser = HtmlParser::new();
+
+        // Create root document node
+        let doc_id = parser
+            .arena
+            .new_node(XpathItemTreeNode::DocumentNode(XpathDocumentNode::new()));
+        parser.root_node = Some(doc_id);
+
+        // Create html element directly in arena (not attached to document)
+        let html_node = XpathItemTreeNode::ElementNode(ElementNode::new("html".to_string()));
+        let html_id = parser.new_node(html_node);
+
+        // Create table element (also not attached to a parent in the tree)
+        let table_node = XpathItemTreeNode::ElementNode(ElementNode::new("table".to_string()));
+        let table_id = parser.new_node(table_node);
+
+        // Push open elements: html, table (table has no parent in the tree)
+        parser.open_elements.push(html_id);
+        parser.open_elements.push(table_id);
+        parser.foster_parenting = true;
+
+        let result = parser.appropriate_place_for_inserting_a_node(None).unwrap();
+        // Table has no parent, so use the element above table in the stack (html)
+        match result {
+            InsertionPosition::LastChildOf(id) => assert_eq!(id, html_id),
+            InsertionPosition::BeforeSibling(_) => {
+                panic!("Expected LastChildOf, got BeforeSibling")
+            }
+        }
+    }
+
+    #[test]
+    fn foster_parenting_with_template_and_no_table() {
+        let mut parser = HtmlParser::new();
+
+        let doc_id = parser
+            .arena
+            .new_node(XpathItemTreeNode::DocumentNode(XpathDocumentNode::new()));
+        parser.root_node = Some(doc_id);
+
+        let html_node = XpathItemTreeNode::ElementNode(ElementNode::new("html".to_string()));
+        let html_id = parser.new_node(html_node);
+        doc_id.append(html_id, &mut parser.arena);
+
+        let body_node = XpathItemTreeNode::ElementNode(ElementNode::new("body".to_string()));
+        let body_id = parser.new_node(body_node);
+        html_id.append(body_id, &mut parser.arena);
+
+        let template_node =
+            XpathItemTreeNode::ElementNode(ElementNode::new("template".to_string()));
+        let template_id = parser.new_node(template_node);
+        body_id.append(template_id, &mut parser.arena);
+
+        // Create a tbody inside template (this will be the current node)
+        let tbody_node = XpathItemTreeNode::ElementNode(ElementNode::new("tbody".to_string()));
+        let tbody_id = parser.new_node(tbody_node);
+        template_id.append(tbody_id, &mut parser.arena);
+
+        parser.open_elements.push(html_id);
+        parser.open_elements.push(body_id);
+        parser.open_elements.push(template_id);
+        parser.open_elements.push(tbody_id);
+        parser.foster_parenting = true;
+
+        let result = parser.appropriate_place_for_inserting_a_node(None).unwrap();
+        // There's a template but no table, so insert inside template
+        match result {
+            InsertionPosition::LastChildOf(id) => assert_eq!(id, template_id),
+            InsertionPosition::BeforeSibling(_) => {
+                panic!("Expected LastChildOf(template), got BeforeSibling")
+            }
+        }
+    }
+
+    #[test]
+    fn foster_parenting_template_more_recent_than_table() {
+        let mut parser = HtmlParser::new();
+
+        let doc_id = parser
+            .arena
+            .new_node(XpathItemTreeNode::DocumentNode(XpathDocumentNode::new()));
+        parser.root_node = Some(doc_id);
+
+        let html_node = XpathItemTreeNode::ElementNode(ElementNode::new("html".to_string()));
+        let html_id = parser.new_node(html_node);
+        doc_id.append(html_id, &mut parser.arena);
+
+        let body_node = XpathItemTreeNode::ElementNode(ElementNode::new("body".to_string()));
+        let body_id = parser.new_node(body_node);
+        html_id.append(body_id, &mut parser.arena);
+
+        let table_node = XpathItemTreeNode::ElementNode(ElementNode::new("table".to_string()));
+        let table_id = parser.new_node(table_node);
+        body_id.append(table_id, &mut parser.arena);
+
+        // Template is more recent (pushed after table)
+        let template_node =
+            XpathItemTreeNode::ElementNode(ElementNode::new("template".to_string()));
+        let template_id = parser.new_node(template_node);
+        table_id.append(template_id, &mut parser.arena);
+
+        // Create a tr inside template (this is the current node)
+        let tr_node = XpathItemTreeNode::ElementNode(ElementNode::new("tr".to_string()));
+        let tr_id = parser.new_node(tr_node);
+        template_id.append(tr_id, &mut parser.arena);
+
+        parser.open_elements.push(html_id);
+        parser.open_elements.push(body_id);
+        parser.open_elements.push(table_id);
+        parser.open_elements.push(template_id);
+        parser.open_elements.push(tr_id);
+        parser.foster_parenting = true;
+
+        let result = parser.appropriate_place_for_inserting_a_node(None).unwrap();
+        // Template is lower/more recent than table, so insert inside template
+        match result {
+            InsertionPosition::LastChildOf(id) => assert_eq!(id, template_id),
+            InsertionPosition::BeforeSibling(_) => {
+                panic!("Expected LastChildOf(template), got BeforeSibling")
+            }
+        }
+    }
+
+    #[test]
+    fn foster_parenting_table_more_recent_than_template() {
+        let mut parser = HtmlParser::new();
+
+        let doc_id = parser
+            .arena
+            .new_node(XpathItemTreeNode::DocumentNode(XpathDocumentNode::new()));
+        parser.root_node = Some(doc_id);
+
+        let html_node = XpathItemTreeNode::ElementNode(ElementNode::new("html".to_string()));
+        let html_id = parser.new_node(html_node);
+        doc_id.append(html_id, &mut parser.arena);
+
+        let body_node = XpathItemTreeNode::ElementNode(ElementNode::new("body".to_string()));
+        let body_id = parser.new_node(body_node);
+        html_id.append(body_id, &mut parser.arena);
+
+        // Template pushed first (higher in stack)
+        let template_node =
+            XpathItemTreeNode::ElementNode(ElementNode::new("template".to_string()));
+        let template_id = parser.new_node(template_node);
+        body_id.append(template_id, &mut parser.arena);
+
+        // Table pushed second (lower in stack, more recent)
+        let table_node = XpathItemTreeNode::ElementNode(ElementNode::new("table".to_string()));
+        let table_id = parser.new_node(table_node);
+        template_id.append(table_id, &mut parser.arena);
+
+        parser.open_elements.push(html_id);
+        parser.open_elements.push(body_id);
+        parser.open_elements.push(template_id);
+        parser.open_elements.push(table_id);
+        parser.foster_parenting = true;
+
+        let result = parser.appropriate_place_for_inserting_a_node(None).unwrap();
+        // Table is more recent than template and has a parent (template),
+        // so insert before table
+        match result {
+            InsertionPosition::BeforeSibling(id) => assert_eq!(id, table_id),
+            InsertionPosition::LastChildOf(_) => {
+                panic!("Expected BeforeSibling(table), got LastChildOf")
+            }
+        }
+    }
+
+    #[test]
+    fn foster_parenting_not_triggered_for_non_table_elements() {
+        let mut parser = HtmlParser::new();
+
+        let doc_id = parser
+            .arena
+            .new_node(XpathItemTreeNode::DocumentNode(XpathDocumentNode::new()));
+        parser.root_node = Some(doc_id);
+
+        let html_node = XpathItemTreeNode::ElementNode(ElementNode::new("html".to_string()));
+        let html_id = parser.new_node(html_node);
+        doc_id.append(html_id, &mut parser.arena);
+
+        let div_node = XpathItemTreeNode::ElementNode(ElementNode::new("div".to_string()));
+        let div_id = parser.new_node(div_node);
+        html_id.append(div_id, &mut parser.arena);
+
+        parser.open_elements.push(html_id);
+        parser.open_elements.push(div_id);
+        parser.foster_parenting = true;
+
+        let result = parser.appropriate_place_for_inserting_a_node(None).unwrap();
+        // div is not a table-scope element, so foster parenting should NOT activate
+        match result {
+            InsertionPosition::LastChildOf(id) => assert_eq!(id, div_id),
+            InsertionPosition::BeforeSibling(_) => {
+                panic!("Expected LastChildOf(div), got BeforeSibling")
+            }
+        }
+    }
+
+    #[test]
+    fn foster_parenting_no_template_no_table_uses_first_element() {
+        let mut parser = HtmlParser::new();
+
+        let doc_id = parser
+            .arena
+            .new_node(XpathItemTreeNode::DocumentNode(XpathDocumentNode::new()));
+        parser.root_node = Some(doc_id);
+
+        let html_node = XpathItemTreeNode::ElementNode(ElementNode::new("html".to_string()));
+        let html_id = parser.new_node(html_node);
+        doc_id.append(html_id, &mut parser.arena);
+
+        // Create a tbody directly (simulating a fragment case with no table/template)
+        let tbody_node = XpathItemTreeNode::ElementNode(ElementNode::new("tbody".to_string()));
+        let tbody_id = parser.new_node(tbody_node);
+        html_id.append(tbody_id, &mut parser.arena);
+
+        parser.open_elements.push(html_id);
+        parser.open_elements.push(tbody_id);
+        parser.foster_parenting = true;
+
+        let result = parser.appropriate_place_for_inserting_a_node(None).unwrap();
+        // No template and no table — fragment case: use first element in stack (html)
+        match result {
+            InsertionPosition::LastChildOf(id) => assert_eq!(id, html_id),
+            InsertionPosition::BeforeSibling(_) => {
+                panic!("Expected LastChildOf(html), got BeforeSibling")
+            }
+        }
+    }
+
+    #[test]
+    fn foster_parenting_with_override_target() {
+        let (mut parser, _, body_id, _table_id, _) = setup_parser_with_table();
+        parser.foster_parenting = true;
+
+        // Override target is body (not a table-scope element)
+        let result = parser
+            .appropriate_place_for_inserting_a_node(Some(body_id))
+            .unwrap();
+        // body is not a table-scope element, so foster parenting should NOT activate
+        match result {
+            InsertionPosition::LastChildOf(id) => assert_eq!(id, body_id),
+            InsertionPosition::BeforeSibling(_) => {
+                panic!("Expected LastChildOf(body), got BeforeSibling")
+            }
+        }
+    }
+
+    #[test]
+    fn foster_parenting_with_override_target_table_element() {
+        let (mut parser, _, _body_id, table_id, _) = setup_parser_with_table();
+        parser.foster_parenting = true;
+
+        // Override target is the table element itself
+        let result = parser
+            .appropriate_place_for_inserting_a_node(Some(table_id))
+            .unwrap();
+        // table IS a table-scope element AND foster_parenting is true,
+        // so foster parenting should activate and insert before table (since it has body as parent)
+        match result {
+            InsertionPosition::BeforeSibling(id) => assert_eq!(id, table_id),
+            InsertionPosition::LastChildOf(_) => {
+                panic!("Expected BeforeSibling(table), got LastChildOf")
+            }
+        }
+    }
+
+    #[test]
+    fn insertion_position_insert_last_child_of() {
+        let mut arena: Arena<XpathItemTreeNode> = Arena::new();
+        let parent_node = XpathItemTreeNode::ElementNode(ElementNode::new("div".to_string()));
+        let parent_id = arena.new_node(parent_node);
+
+        let child1_node = XpathItemTreeNode::ElementNode(ElementNode::new("p".to_string()));
+        let child1_id = arena.new_node(child1_node);
+        parent_id.append(child1_id, &mut arena);
+
+        let child2_node = XpathItemTreeNode::ElementNode(ElementNode::new("span".to_string()));
+        let child2_id = arena.new_node(child2_node);
+
+        let pos = InsertionPosition::LastChildOf(parent_id);
+        pos.insert(child2_id, &mut arena);
+
+        let children: Vec<NodeId> = parent_id.children(&arena).collect();
+        assert_eq!(children, vec![child1_id, child2_id]);
+    }
+
+    #[test]
+    fn insertion_position_insert_before_sibling() {
+        let mut arena: Arena<XpathItemTreeNode> = Arena::new();
+        let parent_node = XpathItemTreeNode::ElementNode(ElementNode::new("div".to_string()));
+        let parent_id = arena.new_node(parent_node);
+
+        let child1_node = XpathItemTreeNode::ElementNode(ElementNode::new("p".to_string()));
+        let child1_id = arena.new_node(child1_node);
+        parent_id.append(child1_id, &mut arena);
+
+        let child2_node = XpathItemTreeNode::ElementNode(ElementNode::new("span".to_string()));
+        let child2_id = arena.new_node(child2_node);
+
+        let pos = InsertionPosition::BeforeSibling(child1_id);
+        pos.insert(child2_id, &mut arena);
+
+        let children: Vec<NodeId> = parent_id.children(&arena).collect();
+        assert_eq!(children, vec![child2_id, child1_id]);
+    }
+
+    #[test]
+    fn insertion_position_previous_sibling_last_child_of() {
+        let mut arena: Arena<XpathItemTreeNode> = Arena::new();
+        let parent_node = XpathItemTreeNode::ElementNode(ElementNode::new("div".to_string()));
+        let parent_id = arena.new_node(parent_node);
+
+        let child1_node = XpathItemTreeNode::ElementNode(ElementNode::new("p".to_string()));
+        let child1_id = arena.new_node(child1_node);
+        parent_id.append(child1_id, &mut arena);
+
+        let pos = InsertionPosition::LastChildOf(parent_id);
+        assert_eq!(pos.previous_sibling(&arena), Some(child1_id));
+    }
+
+    #[test]
+    fn insertion_position_previous_sibling_before_sibling() {
+        let mut arena: Arena<XpathItemTreeNode> = Arena::new();
+        let parent_node = XpathItemTreeNode::ElementNode(ElementNode::new("div".to_string()));
+        let parent_id = arena.new_node(parent_node);
+
+        let child1_node = XpathItemTreeNode::ElementNode(ElementNode::new("p".to_string()));
+        let child1_id = arena.new_node(child1_node);
+        parent_id.append(child1_id, &mut arena);
+
+        let child2_node = XpathItemTreeNode::ElementNode(ElementNode::new("span".to_string()));
+        let child2_id = arena.new_node(child2_node);
+        parent_id.append(child2_id, &mut arena);
+
+        let pos = InsertionPosition::BeforeSibling(child2_id);
+        assert_eq!(pos.previous_sibling(&arena), Some(child1_id));
+    }
+
+    #[test]
+    fn insertion_position_parent_last_child_of() {
+        let mut arena: Arena<XpathItemTreeNode> = Arena::new();
+        let parent_node = XpathItemTreeNode::ElementNode(ElementNode::new("div".to_string()));
+        let parent_id = arena.new_node(parent_node);
+
+        let pos = InsertionPosition::LastChildOf(parent_id);
+        assert_eq!(pos.parent(&arena), Some(parent_id));
+    }
+
+    #[test]
+    fn insertion_position_parent_before_sibling() {
+        let mut arena: Arena<XpathItemTreeNode> = Arena::new();
+        let parent_node = XpathItemTreeNode::ElementNode(ElementNode::new("div".to_string()));
+        let parent_id = arena.new_node(parent_node);
+
+        let child_node = XpathItemTreeNode::ElementNode(ElementNode::new("p".to_string()));
+        let child_id = arena.new_node(child_node);
+        parent_id.append(child_id, &mut arena);
+
+        let pos = InsertionPosition::BeforeSibling(child_id);
+        assert_eq!(pos.parent(&arena), Some(parent_id));
+    }
+
+    #[test]
+    fn is_foster_parenting_target_returns_true_for_table_elements() {
+        let mut parser = HtmlParser::new();
+
+        for tag in &["table", "tbody", "tfoot", "thead", "tr"] {
+            let node =
+                XpathItemTreeNode::ElementNode(ElementNode::new(tag.to_string()));
+            let id = parser.new_node(node);
+            assert!(
+                parser.is_foster_parenting_target(id),
+                "{} should be a table scope element",
+                tag
+            );
+        }
+    }
+
+    #[test]
+    fn is_foster_parenting_target_returns_false_for_non_table_elements() {
+        let mut parser = HtmlParser::new();
+
+        for tag in &["div", "p", "span", "body", "html", "template"] {
+            let node =
+                XpathItemTreeNode::ElementNode(ElementNode::new(tag.to_string()));
+            let id = parser.new_node(node);
+            assert!(
+                !parser.is_foster_parenting_target(id),
+                "{} should NOT be a table scope element",
+                tag
+            );
+        }
     }
 }

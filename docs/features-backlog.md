@@ -10,7 +10,7 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line(s) | Feature | WHATWG Section |
 |---------|---------|----------------|
-| 528 | Foster parenting — adjusted insertion location logic | [13.2.6.1](https://html.spec.whatwg.org/multipage/parsing.html#appropriate-place-for-inserting-a-node) |
+| ~~528~~ | ~~Foster parenting — adjusted insertion location logic~~ | ~~[13.2.6.1](https://html.spec.whatwg.org/multipage/parsing.html#appropriate-place-for-inserting-a-node)~~ **DONE** |
 | 1334 | InHeadNoscript insertion mode | [13.2.6.4.5](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inheadnoscript) |
 | 1338 | InTable insertion mode | [13.2.6.4.9](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intable) |
 | 1339 | InTableText insertion mode | [13.2.6.4.10](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intabletext) |
