@@ -1481,4 +1481,261 @@ impl HtmlParser {
 
         Ok(Acknowledgement::no())
     }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inselect>
+    pub(super) fn in_select_insertion_mode(
+        &mut self,
+        token: HtmlToken,
+    ) -> Result<Acknowledgement, HtmlParseError> {
+        match token {
+            // A character token that is U+0000 NULL
+            HtmlToken::Character('\0') => {
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "unexpected null character in select",
+                )))?;
+            }
+            // Any other character token
+            HtmlToken::Character(c) => {
+                self.insert_character(vec![c])?;
+            }
+            // A comment token
+            HtmlToken::Comment(comment) => {
+                self.insert_a_comment(comment, None)?;
+            }
+            // A DOCTYPE token
+            HtmlToken::DocType(_) => {
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "unexpected DOCTYPE in select",
+                )))?;
+            }
+            // A start tag whose tag name is "html"
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
+                return self
+                    .in_body_insertion_mode(HtmlToken::TagToken(TagTokenType::StartTag(token)));
+            }
+            // A start tag whose tag name is "option"
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "option" => {
+                // If the current node is an option element, pop that node
+                if let Some(el) = self.current_node_as_element() {
+                    if el.name == "option" {
+                        self.open_elements.pop();
+                    }
+                }
+                self.insert_an_html_element(token)?;
+            }
+            // A start tag whose tag name is "optgroup"
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
+                if token.tag_name == "optgroup" =>
+            {
+                // If the current node is an option element, pop that node
+                if let Some(el) = self.current_node_as_element() {
+                    if el.name == "option" {
+                        self.open_elements.pop();
+                    }
+                }
+                // If the current node is an optgroup element, pop that node
+                if let Some(el) = self.current_node_as_element() {
+                    if el.name == "optgroup" {
+                        self.open_elements.pop();
+                    }
+                }
+                self.insert_an_html_element(token)?;
+            }
+            // A start tag whose tag name is "hr"
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "hr" => {
+                // If the current node is an option element, pop that node
+                if let Some(el) = self.current_node_as_element() {
+                    if el.name == "option" {
+                        self.open_elements.pop();
+                    }
+                }
+                // If the current node is an optgroup element, pop that node
+                if let Some(el) = self.current_node_as_element() {
+                    if el.name == "optgroup" {
+                        self.open_elements.pop();
+                    }
+                }
+                self.insert_an_html_element(token)?;
+                // Pop the current node off the stack of open elements
+                self.open_elements.pop();
+                // Acknowledge the token's self-closing flag, if it is set
+                return Ok(Acknowledgement::yes());
+            }
+            // An end tag whose tag name is "optgroup"
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "optgroup" => {
+                // First, if the current node is an option element, and the node immediately
+                // before it in the stack of open elements is an optgroup element, then pop
+                // the current node from the stack of open elements.
+                let len = self.open_elements.len();
+                if len >= 2 {
+                    let is_current_option = self
+                        .current_node_as_element()
+                        .map(|el| el.name == "option")
+                        .unwrap_or(false);
+                    if is_current_option {
+                        let prev_id = self.open_elements[len - 2];
+                        let is_prev_optgroup = self
+                            .arena
+                            .get(prev_id)
+                            .and_then(|node| match node.get() {
+                                XpathItemTreeNode::ElementNode(el) => Some(el.name == "optgroup"),
+                                _ => None,
+                            })
+                            .unwrap_or(false);
+                        if is_prev_optgroup {
+                            self.open_elements.pop();
+                        }
+                    }
+                }
+
+                // If the current node is an optgroup element, pop that node
+                if let Some(el) = self.current_node_as_element() {
+                    if el.name == "optgroup" {
+                        self.open_elements.pop();
+                    } else {
+                        // Otherwise, this is a parse error; ignore the token.
+                        self.handle_error(HtmlParserError::MinorError(String::from(
+                            "unexpected </optgroup> in select",
+                        )))?;
+                    }
+                }
+            }
+            // An end tag whose tag name is "option"
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "option" => {
+                if let Some(el) = self.current_node_as_element() {
+                    if el.name == "option" {
+                        self.open_elements.pop();
+                    } else {
+                        self.handle_error(HtmlParserError::MinorError(String::from(
+                            "unexpected </option> in select",
+                        )))?;
+                    }
+                }
+            }
+            // An end tag whose tag name is "select"
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "select" => {
+                if !self.has_an_element_in_select_scope("select") {
+                    // Parse error. Ignore the token. (fragment case)
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "no select element in select scope",
+                    )))?;
+                } else {
+                    self.pop_until_tag_name("select")?;
+                    self.reset_the_insertion_mode_appropriately()?;
+                }
+            }
+            // A start tag whose tag name is "select"
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "select" => {
+                // Parse error.
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "unexpected <select> in select",
+                )))?;
+                if !self.has_an_element_in_select_scope("select") {
+                    // Ignore the token. (fragment case)
+                } else {
+                    // Act as if </select> was seen
+                    self.pop_until_tag_name("select")?;
+                    self.reset_the_insertion_mode_appropriately()?;
+                }
+            }
+            // A start tag whose tag name is one of: "input", "keygen", "textarea"
+            HtmlToken::TagToken(TagTokenType::StartTag(ref start_token))
+                if ["input", "keygen", "textarea"].contains(&start_token.tag_name.as_str()) =>
+            {
+                // Parse error.
+                self.handle_error(HtmlParserError::MinorError(format!(
+                    "unexpected <{}> in select",
+                    start_token.tag_name
+                )))?;
+                if !self.has_an_element_in_select_scope("select") {
+                    // Ignore the token. (fragment case)
+                } else {
+                    self.pop_until_tag_name("select")?;
+                    self.reset_the_insertion_mode_appropriately()?;
+                    // Reprocess the token.
+                    self.token_emitted(token)?;
+                }
+            }
+            // A start tag whose tag name is one of: "script", "template"
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
+                if ["script", "template"].contains(&token.tag_name.as_str()) =>
+            {
+                return self
+                    .in_head_insertion_mode(HtmlToken::TagToken(TagTokenType::StartTag(token)));
+            }
+            // An end tag whose tag name is "template"
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "template" => {
+                return self
+                    .in_head_insertion_mode(HtmlToken::TagToken(TagTokenType::EndTag(token)));
+            }
+            // An end-of-file token
+            HtmlToken::EndOfFile => {
+                return self.in_body_insertion_mode(HtmlToken::EndOfFile);
+            }
+            // Anything else: parse error, ignore the token.
+            _ => {
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "unexpected token in select",
+                )))?;
+            }
+        }
+
+        Ok(Acknowledgement::no())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inselectintable>
+    pub(super) fn in_select_in_table_insertion_mode(
+        &mut self,
+        token: HtmlToken,
+    ) -> Result<Acknowledgement, HtmlParseError> {
+        match token {
+            // A start tag whose tag name is one of: "caption", "table", "tbody", "tfoot",
+            // "thead", "tr", "td", "th"
+            HtmlToken::TagToken(TagTokenType::StartTag(ref start_token))
+                if [
+                    "caption", "table", "tbody", "tfoot", "thead", "tr", "td", "th",
+                ]
+                .contains(&start_token.tag_name.as_str()) =>
+            {
+                // Parse error.
+                self.handle_error(HtmlParserError::MinorError(format!(
+                    "unexpected <{}> in select in table",
+                    start_token.tag_name
+                )))?;
+                // Pop elements until a select element has been popped
+                self.pop_until_tag_name("select")?;
+                self.reset_the_insertion_mode_appropriately()?;
+                // Reprocess the token.
+                self.token_emitted(token)?;
+            }
+            // An end tag whose tag name is one of: "caption", "table", "tbody", "tfoot",
+            // "thead", "tr", "td", "th"
+            HtmlToken::TagToken(TagTokenType::EndTag(ref end_token))
+                if [
+                    "caption", "table", "tbody", "tfoot", "thead", "tr", "td", "th",
+                ]
+                .contains(&end_token.tag_name.as_str()) =>
+            {
+                // Parse error.
+                self.handle_error(HtmlParserError::MinorError(format!(
+                    "unexpected </{}> in select in table",
+                    end_token.tag_name
+                )))?;
+                if !self.has_an_element_in_table_scope(&end_token.tag_name) {
+                    // Ignore the token.
+                } else {
+                    self.pop_until_tag_name("select")?;
+                    self.reset_the_insertion_mode_appropriately()?;
+                    // Reprocess the token.
+                    self.token_emitted(token)?;
+                }
+            }
+            // Anything else: process using the rules for the "in select" insertion mode
+            _ => {
+                return self.in_select_insertion_mode(token);
+            }
+        }
+
+        Ok(Acknowledgement::no())
+    }
 }

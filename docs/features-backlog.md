@@ -19,8 +19,8 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 | ~~1342~~ | ~~InTableBody insertion mode~~ | ~~[13.2.6.4.13](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intablebody)~~ **DONE** |
 | ~~1343~~ | ~~InRow insertion mode~~ | ~~[13.2.6.4.14](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inrow)~~ **DONE** |
 | ~~1344~~ | ~~InCell insertion mode~~ | ~~[13.2.6.4.15](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incell)~~ **DONE** |
-| 1345 | InSelect insertion mode | [13.2.6.4.16](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inselect) |
-| 1346 | InSelectInTable insertion mode | [13.2.6.4.17](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inselectintable) |
+| ~~1345~~ | ~~InSelect insertion mode~~ | ~~[13.2.6.4.16](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inselect)~~ **DONE** |
+| ~~1346~~ | ~~InSelectInTable insertion mode~~ | ~~[13.2.6.4.17](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inselectintable)~~ **DONE** |
 | 1349 | InFrameset insertion mode | [13.2.6.4.19](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inframeset) |
 | 1350 | AfterFrameset insertion mode | [13.2.6.4.20](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-afterframeset) |
 | 1352 | AfterAfterFrameset insertion mode | [13.2.6.4.22](https://html.spec.whatwg.org/multipage/parsing.html#the-after-after-frameset-insertion-mode) |
@@ -97,8 +97,8 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 | 681 | `<xmp>` start tag |
 | 684 | `<iframe>` start tag |
 | 689 | `<noembed>` / `<noscript>` start tags |
-| 692 | `<select>` start tag |
-| 697 | `<optgroup>` / `<option>` start tags |
+| ~~692~~ | ~~`<select>` start tag~~ **DONE** |
+| ~~697~~ | ~~`<optgroup>` / `<option>` start tags~~ **DONE** |
 | 702 | `<rb>` / `<rtc>` start tags (ruby) |
 | 707 | `<rp>` / `<rt>` start tags (ruby) |
 | 710 | `<math>` start tag (MathML integration) |

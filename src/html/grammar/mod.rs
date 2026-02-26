@@ -978,6 +978,29 @@ impl HtmlParser {
         self.has_an_element_in_the_specific_scope(vec![tag_name], element_types)
     }
 
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-select-scope>
+    ///
+    /// The select scope is inverted from other scopes: all elements are barriers
+    /// EXCEPT optgroup and option.
+    pub(crate) fn has_an_element_in_select_scope(&self, tag_name: &str) -> bool {
+        for node_id in self.open_elements.iter().rev() {
+            if let Some(node) = self.arena.get(*node_id) {
+                if let XpathItemTreeNode::ElementNode(element) = node.get() {
+                    if element.name == tag_name {
+                        return true;
+                    }
+
+                    // Everything except optgroup and option is a barrier
+                    if element.name != "optgroup" && element.name != "option" {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
     /// <https://html.spec.whatwg.org/multipage/parsing.html#clear-the-stack-back-to-a-table-context>
     pub(crate) fn clear_the_stack_back_to_a_table_context(&mut self) {
         while let Some(node) = self.current_node() {
@@ -1523,8 +1546,8 @@ impl HtmlParser {
             InsertionMode::InTableBody => self.in_table_body_insertion_mode(token),
             InsertionMode::InRow => self.in_row_insertion_mode(token),
             InsertionMode::InCell => self.in_cell_insertion_mode(token),
-            InsertionMode::InSelect => todo!(),
-            InsertionMode::InSelectInTable => todo!(),
+            InsertionMode::InSelect => self.in_select_insertion_mode(token),
+            InsertionMode::InSelectInTable => self.in_select_in_table_insertion_mode(token),
             InsertionMode::InTemplate => self.in_template_insertion_mode(token),
             InsertionMode::AfterBody => self.after_body_insertion_mode(token),
             InsertionMode::InFrameset => todo!(),

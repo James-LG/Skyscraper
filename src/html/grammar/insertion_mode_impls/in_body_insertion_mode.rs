@@ -696,12 +696,42 @@ impl HtmlParser {
                 todo!()
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "select" => {
-                todo!()
+                // Reconstruct the active formatting elements, if any.
+                self.reconstruct_the_active_formatting_elements()?;
+                // Insert an HTML element for the token.
+                self.insert_an_html_element(token)?;
+                // Set the frameset-ok flag to "not ok".
+                self.frameset_ok = false;
+                // If the insertion mode is one of "in table", "in caption", "in table body",
+                // "in row", or "in cell", then switch the insertion mode to "in select in table".
+                // Otherwise, switch the insertion mode to "in select".
+                if matches!(
+                    self.insertion_mode,
+                    InsertionMode::InTable
+                        | InsertionMode::InCaption
+                        | InsertionMode::InTableBody
+                        | InsertionMode::InRow
+                        | InsertionMode::InCell
+                ) {
+                    self.insertion_mode = InsertionMode::InSelectInTable;
+                } else {
+                    self.insertion_mode = InsertionMode::InSelect;
+                }
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if ["optgroup", "option"].contains(&token.tag_name.as_str()) =>
             {
-                todo!()
+                // If the current node is an option element, then pop that node from the stack
+                // of open elements.
+                if let Some(el) = self.current_node_as_element() {
+                    if el.name == "option" {
+                        self.open_elements.pop();
+                    }
+                }
+                // Reconstruct the active formatting elements, if any.
+                self.reconstruct_the_active_formatting_elements()?;
+                // Insert an HTML element for the token.
+                self.insert_an_html_element(token)?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if ["rb", "rtc"].contains(&token.tag_name.as_str()) =>
