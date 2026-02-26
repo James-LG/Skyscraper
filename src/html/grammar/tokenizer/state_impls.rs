@@ -2306,10 +2306,11 @@ impl<'a> Tokenizer<'a> {
     pub(super) fn decimal_character_reference_state(&mut self) -> Result<(), HtmlParseError> {
         match self.input_stream.next() {
             Some(c) if c.is_ascii_digit() => {
-                self.character_reference_code *= 10;
-                self.character_reference_code += c
-                    .to_digit(10)
-                    .ok_or(HtmlParseError::new("decimal character not a digit"))?;
+                self.character_reference_code = self.character_reference_code.saturating_mul(10);
+                self.character_reference_code = self.character_reference_code.saturating_add(
+                    c.to_digit(10)
+                        .ok_or(HtmlParseError::new("decimal character not a digit"))?,
+                );
             }
             Some(';') => {
                 self.state = TokenizerState::NumericCharacterReferenceEnd;
@@ -2352,6 +2353,217 @@ impl<'a> Tokenizer<'a> {
 
         self.flush_code_points_consumed_as_character_reference()?;
         self.state = self.current_return_state()?;
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#plaintext-state>
+    pub(super) fn plaintext_state(&mut self) -> Result<(), HtmlParseError> {
+        match self.input_stream.next() {
+            Some(&chars::NULL) => {
+                self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
+
+                self.emit(HtmlToken::Character(chars::FEED_REPLACEMENT_CHARACTER))?;
+            }
+            Some(c) => {
+                let current_input_character = *c;
+                self.emit(HtmlToken::Character(current_input_character))?;
+            }
+            None => self.emit(HtmlToken::EndOfFile)?,
+        };
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#rawtext-less-than-sign-state>
+    pub(super) fn rawtext_less_than_sign_state(&mut self) -> Result<(), HtmlParseError> {
+        match self.input_stream.next() {
+            Some('/') => {
+                self.temporary_buffer.clear();
+                self.state = TokenizerState::RAWTEXTEndTagOpen;
+            }
+            _ => {
+                self.emit(HtmlToken::Character('<'))?;
+                self.reconsume_in_state(TokenizerState::RAWTEXT)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#rawtext-end-tag-open-state>
+    pub(super) fn rawtext_end_tag_open_state(&mut self) -> Result<(), HtmlParseError> {
+        match self.input_stream.next() {
+            Some(c) if c.is_ascii_alphabetic() => {
+                self.tag_token = Some(TagTokenType::EndTag(TagToken::new(String::new())));
+                self.reconsume_in_state(TokenizerState::RAWTEXTEndTagName)?;
+            }
+            _ => {
+                self.emit(HtmlToken::Character('<'))?;
+                self.emit(HtmlToken::Character('/'))?;
+                self.reconsume_in_state(TokenizerState::RAWTEXT)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#rawtext-end-tag-name-state>
+    pub(super) fn rawtext_end_tag_name_state(&mut self) -> Result<(), HtmlParseError> {
+        fn anything_else(tokenizer: &mut Tokenizer) -> Result<(), HtmlParseError> {
+            tokenizer.emit(HtmlToken::Character('<'))?;
+            tokenizer.emit(HtmlToken::Character('/'))?;
+
+            let chars: Vec<char> = tokenizer.temporary_buffer.drain(..).collect();
+            for c in chars.into_iter() {
+                tokenizer.emit(HtmlToken::Character(c))?;
+            }
+
+            tokenizer.reconsume_in_state(TokenizerState::RAWTEXT)?;
+            Ok(())
+        }
+
+        match self.input_stream.next() {
+            Some(
+                &chars::CHARACTER_TABULATION
+                | &chars::LINE_FEED
+                | &chars::FORM_FEED
+                | &chars::SPACE,
+            ) => {
+                if self.is_current_end_tag_token_appropriate() {
+                    self.state = TokenizerState::BeforeAttributeName;
+                    return Ok(());
+                }
+
+                anything_else(self)?;
+            }
+            Some('/') => {
+                if self.is_current_end_tag_token_appropriate() {
+                    self.state = TokenizerState::SelfClosingStartTag;
+                    return Ok(());
+                }
+
+                anything_else(self)?;
+            }
+            Some('>') => {
+                if self.is_current_end_tag_token_appropriate() {
+                    self.state = TokenizerState::Data;
+                    self.emit_current_tag_token()?;
+                    return Ok(());
+                }
+
+                anything_else(self)?;
+            }
+            Some(c) if c.is_ascii_uppercase() => {
+                let c = *c;
+                let lowercase = c.to_ascii_lowercase();
+                self.current_tag_token_mut()?.tag_name_mut().push(lowercase);
+
+                self.temporary_buffer.push(c);
+            }
+            Some(c) if c.is_ascii_lowercase() => {
+                let c = *c;
+                self.current_tag_token_mut()?.tag_name_mut().push(c);
+
+                self.temporary_buffer.push(c);
+            }
+            _ => anything_else(self)?,
+        }
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#cdata-section-state>
+    pub(super) fn cdata_section_state(&mut self) -> Result<(), HtmlParseError> {
+        match self.input_stream.next() {
+            Some(']') => {
+                self.state = TokenizerState::CDATASectionBracket;
+            }
+            Some(c) => {
+                let current_input_character = *c;
+                self.emit(HtmlToken::Character(current_input_character))?;
+            }
+            None => {
+                self.handle_error(TokenizerError::EofInCdataSection)?;
+                self.emit(HtmlToken::EndOfFile)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#cdata-section-bracket-state>
+    pub(super) fn cdata_section_bracket_state(&mut self) -> Result<(), HtmlParseError> {
+        match self.input_stream.next() {
+            Some(']') => {
+                self.state = TokenizerState::CDATASectionEnd;
+            }
+            _ => {
+                self.emit(HtmlToken::Character(']'))?;
+                self.reconsume_in_state(TokenizerState::CDATASection)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#cdata-section-end-state>
+    pub(super) fn cdata_section_end_state(&mut self) -> Result<(), HtmlParseError> {
+        match self.input_stream.next() {
+            Some(']') => {
+                self.emit(HtmlToken::Character(']'))?;
+            }
+            Some('>') => {
+                self.state = TokenizerState::Data;
+            }
+            _ => {
+                self.emit(HtmlToken::Character(']'))?;
+                self.emit(HtmlToken::Character(']'))?;
+                self.reconsume_in_state(TokenizerState::CDATASection)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#hexadecimal-character-reference-start-state>
+    pub(super) fn hexadecimal_character_reference_start_state(
+        &mut self,
+    ) -> Result<(), HtmlParseError> {
+        match self.input_stream.next() {
+            Some(c) if c.is_ascii_hexdigit() => {
+                self.reconsume_in_state(TokenizerState::HexadecimalCharacterReference)?;
+            }
+            _ => {
+                self.handle_error(TokenizerError::AbsenceOfDigitsInNumericCharacterReference)?;
+                self.flush_code_points_consumed_as_character_reference()?;
+                self.reconsume_in_state(self.current_return_state()?)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#hexadecimal-character-reference-state>
+    pub(super) fn hexadecimal_character_reference_state(
+        &mut self,
+    ) -> Result<(), HtmlParseError> {
+        match self.input_stream.next() {
+            Some(c) if c.is_ascii_hexdigit() => {
+                self.character_reference_code = self.character_reference_code.saturating_mul(16);
+                self.character_reference_code = self.character_reference_code.saturating_add(
+                    c.to_digit(16)
+                        .ok_or(HtmlParseError::new("hex character not a hex digit"))?,
+                );
+            }
+            Some(';') => {
+                self.state = TokenizerState::NumericCharacterReferenceEnd;
+            }
+            _ => {
+                self.handle_error(TokenizerError::MissingSemicolonAfterCharacterReference)?;
+                self.reconsume_in_state(TokenizerState::NumericCharacterReferenceEnd)?;
+            }
+        }
 
         Ok(())
     }

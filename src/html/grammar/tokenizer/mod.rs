@@ -306,6 +306,8 @@ pub(crate) enum TokenizerError {
     MissingDoctypeSystemIdentifier,
     #[error("unexpected character after doctype system identifier")]
     UnexpectedCharacterAfterDoctypeSystemIdentifier,
+    #[error("eof in cdata section")]
+    EofInCdataSection,
 }
 
 pub(crate) trait TokenizerErrorHandler {
@@ -599,16 +601,16 @@ impl<'a> Tokenizer<'a> {
             TokenizerState::RCDATA => self.rcdata_state(),
             TokenizerState::RAWTEXT => self.rawtext_state(),
             TokenizerState::ScriptData => self.script_data_state(),
-            TokenizerState::PLAINTEXT => todo!(),
+            TokenizerState::PLAINTEXT => self.plaintext_state(),
             TokenizerState::TagOpen => self.tag_open_state(),
             TokenizerState::EndTagOpen => self.end_tag_open_state(),
             TokenizerState::TagName => self.tag_name_state(),
             TokenizerState::RCDATALessThanSign => self.rcdata_less_than_sign_state(),
             TokenizerState::RCDATAEndTagOpen => self.rcdata_end_tag_open_state(),
             TokenizerState::RCDATAEndTagName => self.rcdata_end_tag_name_state(),
-            TokenizerState::RAWTEXTLessThanSign => todo!(),
-            TokenizerState::RAWTEXTEndTagOpen => todo!(),
-            TokenizerState::RAWTEXTEndTagName => todo!(),
+            TokenizerState::RAWTEXTLessThanSign => self.rawtext_less_than_sign_state(),
+            TokenizerState::RAWTEXTEndTagOpen => self.rawtext_end_tag_open_state(),
+            TokenizerState::RAWTEXTEndTagName => self.rawtext_end_tag_name_state(),
             TokenizerState::ScriptDataLessThanSign => self.script_data_less_than_sign_state(),
             TokenizerState::ScriptDataEndTagOpen => self.script_data_end_tag_open_state(),
             TokenizerState::ScriptDataEndTagName => self.script_data_end_tag_name_state(),
@@ -703,18 +705,22 @@ impl<'a> Tokenizer<'a> {
                 self.after_doctype_system_identifier_state()
             }
             TokenizerState::BogusDOCTYPE => self.bogus_doctype_state(),
-            TokenizerState::CDATASection => todo!(),
-            TokenizerState::CDATASectionBracket => todo!(),
-            TokenizerState::CDATASectionEnd => todo!(),
+            TokenizerState::CDATASection => self.cdata_section_state(),
+            TokenizerState::CDATASectionBracket => self.cdata_section_bracket_state(),
+            TokenizerState::CDATASectionEnd => self.cdata_section_end_state(),
             TokenizerState::CharacterReference => self.character_reference_state(),
             TokenizerState::NamedCharacterReference => self.named_character_reference_state(),
             TokenizerState::AmbiguousAmpersand => self.ambiguous_ampersand_state(),
             TokenizerState::NumericCharacterReference => self.numeric_character_reference_state(),
-            TokenizerState::HexadecimalCharacterReferenceStart => todo!(),
+            TokenizerState::HexadecimalCharacterReferenceStart => {
+                self.hexadecimal_character_reference_start_state()
+            }
             TokenizerState::DecimalCharacterReferenceStart => {
                 self.decimal_character_reference_start_state()
             }
-            TokenizerState::HexadecimalCharacterReference => todo!(),
+            TokenizerState::HexadecimalCharacterReference => {
+                self.hexadecimal_character_reference_state()
+            }
             TokenizerState::DecimalCharacterReference => self.decimal_character_reference_state(),
             TokenizerState::NumericCharacterReferenceEnd => {
                 self.numeric_character_reference_end_state()

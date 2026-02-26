@@ -4,17 +4,6 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 ---
 
-## HTML Tokenizer
-
-**File:** `src/html/grammar/tokenizer/mod.rs`
-
-| Line(s) | Feature | WHATWG Section |
-|---------|---------|----------------|
-| 602 | PLAINTEXT state | [13.2.5.5](https://html.spec.whatwg.org/multipage/parsing.html#plaintext-state) |
-| 609–611 | RAWTEXT states (LessThanSign, EndTagOpen, EndTagName) | [13.2.5.8–13.2.5.10](https://html.spec.whatwg.org/multipage/parsing.html#rawtext-less-than-sign-state) |
-| 706–708 | CDATA section states (CDATASection, CDATASectionBracket, CDATASectionEnd) | [13.2.5.69–13.2.5.71](https://html.spec.whatwg.org/multipage/parsing.html#cdata-section-state) |
-| 713, 717 | Hexadecimal character reference (Start and main states) | [13.2.5.76–13.2.5.77](https://html.spec.whatwg.org/multipage/parsing.html#hexadecimal-character-reference-start-state) |
-
 ## HTML Parser — Insertion Modes
 
 **File:** `src/html/grammar/mod.rs`
