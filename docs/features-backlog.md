@@ -116,7 +116,7 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 |------|---------|
 | ~~387~~ | ~~`for` expressions (`for $x in ... return ...`)~~ **DONE** |
 | ~~388~~ | ~~`let` expressions (`let $x := ... return ...`)~~ **DONE** |
-| 389 | Quantified expressions (`some`/`every ... satisfies ...`) |
+| ~~389~~ | ~~Quantified expressions (`some`/`every ... satisfies ...`)~~ **DONE** |
 | 390 | `if` expressions (`if (...) then ... else ...`) |
 
 ### Logical Expressions
