@@ -156,7 +156,47 @@ impl HtmlParser {
                 self.insertion_mode = InsertionMode::AfterBody;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "frameset" => {
-                todo!()
+                // Parse error.
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "frameset start tag in body",
+                )))?;
+
+                // If the stack of open elements has only one node on it, or if the second
+                // element on the stack of open elements is not a body element, ignore the token.
+                if self.open_elements.len() == 1 {
+                    return Ok(Acknowledgement::no());
+                }
+
+                let second_element_id = self.open_elements[1];
+                let is_body = self
+                    .arena
+                    .get(second_element_id)
+                    .and_then(|node| node.get().as_element_node().ok())
+                    .map_or(false, |el| el.name == "body");
+
+                if !is_body {
+                    return Ok(Acknowledgement::no());
+                }
+
+                // If the frameset-ok flag is set to "not ok", ignore the token.
+                if !self.frameset_ok {
+                    return Ok(Acknowledgement::no());
+                }
+
+                // Remove the second element on the stack of open elements from its parent node.
+                second_element_id.detach(&mut self.arena);
+
+                // Pop all the nodes from the bottom of the stack of open elements, from the
+                // current node up to, but not including, the root html element.
+                while self.open_elements.len() > 1 {
+                    self.open_elements.pop();
+                }
+
+                // Insert an HTML element for the token.
+                self.insert_an_html_element(token)?;
+
+                // Switch the insertion mode to "in frameset".
+                self.insertion_mode = InsertionMode::InFrameset;
             }
             HtmlToken::EndOfFile => {
                 if !self.template_insertion_modes.is_empty() {
