@@ -474,7 +474,8 @@ impl HtmlParser {
                 self.insertion_mode = InsertionMode::InBody;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "frameset" => {
-                todo!()
+                self.insert_an_html_element(token)?;
+                self.insertion_mode = InsertionMode::InFrameset;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if [
@@ -734,6 +735,229 @@ impl HtmlParser {
 
                 self.insertion_mode = InsertionMode::InBody;
                 self.token_emitted(token)?;
+            }
+        }
+
+        Ok(Acknowledgement::no())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inframeset>
+    pub(super) fn in_frameset_insertion_mode(
+        &mut self,
+        token: HtmlToken,
+    ) -> Result<Acknowledgement, HtmlParseError> {
+        match token {
+            // A character token that is one of U+0009, U+000A, U+000C, U+000D, or U+0020
+            HtmlToken::Character(c)
+                if [
+                    chars::CHARACTER_TABULATION,
+                    chars::LINE_FEED,
+                    chars::FORM_FEED,
+                    chars::CARRIAGE_RETURN,
+                    chars::SPACE,
+                ]
+                .contains(&c) =>
+            {
+                self.insert_character(vec![c])?;
+            }
+            // A comment token
+            HtmlToken::Comment(comment) => {
+                self.insert_a_comment(comment, None)?;
+            }
+            // A DOCTYPE token: parse error, ignore
+            HtmlToken::DocType(_) => {
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "unexpected DOCTYPE in frameset",
+                )))?;
+            }
+            // A start tag whose tag name is "html"
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
+                return self
+                    .in_body_insertion_mode(HtmlToken::TagToken(TagTokenType::StartTag(token)));
+            }
+            // A start tag whose tag name is "frameset"
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
+                if token.tag_name == "frameset" =>
+            {
+                self.insert_an_html_element(token)?;
+            }
+            // An end tag whose tag name is "frameset"
+            HtmlToken::TagToken(TagTokenType::EndTag(token))
+                if token.tag_name == "frameset" =>
+            {
+                // If the current node is the root html element, this is a parse error; ignore.
+                let is_root = self.open_elements.len() == 1;
+                if is_root {
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "frameset end tag at root html element",
+                    )))?;
+                } else {
+                    // Pop the current node from the stack of open elements.
+                    self.open_elements.pop();
+
+                    // If the parser was not created as part of the HTML fragment parsing algorithm
+                    // (fragment case), and the current node is no longer a frameset element, then
+                    // switch the insertion mode to "after frameset".
+                    let is_frameset = self
+                        .current_node_as_element()
+                        .map(|el| el.name == "frameset")
+                        .unwrap_or(false);
+                    if !is_frameset {
+                        self.insertion_mode = InsertionMode::AfterFrameset;
+                    }
+                }
+            }
+            // A start tag whose tag name is "frame"
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "frame" => {
+                self.insert_an_html_element(token)?;
+                // Immediately pop the current node off the stack of open elements.
+                self.open_elements.pop();
+                // Acknowledge the token's self-closing flag, if it is set.
+                return Ok(Acknowledgement::yes());
+            }
+            // A start tag whose tag name is "noframes"
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
+                if token.tag_name == "noframes" =>
+            {
+                return self
+                    .in_head_insertion_mode(HtmlToken::TagToken(TagTokenType::StartTag(token)));
+            }
+            // An end-of-file token
+            HtmlToken::EndOfFile => {
+                if self.open_elements.len() > 1 {
+                    // If the current node is not the root html element, this is a parse error.
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "unexpected EOF in frameset",
+                    )))?;
+                }
+                self.stop_parsing()?;
+            }
+            // Anything else: parse error, ignore the token.
+            _ => {
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "unexpected token in frameset",
+                )))?;
+            }
+        }
+
+        Ok(Acknowledgement::no())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-afterframeset>
+    pub(super) fn after_frameset_insertion_mode(
+        &mut self,
+        token: HtmlToken,
+    ) -> Result<Acknowledgement, HtmlParseError> {
+        match token {
+            // A character token that is one of U+0009, U+000A, U+000C, U+000D, or U+0020
+            HtmlToken::Character(c)
+                if [
+                    chars::CHARACTER_TABULATION,
+                    chars::LINE_FEED,
+                    chars::FORM_FEED,
+                    chars::CARRIAGE_RETURN,
+                    chars::SPACE,
+                ]
+                .contains(&c) =>
+            {
+                self.insert_character(vec![c])?;
+            }
+            // A comment token
+            HtmlToken::Comment(comment) => {
+                self.insert_a_comment(comment, None)?;
+            }
+            // A DOCTYPE token: parse error, ignore
+            HtmlToken::DocType(_) => {
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "unexpected DOCTYPE after frameset",
+                )))?;
+            }
+            // A start tag whose tag name is "html"
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
+                return self
+                    .in_body_insertion_mode(HtmlToken::TagToken(TagTokenType::StartTag(token)));
+            }
+            // An end tag whose tag name is "html"
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "html" => {
+                self.insertion_mode = InsertionMode::AfterAfterFrameset;
+            }
+            // A start tag whose tag name is "noframes"
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
+                if token.tag_name == "noframes" =>
+            {
+                return self
+                    .in_head_insertion_mode(HtmlToken::TagToken(TagTokenType::StartTag(token)));
+            }
+            // An end-of-file token
+            HtmlToken::EndOfFile => {
+                self.stop_parsing()?;
+            }
+            // Anything else: parse error, ignore the token.
+            _ => {
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "unexpected token after frameset",
+                )))?;
+            }
+        }
+
+        Ok(Acknowledgement::no())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#the-after-after-frameset-insertion-mode>
+    pub(super) fn after_after_frameset_insertion_mode(
+        &mut self,
+        token: HtmlToken,
+    ) -> Result<Acknowledgement, HtmlParseError> {
+        match token {
+            // A comment token: insert a comment as the last child of the Document object.
+            HtmlToken::Comment(comment) => {
+                let parent = self
+                    .root_node
+                    .ok_or(HtmlParseError::new("root node is None"))?;
+
+                self.insert_a_comment(comment, Some(parent))?;
+            }
+            // A DOCTYPE token: process using the rules for the "in body" insertion mode.
+            HtmlToken::DocType(_) => {
+                self.using_the_rules_for(token, InsertionMode::InBody)?;
+            }
+            // A character token that is one of U+0009, U+000A, U+000C, U+000D, or U+0020:
+            // process using the rules for the "in body" insertion mode.
+            HtmlToken::Character(c)
+                if [
+                    chars::CHARACTER_TABULATION,
+                    chars::LINE_FEED,
+                    chars::FORM_FEED,
+                    chars::CARRIAGE_RETURN,
+                    chars::SPACE,
+                ]
+                .contains(&c) =>
+            {
+                self.using_the_rules_for(HtmlToken::Character(c), InsertionMode::InBody)?;
+            }
+            // A start tag whose tag name is "html"
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
+                self.using_the_rules_for(
+                    HtmlToken::TagToken(TagTokenType::StartTag(token)),
+                    InsertionMode::InBody,
+                )?;
+            }
+            // A start tag whose tag name is "noframes"
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
+                if token.tag_name == "noframes" =>
+            {
+                return self
+                    .in_head_insertion_mode(HtmlToken::TagToken(TagTokenType::StartTag(token)));
+            }
+            // An end-of-file token
+            HtmlToken::EndOfFile => {
+                self.stop_parsing()?;
+            }
+            // Anything else: parse error, ignore the token.
+            _ => {
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "unexpected token after after frameset",
+                )))?;
             }
         }
 

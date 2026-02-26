@@ -1550,10 +1550,10 @@ impl HtmlParser {
             InsertionMode::InSelectInTable => self.in_select_in_table_insertion_mode(token),
             InsertionMode::InTemplate => self.in_template_insertion_mode(token),
             InsertionMode::AfterBody => self.after_body_insertion_mode(token),
-            InsertionMode::InFrameset => todo!(),
-            InsertionMode::AfterFrameset => todo!(),
+            InsertionMode::InFrameset => self.in_frameset_insertion_mode(token),
+            InsertionMode::AfterFrameset => self.after_frameset_insertion_mode(token),
             InsertionMode::AfterAfterBody => self.after_after_body_insertion_mode(token),
-            InsertionMode::AfterAfterFrameset => todo!(),
+            InsertionMode::AfterAfterFrameset => self.after_after_frameset_insertion_mode(token),
         }?;
 
         if self_closing && !acknowledgement.self_closed {
