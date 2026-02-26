@@ -150,6 +150,7 @@ pub(crate) fn func_data<'tree>(
                 &XpathItemTreeNode::AttributeNode(attribute) => {
                     AnyAtomicType::String(attribute.value.clone())
                 }
+                XpathItemTreeNode::DoctypeNode(_) => AnyAtomicType::String(String::new()),
             },
             XpathItem::Function(_) => todo!("func_data Function"),
             XpathItem::AnyAtomicType(atomic) => atomic.clone(),
@@ -169,6 +170,7 @@ pub(crate) fn func_string<'tree>(item: &XpathItem, item_tree: &'tree XpathItemTr
             XpathItemTreeNode::CommentNode(_) => todo!("func_string CommentNode"),
             XpathItemTreeNode::TextNode(text) => text.content.clone(),
             XpathItemTreeNode::AttributeNode(attribute) => attribute.value.clone(),
+            XpathItemTreeNode::DoctypeNode(_) => String::new(),
         },
         XpathItem::AnyAtomicType(atomic) => match atomic {
             AnyAtomicType::Boolean(b) => b.to_string(),

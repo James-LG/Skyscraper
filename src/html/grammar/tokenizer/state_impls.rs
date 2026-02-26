@@ -189,10 +189,11 @@ impl<'a> Tokenizer<'a> {
     pub(super) fn tag_name_state(&mut self) -> Result<(), HtmlParseError> {
         match self.input_stream.next() {
             Some(c) => match c {
-                &chars::CHARACTER_TABULATION
+                c @ (&chars::CHARACTER_TABULATION
                 | &chars::LINE_FEED
                 | &chars::FORM_FEED
-                | &chars::SPACE => {
+                | &chars::SPACE) => {
+                    self.attribute_prefix_buffer.push(*c);
                     self.state = TokenizerState::BeforeAttributeName;
                 }
                 &'/' => {
@@ -866,12 +867,12 @@ impl<'a> Tokenizer<'a> {
     pub(super) fn before_attribute_name_state(&mut self) -> Result<(), HtmlParseError> {
         match self.input_stream.next() {
             Some(
-                &chars::CHARACTER_TABULATION
+                c @ (&chars::CHARACTER_TABULATION
                 | &chars::LINE_FEED
                 | &chars::FORM_FEED
-                | &chars::SPACE,
+                | &chars::SPACE),
             ) => {
-                // ignore
+                self.attribute_prefix_buffer.push(*c);
             }
             Some(c) if ['/', '>'].contains(c) => {
                 self.reconsume_in_state(TokenizerState::AfterAttributeName)?;
@@ -916,8 +917,9 @@ impl<'a> Tokenizer<'a> {
                 self.state = TokenizerState::BeforeAttributeValue;
             }
             Some(c) if c.is_ascii_uppercase() => {
+                let original = *c;
                 let c = c.to_ascii_lowercase();
-                self.push_char_to_attribute_name(c)?;
+                self.push_char_to_attribute_name_with_original(c, original)?;
             }
             Some(&chars::NULL) => {
                 self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
@@ -1070,11 +1072,12 @@ impl<'a> Tokenizer<'a> {
     pub(super) fn attribute_value_unquoted_state(&mut self) -> Result<(), HtmlParseError> {
         match self.input_stream.next() {
             Some(
-                &chars::CHARACTER_TABULATION
+                c @ (&chars::CHARACTER_TABULATION
                 | &chars::LINE_FEED
                 | &chars::FORM_FEED
-                | &chars::SPACE,
+                | &chars::SPACE),
             ) => {
+                self.attribute_prefix_buffer.push(*c);
                 self.state = TokenizerState::BeforeAttributeName;
             }
             Some('&') => {
@@ -1114,11 +1117,12 @@ impl<'a> Tokenizer<'a> {
     pub(super) fn after_attribute_value_quoted_state(&mut self) -> Result<(), HtmlParseError> {
         match self.input_stream.next() {
             Some(
-                &chars::CHARACTER_TABULATION
+                c @ (&chars::CHARACTER_TABULATION
                 | &chars::LINE_FEED
                 | &chars::FORM_FEED
-                | &chars::SPACE,
+                | &chars::SPACE),
             ) => {
+                self.attribute_prefix_buffer.push(*c);
                 self.state = TokenizerState::BeforeAttributeName;
             }
             Some('/') => {

@@ -3,7 +3,7 @@ use std::vec;
 use crate::{
     html::grammar::{tokenizer::TokenizerState, NodeOrMarker, SPECIAL_ELEMENTS},
     xpath::grammar::{
-        data_model::{AttributeNode, ElementNode},
+        data_model::{AttributeNode, DoctypeNode, ElementNode, TextNode},
         XpathItemTreeNode,
     },
 };
@@ -26,17 +26,37 @@ impl HtmlParser {
     ) -> Result<Acknowledgement, HtmlParseError> {
         match token {
             HtmlToken::Character(
-                chars::CHARACTER_TABULATION
+                c @ (chars::CHARACTER_TABULATION
                 | chars::LINE_FEED
                 | chars::FORM_FEED
                 | chars::CARRIAGE_RETURN
-                | chars::SPACE,
+                | chars::SPACE),
             ) => {
-                // ignore
+                // WHATWG says ignore, but we preserve for round-trip fidelity
+                self.insert_character_at_document_level(c)?;
             }
-            HtmlToken::Comment(_) => todo!(),
-            HtmlToken::DocType(_) => {
-                // TODO: Implement this section. No-op is good enough for now, but there's lots to do here.
+            HtmlToken::Comment(comment) => {
+                // Insert a comment as the last child of the Document object.
+                let parent = self
+                    .root_node
+                    .ok_or(HtmlParseError::new("root node is None"))?;
+
+                self.insert_a_comment(comment, Some(parent))?;
+            }
+            HtmlToken::DocType(doctype) => {
+                // Append a DocumentType node to the Document node.
+                let doctype_node = XpathItemTreeNode::DoctypeNode(DoctypeNode::new(
+                    doctype.name,
+                    doctype.public_identifier,
+                    doctype.system_identifier,
+                ));
+
+                let doctype_id = self.arena.new_node(doctype_node);
+
+                self.root_node
+                    .ok_or(HtmlParseError::new("root node is None"))?
+                    .append(doctype_id, &mut self.arena);
+
                 self.insertion_mode = InsertionMode::BeforeHtml;
             }
             _ => {
@@ -84,13 +104,14 @@ impl HtmlParser {
                 self.insert_a_comment(token, Some(parent))?;
             }
             HtmlToken::Character(
-                chars::CHARACTER_TABULATION
+                c @ (chars::CHARACTER_TABULATION
                 | chars::LINE_FEED
                 | chars::FORM_FEED
                 | chars::CARRIAGE_RETURN
-                | chars::SPACE,
+                | chars::SPACE),
             ) => {
-                // ignore
+                // WHATWG says ignore, but we preserve for round-trip fidelity
+                self.insert_character_at_document_level(c)?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
                 let result = self.create_an_element_for_the_token(token, HTML_NAMESPACE)?;
@@ -142,13 +163,14 @@ impl HtmlParser {
 
         match token {
             HtmlToken::Character(
-                chars::CHARACTER_TABULATION
+                c @ (chars::CHARACTER_TABULATION
                 | chars::LINE_FEED
                 | chars::FORM_FEED
                 | chars::CARRIAGE_RETURN
-                | chars::SPACE,
+                | chars::SPACE),
             ) => {
-                // ignore
+                // WHATWG says ignore, but we preserve for round-trip fidelity
+                self.insert_character(vec![c])?;
             }
             HtmlToken::Comment(comment) => {
                 self.insert_a_comment(comment, None)?;
@@ -536,7 +558,12 @@ impl HtmlParser {
                 ]
                 .contains(&c) =>
             {
-                self.using_the_rules_for(token, InsertionMode::InBody)?;
+                // WHATWG says use InBody rules, but we insert as a child of
+                // the html element (after body) for round-trip fidelity.
+                let html_node = *self.open_elements.first().ok_or(
+                    HtmlParseError::new("no elements on open elements stack"),
+                )?;
+                self.insert_character_at_node(html_node, c)?;
             }
             HtmlToken::Comment(_) => {
                 todo!()
@@ -580,15 +607,22 @@ impl HtmlParser {
             HtmlToken::Comment(_) => {
                 todo!()
             }
-            HtmlToken::DocType(_)
-            | HtmlToken::Character(
-                chars::CHARACTER_TABULATION
-                | chars::LINE_FEED
-                | chars::FORM_FEED
-                | chars::CARRIAGE_RETURN
-                | chars::SPACE,
-            ) => {
+            HtmlToken::DocType(_) => {
                 self.using_the_rules_for(token, InsertionMode::InBody)?;
+            }
+            HtmlToken::Character(c)
+                if [
+                    chars::CHARACTER_TABULATION,
+                    chars::LINE_FEED,
+                    chars::FORM_FEED,
+                    chars::CARRIAGE_RETURN,
+                    chars::SPACE,
+                ]
+                .contains(&c) =>
+            {
+                // WHATWG says use InBody rules, but we preserve at document
+                // level for round-trip fidelity (whitespace after </html>).
+                self.insert_character_at_document_level(c)?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
                 self.using_the_rules_for(

@@ -23,7 +23,8 @@ use indextree::{Arena, NodeId};
 use crate::{
     html::{DocumentNode, HtmlDocument, HtmlNode},
     xpath::grammar::data_model::{
-        AttributeNode, CommentNode, ElementNode, PINode, TextNode, XpathDocumentNode,
+        AttributeNode, CommentNode, DoctypeNode, ElementNode, PINode, TextNode,
+        XpathDocumentNode,
     },
 };
 
@@ -49,6 +50,9 @@ pub enum XpathItemTreeNode {
 
     /// An attribute node.
     AttributeNode(AttributeNode),
+
+    /// A document type node (e.g. `<!DOCTYPE html>`).
+    DoctypeNode(DoctypeNode),
 }
 
 impl XpathItemTreeNode {
@@ -69,6 +73,7 @@ impl XpathItemTreeNode {
             XpathItemTreeNode::CommentNode(_) => vec![],
             XpathItemTreeNode::TextNode(_) => vec![],
             XpathItemTreeNode::AttributeNode(_) => vec![],
+            XpathItemTreeNode::DoctypeNode(_) => vec![],
         }
     }
 
@@ -141,6 +146,7 @@ impl XpathItemTreeNode {
             XpathItemTreeNode::CommentNode(_) => String::from(""),
             XpathItemTreeNode::TextNode(node) => node.content.to_string(),
             XpathItemTreeNode::AttributeNode(_) => String::from(""),
+            XpathItemTreeNode::DoctypeNode(_) => String::from(""),
         }
     }
 
@@ -163,6 +169,7 @@ impl XpathItemTreeNode {
             XpathItemTreeNode::CommentNode(_) => None,
             XpathItemTreeNode::TextNode(node) => Some(node.content.to_string()),
             XpathItemTreeNode::AttributeNode(_) => None,
+            XpathItemTreeNode::DoctypeNode(_) => None,
         }
     }
 
@@ -179,6 +186,7 @@ impl XpathItemTreeNode {
             XpathItemTreeNode::CommentNode(node) => node.to_string(),
             XpathItemTreeNode::TextNode(node) => node.display(tree, formatting, indent),
             XpathItemTreeNode::AttributeNode(node) => node.to_string(),
+            XpathItemTreeNode::DoctypeNode(node) => node.to_string(),
         }
     }
 }
@@ -187,7 +195,16 @@ impl XpathItemTreeNode {
 pub enum DisplayFormatting {
     Pretty,
     NoChildren,
+    /// Raw mode: preserve original whitespace, include all node types,
+    /// omit closing tags for void elements.
+    Raw,
 }
+
+/// HTML void elements that cannot have content or closing tags.
+pub(crate) static VOID_ELEMENTS: [&str; 15] = [
+    "meta", "link", "img", "input", "br", "hr", "col", "area", "base", "embed", "keygen",
+    "param", "source", "track", "wbr",
+];
 
 /// An iterator over all text contained in a element and its descendants.
 pub struct TextIter<'a> {
@@ -285,7 +302,7 @@ impl Display for XpathItemTree {
         write!(
             f,
             "{}",
-            self.root().display(self, DisplayFormatting::Pretty, 0)
+            self.root().display(self, DisplayFormatting::Raw, 0)
         )
     }
 }

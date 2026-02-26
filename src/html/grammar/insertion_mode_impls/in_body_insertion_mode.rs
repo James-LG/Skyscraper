@@ -1,7 +1,7 @@
 use indextree::NodeId;
 
 use crate::{
-    html::grammar::{tokenizer::TokenizerState, NodeOrMarker, SPECIAL_ELEMENTS, SVG_NAMESPACE},
+    html::grammar::{tokenizer::TokenizerState, NodeEntry, NodeOrMarker, SPECIAL_ELEMENTS, SVG_NAMESPACE},
     xpath::grammar::{
         data_model::{AttributeNode, ElementNode},
         XpathItemTreeNode,
@@ -11,7 +11,6 @@ use crate::{
 use super::{
     super::tokenizer::{HtmlToken, Parser, TagToken, TagTokenType},
     chars, Acknowledgement, HtmlParseError, HtmlParser, HtmlParserError, InsertionMode,
-    HTML_NAMESPACE,
 };
 
 impl HtmlParser {
@@ -115,7 +114,7 @@ impl HtmlParser {
                         let top_node_id = *self.open_elements.first().unwrap();
 
                         let attr_node_id = self.new_node(XpathItemTreeNode::AttributeNode(
-                            AttributeNode::new(attribute.name, attribute.value),
+                            AttributeNode::with_prefix(attribute.name, attribute.value, attribute.prefix, attribute.original_name),
                         ));
                         top_node_id.append(attr_node_id, &mut self.arena);
                     }
@@ -534,48 +533,46 @@ impl HtmlParser {
                 todo!()
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "a" => {
-                // if the active formatting element list contains an `a` element between the end of the list and the last marker
-                // then this is a parse error
-                if self
+                // Check if there's already an <a> in active formatting elements
+                let old_a_node_id = self
                     .active_formatting_elements
                     .iter()
                     .rev()
-                    .map_while(|node| {
-                        if let NodeOrMarker::Node(node) = node {
-                            Some(node)
-                        } else {
-                            None
+                    .take_while(|e| !matches!(e, NodeOrMarker::Marker))
+                    .find_map(|e| {
+                        if let NodeOrMarker::Node(entry) = e {
+                            if let Ok(element) =
+                                self.arena.get(entry.node_id).unwrap().get().as_element_node()
+                            {
+                                if element.name == "a" {
+                                    return Some(entry.node_id);
+                                }
+                            }
                         }
-                    })
-                    .any(|entry| {
-                        if let XpathItemTreeNode::ElementNode(element) =
-                            self.arena.get(entry.node_id).unwrap().get()
-                        {
-                            element.name == "a"
-                        } else {
-                            false
-                        }
-                    })
-                {
+                        None
+                    });
+                if let Some(old_a_id) = old_a_node_id {
                     self.handle_error(HtmlParserError::MinorError(String::from(
                         "active formatting elements contains an a element",
                     )))?;
                     self.adoption_agency_algorithm(&token)?;
+                    self.remove_from_active_formatting_elements(old_a_id)?;
+                    self.open_elements.retain(|id| *id != old_a_id);
                 }
-
                 self.reconstruct_the_active_formatting_elements()?;
-
                 let element_id = self.insert_an_html_element(token.clone())?;
                 self.push_onto_the_list_of_active_formatting_elements(element_id, token)?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if [
-                    "a", "b", "big", "code", "em", "font", "i", "s", "small", "strike", "strong",
+                    "b", "big", "code", "em", "font", "i", "s", "small", "strike", "strong",
                     "tt", "u",
                 ]
                 .contains(&token.tag_name.as_str()) =>
             {
-                self.adoption_agency_algorithm(&token)?;
+                self.reconstruct_the_active_formatting_elements()?;
+                let element_id = self.insert_an_html_element(token.clone())?;
+                self.push_onto_the_list_of_active_formatting_elements(element_id, token)?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "nobr" => {
                 todo!()
@@ -741,14 +738,14 @@ impl HtmlParser {
                 self.insert_an_html_element(token)?;
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token)) => {
-                self.other_end_tag(&token)?;
+                self.any_other_end_tag(&token)?;
             }
         }
 
         Ok(Acknowledgement::no())
     }
 
-    fn other_end_tag(&mut self, token: &TagToken) -> Result<(), HtmlParseError> {
+    fn any_other_end_tag(&mut self, token: &TagToken) -> Result<(), HtmlParseError> {
         let node = self.current_node_as_element_result()?.clone();
 
         self.in_body_other_end_tag_loop(0, &node, token)?;
@@ -818,112 +815,305 @@ impl HtmlParser {
         &mut self,
         token: &TagToken,
     ) -> Result<(), HtmlParseError> {
-        let subject = token.tag_name.clone();
+        let subject = &token.tag_name;
 
-        if let Some(XpathItemTreeNode::ElementNode(element)) = self.current_node() {
-            if element.name == subject {
-                self.open_elements.pop();
-                return Ok(());
+        // Step 1: If the current node is an HTML element whose tag name is subject,
+        // and the current node is not in the list of active formatting elements,
+        // then pop the current node off the stack of open elements and return.
+        if let Some(current) = self.current_node() {
+            if let Ok(element) = current.as_element_node() {
+                if element.name == *subject {
+                    let current_id = self.current_node_id().unwrap();
+                    let in_active = self
+                        .active_formatting_elements
+                        .iter()
+                        .any(|e| {
+                            if let NodeOrMarker::Node(entry) = e {
+                                entry.node_id == current_id
+                            } else {
+                                false
+                            }
+                        });
+                    if !in_active {
+                        self.open_elements.pop();
+                        return Ok(());
+                    }
+                }
             }
         }
 
+        // Step 2
         let mut outer_loop_counter = 0;
 
+        // Step 3: Outer loop
         loop {
+            // Step 4.1
             if outer_loop_counter >= 8 {
-                return Ok(()); // abort the adoption agency algorithm
+                return Ok(());
             }
 
+            // Step 4.2
             outer_loop_counter += 1;
 
-            let mut active_formatting_elements_until_marker =
-                self.active_formatting_elements_until_marker();
-
-            let formatting_element =
-                match active_formatting_elements_until_marker.find(|node| node.name == subject) {
-                    Some(element) => element.clone(),
-                    None => {
-                        drop(active_formatting_elements_until_marker);
-                        // act as the "any other end tag" and return
-                        return self.other_end_tag(token);
+            // Step 4.3: Find the formatting element
+            let formatting_element_index = self
+                .active_formatting_elements
+                .iter()
+                .enumerate()
+                .rev()
+                .find_map(|(i, e)| {
+                    match e {
+                        NodeOrMarker::Marker => None, // stop at marker
+                        NodeOrMarker::Node(entry) => {
+                            let node = self.arena.get(entry.node_id).unwrap().get();
+                            if let Ok(element) = node.as_element_node() {
+                                if element.name == *subject {
+                                    return Some(i);
+                                }
+                            }
+                            None
+                        }
                     }
-                };
-            drop(active_formatting_elements_until_marker);
+                });
 
-            // if formatting element is not in the open elements
-            if !self.open_elements.contains(&formatting_element.id()) {
-                // remove the formatting element from the list of active formatting elements
-                self.remove_from_active_formatting_elements(formatting_element.id())?;
-                return self.handle_error(HtmlParserError::MinorError(String::from(
-                    "formatting element is not in open elements",
-                )));
+            // Step 4.4: If there is no such element, then return and instead act
+            // as described in the "any other end tag" entry
+            let formatting_element_index = match formatting_element_index {
+                Some(idx) => idx,
+                None => {
+                    // "any other end tag" behavior
+                    self.any_other_end_tag(token)?;
+                    return Ok(());
+                }
+            };
+
+            let formatting_element_entry = match &self.active_formatting_elements[formatting_element_index] {
+                NodeOrMarker::Node(entry) => entry.clone(),
+                _ => unreachable!(),
+            };
+            let formatting_element_id = formatting_element_entry.node_id;
+
+            // Step 4.5: If the formatting element is not in the stack of open elements
+            let formatting_in_stack = self
+                .open_elements
+                .iter()
+                .position(|id| *id == formatting_element_id);
+
+            if formatting_in_stack.is_none() {
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "formatting element is not in the stack of open elements",
+                )))?;
+                self.active_formatting_elements.remove(formatting_element_index);
+                return Ok(());
             }
 
-            // if formatting element is not in scope
-            if !self.has_an_element_in_scope(&formatting_element.name) {
-                return self.handle_error(HtmlParserError::MinorError(String::from(
-                    "formatting element is not in scope",
-                )));
-            }
+            let formatting_in_stack_index = formatting_in_stack.unwrap();
 
-            // if formatting element is not the current node
-            if formatting_element.id() != self.current_node_id_result()? {
-                // parse error, but do _not_ return
+            // Step 4.6: If the formatting element is not in scope
+            // (simplified: just check it's in the stack)
+
+            // Step 4.7: If the formatting element is not the current node
+            if self.current_node_id() != Some(formatting_element_id) {
                 self.handle_error(HtmlParserError::MinorError(String::from(
                     "formatting element is not the current node",
                 )))?;
             }
 
-            let formatting_element_index_in_open_elements = self
+            // Step 4.8: Find the furthest block
+            let furthest_block_index = self
                 .open_elements
                 .iter()
-                .position(|node_id| node_id == &formatting_element.id())
-                .unwrap();
+                .enumerate()
+                .skip(formatting_in_stack_index + 1)
+                .find_map(|(i, id)| {
+                    let node = self.arena.get(*id).unwrap().get();
+                    if let Ok(element) = node.as_element_node() {
+                        if SPECIAL_ELEMENTS.contains(&element.name.as_str()) {
+                            return Some(i);
+                        }
+                    }
+                    None
+                });
 
-            let lower_than_formatting_element = self
-                .open_elements
-                .iter()
-                .skip(formatting_element_index_in_open_elements + 1)
-                .map(|node_id| *node_id)
-                .collect::<Vec<NodeId>>();
+            // Step 4.9: If there is no furthest block
+            if furthest_block_index.is_none() {
+                // Pop elements up to and including the formatting element
+                while let Some(id) = self.open_elements.pop() {
+                    if id == formatting_element_id {
+                        break;
+                    }
+                }
+                self.active_formatting_elements.remove(formatting_element_index);
+                return Ok(());
+            }
 
-            let furthest_block = lower_than_formatting_element
-                .iter()
-                .find(|node_id| {
-                    if let XpathItemTreeNode::ElementNode(element) =
-                        self.arena.get(**node_id).unwrap().get()
-                    {
-                        SPECIAL_ELEMENTS.contains(&element.name.as_str())
+            let furthest_block_index = furthest_block_index.unwrap();
+            let furthest_block_id = self.open_elements[furthest_block_index];
+
+            // Step 4.10: Let common ancestor be the element immediately above
+            // the formatting element in the stack of open elements.
+            let common_ancestor_id = self.open_elements[formatting_in_stack_index - 1];
+
+            // Step 4.11: Let a bookmark note the position of the formatting element
+            // in the list of active formatting elements relative to the elements on either side of it
+            let mut bookmark = formatting_element_index;
+
+            // Step 4.12: Let node and last node be the furthest block.
+            let mut node_index = furthest_block_index;
+            let mut last_node_id = furthest_block_id;
+
+            // Step 4.13: inner loop counter
+            let mut inner_loop_counter = 0;
+
+            // Step 4.14: Inner loop
+            loop {
+                // Step 4.14.1
+                inner_loop_counter += 1;
+
+                // Step 4.14.2: Let node be the element immediately above node in the
+                // stack of open elements
+                node_index -= 1;
+                let node_id = self.open_elements[node_index];
+
+                // Step 4.14.3: If node is the formatting element, then break
+                if node_id == formatting_element_id {
+                    break;
+                }
+
+                // Step 4.14.4: If the inner loop counter is greater than 3 and node
+                // is in the list of active formatting elements, then remove node from
+                // the list of active formatting elements
+                let node_active_index = self
+                    .active_formatting_elements
+                    .iter()
+                    .position(|e| {
+                        if let NodeOrMarker::Node(entry) = e {
+                            entry.node_id == node_id
+                        } else {
+                            false
+                        }
+                    });
+
+                if inner_loop_counter > 3 {
+                    if let Some(active_idx) = node_active_index {
+                        self.active_formatting_elements.remove(active_idx);
+                        if active_idx < bookmark {
+                            bookmark -= 1;
+                        }
+                        continue;
+                    }
+                }
+
+                // Step 4.14.5: If node is not in the list of active formatting elements,
+                // remove node from the stack of open elements and continue
+                let node_active_index = match self.active_formatting_elements.iter().position(|e| {
+                    if let NodeOrMarker::Node(entry) = e {
+                        entry.node_id == node_id
                     } else {
                         false
                     }
-                })
-                .map(|node_id| *node_id);
-
-            let current_node_id = self.current_node_id_result()?;
-            let furthest_block = match furthest_block {
-                Some(node_id) => node_id,
-                None => {
-                    // pop all nodes from the current node up to and including the formatting element
-                    while current_node_id != formatting_element.id() {
-                        self.open_elements.pop();
+                }) {
+                    Some(idx) => idx,
+                    None => {
+                        self.open_elements.remove(node_index);
+                        // Adjust furthest_block_index if needed
+                        continue;
                     }
+                };
 
-                    self.open_elements.pop();
+                // Step 4.14.6: Create an element for the token for which the element
+                // "node" was created, in the HTML namespace, with common ancestor as
+                // the intended parent; replace the entry for "node" in the list of
+                // active formatting elements with an entry for the new element, replace
+                // the entry for "node" in the stack of open elements with an entry for
+                // the new element, and let "node" be the new element.
+                let old_token = match &self.active_formatting_elements[node_active_index] {
+                    NodeOrMarker::Node(entry) => entry.token.clone(),
+                    _ => unreachable!(),
+                };
 
-                    // remove the formatting element from the list of active formatting elements
-                    self.remove_from_active_formatting_elements(formatting_element.id())?;
-                    return Ok(());
+                let new_element_id = self.create_an_element_for_the_token(old_token.clone(), super::HTML_NAMESPACE)?;
+                let new_node_id = self.insert_create_an_element_for_the_token_result(new_element_id)?;
+
+                // Replace in active formatting elements
+                self.active_formatting_elements[node_active_index] =
+                    NodeOrMarker::Node(NodeEntry {
+                        node_id: new_node_id,
+                        token: old_token,
+                    });
+
+                // Replace in open elements
+                self.open_elements[node_index] = new_node_id;
+
+                let node_id = new_node_id;
+
+                // Step 4.14.7: If last node is the furthest block, move the bookmark
+                // to be immediately after the new node in the list of active formatting elements
+                if last_node_id == furthest_block_id {
+                    bookmark = node_active_index + 1;
                 }
+
+                // Step 4.14.8: Append last node to node
+                last_node_id.detach(&mut self.arena);
+                node_id.append(last_node_id, &mut self.arena);
+
+                // Step 4.14.9: Set last node to node
+                last_node_id = node_id;
+            }
+
+            // Step 4.15: Insert whatever last node ended up being in the appropriate
+            // place for inserting a node, but using common ancestor as the override target.
+            last_node_id.detach(&mut self.arena);
+            common_ancestor_id.append(last_node_id, &mut self.arena);
+
+            // Step 4.16: Create an element for the token for which the formatting element
+            // was created, in the HTML namespace, with the furthest block as the intended parent
+            let new_element_id = self.create_an_element_for_the_token(
+                formatting_element_entry.token.clone(),
+                super::HTML_NAMESPACE,
+            )?;
+            let new_formatting_id = self.insert_create_an_element_for_the_token_result(new_element_id)?;
+
+            // Step 4.17: Take all of the child nodes of the furthest block and append
+            // them to the new element
+            let children: Vec<NodeId> = furthest_block_id
+                .children(&self.arena)
+                .collect();
+            for child_id in children {
+                child_id.detach(&mut self.arena);
+                new_formatting_id.append(child_id, &mut self.arena);
+            }
+
+            // Step 4.18: Append the new element to the furthest block
+            furthest_block_id.append(new_formatting_id, &mut self.arena);
+
+            // Step 4.19: Remove the formatting element from the list of active
+            // formatting elements, and insert the new element into the list of
+            // active formatting elements at the position of the aforementioned bookmark.
+            self.active_formatting_elements.remove(formatting_element_index);
+            let insert_pos = if bookmark > self.active_formatting_elements.len() {
+                self.active_formatting_elements.len()
+            } else {
+                bookmark
             };
+            self.active_formatting_elements.insert(
+                insert_pos,
+                NodeOrMarker::Node(NodeEntry {
+                    node_id: new_formatting_id,
+                    token: formatting_element_entry.token.clone(),
+                }),
+            );
 
-            let common_ancestor = self
+            // Step 4.20: Remove the formatting element from the stack of open elements,
+            // and insert the new element into the stack of open elements immediately
+            // below the position of the furthest block in that stack.
+            self.open_elements.retain(|id| *id != formatting_element_id);
+            let fb_pos = self
                 .open_elements
-                .get(formatting_element_index_in_open_elements - 1);
-
-            // TODO: bookmark?
-
-            todo!()
+                .iter()
+                .position(|id| *id == furthest_block_id)
+                .unwrap();
+            self.open_elements.insert(fb_pos + 1, new_formatting_id);
         }
     }
 }

@@ -4,7 +4,7 @@ use thiserror::Error;
 use crate::xpath::{
     grammar::{
         data_model::{
-            AttributeNode, CommentNode, ElementNode, TextNode, XpathDocumentNode, XpathItem,
+            AttributeNode, CommentNode, DoctypeNode, ElementNode, TextNode, XpathDocumentNode,
         },
         XpathItemTreeNode,
     },
@@ -68,6 +68,18 @@ impl DocumentBuilder {
                 .unwrap()
                 .set_id(child_id);
 
+            Ok(child_id)
+        }));
+
+        self
+    }
+
+    pub fn add_doctype(mut self, name: &str) -> Self {
+        let name = name.to_string();
+        self.funcs.push(Box::new(move |arena, _| {
+            let child_id = arena.new_node(XpathItemTreeNode::DoctypeNode(DoctypeNode::new(
+                name, None, None,
+            )));
             Ok(child_id)
         }));
 

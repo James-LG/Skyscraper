@@ -130,6 +130,7 @@ impl NameTest {
                     XpathItemTreeNode::CommentNode(_) => None,
                     XpathItemTreeNode::TextNode(_) => None, // Text nodes do not have a name.
                     XpathItemTreeNode::AttributeNode(a) => Some(&a.name),
+                    XpathItemTreeNode::DoctypeNode(_) => None,
                 };
 
                 match node_name {

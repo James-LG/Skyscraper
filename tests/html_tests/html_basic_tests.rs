@@ -99,7 +99,7 @@ fn sample1_should_parse() {
         .build()
         .unwrap();
 
-    assert!(test_framework::compare_documents(expected, document, false));
+    assert!(test_framework::compare_documents(expected, document, true));
 }
 
 #[test]
@@ -124,7 +124,7 @@ fn sample2_should_parse() {
         .build()
         .unwrap();
 
-    assert!(test_framework::compare_documents(expected, document, false));
+    assert!(test_framework::compare_documents(expected, document, true));
 }
 
 #[test]
@@ -148,7 +148,7 @@ fn comment_should_parse() {
         .build()
         .unwrap();
 
-    assert!(test_framework::compare_documents(expected, document, false));
+    assert!(test_framework::compare_documents(expected, document, true));
 }
 
 #[test]
@@ -185,6 +185,7 @@ fn doctype_should_handle_regular_doctype() {
 
     // assert
     let expected = DocumentBuilder::new()
+        .add_doctype("html")
         .add_element("html", |html| {
             html.add_element("head", |head| head)
                 .add_element("body", |body| {
@@ -209,6 +210,7 @@ fn doctype_should_skip_verbose_doctype() {
 
     // assert
     let expected = DocumentBuilder::new()
+        .add_doctype("html")
         .add_element("html", |html| {
             html.add_element("head", |head| head)
                 .add_element("body", |body| {
@@ -257,4 +259,22 @@ fn script_should_close_properly() {
     println!("{}", document.to_string());
 
     // assert!(test_framework::compare_documents(expected, document, true));
+}
+
+#[test]
+fn attribute_with_character_references_should_not_merge() {
+    // Tests that &quot; in attribute values doesn't cause attribute merging
+    let text = r#"<html><body><a data-x="{&quot;k&quot;:1}" data-y="abc">t</a></body></html>"#;
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains(r#"data-x="{&quot;k&quot;:1}""#),
+        "data-x attribute value should be preserved. Got: {}",
+        output
+    );
+    assert!(
+        output.contains(r#"data-y="abc""#),
+        "data-y attribute should be separate. Got: {}",
+        output
+    );
 }

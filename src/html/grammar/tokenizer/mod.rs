@@ -112,11 +112,22 @@ impl TagToken {
 pub struct Attribute {
     pub name: String,
     pub value: String,
+    /// Whitespace that preceded this attribute in the original source.
+    /// Used for round-trip fidelity in Raw display mode.
+    pub prefix: String,
+    /// Original attribute name as written in source (before lowercasing).
+    /// Used for round-trip fidelity in Raw display mode.
+    pub original_name: Option<String>,
 }
 
 impl Attribute {
     pub fn new(name: String, value: String) -> Self {
-        Attribute { name, value }
+        Attribute {
+            name,
+            value,
+            prefix: String::new(),
+            original_name: None,
+        }
     }
 }
 
@@ -336,6 +347,8 @@ pub struct Tokenizer<'a> {
     attribute_name: Option<String>,
     character_reference_code: u32,
     last_emitted_start_tag: Option<TagToken>,
+    /// Buffer for accumulating whitespace between attributes for round-trip fidelity.
+    attribute_prefix_buffer: String,
 }
 
 impl<'a> Tokenizer<'a> {
@@ -353,6 +366,7 @@ impl<'a> Tokenizer<'a> {
             attribute_name: None,
             character_reference_code: 0,
             last_emitted_start_tag: None,
+            attribute_prefix_buffer: String::new(),
         }
     }
 
@@ -407,26 +421,23 @@ impl<'a> Tokenizer<'a> {
             .as_mut()
             .ok_or(HtmlParseError::new("no current tag found"))?;
 
-        let current_attribute_name = self
-            .attribute_name
-            .as_ref()
-            .ok_or(HtmlParseError::new("no current attribute name found"))?;
-
+        // Use last_mut() instead of find() because the current attribute being
+        // built is always the last one pushed by create_new_attribute(). Using
+        // find() by name would incorrectly match an earlier attribute when the
+        // current attribute's partial name happens to equal an existing one
+        // (e.g. "data-hydro-click" prefix of "data-hydro-click-hmac").
         let entry = current_tag_token
             .attributes_mut()
-            .into_iter()
-            .find(|x| x.name == *current_attribute_name)
+            .last_mut()
             .ok_or_else(|| {
-                HtmlParseError::new(&format!(
-                    "could not find attribute {} on current tag",
-                    current_attribute_name
-                ))
+                HtmlParseError::new("no attributes on current tag")
             })?;
 
         Ok(entry)
     }
 
-    pub fn create_new_attribute(&mut self, attribute: Attribute) -> Result<(), HtmlParseError> {
+    pub fn create_new_attribute(&mut self, mut attribute: Attribute) -> Result<(), HtmlParseError> {
+        attribute.prefix = std::mem::take(&mut self.attribute_prefix_buffer);
         self.attribute_name = Some(attribute.name.clone());
         self.current_tag_token_mut()?
             .attributes_mut()
@@ -436,7 +447,34 @@ impl<'a> Tokenizer<'a> {
     }
 
     pub fn push_char_to_attribute_name(&mut self, c: char) -> Result<(), HtmlParseError> {
-        self.current_attribute_mut()?.name.push(c);
+        let attr = self.current_attribute_mut()?;
+        attr.name.push(c);
+        // If we're already tracking original_name (due to earlier uppercase),
+        // keep appending to it.
+        if let Some(ref mut orig) = attr.original_name {
+            orig.push(c);
+        }
+
+        if let Some(attribute_name) = self.attribute_name.as_mut() {
+            attribute_name.push(c);
+            Ok(())
+        } else {
+            Err(HtmlParseError::new("no current attribute name found"))
+        }
+    }
+
+    /// Push a lowercased char to the attribute name while preserving
+    /// the original character for round-trip fidelity.
+    pub fn push_char_to_attribute_name_with_original(
+        &mut self,
+        c: char,
+        original: char,
+    ) -> Result<(), HtmlParseError> {
+        let attr = self.current_attribute_mut()?;
+        attr.name.push(c);
+        // Start or continue tracking the original name since casing differs.
+        let orig = attr.original_name.get_or_insert_with(|| attr.name[..attr.name.len() - 1].to_string());
+        orig.push(original);
 
         if let Some(attribute_name) = self.attribute_name.as_mut() {
             attribute_name.push(c);
@@ -472,6 +510,7 @@ impl<'a> Tokenizer<'a> {
             #[cfg(feature = "debug_prints")]
             println!("emitting tag token: {:?}", tag_token);
 
+            self.attribute_prefix_buffer.clear();
             self.emit(HtmlToken::TagToken(tag_token))?;
             self.tag_token = None;
         }

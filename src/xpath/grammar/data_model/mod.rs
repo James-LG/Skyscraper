@@ -6,7 +6,22 @@ use enum_extract_macro::EnumExtract;
 use indextree::{Arena, NodeId};
 use ordered_float::OrderedFloat;
 
-use super::{DisplayFormatting, TextIter, XpathItemTree, XpathItemTreeNode};
+use super::{DisplayFormatting, TextIter, XpathItemTree, XpathItemTreeNode, VOID_ELEMENTS};
+
+/// Escape characters in an attribute value for HTML serialization.
+fn escape_attribute_value(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+fn escape_text_content(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
 
 /// <https://www.w3.org/TR/xpath-datamodel-31/#dt-item>
 #[derive(PartialEq, Eq, Debug, Clone, Hash, EnumExtract)]
@@ -154,15 +169,29 @@ impl XpathDocumentNode {
         tree: &'tree XpathItemTree,
         formatting: DisplayFormatting,
     ) -> String {
-        let children = self.children(tree);
+        match formatting {
+            DisplayFormatting::Raw => {
+                // Raw mode: include all children (comments, text, elements)
+                let child_strings: Vec<String> = tree
+                    .root_node
+                    .children(&tree.arena)
+                    .map(|x| tree.get(x))
+                    .map(|x| x.display(tree, formatting, 0))
+                    .collect();
+                child_strings.join("")
+            }
+            _ => {
+                let children = self.children(tree);
 
-        let element_strings: Vec<String> = children
-            .iter()
-            .filter_map(|x| x.as_element_node().ok())
-            .map(|x| x.display(tree, formatting, 0))
-            .collect();
+                let element_strings: Vec<String> = children
+                    .iter()
+                    .filter_map(|x| x.as_element_node().ok())
+                    .map(|x| x.display(tree, formatting, 0))
+                    .collect();
 
-        element_strings.join("\n")
+                element_strings.join("\n")
+            }
+        }
     }
 }
 
@@ -400,6 +429,50 @@ impl ElementNode {
         formatting: DisplayFormatting,
         indent: usize,
     ) -> String {
+        match formatting {
+            DisplayFormatting::Raw => self.display_raw(tree),
+            _ => self.display_pretty(tree, formatting, indent),
+        }
+    }
+
+    fn display_raw<'tree>(&self, tree: &'tree XpathItemTree) -> String {
+        let attributes = self.attributes(tree);
+
+        let mut display_string = String::new();
+
+        // start tag
+        display_string.push_str(&format!("<{}", self.name));
+        for attr in &attributes {
+            display_string.push_str(&attr.prefix);
+            let escaped_value = escape_attribute_value(&attr.value);
+            let display_name = attr.original_name.as_deref().unwrap_or(&attr.name);
+            display_string.push_str(&format!("{}=\"{}\"", display_name, escaped_value));
+        }
+        display_string.push('>');
+
+        let is_void = VOID_ELEMENTS.contains(&self.name.as_str());
+
+        if !is_void {
+            // children (all types except attributes)
+            let children_without_attributes =
+                self.children(tree).filter(|x| !x.is_attribute_node());
+            for child in children_without_attributes {
+                display_string.push_str(&child.display(tree, DisplayFormatting::Raw, 0));
+            }
+
+            // end tag
+            display_string.push_str(&format!("</{}>", self.name));
+        }
+
+        display_string
+    }
+
+    fn display_pretty<'tree>(
+        &self,
+        tree: &'tree XpathItemTree,
+        formatting: DisplayFormatting,
+        indent: usize,
+    ) -> String {
         let displayed_children: Vec<String> = match formatting {
             DisplayFormatting::Pretty => {
                 let children_without_attributes =
@@ -410,6 +483,7 @@ impl ElementNode {
                     .collect()
             }
             DisplayFormatting::NoChildren => Vec::new(),
+            DisplayFormatting::Raw => unreachable!(),
         };
 
         let attributes = self.attributes(tree);
@@ -464,6 +538,14 @@ pub struct AttributeNode {
 
     /// The value of the attribute.
     pub value: String,
+
+    /// Whitespace prefix before this attribute in the original source.
+    /// Used for round-trip fidelity in Raw display mode.
+    pub prefix: String,
+
+    /// Original attribute name before lowercasing (e.g. "viewBox").
+    /// Used for round-trip fidelity in Raw display mode.
+    pub original_name: Option<String>,
 }
 
 impl Debug for AttributeNode {
@@ -483,6 +565,24 @@ impl AttributeNode {
             id: None,
             name,
             value,
+            prefix: String::from(" "),
+            original_name: None,
+        }
+    }
+
+    /// Create a new attribute node with a custom prefix and original name.
+    pub(crate) fn with_prefix(
+        name: String,
+        value: String,
+        prefix: String,
+        original_name: Option<String>,
+    ) -> Self {
+        Self {
+            id: None,
+            name,
+            value,
+            prefix,
+            original_name,
         }
     }
 
@@ -600,6 +700,52 @@ impl PartialEq for CommentNode {
     }
 }
 
+/// A document type node representing `<!DOCTYPE ...>`.
+#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash, Clone)]
+pub struct DoctypeNode {
+    /// The name of the document type (e.g. "html").
+    pub name: String,
+
+    /// The public identifier, if present.
+    pub public_id: Option<String>,
+
+    /// The system identifier, if present.
+    pub system_id: Option<String>,
+}
+
+impl DoctypeNode {
+    pub(crate) fn new(name: String, public_id: Option<String>, system_id: Option<String>) -> Self {
+        Self {
+            name,
+            public_id,
+            system_id,
+        }
+    }
+}
+
+impl Display for DoctypeNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match (&self.public_id, &self.system_id) {
+            (Some(public), Some(system)) => {
+                write!(
+                    f,
+                    r#"<!DOCTYPE {} PUBLIC "{}" "{}">"#,
+                    self.name, public, system
+                )
+            }
+            (Some(public), None) => {
+                write!(f, r#"<!DOCTYPE {} PUBLIC "{}">"#, self.name, public)
+            }
+            (None, Some(system)) => {
+                write!(f, r#"<!DOCTYPE {} SYSTEM "{}">"#, self.name, system)
+            }
+            (None, None) => {
+                write!(f, "<!DOCTYPE {}>", self.name)
+            }
+        }
+    }
+}
+
 /// <https://www.w3.org/TR/xpath-datamodel-31/#TextNode>
 #[derive(Eq, Hash, Clone)]
 pub struct TextNode {
@@ -662,13 +808,17 @@ impl TextNode {
         formatting: DisplayFormatting,
         indent: usize,
     ) -> String {
-        let indentation = "  ".repeat(indent);
-        let string = match formatting {
-            DisplayFormatting::NoChildren => self.content.clone(),
-            DisplayFormatting::Pretty => self.content.clone().trim().to_string(),
-        };
-
-        format!("{}{}", indentation, string)
+        match formatting {
+            DisplayFormatting::Raw => escape_text_content(&self.content),
+            DisplayFormatting::NoChildren => {
+                let indentation = "  ".repeat(indent);
+                format!("{}{}", indentation, self.content)
+            }
+            DisplayFormatting::Pretty => {
+                let indentation = "  ".repeat(indent);
+                format!("{}{}", indentation, self.content.trim())
+            }
+        }
     }
 }
 

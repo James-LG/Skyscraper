@@ -240,8 +240,8 @@ pub(crate) enum NodeOrMarker {
 
 #[derive(Debug, Clone)]
 pub(crate) struct NodeEntry {
-    node_id: NodeId,
-    token: TagToken,
+    pub(crate) node_id: NodeId,
+    pub(crate) token: TagToken,
 }
 
 pub struct HtmlParser {
@@ -454,7 +454,8 @@ impl HtmlParser {
 
         // add the attributes to the element
         for attribute in result.attributes {
-            self.add_attribute_to_element(element_id, attribute.name, attribute.value)?;
+            let item_id = self.new_node(XpathItemTreeNode::AttributeNode(attribute));
+            element_id.append(item_id, &mut self.arena);
         }
 
         self.open_elements.push(element_id);
@@ -560,7 +561,7 @@ impl HtmlParser {
         let attributes: Vec<AttributeNode> = token
             .attributes
             .into_iter()
-            .map(|attribute| AttributeNode::new(attribute.name, attribute.value))
+            .map(|attribute| AttributeNode::with_prefix(attribute.name, attribute.value, attribute.prefix, attribute.original_name))
             .collect();
 
         Ok(CreateAnElementForTheTokenResult {
@@ -733,6 +734,74 @@ impl HtmlParser {
 
             adjusted_insertion_location_id.append(text_id, &mut self.arena);
         }
+
+        Ok(())
+    }
+
+    /// Insert a character as a text node directly on the document root.
+    ///
+    /// Used in initial/before_html insertion modes where the open elements stack
+    /// may be empty and `insert_character` would fail or drop the character.
+    pub(crate) fn insert_character_at_document_level(
+        &mut self,
+        c: char,
+    ) -> Result<(), HtmlParseError> {
+        let root = self
+            .root_node
+            .ok_or(HtmlParseError::new("root node is None"))?;
+
+        let prev_sibling_id = self.arena.get(root).unwrap().last_child();
+
+        if let Some(prev_id) = prev_sibling_id {
+            let prev = self.arena.get_mut(prev_id).unwrap().get_mut();
+            if let XpathItemTreeNode::TextNode(ref mut text) = prev {
+                text.content.push(c);
+                return Ok(());
+            }
+        }
+
+        let text = XpathItemTreeNode::TextNode(TextNode::new(c.to_string()));
+        let text_id = self.new_node(text);
+        self.arena
+            .get_mut(text_id)
+            .unwrap()
+            .get_mut()
+            .as_text_node_mut()
+            .unwrap()
+            .set_id(text_id);
+        root.append(text_id, &mut self.arena);
+
+        Ok(())
+    }
+
+    /// Insert a character as a child of the given node, coalescing with
+    /// an existing trailing text node if possible. Used for preserving
+    /// whitespace at specific tree locations for round-trip fidelity.
+    pub(crate) fn insert_character_at_node(
+        &mut self,
+        parent: NodeId,
+        c: char,
+    ) -> Result<(), HtmlParseError> {
+        let prev_child_id = self.arena.get(parent).unwrap().last_child();
+
+        if let Some(prev_id) = prev_child_id {
+            let prev = self.arena.get_mut(prev_id).unwrap().get_mut();
+            if let XpathItemTreeNode::TextNode(ref mut text) = prev {
+                text.content.push(c);
+                return Ok(());
+            }
+        }
+
+        let text = XpathItemTreeNode::TextNode(TextNode::new(c.to_string()));
+        let text_id = self.new_node(text);
+        self.arena
+            .get_mut(text_id)
+            .unwrap()
+            .get_mut()
+            .as_text_node_mut()
+            .unwrap()
+            .set_id(text_id);
+        parent.append(text_id, &mut self.arena);
 
         Ok(())
     }

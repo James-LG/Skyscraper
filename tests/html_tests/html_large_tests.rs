@@ -14,6 +14,7 @@ fn parse_should_return_document() {
 
     // assert
     let expected = DocumentBuilder::new()
+        .add_doctype("html")
         .add_comment(" saved from url=(0038)https://github.com/James-LG/Skyscraper ")
         .add_element("html", |html| {
             html.add_attributes_str(vec![
