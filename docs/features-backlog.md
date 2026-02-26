@@ -11,7 +11,7 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 | Line(s) | Feature | WHATWG Section |
 |---------|---------|----------------|
 | ~~528~~ | ~~Foster parenting — adjusted insertion location logic~~ | ~~[13.2.6.1](https://html.spec.whatwg.org/multipage/parsing.html#appropriate-place-for-inserting-a-node)~~ **DONE** |
-| 1334 | InHeadNoscript insertion mode | [13.2.6.4.5](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inheadnoscript) |
+| ~~1334~~ | ~~InHeadNoscript insertion mode~~ | ~~[13.2.6.4.5](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inheadnoscript)~~ **DONE** |
 | 1338 | InTable insertion mode | [13.2.6.4.9](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intable) |
 | 1339 | InTableText insertion mode | [13.2.6.4.10](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intabletext) |
 | 1340 | InCaption insertion mode | [13.2.6.4.11](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incaption) |
@@ -52,10 +52,10 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 |------|---------|
 | 233 | DOCTYPE token handling |
 | 235 | `<html>` start tag (process using InBody rules) |
-| 266 | `<noscript>` start tag |
+| ~~266~~ | ~~`<noscript>` start tag~~ **DONE** |
 | 305 | `<template>` start tag — non-adjusted-current-node branch |
 | 330 | Duplicate `<head>` start tag (parse error) |
-| 333 | Unexpected end tags (parse error) |
+| ~~333~~ | ~~Unexpected end tags (parse error)~~ **DONE** |
 
 ## HTML Parser — AfterHead Insertion Mode
 

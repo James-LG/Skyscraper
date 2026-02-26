@@ -1446,7 +1446,7 @@ impl HtmlParser {
             InsertionMode::BeforeHtml => self.before_html_insertion_mode(token),
             InsertionMode::BeforeHead => self.before_head_insertion_mode(token),
             InsertionMode::InHead => self.in_head_insertion_mode(token),
-            InsertionMode::InHeadNoscript => todo!(),
+            InsertionMode::InHeadNoscript => self.in_head_noscript_insertion_mode(token),
             InsertionMode::AfterHead => self.after_head_insertion_mode(token),
             InsertionMode::InBody => self.in_body_insertion_mode(token),
             InsertionMode::Text => self.text_insertion_mode(token),

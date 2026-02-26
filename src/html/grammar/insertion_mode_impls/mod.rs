@@ -263,7 +263,11 @@ impl HtmlParser {
                 return self.generic_raw_text_element_parsing_algorithm(token);
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "noscript" => {
-                todo!()
+                // Scripting is disabled in Skyscraper, so:
+                // Insert an HTML element for the token.
+                self.insert_an_html_element(token)?;
+                // Switch the insertion mode to "in head noscript".
+                self.insertion_mode = InsertionMode::InHeadNoscript;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "script" => {
                 let node = self.insert_an_html_element(token)?;
@@ -330,8 +334,98 @@ impl HtmlParser {
                 todo!()
             }
             HtmlToken::TagToken(TagTokenType::EndTag(_)) => {
-                todo!()
+                // Any other end tag: parse error, ignore the token.
             }
+            _ => {
+                anything_else(self, token)?;
+            }
+        }
+
+        Ok(Acknowledgement::no())
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inheadnoscript>
+    pub(super) fn in_head_noscript_insertion_mode(
+        &mut self,
+        token: HtmlToken,
+    ) -> Result<Acknowledgement, HtmlParseError> {
+        fn anything_else(parser: &mut HtmlParser, token: HtmlToken) -> Result<(), HtmlParseError> {
+            // Parse error.
+            // Pop the current node (which will be a noscript element) from the stack of open
+            // elements; the new current node will be a head element.
+            parser.open_elements.pop().expect("open elements is empty");
+            // Switch the insertion mode to "in head".
+            parser.insertion_mode = InsertionMode::InHead;
+            // Reprocess the token.
+            parser.token_emitted(token)?;
+            Ok(())
+        }
+
+        match token {
+            // A DOCTYPE token: Parse error. Ignore the token.
+            HtmlToken::DocType(_) => {
+                // parse error, ignore
+            }
+            // A comment token: Process the token using the rules for the "in head" insertion mode.
+            HtmlToken::Comment(comment) => {
+                return self.in_head_insertion_mode(HtmlToken::Comment(comment));
+            }
+            // A character token that is one of U+0009, U+000A, U+000C, U+000D, or U+0020:
+            // Process the token using the rules for the "in head" insertion mode.
+            HtmlToken::Character(c)
+                if [
+                    chars::CHARACTER_TABULATION,
+                    chars::LINE_FEED,
+                    chars::FORM_FEED,
+                    chars::CARRIAGE_RETURN,
+                    chars::SPACE,
+                ]
+                .contains(&c) =>
+            {
+                return self.in_head_insertion_mode(HtmlToken::Character(c));
+            }
+            // A start tag whose tag name is "html":
+            // Process the token using the rules for the "in body" insertion mode.
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
+                return self
+                    .in_body_insertion_mode(HtmlToken::TagToken(TagTokenType::StartTag(token)));
+            }
+            // An end tag whose tag name is "noscript":
+            // Pop the current node (noscript) from the stack of open elements;
+            // the new current node will be a head element.
+            // Switch the insertion mode to "in head".
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "noscript" => {
+                self.open_elements.pop().expect("open elements is empty");
+                self.insertion_mode = InsertionMode::InHead;
+            }
+            // A start tag whose tag name is one of: "basefont", "bgsound", "link", "meta",
+            // "noframes", "style":
+            // Process the token using the rules for the "in head" insertion mode.
+            HtmlToken::TagToken(TagTokenType::StartTag(token))
+                if ["basefont", "bgsound", "link", "meta", "noframes", "style"]
+                    .contains(&token.tag_name.as_str()) =>
+            {
+                return self
+                    .in_head_insertion_mode(HtmlToken::TagToken(TagTokenType::StartTag(token)));
+            }
+            // An end tag whose tag name is "br":
+            // Act as described in the "anything else" entry below.
+            HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "br" => {
+                anything_else(self, HtmlToken::TagToken(TagTokenType::EndTag(token)))?;
+            }
+            // A start tag whose tag name is one of: "head", "noscript":
+            // Parse error. Ignore the token.
+            HtmlToken::TagToken(TagTokenType::StartTag(_token))
+                if ["head", "noscript"].contains(&_token.tag_name.as_str()) =>
+            {
+                // parse error, ignore
+            }
+            // Any other end tag: Parse error. Ignore the token.
+            HtmlToken::TagToken(TagTokenType::EndTag(_)) => {
+                // parse error, ignore
+            }
+            // Anything else: Parse error.
+            // Pop the current node (noscript), switch to "in head", reprocess.
             _ => {
                 anything_else(self, token)?;
             }
