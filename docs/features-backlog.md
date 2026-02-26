@@ -78,7 +78,7 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line(s) | Feature |
 |---------|---------|
-| 47 | NULL character handling |
+| ~~47~~ | ~~NULL character handling~~ **DONE** |
 | 74 | DOCTYPE token handling |
 | 153 | `<frameset>` start tag |
 | 244 | `<pre>` / `<listing>` start tags |

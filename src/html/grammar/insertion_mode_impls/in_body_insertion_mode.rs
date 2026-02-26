@@ -44,7 +44,10 @@ impl HtmlParser {
 
         match token {
             HtmlToken::Character(chars::NULL) => {
-                todo!()
+                // Parse error. Ignore the token.
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "null character in body",
+                )))?;
             }
             HtmlToken::Character(c)
                 if [
