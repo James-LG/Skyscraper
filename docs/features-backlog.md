@@ -40,9 +40,9 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line | Feature |
 |------|---------|
-| 178 | DOCTYPE token handling |
-| 180 | `<html>` start tag (process using InBody rules) |
-| 195 | Unexpected end tags (parse error) |
+| ~~178~~ | ~~DOCTYPE token handling~~ **DONE** |
+| ~~180~~ | ~~`<html>` start tag (process using InBody rules)~~ **DONE** |
+| ~~195~~ | ~~Unexpected end tags (parse error)~~ **DONE** |
 
 ## HTML Parser — InHead Insertion Mode
 

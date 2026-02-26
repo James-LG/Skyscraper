@@ -177,9 +177,15 @@ impl HtmlParser {
             HtmlToken::Comment(comment) => {
                 self.insert_a_comment(comment, None)?;
             }
-            HtmlToken::DocType(_) => todo!(),
+            HtmlToken::DocType(_) => {
+                // parse error, ignore the token
+            }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
-                todo!()
+                // process the token using the rules for the "in body" insertion mode
+                self.using_the_rules_for(
+                    HtmlToken::TagToken(TagTokenType::StartTag(token)),
+                    InsertionMode::InBody,
+                )?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "head" => {
                 let node_id = self.insert_an_html_element(token)?;
@@ -194,7 +200,7 @@ impl HtmlParser {
                 anything_else(self, HtmlToken::TagToken(TagTokenType::EndTag(token)))?;
             }
             HtmlToken::TagToken(TagTokenType::EndTag(_)) => {
-                todo!()
+                // parse error, ignore the token
             }
             _ => anything_else(self, token)?,
         }
