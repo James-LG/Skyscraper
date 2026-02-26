@@ -99,10 +99,10 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 | ~~689~~ | ~~`<noembed>` / `<noscript>` start tags~~ **DONE** |
 | ~~692~~ | ~~`<select>` start tag~~ **DONE** |
 | ~~697~~ | ~~`<optgroup>` / `<option>` start tags~~ **DONE** |
-| 702 | `<rb>` / `<rtc>` start tags (ruby) |
-| 707 | `<rp>` / `<rt>` start tags (ruby) |
-| 710 | `<math>` start tag (MathML integration) |
-| 733 | Table-related start tags in body (`<caption>`, `<col>`, `<colgroup>`, `<frame>`, `<head>`, `<tbody>`, `<td>`, `<tfoot>`, `<th>`, `<thead>`, `<tr>`) |
+| ~~702~~ | ~~`<rb>` / `<rtc>` start tags (ruby)~~ **DONE** |
+| ~~707~~ | ~~`<rp>` / `<rt>` start tags (ruby)~~ **DONE** |
+| ~~710~~ | ~~`<math>` start tag (MathML integration)~~ **DONE** |
+| ~~733~~ | ~~Table-related start tags in body (`<caption>`, `<col>`, `<colgroup>`, `<frame>`, `<head>`, `<tbody>`, `<td>`, `<tfoot>`, `<th>`, `<thead>`, `<tr>`)~~ **DONE** |
 
 ---
 

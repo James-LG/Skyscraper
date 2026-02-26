@@ -1,7 +1,7 @@
 use indextree::NodeId;
 
 use crate::{
-    html::grammar::{tokenizer::TokenizerState, NodeEntry, NodeOrMarker, SPECIAL_ELEMENTS, SVG_NAMESPACE},
+    html::grammar::{tokenizer::TokenizerState, NodeEntry, NodeOrMarker, MATHML_NAMESPACE, SPECIAL_ELEMENTS, SVG_NAMESPACE},
     xpath::grammar::{
         data_model::{AttributeNode, ElementNode},
         XpathItemTreeNode,
@@ -985,15 +985,54 @@ impl HtmlParser {
             HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if ["rb", "rtc"].contains(&token.tag_name.as_str()) =>
             {
-                todo!()
+                // If the stack of open elements has a ruby element in scope,
+                // then generate implied end tags.
+                if self.has_an_element_in_scope("ruby") {
+                    self.generate_implied_end_tags(None)?;
+
+                    // If the current node is not now a ruby element, this is a parse error.
+                    if self.current_node_as_element().unwrap().name != "ruby" {
+                        self.handle_error(HtmlParserError::MinorError(String::from(
+                            "current node is not a ruby element",
+                        )))?;
+                    }
+                }
+
+                self.insert_an_html_element(token)?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if ["rp", "rt"].contains(&token.tag_name.as_str()) =>
             {
-                todo!()
+                // If the stack of open elements has a ruby element in scope,
+                // then generate implied end tags, except for rtc elements.
+                if self.has_an_element_in_scope("ruby") {
+                    self.generate_implied_end_tags(Some("rtc"))?;
+
+                    // If the current node is not now a rtc element or a ruby element,
+                    // this is a parse error.
+                    let current_name = &self.current_node_as_element().unwrap().name;
+                    if current_name != "rtc" && current_name != "ruby" {
+                        self.handle_error(HtmlParserError::MinorError(String::from(
+                            "current node is not a rtc or ruby element",
+                        )))?;
+                    }
+                }
+
+                self.insert_an_html_element(token)?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "math" => {
-                todo!()
+                self.reconstruct_the_active_formatting_elements()?;
+
+                // TODO: adjust MathML attributes
+                // TODO: adjust foreign attributes
+
+                let self_closing = token.self_closing;
+                self.insert_foreign_element(token, MATHML_NAMESPACE, false)?;
+
+                if self_closing {
+                    self.open_elements.pop();
+                    return Ok(Acknowledgement::yes());
+                }
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "svg" => {
                 self.reconstruct_the_active_formatting_elements()?;
@@ -1016,7 +1055,11 @@ impl HtmlParser {
                 ]
                 .contains(&token.tag_name.as_str()) =>
             {
-                todo!()
+                // Parse error. Ignore the token.
+                self.handle_error(HtmlParserError::MinorError(format!(
+                    "unexpected {} start tag in body",
+                    token.tag_name
+                )))?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) => {
                 self.reconstruct_the_active_formatting_elements()?;

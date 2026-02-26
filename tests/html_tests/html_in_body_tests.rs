@@ -533,6 +533,133 @@ fn noscript_start_tag_inserts_normally_when_scripting_disabled() {
     );
 }
 
+/// A <rb> start tag inside a <ruby> element should generate implied end tags
+/// and insert the rb element (WHATWG 13.2.6.4.7).
+#[test]
+fn rb_start_tag_inside_ruby() {
+    let text = "<html><body><ruby>text<rb>base</rb></ruby></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<rb>base</rb>"),
+        "rb element should be present: {output:?}"
+    );
+}
+
+/// A <rtc> start tag inside a <ruby> element should generate implied end tags
+/// and insert the rtc element (WHATWG 13.2.6.4.7).
+#[test]
+fn rtc_start_tag_inside_ruby() {
+    let text = "<html><body><ruby>text<rtc>annotation</rtc></ruby></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<rtc>annotation</rtc>"),
+        "rtc element should be present: {output:?}"
+    );
+}
+
+/// A <rt> start tag inside a <ruby> element should generate implied end tags
+/// except for rtc, and insert the rt element (WHATWG 13.2.6.4.7).
+#[test]
+fn rt_start_tag_inside_ruby() {
+    let text = "<html><body><ruby>text<rt>annotation</rt></ruby></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<rt>annotation</rt>"),
+        "rt element should be present: {output:?}"
+    );
+}
+
+/// A <rp> start tag inside a <ruby> element should generate implied end tags
+/// except for rtc, and insert the rp element (WHATWG 13.2.6.4.7).
+#[test]
+fn rp_start_tag_inside_ruby() {
+    let text = "<html><body><ruby>text<rp>(</rp><rt>annotation</rt><rp>)</rp></ruby></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<rp>(</rp>"),
+        "first rp element should be present: {output:?}"
+    );
+    assert!(
+        output.contains("<rp>)</rp>"),
+        "second rp element should be present: {output:?}"
+    );
+}
+
+/// An <rt> inside a <ruby> with an open <rb> should implicitly close the <rb>
+/// (via generate implied end tags) (WHATWG 13.2.6.4.7).
+#[test]
+fn rt_closes_open_rb() {
+    let text = "<html><body><ruby><rb>base<rt>annotation</ruby></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<rb>base</rb>"),
+        "rb should be implicitly closed: {output:?}"
+    );
+    assert!(
+        output.contains("<rt>annotation</rt>"),
+        "rt should be present: {output:?}"
+    );
+}
+
+/// A <math> start tag should reconstruct active formatting elements and
+/// insert a foreign element in the MathML namespace (WHATWG 13.2.6.4.7).
+#[test]
+fn math_start_tag_inserts_foreign_element() {
+    let text = "<html><body><math><mi>x</mi></math></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<math>"),
+        "math element should be present: {output:?}"
+    );
+}
+
+/// A self-closing <math/> should insert and immediately pop (WHATWG 13.2.6.4.7).
+#[test]
+fn math_self_closing_pops_immediately() {
+    let text = "<html><body><math/><p>after</p></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<math>"),
+        "math element should be present: {output:?}"
+    );
+    assert!(
+        output.contains("<p>after</p>"),
+        "content after self-closing math should be preserved: {output:?}"
+    );
+}
+
+/// Table-related start tags in body (<caption>, <col>, etc.) should be
+/// treated as a parse error and ignored (WHATWG 13.2.6.4.7).
+#[test]
+fn table_related_start_tags_in_body_are_ignored() {
+    let text = "<html><body><caption>text</caption><p>content</p></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<p>content</p>"),
+        "Body content should be preserved: {output:?}"
+    );
+}
+
+/// A <frame> start tag in body should be ignored (WHATWG 13.2.6.4.7).
+#[test]
+fn frame_start_tag_in_body_is_ignored() {
+    let text = "<html><body><frame><p>content</p></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<p>content</p>"),
+        "Body content should be preserved: {output:?}"
+    );
+}
+
 /// A DOCTYPE token encountered in the "in body" insertion mode should be
 /// treated as a parse error and ignored (WHATWG 13.2.6.4.7).
 ///

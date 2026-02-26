@@ -133,6 +133,9 @@ pub(crate) const HTML_NAMESPACE: &str = "http://www.w3.org/1999/xhtml";
 /// <https://infra.spec.whatwg.org/#svg-namespace>
 pub(crate) const SVG_NAMESPACE: &str = "http://www.w3.org/2000/svg";
 
+/// <https://infra.spec.whatwg.org/#mathml-namespace>
+pub(crate) const MATHML_NAMESPACE: &str = "http://www.w3.org/1998/Math/MathML";
+
 pub(crate) static ELEMENT_IN_SCOPE_TYPES: [&str; 9] = [
     "applet", "caption", "html", "table", "td", "th", "marquee", "object", "template",
 ];
