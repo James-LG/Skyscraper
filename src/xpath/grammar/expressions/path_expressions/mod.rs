@@ -251,8 +251,7 @@ impl RelativePathExpr {
             // so that the final result is only the result of the last step.
             for (i, _item) in this_result.iter().enumerate() {
                 // Create a context for the inner steps using an item from the current result.
-                let inner_context = XpathExpressionContext::new(
-                    context.item_tree,
+                let inner_context = context.new_with_variables(
                     &this_result,
                     i + 1,
                     context.is_root_level,
@@ -277,8 +276,7 @@ impl RelativePathExpr {
         // Otherwise, for each item in the result of the expression, evaluate the steps.
         let mut items = XpathItemSet::new();
         for (i, _item) in e1_result.iter().enumerate() {
-            let en_context = XpathExpressionContext::new(
-                context.item_tree,
+            let en_context = context.new_with_variables(
                 &e1_result,
                 i + 1,
                 context.is_root_level,

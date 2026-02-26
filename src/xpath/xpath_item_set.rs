@@ -7,7 +7,7 @@ use indexmap::{self, IndexSet};
 use super::grammar::data_model::{AnyAtomicType, XpathItem};
 
 /// An ordered set of [`XpathItem`]s.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct XpathItemSet<'tree> {
     index_set: IndexSet<XpathItem<'tree>>,
 }

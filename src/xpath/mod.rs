@@ -168,6 +168,8 @@
 //! # }
 //! ```
 
+use std::collections::HashMap;
+
 use thiserror::Error;
 
 use self::{
@@ -232,24 +234,12 @@ pub(crate) struct XpathExpressionContext<'tree> {
     ///
     /// This should not be modified for the entire evaluation cycle of an expression.
     is_root_level: bool, // TODO: This should be `is_initial_step`; it's not used for the root level
+
+    /// Variable bindings in scope (e.g. from `for` or `let` expressions).
+    variables: HashMap<String, XpathItemSet<'tree>>,
 }
 
 impl<'tree> XpathExpressionContext<'tree> {
-    pub fn new(
-        item_tree: &'tree XpathItemTree,
-        items: &XpathItemSet<'tree>,
-        position: usize,
-        is_root_level: bool,
-    ) -> Self {
-        Self {
-            item_tree,
-            item: items[position - 1].clone(), // Position is 1-based
-            position: position,
-            size: items.len(),
-            is_root_level,
-        }
-    }
-
     pub fn new_single(
         item_tree: &'tree XpathItemTree,
         item: XpathItem<'tree>,
@@ -261,7 +251,67 @@ impl<'tree> XpathExpressionContext<'tree> {
             position: 1,
             size: 1,
             is_root_level,
+            variables: HashMap::new(),
         }
+    }
+
+    /// Create a new context that inherits variable bindings from this context,
+    /// with a new item and position derived from an item set.
+    pub fn new_with_variables(
+        &self,
+        items: &XpathItemSet<'tree>,
+        position: usize,
+        is_root_level: bool,
+    ) -> Self {
+        Self {
+            item_tree: self.item_tree,
+            item: items[position - 1].clone(),
+            position,
+            size: items.len(),
+            is_root_level,
+            variables: self.variables.clone(),
+        }
+    }
+
+    /// Create a new context that inherits variable bindings from this context,
+    /// with a single item as the context item.
+    pub fn new_single_with_variables(
+        &self,
+        item: XpathItem<'tree>,
+        is_root_level: bool,
+    ) -> Self {
+        Self {
+            item_tree: self.item_tree,
+            item,
+            position: 1,
+            size: 1,
+            is_root_level,
+            variables: self.variables.clone(),
+        }
+    }
+
+    /// Create a new context with an additional variable binding.
+    /// Inherits all existing variables plus the new one.
+    pub fn with_variable(
+        &self,
+        name: String,
+        value: XpathItemSet<'tree>,
+    ) -> Self {
+        let mut variables = self.variables.clone();
+        variables.insert(name, value);
+        Self {
+            item_tree: self.item_tree,
+            item: self.item.clone(),
+            position: self.position,
+            size: self.size,
+            is_root_level: self.is_root_level,
+            variables,
+        }
+    }
+
+    /// Look up a variable binding by name.
+    pub fn get_variable(&self, name: &str) -> Option<&XpathItemSet<'tree>> {
+        self.variables.get(name)
     }
 }
 

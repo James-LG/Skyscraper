@@ -384,7 +384,7 @@ impl ExprSingle {
         context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         match self {
-            ExprSingle::ForExpr(_) => todo!("ExprSingle::ForExpr"),
+            ExprSingle::ForExpr(e) => e.eval(context),
             ExprSingle::LetExpr(_) => todo!("ExprSingle::LetExpr"),
             ExprSingle::QuantifiedExpr(_) => todo!("ExprSingle::QuantifiedExpr"),
             ExprSingle::IfExpr(_) => todo!("ExprSingle::IfExpr"),

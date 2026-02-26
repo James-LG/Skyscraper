@@ -10,8 +10,13 @@ use nom::{
     sequence::tuple,
 };
 
-use crate::xpath::grammar::{
-    recipes::Res, terminal_symbols::symbol_separator, whitespace_recipes::sep,
+use crate::{
+    xpath::{
+        grammar::{recipes::Res, terminal_symbols::symbol_separator, whitespace_recipes::sep},
+        xpath_item_set::XpathItemSet,
+        ExpressionApplyError, XpathExpressionContext,
+    },
+    xpath_item_set,
 };
 
 use super::{
@@ -42,6 +47,53 @@ pub fn for_expr(input: &str) -> Res<&str, ForExpr> {
 pub struct ForExpr {
     pub clause: SimpleForClause,
     pub expr: ExprSingle,
+}
+
+impl ForExpr {
+    pub(crate) fn eval<'tree>(
+        &self,
+        context: &XpathExpressionContext<'tree>,
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
+        // Collect all bindings (first + extras) into a single list.
+        let mut bindings = vec![&self.clause.binding];
+        bindings.extend(self.clause.extras.iter());
+
+        // Recursively evaluate bindings.
+        // For multiple bindings like `for $x in E1, $y in E2 return E3`,
+        // this is equivalent to `for $x in E1 return (for $y in E2 return E3)`.
+        Self::eval_bindings(context, &bindings, &self.expr)
+    }
+
+    fn eval_bindings<'tree>(
+        context: &XpathExpressionContext<'tree>,
+        bindings: &[&SimpleForBinding],
+        return_expr: &ExprSingle,
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
+        let (binding, rest) = match bindings.split_first() {
+            Some(pair) => pair,
+            None => {
+                // No more bindings — evaluate the return expression.
+                return return_expr.eval(context);
+            }
+        };
+
+        // Evaluate the binding's "in" expression to get the sequence to iterate over.
+        let sequence = binding.expr.eval(context)?;
+        let mut result = XpathItemSet::new();
+
+        // For each item in the sequence, bind the variable and evaluate the rest.
+        let var_name = binding.var.to_string();
+        for item in &sequence {
+            let var_value = xpath_item_set![item.clone()];
+
+            let inner_context = context.with_variable(var_name.clone(), var_value);
+
+            let inner_result = Self::eval_bindings(&inner_context, rest, return_expr)?;
+            result.extend(inner_result);
+        }
+
+        Ok(result)
+    }
 }
 
 impl Display for ForExpr {

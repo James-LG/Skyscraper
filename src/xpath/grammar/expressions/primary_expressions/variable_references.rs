@@ -19,6 +19,13 @@ pub fn var_ref(input: &str) -> Res<&str, VarRef> {
 #[derive(PartialEq, Debug, Clone)]
 pub struct VarRef(VarName);
 
+impl VarRef {
+    /// Get the variable name (without the `$` prefix).
+    pub fn name(&self) -> &VarName {
+        &self.0
+    }
+}
+
 impl Display for VarRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "${}", self.0)

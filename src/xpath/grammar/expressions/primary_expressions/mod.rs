@@ -144,7 +144,16 @@ impl PrimaryExpr {
             PrimaryExpr::Literal(literal) => {
                 Ok(xpath_item_set![XpathItem::AnyAtomicType(literal.value())])
             }
-            PrimaryExpr::VarRef(_) => todo!("PrimaryExpr::VarRef eval"),
+            PrimaryExpr::VarRef(var_ref) => {
+                let name = var_ref.name().to_string();
+                match context.get_variable(&name) {
+                    Some(value) => Ok(value.clone()),
+                    None => Err(ExpressionApplyError::new(format!(
+                        "Undefined variable: ${}",
+                        name
+                    ))),
+                }
+            }
             PrimaryExpr::ParenthesizedExpr(expr) => expr.eval(context),
             PrimaryExpr::ContextItemExpr => {
                 // Context item expression is '.', which means select the current context item.
