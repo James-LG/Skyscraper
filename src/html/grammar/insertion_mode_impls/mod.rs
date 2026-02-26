@@ -238,9 +238,15 @@ impl HtmlParser {
             HtmlToken::Comment(comment) => {
                 self.insert_a_comment(comment, None)?;
             }
-            HtmlToken::DocType(_) => todo!(),
+            HtmlToken::DocType(_) => {
+                // parse error, ignore the token
+            }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
-                todo!()
+                // process the token using the rules for the "in body" insertion mode
+                self.using_the_rules_for(
+                    HtmlToken::TagToken(TagTokenType::StartTag(token)),
+                    InsertionMode::InBody,
+                )?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if ["base", "basefont", "bgsound", "link"].contains(&token.tag_name.as_str()) =>
@@ -339,7 +345,7 @@ impl HtmlParser {
                 self.reset_the_insertion_mode_appropriately()?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "head" => {
-                todo!()
+                // parse error, ignore the token
             }
             HtmlToken::TagToken(TagTokenType::EndTag(_)) => {
                 // Any other end tag: parse error, ignore the token.

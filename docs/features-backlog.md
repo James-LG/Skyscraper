@@ -50,11 +50,11 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line | Feature |
 |------|---------|
-| 233 | DOCTYPE token handling |
-| 235 | `<html>` start tag (process using InBody rules) |
+| ~~233~~ | ~~DOCTYPE token handling~~ **DONE** |
+| ~~235~~ | ~~`<html>` start tag (process using InBody rules)~~ **DONE** |
 | ~~266~~ | ~~`<noscript>` start tag~~ **DONE** |
 | 305 | `<template>` start tag — non-adjusted-current-node branch |
-| 330 | Duplicate `<head>` start tag (parse error) |
+| ~~330~~ | ~~Duplicate `<head>` start tag (parse error)~~ **DONE** |
 | ~~333~~ | ~~Unexpected end tags (parse error)~~ **DONE** |
 
 ## HTML Parser — AfterHead Insertion Mode
