@@ -104,3 +104,61 @@ fn duplicate_head_with_attributes_is_ignored() {
         "Duplicate <head> attributes should not appear: {output:?}"
     );
 }
+
+/// A <template> start tag in the "in head" insertion mode should insert an
+/// HTML element and switch to InTemplate mode (WHATWG 13.2.6.4.4).
+#[test]
+fn template_in_head_is_inserted() {
+    let text = "<html><head><template><p>hello</p></template></head><body></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<template>"),
+        "Should contain <template>: {output:?}"
+    );
+    assert!(
+        output.contains("</template>"),
+        "Should contain </template>: {output:?}"
+    );
+    assert!(
+        output.contains("<head><template>"),
+        "Template should be a child of <head>: {output:?}"
+    );
+}
+
+/// An empty <template> in <head> should parse without error.
+#[test]
+fn empty_template_in_head() {
+    let text = "<html><head><template></template></head><body></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<template></template>"),
+        "Should contain empty template: {output:?}"
+    );
+}
+
+/// A <template> with attributes should preserve them.
+#[test]
+fn template_in_head_preserves_attributes() {
+    let text = r#"<html><head><template id="tmpl"><div>content</div></template></head><body></body></html>"#;
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains(r#"id="tmpl""#),
+        "Template should preserve id attribute: {output:?}"
+    );
+}
+
+/// Multiple <template> elements in <head> should all be inserted.
+#[test]
+fn multiple_templates_in_head() {
+    let text = "<html><head><template>A</template><template>B</template></head><body></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert_eq!(
+        output.matches("<template>").count(),
+        2,
+        "Should have two templates: {output:?}"
+    );
+}

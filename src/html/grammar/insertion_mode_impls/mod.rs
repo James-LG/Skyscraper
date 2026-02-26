@@ -314,13 +314,10 @@ impl HtmlParser {
                 self.template_insertion_modes
                     .push(InsertionMode::InTemplate);
 
-                // TODO: shadow root mode
-                if self.adjusted_current_node_id().ok() == self.open_elements.last().map(|x| *x) {
-                    self.insert_an_html_element(token)?;
-                    return Ok(Acknowledgement::no());
-                }
-
-                todo!()
+                // Declarative shadow DOM is not supported, so shadowrootmode is
+                // always in the None state. Per WHATWG step 9, when any of the
+                // three conditions is false we simply insert an HTML element.
+                self.insert_an_html_element(token)?;
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "template" => {
                 if !self.open_elements_has_element("template") {
