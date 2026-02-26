@@ -12,7 +12,7 @@
 //! # use std::error::Error;
 //! #
 //! use skyscraper::html;
-//! use skyscraper::xpath::{self, XpathItemTree};
+//! use skyscraper::xpath;
 //!
 //! # fn main() -> Result<(), Box<dyn Error>> {
 //! let text = r##"
@@ -24,8 +24,7 @@
 //! </html>"##;
 //!
 //! // Parse the HTML text
-//! let document = html::parse(text)?;
-//! let xpath_item_tree = XpathItemTree::from(&document);
+//! let xpath_item_tree = html::parse(text)?;
 //!
 //! let xpath = xpath::parse("//a/@href")?;
 //!
@@ -54,7 +53,7 @@
 //! # use std::error::Error;
 //! #
 //! use skyscraper::html;
-//! use skyscraper::xpath::{self, XpathItemTree};
+//! use skyscraper::xpath;
 //!
 //! # fn main() -> Result<(), Box<dyn Error>> {
 //! let text = r##"
@@ -66,8 +65,7 @@
 //! </html>"##;
 //!
 //! // Parse the HTML text
-//! let document = html::parse(text)?;
-//! let xpath_item_tree = XpathItemTree::from(&document);
+//! let xpath_item_tree = html::parse(text)?;
 //!
 //! let xpath = xpath::parse("//a")?;
 //!
@@ -95,7 +93,7 @@
 //! # use std::error::Error;
 //! #
 //! use skyscraper::html;
-//! use skyscraper::xpath::{self, XpathItemTree};
+//! use skyscraper::xpath;
 //!
 //! # fn main() -> Result<(), Box<dyn Error>> {
 //! let text = r##"
@@ -107,8 +105,7 @@
 //! </html>"##;
 //!
 //! // Parse the HTML text
-//! let document = html::parse(text)?;
-//! let xpath_item_tree = XpathItemTree::from(&document);
+//! let xpath_item_tree = html::parse(text)?;
 //!
 //! let xpath = xpath::parse("//div/text()")?;
 //!
@@ -137,7 +134,7 @@
 //! # use std::error::Error;
 //! #
 //! use skyscraper::html;
-//! use skyscraper::xpath::{self, XpathItemTree};
+//! use skyscraper::xpath;
 //!
 //! # fn main() -> Result<(), Box<dyn Error>> {
 //! let text = r##"
@@ -149,8 +146,7 @@
 //! </html>"##;
 //!
 //! // Parse the HTML text
-//! let document = html::parse(text)?;
-//! let xpath_item_tree = XpathItemTree::from(&document);
+//! let xpath_item_tree = html::parse(text)?;
 //!
 //! let xpath = xpath::parse("//div")?;
 //!

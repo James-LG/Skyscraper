@@ -287,6 +287,10 @@ impl RelativePathExpr {
             items.extend(result);
         }
 
+        // Path expressions must return results in document order.
+        // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-path-expressions
+        items.sort_by_document_order();
+
         Ok(items)
     }
 }

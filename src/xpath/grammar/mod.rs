@@ -104,6 +104,17 @@ impl XpathItemTreeNode {
     /// # Returns
     ///
     /// The parent of the element if it exists, or `None` if it does not.
+    /// Get the [`NodeId`] of this node, if it has one.
+    pub(crate) fn node_id(&self) -> Option<NodeId> {
+        match self {
+            XpathItemTreeNode::ElementNode(e) => Some(e.id()),
+            XpathItemTreeNode::TextNode(t) => Some(t.id()),
+            XpathItemTreeNode::AttributeNode(a) => Some(a.id()),
+            XpathItemTreeNode::CommentNode(c) => Some(c.id()),
+            _ => None,
+        }
+    }
+
     pub fn parent<'tree>(&self, tree: &'tree XpathItemTree) -> Option<&'tree XpathItemTreeNode> {
         let id = match self {
             XpathItemTreeNode::ElementNode(e) => Some(e.id()),
@@ -250,12 +261,10 @@ impl<'a> Iterator for TextIter<'a> {
 ///
 /// ```rust
 /// use skyscraper::html;
-/// use skyscraper::xpath::{self, XpathItemTree};
 ///
-/// let text = "<html></html";
+/// let text = "<html></html>";
 ///
-/// let document = html::parse(text).unwrap();
-/// let xpath_item_tree = XpathItemTree::from(&document);
+/// let tree = html::parse(text).unwrap();
 /// ```
 #[derive(Debug, PartialEq, Clone)]
 pub struct XpathItemTree {

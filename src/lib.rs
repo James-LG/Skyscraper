@@ -14,7 +14,7 @@
 //! # use std::error::Error;
 //! # fn main() -> Result<(), Box<dyn Error>> {
 //! use skyscraper::html;
-//! use skyscraper::xpath::{self, XpathItemTree};
+//! use skyscraper::xpath;
 //!
 //! let text = r##"
 //! <html>
@@ -30,28 +30,27 @@
 //!     </body>
 //! </html>"##;
 //!
-//! // Parse the HTML text
-//! let document = html::parse(text)?;
-//! let xpath_item_tree = XpathItemTree::from(&document);
+//! // Parse the HTML text into an XpathItemTree
+//! let tree = html::parse(text)?;
 //!
 //! // Assuming your XPath string is static, it is safe to use `expect` during parsing
 //! let xpath = xpath::parse("//div[@class='yes']/parent::div/div[@class='duplicate']")
 //!     .expect("xpath is invalid");
 //!
 //! // Apply the XPath expression to our HTML document
-//! let items = xpath.apply(&xpath_item_tree)?;
+//! let items = xpath.apply(&tree)?;
 //!
 //! assert_eq!(items.len(), 1);
 //!
 //! // Compare the text of the first and only node returned by the XPath expression
 //! let node = items[0].extract_as_node();
-//! let text = node.text(&xpath_item_tree).unwrap();
+//! let text = node.text(&tree).unwrap();
 //!
 //! assert_eq!(text, "Good info");
 //!
 //! // Assert that node class attribute is "duplicate" string.
 //! let element = node.extract_as_element_node();
-//! let attribute = element.get_attribute(&xpath_item_tree, "class").unwrap();
+//! let attribute = element.get_attribute(&tree, "class").unwrap();
 //! assert_eq!(attribute, "duplicate");
 //!
 //! # Ok(())
@@ -67,27 +66,26 @@
 //!
 //! ```rust
 //! use std::error::Error;
-//! use skyscraper::{html::{self, HtmlDocument}, xpath::{self, Xpath, XpathItemTree}};
+//! use skyscraper::{html, xpath::{self, Xpath, XpathItemTree}};
 //! use once_cell::sync::Lazy;
 //!
-//! static SPAN_XPATH: Lazy<Xpath> = Lazy::new(|| xpath::parse("/div/span").unwrap());
+//! static SPAN_XPATH: Lazy<Xpath> = Lazy::new(|| xpath::parse("//span").unwrap());
 //!
-//! fn my_func(document: &HtmlDocument) -> Result<String, Box<dyn Error>> {
-//!     let xpath_item_tree = XpathItemTree::from(document);
-//!     let result = SPAN_XPATH.apply(&xpath_item_tree)?;
+//! fn my_func(tree: &XpathItemTree) -> Result<String, Box<dyn Error>> {
+//!     let result = SPAN_XPATH.apply(tree)?;
 //!
 //!     let items = result;
 //!     let node = items[0].extract_as_node();
-//!     Ok(node.text(&xpath_item_tree).unwrap())
+//!     Ok(node.text(tree).unwrap())
 //! }
 //!
 //! fn main() -> Result<(), Box<dyn Error>> {
-//!     let doc1 = html::parse("<div><span>foo</span></div>")?;
-//!     let text1 = my_func(&doc1)?;
+//!     let tree1 = html::parse("<div><span>foo</span></div>")?;
+//!     let text1 = my_func(&tree1)?;
 //!     assert_eq!(text1, "foo");
 //!
-//!     let doc2 = html::parse("<div><span>bar</span></div>")?;
-//!     let text2 = my_func(&doc2)?;
+//!     let tree2 = html::parse("<div><span>bar</span></div>")?;
+//!     let text2 = my_func(&tree2)?;
 //!     assert_eq!(text2, "bar");
 //!
 //!     Ok(())

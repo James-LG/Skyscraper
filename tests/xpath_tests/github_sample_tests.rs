@@ -56,7 +56,10 @@ fn xpath_github_sample2() {
     let mut children = children.into_iter();
 
     let text = children.next().unwrap();
-    assert_eq!(text.content, "refactor: Reorganize into workspace")
+    assert_eq!(
+        text.content,
+        "refactor:\n                                Reorganize into workspace"
+    )
 }
 
 #[test]
@@ -92,7 +95,10 @@ fn xpath_github_sample3() {
     );
 
     let text = children.next().unwrap().extract_as_text_node();
-    assert_eq!(text.content, "Create a new release");
+    assert_eq!(
+        text.content,
+        "Create a\n                            new release"
+    );
 }
 
 #[test]

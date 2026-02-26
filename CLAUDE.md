@@ -21,10 +21,12 @@ Stack overflow regression tests (Windows-specific, run in CI on windows-latest):
 cargo test --test run_stack_overflow_tests -- --include-ignored --test-threads=1
 ```
 
-Reference testing against Python lxml (requires python3-lxml):
+Reference testing against Python lxml (managed via uv):
 ```sh
-cat tests/samples/James-LG_Skyscraper.html | python3 tests/lxml_tests/xpath.py "//div"
+cd tests/lxml_tests && uv sync          # Install Python deps (first time / after changes)
+cat tests/samples/James-LG_Skyscraper.html | uv run --directory tests/lxml_tests python xpath.py "//div"
 ```
+The Rust lxml tests (`tests/xpath_tests/lxml_tests.rs`) automatically use the venv at `tests/lxml_tests/.venv/bin/python` when available.
 
 Feature flag: `debug_prints` enables debug output during parsing.
 

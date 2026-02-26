@@ -118,10 +118,9 @@ pub enum ParseApplyError {
 ///
 /// ```rust
 /// use skyscraper::html;
-/// use skyscraper::xpath::{XpathItemTree, query::find, grammar::data_model::ElementNode};
+/// use skyscraper::xpath::{query::find, grammar::data_model::ElementNode};
 ///
-/// let html = html::parse("<html><body><div>Example 1</div><div>Example 2</div></body></html>").unwrap();
-/// let tree = XpathItemTree::from(&html);
+/// let tree = html::parse("<html><body><div>Example 1</div><div>Example 2</div></body></html>").unwrap();
 ///
 /// let items = find(&tree, "//div").unwrap();
 ///
@@ -149,10 +148,9 @@ pub fn find<'tree>(
 ///
 /// ```rust
 /// use skyscraper::html;
-/// use skyscraper::xpath::{XpathItemTree, query::find_attributes, grammar::data_model::AttributeNode};
+/// use skyscraper::xpath::{query::find_attributes, grammar::data_model::AttributeNode};
 ///
-/// let html = html::parse("<html><body><div id=\"example\">Example 1</div></body></html>").unwrap();
-/// let tree = XpathItemTree::from(&html);
+/// let tree = html::parse("<html><body><div id=\"example\">Example 1</div></body></html>").unwrap();
 ///
 /// let attributes = find_attributes(&tree, "//div/@id").unwrap();
 ///
@@ -180,10 +178,9 @@ pub fn find_attributes<'tree>(
 ///
 /// ```rust
 /// use skyscraper::html;
-/// use skyscraper::xpath::{XpathItemTree, query::find_elements, grammar::data_model::ElementNode};
+/// use skyscraper::xpath::{query::find_elements, grammar::data_model::ElementNode};
 ///
-/// let html = html::parse("<html><body><div id=\"example\">Example 1</div></body></html>").unwrap();
-/// let tree = XpathItemTree::from(&html);
+/// let tree = html::parse("<html><body><div id=\"example\">Example 1</div></body></html>").unwrap();
 ///
 /// let elements = find_elements(&tree, "//div").unwrap();
 ///

@@ -8,7 +8,7 @@ use std::{
 use itertools::Itertools;
 use serde::Deserialize;
 use skyscraper::{
-    html::{self, HtmlNode},
+    html,
     xpath::{self, xpath_item_set::XpathItemSet, XpathItemTree},
 };
 
@@ -25,7 +25,17 @@ fn get_lxml_output(xpath: &str, html_text: String, count_only: bool) -> std::pro
     let mut lxml_python_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     lxml_python_path.push("tests/lxml_tests/xpath.py");
 
-    let mut cmd = Command::new("python3");
+    // Use the uv-managed venv Python so lxml/jsons deps are available.
+    let mut venv_python = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    venv_python.push("tests/lxml_tests/.venv/bin/python");
+
+    let python = if venv_python.exists() {
+        venv_python.into_os_string().into_string().unwrap()
+    } else {
+        "python3".to_string()
+    };
+
+    let mut cmd = Command::new(python);
     cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .arg(
@@ -138,16 +148,6 @@ fn compare_skyscraper_to_lxml(
 }
 
 fn compare_itertext(first: &Vec<String>, second: &Vec<String>) {
-    println!("First itertext:");
-    for (i, x) in first.iter().enumerate() {
-        println!("{}: {:?}", i, x);
-    }
-
-    println!("Second itertext:");
-    for (i, x) in second.iter().enumerate() {
-        println!("{}: {:?}", i, x);
-    }
-
     for (i, eb) in first.iter().zip_longest(second.iter()).enumerate() {
         let (first, second) = eb.left_and_right();
         assert_eq!(first, second, "Itertext mismatch at index {}", i);
@@ -256,30 +256,3 @@ fn test_item_count1() {
     assert_eq!(lxml_count, skyscraper_elements.len());
 }
 
-#[allow(dead_code)]
-fn debug_xpath_tree(xpath_item_tree: &XpathItemTree) {
-    let xpath_iter = xpath_item_tree.iter();
-    for node in xpath_iter {
-        if let Ok(element) = node.as_element_node() {
-            if element.name == "h2" {
-                println!(
-                    "{:?}",
-                    element.itertext(&xpath_item_tree).collect::<Vec<_>>()
-                );
-            }
-        }
-    }
-}
-
-#[allow(dead_code)]
-fn debug_html(html_document: html::HtmlDocument) {
-    let html_iter = html_document.iter();
-    for node in html_iter {
-        let html_node = html_document.get_html_node(&node).unwrap();
-        if let HtmlNode::Tag(tag) = html_node {
-            if tag.name == "h2" {
-                println!("{:?}", tag.get_all_text(&node, &html_document));
-            }
-        }
-    }
-}

@@ -2,8 +2,8 @@
 //!
 //! # Example: parse HTML text into a document
 //! ```rust
-//! use skyscraper::html::{self, parse::ParseError};
-//! # fn main() -> Result<(), ParseError> {
+//! use skyscraper::html::{self, grammar::HtmlParseError};
+//! # fn main() -> Result<(), HtmlParseError> {
 //! let html_text = r##"
 //! <html>
 //!     <body>
@@ -11,7 +11,7 @@
 //!     </body>
 //! </html>"##;
 //!
-//! let document = html::parse(html_text)?;
+//! let tree = html::parse(html_text)?;
 //! # Ok(())
 //! # }
 //! ```
@@ -425,48 +425,52 @@ fn display_node(
 ///
 /// Implements [Copy] so that it can be easily passed around, unlike its associated [HtmlNode].
 ///
-/// # Example: get associated [HtmlNode]
+/// # Example: get the root element
 ///
 /// ```rust
-/// # use skyscraper::html::{self, DocumentNode, HtmlNode, parse::ParseError};
-/// # fn main() -> Result<(), ParseError> {
-/// // Parse the HTML text into a document
-/// let text = r#"<div/>"#;
-/// let document = html::parse(text)?;
+/// # use std::error::Error;
+/// # fn main() -> Result<(), Box<dyn Error>> {
+/// use skyscraper::html;
+/// use skyscraper::xpath;
 ///
-/// // Get the root document node's associated HTML node
-/// let doc_node: DocumentNode = document.root_node;
-/// let html_node = document.get_html_node(&doc_node).expect("root node must be in document");
+/// // Parse the HTML text into a tree
+/// let text = r#"<div></div>"#;
+/// let tree = html::parse(text)?;
 ///
-/// // Check we got the right node
-/// match html_node {
-///     HtmlNode::Tag(tag) => assert_eq!(String::from("div"), tag.name),
-///     HtmlNode::Text(_) => panic!("expected tag, got text instead")
-/// }
+/// // Use XPath to find elements
+/// let xpath = xpath::parse("//div")?;
+/// let items = xpath.apply(&tree)?;
+/// assert_eq!(items.len(), 1);
+///
+/// let element = items[0].extract_as_node().extract_as_element_node();
+/// assert_eq!(element.name, "div");
 /// # Ok(())
 /// # }
 /// ```
 ///
-/// # Example: get children and parents
+/// # Example: get children
 ///
 /// ```rust
-/// # use skyscraper::html::{self, DocumentNode, HtmlNode, parse::ParseError};
-/// # fn main() -> Result<(), ParseError> {
-/// // Parse the HTML text into a document
-/// let text = r#"<parent><child/><child/></parent>"#;
-/// let document = html::parse(text)?;
+/// # use std::error::Error;
+/// # fn main() -> Result<(), Box<dyn Error>> {
+/// use skyscraper::html;
+/// use skyscraper::xpath;
 ///
-/// // Get the children of the root node
-/// let parent_node: DocumentNode = document.root_node;
-/// let children: Vec<DocumentNode> = parent_node.children(&document).collect();
-/// assert_eq!(2, children.len());
+/// // Parse the HTML text into a tree
+/// let text = r#"<ul><li></li><li></li></ul>"#;
+/// let tree = html::parse(text)?;
 ///
-/// // Get the parent of both child nodes
-/// let parent_of_child0: DocumentNode = children[0].parent(&document).expect("parent of child 0 missing");
-/// let parent_of_child1: DocumentNode = children[1].parent(&document).expect("parent of child 1 missing");
+/// // Find the ul element and its li children
+/// let xpath = xpath::parse("//ul")?;
+/// let items = xpath.apply(&tree)?;
+/// assert_eq!(items.len(), 1);
 ///
-/// assert_eq!(parent_node, parent_of_child0);
-/// assert_eq!(parent_node, parent_of_child1);
+/// let ul = items[0].extract_as_node().extract_as_element_node();
+/// let children: Vec<_> = ul.children(&tree).collect();
+/// let element_children: Vec<_> = children.iter()
+///     .filter_map(|c| c.as_element_node().ok())
+///     .collect();
+/// assert_eq!(2, element_children.len());
 /// # Ok(())
 /// # }
 /// ```
@@ -488,19 +492,25 @@ impl DocumentNode {
     /// # Example: get the text of a node
     ///
     /// ```rust
-    /// use skyscraper::html::{self, parse::ParseError};
-    /// # fn main() -> Result<(), ParseError> {
-    /// // Parse the text into a document.
+    /// # use std::error::Error;
+    /// # fn main() -> Result<(), Box<dyn Error>> {
+    /// use skyscraper::html;
+    /// use skyscraper::xpath;
+    ///
+    /// // Parse the text into a tree.
     /// let text = r##"<parent>foo<child>bar</child>baz</parent>"##;
-    /// let document = html::parse(text)?;
+    /// let tree = html::parse(text)?;
     ///
-    /// // Get all text of the root node.
-    /// let doc_node = document.root_node;
-    /// let text = doc_node.get_all_text(&document).expect("text missing");
+    /// // Get the text content of the parent element using XPath.
+    /// let xp = xpath::parse("//parent")?;
+    /// let items = xp.apply(&tree)?;
+    /// let element = items[0].extract_as_node().extract_as_element_node();
+    /// let text_content = element.text_content(&tree);
     ///
-    /// assert_eq!("foo bar baz", text);
+    /// assert_eq!("foobarbaz", text_content);
     /// # Ok(())
     /// # }
+    /// ```
     pub fn get_all_text(&self, document: &HtmlDocument) -> Option<String> {
         match document.get_html_node(self) {
             Some(html_node) => html_node.get_all_text(self, document),
@@ -515,19 +525,25 @@ impl DocumentNode {
     /// # Example: get the text of a node
     ///
     /// ```rust
-    /// use skyscraper::html::{self, parse::ParseError};
-    /// # fn main() -> Result<(), ParseError> {
-    /// // Parse the text into a document.
+    /// # use std::error::Error;
+    /// # fn main() -> Result<(), Box<dyn Error>> {
+    /// use skyscraper::html;
+    /// use skyscraper::xpath;
+    ///
+    /// // Parse the text into a tree.
     /// let html_text = r##"<parent>foo<child>bar</child>baz</parent>"##;
-    /// let document = html::parse(html_text)?;
+    /// let tree = html::parse(html_text)?;
     ///
-    /// // Get all text of the root node.
-    /// let doc_node = document.root_node;
-    /// let text = doc_node.get_text(&document).expect("text missing");
+    /// // Get the direct text of the parent element using XPath.
+    /// let xp = xpath::parse("//parent")?;
+    /// let items = xp.apply(&tree)?;
+    /// let element = items[0].extract_as_node().extract_as_element_node();
+    /// let text = element.text(&tree).unwrap();
     ///
-    /// assert_eq!("foo baz", text);
+    /// assert_eq!("foo", text);
     /// # Ok(())
     /// # }
+    /// ```
     pub fn get_text(&self, document: &HtmlDocument) -> Option<String> {
         match document.get_html_node(self) {
             Some(html_node) => html_node.get_text(self, document),
@@ -540,19 +556,25 @@ impl DocumentNode {
     /// If Node is a `Text` return None
     ///
     /// ```rust
-    /// use skyscraper::html::{self, parse::ParseError};
-    /// # fn main() -> Result<(), ParseError> {
-    /// // Parse the text into a document.
+    /// # use std::error::Error;
+    /// # fn main() -> Result<(), Box<dyn Error>> {
+    /// use skyscraper::html;
+    /// use skyscraper::xpath;
+    ///
+    /// // Parse the text into a tree.
     /// let html_text = r##"<div attr1="attr1_value"></div>"##;
-    /// let document = html::parse(html_text)?;
+    /// let tree = html::parse(html_text)?;
     ///
-    /// // Get root node.
-    /// let doc_node = document.root_node;
-    /// let attributes = doc_node.get_attributes(&document).expect("No attributes");
+    /// // Get the attribute using XPath.
+    /// let xp = xpath::parse("//div")?;
+    /// let items = xp.apply(&tree)?;
+    /// let element = items[0].extract_as_node().extract_as_element_node();
+    /// let attr = element.get_attribute(&tree, "attr1").unwrap();
     ///
-    /// assert_eq!("attr1_value", attributes["attr1"]);
+    /// assert_eq!("attr1_value", attr);
     /// # Ok(())
     /// # }
+    /// ```
     pub fn get_attributes<'a>(&'a self, document: &'a HtmlDocument) -> Option<&'a TagAttributes> {
         match document.get_html_node(self) {
             Some(html_node) => html_node.get_attributes(),

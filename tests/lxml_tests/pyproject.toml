@@ -1,0 +1,10 @@
+[project]
+name = "lxml-tests"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.14"
+dependencies = [
+    "jsons>=1.6.3",
+    "lxml>=6.0.2",
+    "typish>=1.9.3",
+]

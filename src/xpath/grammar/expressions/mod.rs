@@ -81,7 +81,7 @@ impl Xpath {
     ///
     /// ```rust
     /// use skyscraper::html;
-    /// use skyscraper::xpath::{self, XpathItemTree, grammar::{XpathItemTreeNode, data_model::XpathItem}};
+    /// use skyscraper::xpath;
     /// use std::error::Error;
     ///
     /// fn main() -> Result<(), Box<dyn Error>> {
@@ -92,16 +92,15 @@ impl Xpath {
     ///         </body>
     ///     </html>"##;
     ///
-    ///     let document = html::parse(html_text)?;
-    ///     let xpath_item_tree = XpathItemTree::from(&document);
+    ///     let xpath_item_tree = html::parse(html_text)?;
     ///     let xpath = xpath::parse("//div")?;
-    ///    
+    ///
     ///     let items = xpath.apply(&xpath_item_tree)?;
-    ///    
+    ///
     ///     assert_eq!(items.len(), 1);
-    ///    
+    ///
     ///     let mut items = items.into_iter();
-    ///    
+    ///
     ///     let item = items
     ///         .next()
     ///         .unwrap();
@@ -141,7 +140,7 @@ impl Xpath {
     ///
     /// ```rust
     /// use skyscraper::html::{self, trim_internal_whitespace};
-    /// use skyscraper::xpath::{self, XpathItemTree, grammar::{data_model::{XpathItem}}};
+    /// use skyscraper::xpath;
     /// use std::error::Error;
     ///
     /// fn main() -> Result<(), Box<dyn Error>> {
@@ -153,8 +152,7 @@ impl Xpath {
     ///         </body>
     ///     </html>"##;
     ///
-    ///     let document = html::parse(html_text)?;
-    ///     let xpath_item_tree = XpathItemTree::from(&document);
+    ///     let xpath_item_tree = html::parse(html_text)?;
     ///     let xpath = xpath::parse(r#"//div[@id="2"]"#)?;
     ///    
     ///     let items = xpath.apply(&xpath_item_tree)?;
@@ -201,7 +199,7 @@ impl Xpath {
     ///
     /// ```rust
     /// use skyscraper::html::{self, trim_internal_whitespace};
-    /// use skyscraper::xpath::{self, XpathItemTree, grammar::{XpathItemTreeNode, data_model::{XpathItem}}};
+    /// use skyscraper::xpath;
     /// use std::error::Error;
     ///
     /// fn main() -> Result<(), Box<dyn Error>> {
@@ -213,8 +211,7 @@ impl Xpath {
     ///         </body>
     ///     </html>"##;
     ///
-    ///     let document = html::parse(html_text)?;
-    ///     let xpath_item_tree = XpathItemTree::from(&document);
+    ///     let xpath_item_tree = html::parse(html_text)?;
     ///     let xpath = xpath::parse(r#"//div[@id="2"]"#)?;
     ///    
     ///     let items = xpath.find_elements(&xpath_item_tree)?;

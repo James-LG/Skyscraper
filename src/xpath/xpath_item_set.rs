@@ -119,9 +119,29 @@ impl<'tree> XpathItemSet<'tree> {
         }
     }
 
-    // pub(crate) fn sort(&mut self) {
-    //     self.index_set.sort();
-    // }
+    /// Sort items by document order (arena NodeId).
+    ///
+    /// Items that are nodes are sorted by their NodeId, which corresponds to
+    /// document order in the arena. Non-node items retain their relative order
+    /// at the end of the set.
+    pub(crate) fn sort_by_document_order(&mut self) {
+        self.index_set.sort_by(|a, b| {
+            let a_id = match a {
+                XpathItem::Node(node) => node.node_id(),
+                _ => None,
+            };
+            let b_id = match b {
+                XpathItem::Node(node) => node.node_id(),
+                _ => None,
+            };
+            match (a_id, b_id) {
+                (Some(a), Some(b)) => a.cmp(&b),
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => std::cmp::Ordering::Equal,
+            }
+        });
+    }
 }
 
 impl<'tree> From<IndexSet<XpathItem<'tree>>> for XpathItemSet<'tree> {
