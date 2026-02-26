@@ -257,6 +257,43 @@ fn dt_end_tag_closes_dt() {
     );
 }
 
+/// An <applet> start tag should insert the element and push a marker onto
+/// the active formatting elements list (WHATWG 13.2.6.4.7).
+#[test]
+fn applet_start_tag_inserts_element() {
+    let text = "<html><body><applet>content</applet></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<applet>content</applet>"),
+        "applet should be present: {output:?}"
+    );
+}
+
+/// A <marquee> start tag should insert the element (WHATWG 13.2.6.4.7).
+#[test]
+fn marquee_start_tag_inserts_element() {
+    let text = "<html><body><marquee>scrolling</marquee></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<marquee>scrolling</marquee>"),
+        "marquee should be present: {output:?}"
+    );
+}
+
+/// An </object> end tag without object in scope should be ignored (WHATWG 13.2.6.4.7).
+#[test]
+fn object_end_tag_without_scope_is_ignored() {
+    let text = "<html><body></object><p>text</p></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<p>text</p>"),
+        "Body content should be preserved: {output:?}"
+    );
+}
+
 /// A <nobr> start tag should insert a nobr element and push it onto the
 /// list of active formatting elements (WHATWG 13.2.6.4.7).
 #[test]

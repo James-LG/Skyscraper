@@ -778,12 +778,34 @@ impl HtmlParser {
             HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if ["applet", "marquee", "object"].contains(&token.tag_name.as_str()) =>
             {
-                todo!()
+                self.reconstruct_the_active_formatting_elements()?;
+                self.insert_an_html_element(token)?;
+                // Insert a marker at the end of the list of active formatting elements.
+                self.active_formatting_elements.push(NodeOrMarker::Marker);
+                self.frameset_ok = false;
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token))
                 if ["applet", "marquee", "object"].contains(&token.tag_name.as_str()) =>
             {
-                todo!()
+                if !self.has_an_element_in_scope(&token.tag_name) {
+                    // Parse error. Ignore the token.
+                    self.handle_error(HtmlParserError::MinorError(format!(
+                        "no {} element in scope",
+                        token.tag_name
+                    )))?;
+                } else {
+                    self.generate_implied_end_tags(None)?;
+
+                    if self.current_node_as_element().unwrap().name != token.tag_name {
+                        self.handle_error(HtmlParserError::MinorError(format!(
+                            "current node is not {}",
+                            token.tag_name
+                        )))?;
+                    }
+
+                    self.pop_until_tag_name(&token.tag_name)?;
+                    self.clear_the_list_of_active_formatting_elements_up_to_the_last_marker()?;
+                }
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "table" => {
                 // TODO: If the Document is not set to quirks mode, and ...

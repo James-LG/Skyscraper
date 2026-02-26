@@ -87,8 +87,8 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 | ~~507~~ | ~~`</dd>` / `</dt>` end tags~~ **DONE** |
 | ~~533~~ | ~~`</sarcasm>` end tag (spec joke — "take a deep breath")~~ **DONE** |
 | ~~578~~ | ~~`<nobr>` start tag~~ **DONE** |
-| 592 | `<applet>` / `<marquee>` / `<object>` start tags |
-| 597 | `</applet>` / `</marquee>` / `</object>` end tags |
+| ~~592~~ | ~~`<applet>` / `<marquee>` / `<object>` start tags~~ **DONE** |
+| ~~597~~ | ~~`</applet>` / `</marquee>` / `</object>` end tags~~ **DONE** |
 | ~~600~~ | ~~`<table>` start tag~~ **DONE** |
 | 608 | Void elements: `<area>`, `<br>`, `<embed>`, `<img>` etc. — some missing branches |
 | 658 | `<param>` / `<source>` / `<track>` start tags |
