@@ -74,7 +74,10 @@ impl HtmlParser {
                 self.insert_a_comment(comment, None)?;
             }
             HtmlToken::DocType(_) => {
-                todo!()
+                // Parse error. Ignore the token.
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "unexpected DOCTYPE in body",
+                )))?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
                 self.handle_error(HtmlParserError::MinorError(String::from(
