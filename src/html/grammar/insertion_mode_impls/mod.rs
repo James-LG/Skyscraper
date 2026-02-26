@@ -95,7 +95,9 @@ impl HtmlParser {
         }
 
         match token {
-            HtmlToken::DocType(_) => todo!(),
+            HtmlToken::DocType(_) => {
+                // parse error, ignore the token
+            }
             HtmlToken::Comment(token) => {
                 let parent = self
                     .root_node
@@ -135,7 +137,7 @@ impl HtmlParser {
                 )?;
             }
             HtmlToken::TagToken(TagTokenType::EndTag(_)) => {
-                todo!()
+                // parse error, ignore the token
             }
             _ => {
                 anything_else(self, token)?;

@@ -21,9 +21,9 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 | ~~1344~~ | ~~InCell insertion mode~~ | ~~[13.2.6.4.15](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incell)~~ **DONE** |
 | ~~1345~~ | ~~InSelect insertion mode~~ | ~~[13.2.6.4.16](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inselect)~~ **DONE** |
 | ~~1346~~ | ~~InSelectInTable insertion mode~~ | ~~[13.2.6.4.17](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inselectintable)~~ **DONE** |
-| 1349 | InFrameset insertion mode | [13.2.6.4.19](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inframeset) |
-| 1350 | AfterFrameset insertion mode | [13.2.6.4.20](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-afterframeset) |
-| 1352 | AfterAfterFrameset insertion mode | [13.2.6.4.22](https://html.spec.whatwg.org/multipage/parsing.html#the-after-after-frameset-insertion-mode) |
+| ~~1349~~ | ~~InFrameset insertion mode~~ | ~~[13.2.6.4.19](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inframeset)~~ **DONE** |
+| ~~1350~~ | ~~AfterFrameset insertion mode~~ | ~~[13.2.6.4.20](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-afterframeset)~~ **DONE** |
+| ~~1352~~ | ~~AfterAfterFrameset insertion mode~~ | ~~[13.2.6.4.22](https://html.spec.whatwg.org/multipage/parsing.html#the-after-after-frameset-insertion-mode)~~ **DONE** |
 
 ## HTML Parser — BeforeHtml Insertion Mode
 
@@ -31,8 +31,8 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line | Feature |
 |------|---------|
-| 98 | DOCTYPE token handling |
-| 138 | Unexpected end tags (parse error) |
+| ~~98~~ | ~~DOCTYPE token handling~~ **DONE** |
+| ~~138~~ | ~~Unexpected end tags (parse error)~~ **DONE** |
 
 ## HTML Parser — BeforeHead Insertion Mode
 
