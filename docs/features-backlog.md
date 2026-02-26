@@ -153,7 +153,7 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line | Feature |
 |------|---------|
-| 59 | String concatenation operator (`||`) |
+| ~~59~~ | ~~String concatenation operator (`||`)~~ **DONE** |
 
 ### Arrow Operator
 

@@ -4,13 +4,23 @@ use std::fmt::Display;
 
 use nom::{bytes::complete::tag, error::context, multi::many0, sequence::tuple};
 
-use crate::xpath::{
-    grammar::{recipes::Res, whitespace_recipes::ws},
-    xpath_item_set::XpathItemSet,
-    ExpressionApplyError, XpathExpressionContext,
+use crate::{
+    xpath::{
+        grammar::{
+            data_model::{AnyAtomicType, XpathItem},
+            recipes::Res,
+            whitespace_recipes::ws,
+        },
+        xpath_item_set::XpathItemSet,
+        ExpressionApplyError, XpathExpressionContext,
+    },
+    xpath_item_set,
 };
 
-use super::sequence_expressions::constructing_sequences::{range_expr, RangeExpr};
+use super::{
+    primary_expressions::static_function_calls::func_data,
+    sequence_expressions::constructing_sequences::{range_expr, RangeExpr},
+};
 
 pub fn string_concat_expr(input: &str) -> Res<&str, StringConcatExpr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-StringConcatExpr
@@ -55,8 +65,25 @@ impl StringConcatExpr {
             return Ok(result);
         }
 
-        // Otherwise, do the operation.
-        todo!("StringConcatExpr::eval concat operator")
+        // Atomize the first operand and cast to string.
+        let atomized = func_data(&result, &context.item_tree);
+        let mut concatenated = String::new();
+        for a in &atomized {
+            concatenated.push_str(&a.to_string());
+        }
+
+        // Evaluate and concatenate each additional operand.
+        for item in &self.items {
+            let item_result = item.eval(context)?;
+            let item_atomized = func_data(&item_result, &context.item_tree);
+            for a in &item_atomized {
+                concatenated.push_str(&a.to_string());
+            }
+        }
+
+        Ok(xpath_item_set![XpathItem::AnyAtomicType(
+            AnyAtomicType::String(concatenated),
+        )])
     }
 }
 
