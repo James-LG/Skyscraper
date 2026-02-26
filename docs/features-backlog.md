@@ -125,8 +125,8 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line | Feature |
 |------|---------|
-| 60 | `or` operator |
-| 108 | `and` operator |
+| ~~60~~ | ~~`or` operator~~ **DONE** |
+| ~~108~~ | ~~`and` operator~~ **DONE** |
 
 ### Comparison Expressions
 

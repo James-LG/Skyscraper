@@ -4,13 +4,17 @@ use std::fmt::Display;
 
 use nom::{bytes::complete::tag, error::context};
 
-use crate::xpath::{
-    grammar::{
-        recipes::Res,
-        whitespace_recipes::{sep, sep_many0},
+use crate::{
+    xpath::{
+        grammar::{
+            data_model::{AnyAtomicType, XpathItem},
+            recipes::Res,
+            whitespace_recipes::{sep, sep_many0},
+        },
+        xpath_item_set::XpathItemSet,
+        ExpressionApplyError, XpathExpressionContext,
     },
-    xpath_item_set::XpathItemSet,
-    ExpressionApplyError, XpathExpressionContext,
+    xpath_item_set,
 };
 
 use super::comparison_expressions::{comparison_expr, ComparisonExpr};
@@ -56,8 +60,26 @@ impl OrExpr {
             return Ok(result);
         }
 
-        // Otherwise, do the boolean op.
-        todo!("OrExpr::eval or operator")
+        // Otherwise, evaluate the or operator.
+        // The result is true if the EBV of any operand is true.
+        if result.boolean() {
+            return Ok(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::Boolean(true),
+            )]);
+        }
+
+        for item in &self.items {
+            let item_result = item.eval(context)?;
+            if item_result.boolean() {
+                return Ok(xpath_item_set![XpathItem::AnyAtomicType(
+                    AnyAtomicType::Boolean(true),
+                )]);
+            }
+        }
+
+        Ok(xpath_item_set![XpathItem::AnyAtomicType(
+            AnyAtomicType::Boolean(false),
+        )])
     }
 }
 
@@ -104,8 +126,26 @@ impl AndExpr {
             return Ok(result);
         }
 
-        // Otherwise, do the boolean op.
-        todo!("AndExpr::eval and operator")
+        // Otherwise, evaluate the and operator.
+        // The result is true only if the EBV of every operand is true.
+        if !result.boolean() {
+            return Ok(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::Boolean(false),
+            )]);
+        }
+
+        for item in &self.items {
+            let item_result = item.eval(context)?;
+            if !item_result.boolean() {
+                return Ok(xpath_item_set![XpathItem::AnyAtomicType(
+                    AnyAtomicType::Boolean(false),
+                )]);
+            }
+        }
+
+        Ok(xpath_item_set![XpathItem::AnyAtomicType(
+            AnyAtomicType::Boolean(true),
+        )])
     }
 }
 
