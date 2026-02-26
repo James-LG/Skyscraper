@@ -371,6 +371,168 @@ fn plaintext_start_tag_closes_p() {
     );
 }
 
+/// A <param> start tag should insert the element and immediately pop it
+/// from the stack (void element behavior) (WHATWG 13.2.6.4.7).
+#[test]
+fn param_start_tag_inserts_void_element() {
+    let text = "<html><body><object><param name=\"movie\" value=\"test.swf\"></object></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<param "),
+        "param element should be present: {output:?}"
+    );
+}
+
+/// A <source> start tag should insert the element and immediately pop it
+/// from the stack (void element behavior) (WHATWG 13.2.6.4.7).
+#[test]
+fn source_start_tag_inserts_void_element() {
+    let text = "<html><body><video><source src=\"video.mp4\"></video></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<source "),
+        "source element should be present: {output:?}"
+    );
+}
+
+/// A <track> start tag should insert the element and immediately pop it
+/// from the stack (void element behavior) (WHATWG 13.2.6.4.7).
+#[test]
+fn track_start_tag_inserts_void_element() {
+    let text = "<html><body><video><track kind=\"subtitles\" src=\"subs.vtt\"></video></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<track "),
+        "track element should be present: {output:?}"
+    );
+}
+
+/// An <hr> start tag should close an open <p> element, insert the <hr>,
+/// pop it, and set frameset-ok to "not ok" (WHATWG 13.2.6.4.7).
+#[test]
+fn hr_start_tag_closes_p_and_inserts() {
+    let text = "<html><body><p>text<hr></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<hr>"),
+        "hr element should be present: {output:?}"
+    );
+    // The p should be closed before hr.
+    assert!(
+        !output.contains("<p><hr>"),
+        "p should not contain hr: {output:?}"
+    );
+}
+
+/// An <hr> without an open <p> should just insert normally (WHATWG 13.2.6.4.7).
+#[test]
+fn hr_start_tag_inserts_without_p() {
+    let text = "<html><body><div><hr></div></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<hr>"),
+        "hr element should be present: {output:?}"
+    );
+}
+
+/// An <image> start tag should be rewritten to <img> and reprocessed
+/// (WHATWG 13.2.6.4.7).
+#[test]
+fn image_start_tag_rewritten_to_img() {
+    let text = "<html><body><image src=\"photo.jpg\"></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    // <image> should be rewritten to <img>.
+    assert!(
+        output.contains("<img "),
+        "image should be rewritten to img: {output:?}"
+    );
+    assert!(
+        !output.contains("<image"),
+        "image tag should not appear in output: {output:?}"
+    );
+    // Attributes should survive the tag name rewrite.
+    assert!(
+        output.contains("photo.jpg"),
+        "attributes should be preserved through rewrite: {output:?}"
+    );
+}
+
+/// An <xmp> start tag should close an open <p> element, reconstruct active
+/// formatting elements, set frameset-ok to "not ok", and use the generic
+/// raw text element parsing algorithm (WHATWG 13.2.6.4.7).
+#[test]
+fn xmp_start_tag_inserts_raw_text() {
+    let text = "<html><body><xmp><b>not bold</b></xmp></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<xmp>"),
+        "xmp element should be present: {output:?}"
+    );
+    // Inside <xmp>, tags are treated as raw text and serialized escaped.
+    assert!(
+        output.contains("&lt;b&gt;"),
+        "Content inside xmp should be escaped as raw text: {output:?}"
+    );
+}
+
+/// An <xmp> start tag should close an open <p> element (WHATWG 13.2.6.4.7).
+#[test]
+fn xmp_start_tag_closes_p() {
+    let text = "<html><body><p>text<xmp>code</xmp></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        !output.contains("<p><xmp>"),
+        "p should not contain xmp: {output:?}"
+    );
+}
+
+/// An <iframe> start tag should set frameset-ok to "not ok" and use the
+/// generic raw text element parsing algorithm (WHATWG 13.2.6.4.7).
+#[test]
+fn iframe_start_tag_inserts_raw_text() {
+    let text = "<html><body><iframe><b>not bold</b></iframe></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<iframe>"),
+        "iframe element should be present: {output:?}"
+    );
+}
+
+/// A <noembed> start tag should use the generic raw text element parsing
+/// algorithm (WHATWG 13.2.6.4.7).
+#[test]
+fn noembed_start_tag_inserts_raw_text() {
+    let text = "<html><body><noembed><b>not bold</b></noembed></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<noembed>"),
+        "noembed element should be present: {output:?}"
+    );
+}
+
+/// A <noscript> start tag when scripting is disabled should reconstruct
+/// active formatting elements and insert normally (WHATWG 13.2.6.4.7).
+#[test]
+fn noscript_start_tag_inserts_normally_when_scripting_disabled() {
+    let text = "<html><body><noscript>fallback content</noscript></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<noscript>fallback content</noscript>"),
+        "noscript element should be present with content: {output:?}"
+    );
+}
+
 /// A DOCTYPE token encountered in the "in body" insertion mode should be
 /// treated as a parse error and ignored (WHATWG 13.2.6.4.7).
 ///

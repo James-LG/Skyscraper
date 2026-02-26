@@ -873,13 +873,36 @@ impl HtmlParser {
             HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if ["param", "source", "track"].contains(&token.tag_name.as_str()) =>
             {
-                todo!()
+                let self_closing = token.self_closing;
+                self.insert_an_html_element(token)?;
+                self.open_elements.pop();
+
+                if self_closing {
+                    return Ok(Acknowledgement::yes());
+                }
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "hr" => {
-                todo!()
+                if self.has_an_element_in_button_scope("p") {
+                    self.close_a_p_element()?;
+                }
+
+                let self_closing = token.self_closing;
+                self.insert_an_html_element(token)?;
+                self.open_elements.pop();
+
+                self.frameset_ok = false;
+
+                if self_closing {
+                    return Ok(Acknowledgement::yes());
+                }
             }
-            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "image" => {
-                todo!()
+            HtmlToken::TagToken(TagTokenType::StartTag(mut token)) if token.tag_name == "image" => {
+                // Parse error. Change the token's tag name to "img" and reprocess.
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "image start tag, rewriting to img",
+                )))?;
+                token.tag_name = String::from("img");
+                return self.in_body_insertion_mode(HtmlToken::TagToken(TagTokenType::StartTag(token)));
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "textarea" => {
                 self.insert_an_html_element(token)?;
@@ -897,15 +920,29 @@ impl HtmlParser {
                 });
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "xmp" => {
-                todo!()
+                if self.has_an_element_in_button_scope("p") {
+                    self.close_a_p_element()?;
+                }
+
+                self.reconstruct_the_active_formatting_elements()?;
+                self.frameset_ok = false;
+
+                return self.generic_raw_text_element_parsing_algorithm(token);
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "iframe" => {
-                todo!()
+                self.frameset_ok = false;
+
+                return self.generic_raw_text_element_parsing_algorithm(token);
             }
-            HtmlToken::TagToken(TagTokenType::StartTag(token))
-                if ["noembed", "noscript"].contains(&token.tag_name.as_str()) =>
-            {
-                todo!()
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "noembed" => {
+                // Follow the generic raw text element parsing algorithm.
+                return self.generic_raw_text_element_parsing_algorithm(token);
+            }
+            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "noscript" => {
+                // Scripting is disabled in Skyscraper, so treat as a normal element:
+                // reconstruct active formatting elements and insert.
+                self.reconstruct_the_active_formatting_elements()?;
+                self.insert_an_html_element(token)?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "select" => {
                 // Reconstruct the active formatting elements, if any.

@@ -90,13 +90,13 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 | ~~592~~ | ~~`<applet>` / `<marquee>` / `<object>` start tags~~ **DONE** |
 | ~~597~~ | ~~`</applet>` / `</marquee>` / `</object>` end tags~~ **DONE** |
 | ~~600~~ | ~~`<table>` start tag~~ **DONE** |
-| 608 | Void elements: `<area>`, `<br>`, `<embed>`, `<img>` etc. — some missing branches |
-| 658 | `<param>` / `<source>` / `<track>` start tags |
-| 661 | `<hr>` start tag |
-| 664 | `<image>` start tag (should be rewritten to `<img>`) |
-| 681 | `<xmp>` start tag |
-| 684 | `<iframe>` start tag |
-| 689 | `<noembed>` / `<noscript>` start tags |
+| ~~608~~ | ~~Void elements: `<area>`, `<br>`, `<embed>`, `<img>` etc. — some missing branches~~ **DONE** |
+| ~~658~~ | ~~`<param>` / `<source>` / `<track>` start tags~~ **DONE** |
+| ~~661~~ | ~~`<hr>` start tag~~ **DONE** |
+| ~~664~~ | ~~`<image>` start tag (should be rewritten to `<img>`)~~ **DONE** |
+| ~~681~~ | ~~`<xmp>` start tag~~ **DONE** |
+| ~~684~~ | ~~`<iframe>` start tag~~ **DONE** |
+| ~~689~~ | ~~`<noembed>` / `<noscript>` start tags~~ **DONE** |
 | ~~692~~ | ~~`<select>` start tag~~ **DONE** |
 | ~~697~~ | ~~`<optgroup>` / `<option>` start tags~~ **DONE** |
 | 702 | `<rb>` / `<rtc>` start tags (ruby) |
