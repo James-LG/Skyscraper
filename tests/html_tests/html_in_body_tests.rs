@@ -156,6 +156,71 @@ fn pre_does_not_strip_non_lf() {
     );
 }
 
+/// A <dd> start tag should close an existing open <dd> and insert a new one
+/// (WHATWG 13.2.6.4.7).
+#[test]
+fn dd_start_tag_closes_previous_dd() {
+    let text = "<html><body><dl><dd>first<dd>second</dl></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    // The first dd should be implicitly closed by the second dd.
+    assert!(
+        output.contains("<dd>first</dd>"),
+        "first dd should be closed: {output:?}"
+    );
+    assert!(
+        output.contains("<dd>second</dd>"),
+        "second dd should be present: {output:?}"
+    );
+}
+
+/// A <dt> start tag should close an existing open <dd> element
+/// (WHATWG 13.2.6.4.7).
+#[test]
+fn dt_start_tag_closes_previous_dd() {
+    let text = "<html><body><dl><dd>desc<dt>term</dl></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<dd>desc</dd>"),
+        "dd should be closed by dt: {output:?}"
+    );
+    assert!(
+        output.contains("<dt>term</dt>"),
+        "dt should be present: {output:?}"
+    );
+}
+
+/// A <dd> start tag should close an existing open <dt> element
+/// (WHATWG 13.2.6.4.7).
+#[test]
+fn dd_start_tag_closes_previous_dt() {
+    let text = "<html><body><dl><dt>term<dd>desc</dl></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<dt>term</dt>"),
+        "dt should be closed by dd: {output:?}"
+    );
+    assert!(
+        output.contains("<dd>desc</dd>"),
+        "dd should be present: {output:?}"
+    );
+}
+
+/// A <dd>/<dt> start tag should close a <p> element in button scope
+/// (WHATWG 13.2.6.4.7).
+#[test]
+fn dd_start_tag_closes_p_element() {
+    let text = "<html><body><p>text<dd>desc</body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        !output.contains("<p><dd>"),
+        "p should not contain dd: {output:?}"
+    );
+}
+
 /// A DOCTYPE token encountered in the "in body" insertion mode should be
 /// treated as a parse error and ignored (WHATWG 13.2.6.4.7).
 ///

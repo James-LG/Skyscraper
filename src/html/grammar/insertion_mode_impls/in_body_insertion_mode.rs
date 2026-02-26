@@ -400,7 +400,102 @@ impl HtmlParser {
             HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if ["dd", "dt"].contains(&token.tag_name.as_str()) =>
             {
-                todo!()
+                fn step_3_loop(
+                    parser: &mut HtmlParser,
+                    element: &ElementNode,
+                    token: TagToken,
+                ) -> Result<(), HtmlParseError> {
+                    // If node is a dd element, then run these substeps:
+                    if element.name == "dd" {
+                        parser.generate_implied_end_tags(Some("dd"))?;
+
+                        if parser.current_node_as_element_result()?.name != "dd" {
+                            parser.handle_error(HtmlParserError::MinorError(String::from(
+                                "current node is not dd",
+                            )))?;
+                        }
+
+                        parser.pop_until_tag_name("dd")?;
+                    }
+
+                    // If node is a dt element, then run these substeps:
+                    if element.name == "dt" {
+                        parser.generate_implied_end_tags(Some("dt"))?;
+
+                        if parser.current_node_as_element_result()?.name != "dt" {
+                            parser.handle_error(HtmlParserError::MinorError(String::from(
+                                "current node is not dt",
+                            )))?;
+                        }
+
+                        parser.pop_until_tag_name("dt")?;
+                    }
+
+                    // If node is in the special category, but is not an address, div, or p
+                    // element, then jump to the step labeled done below.
+                    if SPECIAL_ELEMENTS.contains(&element.name.as_str())
+                        && !["address", "div", "p"].contains(&element.name.as_str())
+                    {
+                        step_done(parser, token)?;
+                    } else {
+                        // Otherwise, set node to the previous entry in the stack of open
+                        // elements and return to the step labeled loop.
+                        let current_element_index = parser
+                            .open_elements
+                            .iter()
+                            .position(|node_id| node_id == &element.id())
+                            .expect("current element is not in open elements");
+
+                        let previous_element_id = parser
+                            .open_elements
+                            .get(current_element_index - 1)
+                            .expect("previous element is not in open elements");
+
+                        let previous_element = parser
+                            .arena
+                            .get(*previous_element_id)
+                            .unwrap()
+                            .get()
+                            .as_element_node()
+                            .map_err(|_| {
+                                HtmlParserError::MinorError(String::from(
+                                    "previous element is not an element node",
+                                ))
+                            });
+
+                        match previous_element {
+                            Err(_) => {
+                                parser.handle_error(HtmlParserError::MinorError(String::from(
+                                    "previous element is not an element node",
+                                )))?;
+                            }
+                            Ok(previous_element) => {
+                                let previous_element = previous_element.clone();
+                                return step_3_loop(parser, &previous_element, token);
+                            }
+                        }
+                    }
+
+                    Ok(())
+                }
+
+                fn step_done(
+                    parser: &mut HtmlParser,
+                    token: TagToken,
+                ) -> Result<(), HtmlParseError> {
+                    if parser.has_an_element_in_button_scope("p") {
+                        parser.close_a_p_element()?;
+                    }
+
+                    parser.insert_an_html_element(token)?;
+
+                    Ok(())
+                }
+
+                self.frameset_ok = false;
+
+                let node = self.current_node_as_element_result()?.clone();
+                step_3_loop(self, &node, token)?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "plaintext" => {
                 todo!()
