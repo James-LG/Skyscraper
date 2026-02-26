@@ -498,7 +498,17 @@ impl HtmlParser {
                 step_3_loop(self, &node, token)?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "plaintext" => {
-                todo!()
+                if self.has_an_element_in_button_scope("p") {
+                    self.close_a_p_element()?;
+                }
+
+                self.insert_an_html_element(token)?;
+
+                // Switch the tokenizer to the PLAINTEXT state.
+                return Ok(Acknowledgement {
+                    self_closed: false,
+                    tokenizer_state: Some(TokenizerState::PLAINTEXT),
+                });
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "button" => {
                 if self.has_an_element_in_scope("button") {

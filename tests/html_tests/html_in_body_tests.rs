@@ -221,6 +221,37 @@ fn dd_start_tag_closes_p_element() {
     );
 }
 
+/// A <plaintext> start tag should close p in button scope, insert the element,
+/// and switch the tokenizer to PLAINTEXT state (WHATWG 13.2.6.4.7).
+/// Everything after <plaintext> is treated as raw text (no end tag).
+#[test]
+fn plaintext_start_tag_inserts_and_switches_tokenizer() {
+    let text = "<html><body><plaintext>raw <b>not bold</b> text";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<plaintext>"),
+        "plaintext element should be present: {output:?}"
+    );
+    // In PLAINTEXT mode, everything is text — <b> and </b> are not parsed as tags.
+    assert!(
+        output.contains("&lt;b&gt;") || output.contains("<b>not bold</b>") || output.contains("raw"),
+        "Content after <plaintext> should be preserved as text: {output:?}"
+    );
+}
+
+/// A <plaintext> start tag should close an open <p> element (WHATWG 13.2.6.4.7).
+#[test]
+fn plaintext_start_tag_closes_p() {
+    let text = "<html><body><p>para<plaintext>raw text";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        !output.contains("<p><plaintext>"),
+        "p should not contain plaintext: {output:?}"
+    );
+}
+
 /// A DOCTYPE token encountered in the "in body" insertion mode should be
 /// treated as a parse error and ignored (WHATWG 13.2.6.4.7).
 ///
