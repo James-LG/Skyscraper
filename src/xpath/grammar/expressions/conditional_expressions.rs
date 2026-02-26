@@ -9,9 +9,13 @@ use nom::{
     sequence::tuple,
 };
 
-use crate::xpath::grammar::{
-    recipes::Res,
-    whitespace_recipes::{sep, ws},
+use crate::xpath::{
+    grammar::{
+        recipes::Res,
+        whitespace_recipes::{sep, ws},
+    },
+    xpath_item_set::XpathItemSet,
+    ExpressionApplyError, XpathExpressionContext,
 };
 
 use super::{expr, expr_single, Expr, ExprSingle};
@@ -44,6 +48,22 @@ pub struct IfExpr {
     pub condition: Expr,
     pub then: ExprSingle,
     pub else_expr: ExprSingle,
+}
+
+impl IfExpr {
+    pub(crate) fn eval<'tree>(
+        &self,
+        context: &XpathExpressionContext<'tree>,
+    ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
+        // Evaluate the condition and get its effective boolean value.
+        let condition_result = self.condition.eval(context)?;
+
+        if condition_result.boolean() {
+            self.then.eval(context)
+        } else {
+            self.else_expr.eval(context)
+        }
+    }
 }
 
 impl Display for IfExpr {

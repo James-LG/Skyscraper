@@ -387,7 +387,7 @@ impl ExprSingle {
             ExprSingle::ForExpr(e) => e.eval(context),
             ExprSingle::LetExpr(e) => e.eval(context),
             ExprSingle::QuantifiedExpr(e) => e.eval(context),
-            ExprSingle::IfExpr(_) => todo!("ExprSingle::IfExpr"),
+            ExprSingle::IfExpr(e) => e.eval(context),
             ExprSingle::OrExpr(e) => e.eval(context),
         }
     }
