@@ -664,7 +664,24 @@ impl HtmlParser {
             HtmlToken::TagToken(TagTokenType::EndTag(token))
                 if ["dd", "dt"].contains(&token.tag_name.as_str()) =>
             {
-                todo!()
+                if !self.has_an_element_in_scope(&token.tag_name) {
+                    // Parse error. Ignore the token.
+                    self.handle_error(HtmlParserError::MinorError(format!(
+                        "no {} element in scope",
+                        token.tag_name
+                    )))?;
+                } else {
+                    self.generate_implied_end_tags(Some(&token.tag_name))?;
+
+                    if self.current_node_as_element().unwrap().name != token.tag_name {
+                        self.handle_error(HtmlParserError::MinorError(format!(
+                            "current node is not {}",
+                            token.tag_name
+                        )))?;
+                    }
+
+                    self.pop_until_tag_name(&token.tag_name)?;
+                }
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token))
                 if ["h1", "h2", "h3", "h4", "h5", "h6"].contains(&token.tag_name.as_str()) =>

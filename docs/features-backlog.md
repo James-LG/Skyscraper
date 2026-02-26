@@ -84,7 +84,7 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 | ~~244~~ | ~~`<pre>` / `<listing>` start tags~~ **DONE** |
 | ~~348~~ | ~~`<dd>` / `<dt>` start tags~~ **DONE** |
 | ~~351~~ | ~~`<plaintext>` start tag~~ **DONE** |
-| 507 | `</dd>` / `</dt>` end tags |
+| ~~507~~ | ~~`</dd>` / `</dt>` end tags~~ **DONE** |
 | 533 | `</sarcasm>` end tag (spec joke — "take a deep breath") |
 | 578 | `<nobr>` start tag |
 | 592 | `<applet>` / `<marquee>` / `<object>` start tags |

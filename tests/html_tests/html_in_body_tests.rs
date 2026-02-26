@@ -221,6 +221,42 @@ fn dd_start_tag_closes_p_element() {
     );
 }
 
+/// An explicit </dd> end tag should close the dd element (WHATWG 13.2.6.4.7).
+#[test]
+fn dd_end_tag_closes_dd() {
+    let text = "<html><body><dl><dd>content</dd></dl></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<dd>content</dd>"),
+        "dd should be properly closed: {output:?}"
+    );
+}
+
+/// A </dd> end tag with no dd in scope should be ignored (WHATWG 13.2.6.4.7).
+#[test]
+fn dd_end_tag_without_scope_is_ignored() {
+    let text = "<html><body></dd><p>text</p></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<p>text</p>"),
+        "Body content should be preserved: {output:?}"
+    );
+}
+
+/// An explicit </dt> end tag should close the dt element (WHATWG 13.2.6.4.7).
+#[test]
+fn dt_end_tag_closes_dt() {
+    let text = "<html><body><dl><dt>term</dt></dl></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("<dt>term</dt>"),
+        "dt should be properly closed: {output:?}"
+    );
+}
+
 /// A <plaintext> start tag should close p in button scope, insert the element,
 /// and switch the tokenizer to PLAINTEXT state (WHATWG 13.2.6.4.7).
 /// Everything after <plaintext> is treated as raw text (no end tag).
