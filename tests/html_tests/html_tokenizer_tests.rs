@@ -1778,3 +1778,124 @@ fn attribute_with_decimal_char_ref_in_unquoted() {
         .unwrap();
     assert!(test_framework::compare_documents(expected, document, true));
 }
+
+// ============================================================================
+// Duplicate attribute deduplication tests (WHATWG 13.2.5.34)
+// ============================================================================
+
+/// Duplicate attributes on a tag: per WHATWG spec, only the first
+/// occurrence of an attribute name should be kept; subsequent
+/// duplicates are parse errors and must be dropped.
+#[test]
+fn duplicate_attributes_first_wins() {
+    let text = r#"<html><head></head><body><div class="a" class="b">text</div></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+
+    let expected = DocumentBuilder::new()
+        .add_element("html", |html| {
+            html.add_element("head", |head| head)
+                .add_element("body", |body| {
+                    body.add_element("div", |div| {
+                        div.add_attribute_str("class", "a").add_text("text")
+                    })
+                })
+        })
+        .build()
+        .unwrap();
+
+    assert!(test_framework::compare_documents(expected, document, true));
+}
+
+/// Duplicate attributes with different values: only the first value is kept.
+#[test]
+fn duplicate_attributes_multiple_different_values() {
+    let text = r#"<html><head></head><body><p id="first" id="second" id="third">text</p></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+
+    let expected = DocumentBuilder::new()
+        .add_element("html", |html| {
+            html.add_element("head", |head| head)
+                .add_element("body", |body| {
+                    body.add_element("p", |p| {
+                        p.add_attribute_str("id", "first").add_text("text")
+                    })
+                })
+        })
+        .build()
+        .unwrap();
+
+    assert!(test_framework::compare_documents(expected, document, true));
+}
+
+/// Non-duplicate attributes should all be preserved.
+#[test]
+fn non_duplicate_attributes_all_preserved() {
+    let text =
+        r#"<html><head></head><body><div id="a" class="b" data-x="c">text</div></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+
+    let expected = DocumentBuilder::new()
+        .add_element("html", |html| {
+            html.add_element("head", |head| head)
+                .add_element("body", |body| {
+                    body.add_element("div", |div| {
+                        div.add_attribute_str("id", "a")
+                            .add_attribute_str("class", "b")
+                            .add_attribute_str("data-x", "c")
+                            .add_text("text")
+                    })
+                })
+        })
+        .build()
+        .unwrap();
+
+    assert!(test_framework::compare_documents(expected, document, true));
+}
+
+/// Duplicate attribute where first occurrence has empty value.
+#[test]
+fn duplicate_attribute_first_empty_value() {
+    let text = r#"<html><head></head><body><div class="" class="b">text</div></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+
+    let expected = DocumentBuilder::new()
+        .add_element("html", |html| {
+            html.add_element("head", |head| head)
+                .add_element("body", |body| {
+                    body.add_element("div", |div| {
+                        div.add_attribute_str("class", "").add_text("text")
+                    })
+                })
+        })
+        .build()
+        .unwrap();
+
+    assert!(test_framework::compare_documents(expected, document, true));
+}
+
+/// Duplicate attribute names are compared after lowercasing.
+/// CLASS="a" and class="b" should be treated as duplicates.
+#[test]
+fn duplicate_attribute_case_insensitive() {
+    let text = r#"<html><head></head><body><div CLASS="a" class="b">text</div></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+
+    let expected = DocumentBuilder::new()
+        .add_element("html", |html| {
+            html.add_element("head", |head| head)
+                .add_element("body", |body| {
+                    body.add_element("div", |div| {
+                        div.add_attribute_str("class", "a").add_text("text")
+                    })
+                })
+        })
+        .build()
+        .unwrap();
+
+    assert!(test_framework::compare_documents(expected, document, true));
+}

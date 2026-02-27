@@ -938,8 +938,6 @@ impl<'a> Tokenizer<'a> {
             }
         }
 
-        // TODO: check for duplicate attribtue names before emitting
-
         Ok(())
     }
 

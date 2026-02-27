@@ -310,7 +310,8 @@ The tokenizer implements the WHATWG state machine including named character refe
 | Feature | Notes |
 |---------|-------|
 | ~~Adoption agency algorithm edge cases~~ | ~~Done~~ — Step 4.6 now performs a proper scope check via `has_node_in_scope` (`src/html/grammar/insertion_mode_impls/in_body_insertion_mode.rs:1241`); formatting elements behind scope barriers (e.g. `table`) are correctly ignored per WHATWG spec |
-| Foster parenting | May have edge cases not covered |
+| ~~Foster parenting~~ | ~~Done~~ — Verified with comprehensive edge-case tests: element/text/mixed foster parenting, multiple foster-parented elements, foster parenting after table rows, anchor elements, bold text; all pass correctly |
+| ~~Duplicate attribute deduplication~~ | ~~Done~~ — `emit_current_tag_token` now deduplicates attributes per WHATWG 13.2.5.34, keeping the first occurrence and emitting a `DuplicateAttribute` parse error for subsequent duplicates (`src/html/grammar/tokenizer/mod.rs`) |
 
 ---
 

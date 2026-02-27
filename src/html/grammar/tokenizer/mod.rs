@@ -1,6 +1,6 @@
 //! <https://html.spec.whatwg.org/multipage/parsing.html#tokenization>
 
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use indextree::NodeId;
 use nom::error;
@@ -314,6 +314,8 @@ pub(crate) enum TokenizerError {
     UnexpectedCharacterAfterDoctypeSystemIdentifier,
     #[error("eof in cdata section")]
     EofInCdataSection,
+    #[error("duplicate attribute")]
+    DuplicateAttribute,
 }
 
 pub(crate) trait TokenizerErrorHandler {
@@ -518,9 +520,27 @@ impl<'a> Tokenizer<'a> {
     }
 
     pub fn emit_current_tag_token(&mut self) -> Result<(), HtmlParseError> {
-        if let Some(tag_token) = self.tag_token.take() {
+        if let Some(mut tag_token) = self.tag_token.take() {
             #[cfg(feature = "debug_prints")]
             println!("emitting tag token: {:?}", tag_token);
+
+            // WHATWG 13.2.5.34: Before emitting a tag token, check for duplicate
+            // attribute names. If a duplicate is found, it is a parse error and the
+            // later attribute must be removed (keeping the first occurrence).
+            let attributes = tag_token.attributes_mut();
+            let mut seen = HashSet::new();
+            let mut had_duplicate = false;
+            attributes.retain(|attr| {
+                if seen.insert(attr.name.clone()) {
+                    true
+                } else {
+                    had_duplicate = true;
+                    false
+                }
+            });
+            if had_duplicate {
+                self.handle_error(TokenizerError::DuplicateAttribute)?;
+            }
 
             self.attribute_prefix_buffer.clear();
             self.emit(HtmlToken::TagToken(tag_token))?;

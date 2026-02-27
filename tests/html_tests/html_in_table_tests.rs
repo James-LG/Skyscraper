@@ -411,6 +411,152 @@ fn table_non_hidden_input_foster_parented() {
     assert!(test_framework::compare_documents(expected, document, true));
 }
 
+/// An element (<div>) inside a table triggers foster parenting.
+/// The <div> and its contents should appear before the table.
+#[test]
+fn table_element_foster_parented() {
+    let text =
+        r#"<html><head></head><body><table><div>foster me</div></table></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+
+    let expected = DocumentBuilder::new()
+        .add_element("html", |html| {
+            html.add_element("head", |head| head)
+                .add_element("body", |body| {
+                    body.add_element("div", |div| div.add_text("foster me"))
+                        .add_element("table", |table| table)
+                })
+        })
+        .build()
+        .unwrap();
+
+    assert!(test_framework::compare_documents(expected, document, true));
+}
+
+/// Multiple elements foster-parented out of a table should appear
+/// in order before the table.
+#[test]
+fn table_multiple_elements_foster_parented() {
+    let text = r#"<html><head></head><body><table><p>first</p><p>second</p></table></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+
+    let expected = DocumentBuilder::new()
+        .add_element("html", |html| {
+            html.add_element("head", |head| head)
+                .add_element("body", |body| {
+                    body.add_element("p", |p| p.add_text("first"))
+                        .add_element("p", |p| p.add_text("second"))
+                        .add_element("table", |table| table)
+                })
+        })
+        .build()
+        .unwrap();
+
+    assert!(test_framework::compare_documents(expected, document, true));
+}
+
+/// Foster-parented text interleaved with table structure.
+/// <p>B</p> appears after </tr> inside table, gets foster-parented.
+#[test]
+fn table_foster_parented_after_row() {
+    let text = r#"<html><head></head><body><table><tr><td>A</td></tr><p>B</p></table></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+
+    let expected = DocumentBuilder::new()
+        .add_element("html", |html| {
+            html.add_element("head", |head| head)
+                .add_element("body", |body| {
+                    body.add_element("p", |p| p.add_text("B"))
+                        .add_element("table", |table| {
+                            table.add_element("tbody", |tbody| {
+                                tbody.add_element("tr", |tr| {
+                                    tr.add_element("td", |td| td.add_text("A"))
+                                })
+                            })
+                        })
+                })
+        })
+        .build()
+        .unwrap();
+
+    assert!(test_framework::compare_documents(expected, document, true));
+}
+
+/// Bold text inside a table gets foster-parented: <b> and its text
+/// appear before the table.
+#[test]
+fn table_bold_text_foster_parented() {
+    let text =
+        r#"<html><head></head><body><table><b>bold</b></table></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+
+    let expected = DocumentBuilder::new()
+        .add_element("html", |html| {
+            html.add_element("head", |head| head)
+                .add_element("body", |body| {
+                    body.add_element("b", |b| b.add_text("bold"))
+                        .add_element("table", |table| table)
+                })
+        })
+        .build()
+        .unwrap();
+
+    assert!(test_framework::compare_documents(expected, document, true));
+}
+
+/// Mixed text and element foster parenting: "a", <b>bold</b>, "c" all
+/// get foster-parented before the table in order.
+#[test]
+fn table_mixed_text_and_element_foster_parented() {
+    let text =
+        r#"<html><head></head><body><table>a<b>bold</b>c</table></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+
+    let expected = DocumentBuilder::new()
+        .add_element("html", |html| {
+            html.add_element("head", |head| head)
+                .add_element("body", |body| {
+                    body.add_text("a")
+                        .add_element("b", |b| b.add_text("bold"))
+                        .add_text("c")
+                        .add_element("table", |table| table)
+                })
+        })
+        .build()
+        .unwrap();
+
+    assert!(test_framework::compare_documents(expected, document, true));
+}
+
+/// <a href="..."> inside table gets foster-parented. Tests interaction
+/// between adoption agency algorithm and foster parenting.
+#[test]
+fn table_anchor_foster_parented() {
+    let text = r#"<html><head></head><body><table><a href="x">link</a></table></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+
+    let expected = DocumentBuilder::new()
+        .add_element("html", |html| {
+            html.add_element("head", |head| head)
+                .add_element("body", |body| {
+                    body.add_element("a", |a| {
+                        a.add_attribute_str("href", "x").add_text("link")
+                    })
+                    .add_element("table", |table| table)
+                })
+        })
+        .build()
+        .unwrap();
+
+    assert!(test_framework::compare_documents(expected, document, true));
+}
+
 /// Nested <table> start tag: the first table is closed, then the second is opened.
 #[test]
 fn table_nested_table_closes_first() {
