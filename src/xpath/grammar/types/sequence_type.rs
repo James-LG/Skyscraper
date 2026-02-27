@@ -27,8 +27,10 @@ use crate::xpath::{
 };
 
 use super::{
-    array_test::ArrayTest, function_test::FunctionTest, map_test::MapTest, AtomicOrUnionType,
-    KindTest,
+    array_test::{ArrayTest, TypedArrayTest},
+    function_test::{FunctionTest, TypedFunctionTest},
+    map_test::{MapTest, TypedMapTest},
+    AtomicOrUnionType, KindTest,
 };
 
 pub fn sequence_type(input: &str) -> Res<&str, SequenceType> {
@@ -196,6 +198,32 @@ impl Display for ItemType {
     }
 }
 
+/// Check if an atomic value matches a type name.
+///
+/// Returns `true` if the atomic value is of the given type, or if the type name
+/// is not one of the known XPath built-in types (fall back to accepting any atomic).
+fn atomic_matches_type_name(atomic: &AnyAtomicType, type_local: Option<&str>) -> bool {
+    match type_local {
+        Some("integer") => matches!(atomic, AnyAtomicType::Integer(_)),
+        Some("string") => matches!(atomic, AnyAtomicType::String(_)),
+        Some("boolean") => matches!(atomic, AnyAtomicType::Boolean(_)),
+        Some("float") => matches!(atomic, AnyAtomicType::Float(_)),
+        Some("double") => matches!(atomic, AnyAtomicType::Double(_)),
+        // Unknown type name — fall back to accepting any atomic.
+        _ => true,
+    }
+}
+
+/// Get the arity of a function item.
+fn function_arity(f: &Function) -> u32 {
+    match f {
+        Function::Named { arity, .. } => *arity,
+        Function::Inline { params, .. } => params.len() as u32,
+        Function::Map { .. } => 1,
+        Function::Array { .. } => 1,
+    }
+}
+
 impl ItemType {
     pub(crate) fn is_match<'tree>(
         &self,
@@ -209,44 +237,133 @@ impl ItemType {
                 let result = x.filter(item_set, item_tree)?;
                 Ok(!result.is_empty())
             }
-            ItemType::FunctionTest(_x) => {
-                // function(*) matches any function item (Named, Inline, Map, Array).
-                // TypedFunctionTest checks parameter/return types, which we don't
-                // track at runtime. For now, just check if the item is a function.
-                Ok(item_set.iter().all(|item| matches!(item, XpathItem::Function(_))))
-            }
-            ItemType::MapTest(_x) => {
-                // map(*) matches any map. TypedMapTest checks key/value types.
-                // For now, just check if the item is a Map function.
-                Ok(item_set
-                    .iter()
-                    .all(|item| matches!(item, XpathItem::Function(Function::Map { .. }))))
-            }
-            ItemType::ArrayTest(_x) => {
-                // array(*) matches any array. TypedArrayTest checks member types.
-                // For now, just check if the item is an Array function.
-                Ok(item_set
-                    .iter()
-                    .all(|item| matches!(item, XpathItem::Function(Function::Array { .. }))))
-            }
+            ItemType::FunctionTest(x) => match x.as_ref() {
+                FunctionTest::AnyFunctionTest => {
+                    // function(*) matches any function item.
+                    Ok(item_set
+                        .iter()
+                        .all(|item| matches!(item, XpathItem::Function(_))))
+                }
+                FunctionTest::TypedFunctionTest(typed) => {
+                    // function(T1, T2, ...) as R matches a function with matching arity.
+                    // We validate arity against the number of declared parameter types.
+                    // Full parameter/return type covariance/contravariance checking is
+                    // not possible for Named/Inline since we don't store type signatures.
+                    Self::is_match_typed_function_test(item_set, typed)
+                }
+            },
+            ItemType::MapTest(x) => match x.as_ref() {
+                MapTest::AnyMapTest => {
+                    // map(*) matches any map.
+                    Ok(item_set
+                        .iter()
+                        .all(|item| matches!(item, XpathItem::Function(Function::Map { .. }))))
+                }
+                MapTest::TypedMapTest(typed) => {
+                    // map(K, V) matches maps whose keys are all of type K
+                    // and whose values all match sequence type V.
+                    Self::is_match_typed_map_test(item_set, item_tree, typed)
+                }
+            },
+            ItemType::ArrayTest(x) => match x.as_ref() {
+                ArrayTest::AnyArrayTest => {
+                    // array(*) matches any array.
+                    Ok(item_set
+                        .iter()
+                        .all(|item| matches!(item, XpathItem::Function(Function::Array { .. }))))
+                }
+                ArrayTest::TypedArrayTest(typed) => {
+                    // array(T) matches arrays whose members all match sequence type T.
+                    Self::is_match_typed_array_test(item_set, item_tree, typed)
+                }
+            },
             ItemType::AtomicOrUnionType(x) => {
-                // Check if every item matches the specified atomic type.
-                // Extract the local type name for matching against known XPath types.
                 let type_local = x.local_name();
                 Ok(item_set.iter().all(|item| match item {
-                    XpathItem::AnyAtomicType(atomic) => match type_local {
-                        Some("integer") => matches!(atomic, AnyAtomicType::Integer(_)),
-                        Some("string") => matches!(atomic, AnyAtomicType::String(_)),
-                        Some("boolean") => matches!(atomic, AnyAtomicType::Boolean(_)),
-                        Some("float") => matches!(atomic, AnyAtomicType::Float(_)),
-                        Some("double") => matches!(atomic, AnyAtomicType::Double(_)),
-                        // Unknown type name — fall back to accepting any atomic.
-                        _ => true,
-                    },
+                    XpathItem::AnyAtomicType(atomic) => {
+                        atomic_matches_type_name(atomic, type_local)
+                    }
                     _ => false,
                 }))
             }
         }
+    }
+
+    /// Typed function test: `function(P1, P2, ...) as R`.
+    ///
+    /// Validates that each item is a function whose arity equals the number of
+    /// declared parameter types.
+    fn is_match_typed_function_test(
+        item_set: &XpathItemSet<'_>,
+        typed: &TypedFunctionTest,
+    ) -> Result<bool, ExpressionApplyError> {
+        let expected_arity = typed.params.len() as u32;
+        Ok(item_set.iter().all(|item| {
+            if let XpathItem::Function(f) = item {
+                function_arity(f) == expected_arity
+            } else {
+                false
+            }
+        }))
+    }
+
+    /// Typed map test: `map(K, V)`.
+    ///
+    /// Validates that each item is a map whose keys all match atomic type K
+    /// and whose value sequences all match sequence type V.
+    fn is_match_typed_map_test<'tree>(
+        item_set: &XpathItemSet<'tree>,
+        item_tree: &'tree XpathItemTree,
+        typed: &TypedMapTest,
+    ) -> Result<bool, ExpressionApplyError> {
+        let key_type_local = typed.atomic_or_union_type.local_name();
+        for item in item_set.iter() {
+            match item {
+                XpathItem::Function(Function::Map { entries }) => {
+                    for (key, values) in entries {
+                        if !atomic_matches_type_name(key, key_type_local) {
+                            return Ok(false);
+                        }
+                        let value_set: XpathItemSet = values
+                            .iter()
+                            .map(|v| XpathItem::AnyAtomicType(v.clone()))
+                            .collect();
+                        if !typed.sequence_type.is_match(&value_set, item_tree)? {
+                            return Ok(false);
+                        }
+                    }
+                }
+                _ => return Ok(false),
+            }
+        }
+        Ok(true)
+    }
+
+    /// Typed array test: `array(T)`.
+    ///
+    /// Validates that each item is an array whose members all match sequence type T.
+    fn is_match_typed_array_test<'tree>(
+        item_set: &XpathItemSet<'tree>,
+        item_tree: &'tree XpathItemTree,
+        typed: &TypedArrayTest,
+    ) -> Result<bool, ExpressionApplyError> {
+        for item in item_set.iter() {
+            match item {
+                XpathItem::Function(Function::Array { members }) => {
+                    for member in members {
+                        let member_set: XpathItemSet = member
+                            .iter()
+                            .map(|v| XpathItem::AnyAtomicType(v.clone()))
+                            .collect();
+                        if !typed.0.is_match(&member_set, item_tree)? {
+                            return Ok(false);
+                        }
+                    }
+                }
+                _ => return Ok(false),
+            }
+        }
+        Ok(true)
     }
 }
 

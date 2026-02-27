@@ -70,7 +70,7 @@ All 13 axes parse and evaluate:
 | Feature | Gap | Location |
 |---------|-----|----------|
 | `namespace-node()` | Parses but always returns empty for HTML | `src/xpath/grammar/types/mod.rs:184-187` |
-| Typed function/map/array tests | `function(T as S)`, `map(K,V)`, `array(T)` parse but parameter/return types are not validated at runtime | `src/xpath/grammar/types/sequence_type.rs:211-213` |
+| ~~Typed function/map/array tests~~ | ~~Done~~ — `map(K,V)` validates key/value types, `array(T)` validates member types, `function(T1,...) as R` validates arity; used by `instance of` and `treat as` | `src/xpath/grammar/types/sequence_type.rs` |
 
 ---
 
