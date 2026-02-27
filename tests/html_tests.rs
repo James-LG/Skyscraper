@@ -2,6 +2,7 @@ mod test_framework;
 
 mod html_tests {
     mod html_adoption_agency_tests;
+    mod html_after_body_tests;
     mod html_after_head_tests;
     mod html_basic_tests;
     mod html_before_head_tests;

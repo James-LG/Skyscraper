@@ -713,11 +713,19 @@ impl HtmlParser {
                 )?;
                 self.insert_character_at_node(html_node, c)?;
             }
-            HtmlToken::Comment(_) => {
-                todo!()
+            HtmlToken::Comment(comment) => {
+                // Insert a comment as the last child of the first element in
+                // the stack of open elements (the html element).
+                let html_node = *self.open_elements.first().ok_or(
+                    HtmlParseError::new("no elements on open elements stack"),
+                )?;
+                self.insert_a_comment(comment, Some(html_node))?;
             }
             HtmlToken::DocType(_) => {
-                todo!()
+                // Parse error. Ignore the token.
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "unexpected DOCTYPE after body",
+                )))?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
                 self.using_the_rules_for(
@@ -752,8 +760,12 @@ impl HtmlParser {
         token: HtmlToken,
     ) -> Result<Acknowledgement, HtmlParseError> {
         match token {
-            HtmlToken::Comment(_) => {
-                todo!()
+            HtmlToken::Comment(comment) => {
+                // Insert a comment as the last child of the Document object.
+                let parent = self
+                    .root_node
+                    .ok_or(HtmlParseError::new("root node is None"))?;
+                self.insert_a_comment(comment, Some(parent))?;
             }
             HtmlToken::DocType(_) => {
                 self.using_the_rules_for(token, InsertionMode::InBody)?;

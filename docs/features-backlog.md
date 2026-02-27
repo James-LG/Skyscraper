@@ -182,9 +182,9 @@ The tokenizer implements the WHATWG state machine including named character refe
 | Feature | Gap | Location |
 |---------|-----|----------|
 | ~~Text insertion mode — EOF handling~~ | ~~Done~~ — parse error, pop node, switch to original mode, reprocess EOF | `src/html/grammar/insertion_mode_impls/mod.rs:556-573` |
-| AfterBody — Comment token | `todo!()` — should insert as last child of `<html>` | `src/html/grammar/insertion_mode_impls/mod.rs:700` |
-| AfterBody — DocType token | `todo!()` — should be a parse error (ignore) | `src/html/grammar/insertion_mode_impls/mod.rs:703` |
-| AfterAfterBody — Comment token | `todo!()` — should insert as last child of Document | `src/html/grammar/insertion_mode_impls/mod.rs:739` |
+| ~~AfterBody — Comment token~~ | ~~Done~~ — insert as last child of `<html>` element | `src/html/grammar/insertion_mode_impls/mod.rs:716-722` |
+| ~~AfterBody — DocType token~~ | ~~Done~~ — parse error, ignore | `src/html/grammar/insertion_mode_impls/mod.rs:723-727` |
+| ~~AfterAfterBody — Comment token~~ | ~~Done~~ — insert as last child of Document | `src/html/grammar/insertion_mode_impls/mod.rs:763-768` |
 | Declarative Shadow DOM | Not supported (noted in comment) | `src/html/grammar/insertion_mode_impls/mod.rs:317` |
 | HTML fragment parsing algorithm | Not implemented (noted in TODO comment) | `src/html/grammar/insertion_mode_impls/mod.rs:712` |
 
