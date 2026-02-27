@@ -52,48 +52,71 @@ impl FunctionCall {
         &self,
         context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
-        match &self.name {
-            EQName::QName(qname) => match qname {
-                QName::PrefixedName(prefixed_name) => {
-                    if prefixed_name.prefix == "fn" {
-                        // Root function selects the root node of the tree.
-                        if prefixed_name.local_part == "root" {
-                            return Ok(xpath_item_set![XpathItem::Node(context.item_tree.root())]);
-                        }
-                    }
-
-                    Err(ExpressionApplyError {
-                        msg: format!("Unknown function {}", self.name.to_string()),
-                    })
-                }
-                QName::UnprefixedName(unprefixed_name) => match unprefixed_name.as_str() {
-                    "contains" => func_contains(&self.argument_list, context),
-                    _ => Err(ExpressionApplyError {
-                        msg: format!("Unknown function {}", self.name.to_string()),
-                    }),
-                },
-            },
-            EQName::UriQualifiedName(_) => todo!("FunctionCall::eval UriQualifiedName"),
+        // fn:root is special: its arguments are never evaluated because path
+        // expansion passes `self::node()` which may hit unimplemented axes.
+        if let EQName::QName(QName::PrefixedName(p)) = &self.name {
+            if p.prefix == "fn" && p.local_part == "root" {
+                return Ok(xpath_item_set![XpathItem::Node(context.item_tree.root())]);
+            }
         }
+
+        // Eagerly evaluate arguments, then dispatch through the shared table.
+        let mut args = Vec::new();
+        for arg in &self.argument_list.0 {
+            args.push(arg.eval(context)?);
+        }
+        dispatch_function(&self.name, &args, context)
+    }
+}
+
+/// Dispatch a function call by name with pre-evaluated arguments.
+///
+/// Used by `ArrowExpr::eval` where the left-hand side is prepended as the
+/// first argument.
+pub(crate) fn dispatch_function<'tree>(
+    name: &EQName,
+    args: &[XpathItemSet<'tree>],
+    context: &XpathExpressionContext<'tree>,
+) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
+    match name {
+        EQName::QName(qname) => match qname {
+            QName::PrefixedName(prefixed_name) => {
+                if prefixed_name.prefix == "fn" {
+                    if prefixed_name.local_part == "root" {
+                        return Ok(xpath_item_set![XpathItem::Node(context.item_tree.root())]);
+                    }
+                }
+
+                Err(ExpressionApplyError {
+                    msg: format!("Unknown function {}", name),
+                })
+            }
+            QName::UnprefixedName(unprefixed_name) => match unprefixed_name.as_str() {
+                "contains" => func_contains(args, context),
+                _ => Err(ExpressionApplyError {
+                    msg: format!("Unknown function {}", name),
+                }),
+            },
+        },
+        EQName::UriQualifiedName(_) => todo!("dispatch_function UriQualifiedName"),
     }
 }
 
 /// https://developer.mozilla.org/en-US/docs/Web/XPath/Functions/contains
 fn func_contains<'tree>(
-    argument_list: &ArgumentList,
+    args: &[XpathItemSet<'tree>],
     context: &XpathExpressionContext<'tree>,
 ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
-    let arguments = &argument_list.0;
-    if arguments.len() != 2 {
+    if args.len() != 2 {
         return Err(ExpressionApplyError {
             msg: format!(
                 "contains: function expects 2 arguments, got {}",
-                arguments.len()
+                args.len()
             ),
         });
     }
 
-    let arg1_set = arguments[0].eval(context)?;
+    let arg1_set = &args[0];
     if arg1_set.len() > 1 {
         return Err(ExpressionApplyError {
             msg: format!(
@@ -109,7 +132,7 @@ fn func_contains<'tree>(
         func_string(&arg1_set[0], &context.item_tree)
     };
 
-    let arg2_set = arguments[1].eval(context)?;
+    let arg2_set = &args[1];
     if arg2_set.len() > 1 {
         return Err(ExpressionApplyError {
             msg: format!(

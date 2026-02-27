@@ -21,7 +21,9 @@ use super::{
     arithmetic_expressions::{unary_expr, UnaryExpr},
     common::{argument_list, ArgumentList},
     primary_expressions::{
-        parenthesized_expressions::ParenthesizedExpr, variable_references::VarRef,
+        parenthesized_expressions::ParenthesizedExpr,
+        static_function_calls::dispatch_function,
+        variable_references::VarRef,
     },
 };
 
@@ -75,15 +77,45 @@ impl ArrowExpr {
         context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         // Evaluate the first expression.
-        let result = self.expr.eval(context)?;
+        let mut result = self.expr.eval(context)?;
 
-        // If there's only one parameter, return it's eval.
+        // If there are no arrow items, return the base expression's eval.
         if self.items.is_empty() {
             return Ok(result);
         }
 
-        // Otherwise, do the operation.
-        todo!("ArrowExpr::eval operator")
+        // Chain through each arrow item: result => func(args)
+        // is equivalent to func(result, args).
+        for item in &self.items {
+            match &item.function_specifier {
+                ArrowFunctionSpecifier::Name(name) => {
+                    // Evaluate the explicit arguments.
+                    let mut args = vec![result];
+                    for arg in &item.arguments.0 {
+                        args.push(arg.eval(context)?);
+                    }
+
+                    // Dispatch the function with the LHS prepended as the first argument.
+                    result = dispatch_function(name, &args, context)?;
+                }
+                ArrowFunctionSpecifier::VarRef(_) => {
+                    return Err(ExpressionApplyError {
+                        msg: String::from(
+                            "ArrowExpr: VarRef function specifier not yet supported",
+                        ),
+                    });
+                }
+                ArrowFunctionSpecifier::ParenthesizedExpr(_) => {
+                    return Err(ExpressionApplyError {
+                        msg: String::from(
+                            "ArrowExpr: ParenthesizedExpr function specifier not yet supported",
+                        ),
+                    });
+                }
+            }
+        }
+
+        Ok(result)
     }
 }
 

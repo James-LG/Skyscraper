@@ -161,7 +161,7 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line | Feature |
 |------|---------|
-| 86 | Arrow operator (`=>`) |
+| ~~86~~ | ~~Arrow operator (`=>`)~~ **DONE** |
 
 ### Simple Map Operator
 
