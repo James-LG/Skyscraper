@@ -102,7 +102,7 @@ All 13 axes parse and evaluate:
 
 ## XPath 3.1 — Built-in Functions
 
-**79** of the 120+ standard functions are implemented. All dispatch is in `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs`.
+**79** `fn:` functions plus **10** `map:`, **18** `array:`, and **14** `math:` functions (**121 total**) are implemented. All dispatch is in `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs`.
 
 ### Implemented
 
@@ -186,6 +186,63 @@ All 13 axes parse and evaluate:
 | `fn:function-name(function)` | Complete | Returns name for named functions, empty for anonymous |
 | `fn:function-arity(function)` | Complete | Returns arity for all function item types |
 
+### Implemented — Map Functions
+
+| Function | Status | Notes |
+|----------|--------|-------|
+| `map:size(map)` | Complete | |
+| `map:keys(map)` | Complete | |
+| `map:contains(map, key)` | Complete | |
+| `map:get(map, key)` | Complete | |
+| `map:put(map, key, value)` | Complete | |
+| `map:entry(key, value)` | Complete | |
+| `map:remove(map, keys)` | Complete | |
+| `map:merge(maps, options?)` | Complete | Options arg accepted but ignored; default first-wins policy |
+| `map:for-each(map, function)` | Complete | Higher-order |
+| `map:find(input, key)` | Complete | Recursive search into nested maps/arrays |
+
+### Implemented — Array Functions
+
+| Function | Status | Notes |
+|----------|--------|-------|
+| `array:size(array)` | Complete | |
+| `array:get(array, position)` | Complete | |
+| `array:put(array, position, value)` | Complete | |
+| `array:append(array, value)` | Complete | |
+| `array:subarray(array, start, length?)` | Complete | |
+| `array:remove(array, positions)` | Complete | |
+| `array:insert-before(array, position, value)` | Complete | |
+| `array:head(array)` | Complete | |
+| `array:tail(array)` | Complete | |
+| `array:reverse(array)` | Complete | |
+| `array:join(arrays)` | Complete | |
+| `array:flatten(input)` | Complete | Recursive flattening |
+| `array:for-each(array, function)` | Complete | Higher-order |
+| `array:filter(array, function)` | Complete | Higher-order |
+| `array:fold-left(array, zero, function)` | Complete | Higher-order |
+| `array:fold-right(array, zero, function)` | Complete | Higher-order |
+| `array:for-each-pair(array1, array2, function)` | Complete | Higher-order |
+| `array:sort(array, collation?, key?)` | Complete | Collation ignored; key function supported |
+
+### Implemented — Math Functions
+
+| Function | Status | Notes |
+|----------|--------|-------|
+| `math:pi()` | Complete | |
+| `math:exp(value)` | Complete | |
+| `math:exp10(value)` | Complete | |
+| `math:log(value)` | Complete | |
+| `math:log10(value)` | Complete | |
+| `math:sqrt(value)` | Complete | |
+| `math:sin(value)` | Complete | |
+| `math:cos(value)` | Complete | |
+| `math:tan(value)` | Complete | |
+| `math:asin(value)` | Complete | |
+| `math:acos(value)` | Complete | |
+| `math:atan(value)` | Complete | |
+| `math:pow(x, y)` | Complete | |
+| `math:atan2(y, x)` | Complete | |
+
 ### Not Implemented — By Category
 
 #### Numeric (high priority)
@@ -202,15 +259,6 @@ All 13 axes parse and evaluate:
 
 #### Higher-order (medium priority)
 `fn:function-lookup`
-
-#### Map functions (medium priority)
-`map:merge`, `map:size`, `map:keys`, `map:contains`, `map:get`, `map:find`, `map:put`, `map:entry`, `map:remove`, `map:for-each`
-
-#### Array functions (medium priority)
-`array:size`, `array:get`, `array:put`, `array:append`, `array:subarray`, `array:remove`, `array:insert-before`, `array:head`, `array:tail`, `array:reverse`, `array:join`, `array:for-each`, `array:filter`, `array:fold-left`, `array:fold-right`, `array:for-each-pair`, `array:sort`, `array:flatten`
-
-#### Math functions (low priority)
-`math:pi`, `math:exp`, `math:exp10`, `math:log`, `math:log10`, `math:pow`, `math:sqrt`, `math:sin`, `math:cos`, `math:tan`, `math:asin`, `math:acos`, `math:atan`, `math:atan2`
 
 #### Error/Trace (low priority)
 `fn:error`, `fn:trace`
