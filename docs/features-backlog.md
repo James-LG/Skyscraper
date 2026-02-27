@@ -33,7 +33,7 @@ Last audited: 2026-02-27.
 | Feature | Gap | Location |
 |---------|-----|----------|
 | ~~Arrow operator (`=>`)~~ | ~~Done~~ — VarRef and ParenthesizedExpr function specifiers now supported | `src/xpath/grammar/expressions/arrow_operator.rs` |
-| `cast as` | URI-qualified type names (`Q{uri}type`) not supported | `src/xpath/grammar/expressions/expressions_on_sequence_types/cast.rs:113` |
+| ~~`cast as`~~ | ~~Done~~ — URI-qualified type names (`Q{uri}type`) now supported for `xs` namespace | `src/xpath/grammar/expressions/expressions_on_sequence_types/cast.rs:113` |
 | Item sorting | Disabled with TODO comment — may affect document-order guarantees in some edge cases | `src/xpath/grammar/expressions/mod.rs:123` |
 
 ---
