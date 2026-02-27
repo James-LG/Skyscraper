@@ -73,15 +73,22 @@ impl UnionExpr {
         context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         // Evaluate the first expression.
-        let result = self.expr.eval(context)?;
+        let mut result = self.expr.eval(context)?;
 
-        // If there's only one parameter, return it's eval.
+        // If there are no union items, return the base expression's eval.
         if self.items.is_empty() {
             return Ok(result);
         }
 
-        // Otherwise, do the operation.
-        todo!("UnionExpr::eval union operator")
+        // Union combines all items from both operands (duplicates removed by IndexSet).
+        for pair in &self.items {
+            let rhs = pair.1.eval(context)?;
+            result.extend(rhs);
+        }
+
+        // The result must be in document order.
+        result.sort_by_document_order();
+        Ok(result)
     }
 }
 
@@ -164,15 +171,38 @@ impl IntersectExceptExpr {
         context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         // Evaluate the first expression.
-        let result = self.expr.eval(context)?;
+        let mut result = self.expr.eval(context)?;
 
-        // If there's only one parameter, return it's eval.
+        // If there are no intersect/except items, return the base expression's eval.
         if self.items.is_empty() {
             return Ok(result);
         }
 
-        // Otherwise, do the operation.
-        todo!("IntersectExceptExpr::eval intersect or except operator")
+        for pair in &self.items {
+            let rhs = pair.1.eval(context)?;
+            match pair.0 {
+                IntersectExceptType::Intersect => {
+                    // Keep only items present in both sets.
+                    result = result
+                        .iter()
+                        .filter(|item| rhs.contains(item))
+                        .cloned()
+                        .collect();
+                }
+                IntersectExceptType::Except => {
+                    // Keep only items from the LHS that are NOT in the RHS.
+                    result = result
+                        .iter()
+                        .filter(|item| !rhs.contains(item))
+                        .cloned()
+                        .collect();
+                }
+            }
+        }
+
+        // The result must be in document order.
+        result.sort_by_document_order();
+        Ok(result)
     }
 }
 

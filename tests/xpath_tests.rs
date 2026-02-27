@@ -4,6 +4,7 @@ mod xpath_tests {
     mod apply_to_item_tests;
     mod arithmetic_expression_tests;
     mod arrow_operator_tests;
+    mod combining_sequences_tests;
     mod comparison_expression_tests;
     mod contains_tests;
     mod for_expression_tests;

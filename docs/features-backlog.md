@@ -178,8 +178,8 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 | Line | File | Feature |
 |------|------|---------|
 | ~~66~~ | ~~`constructing_sequences.rs`~~ | ~~Range operator (`to`)~~ **DONE** |
-| 84 | `combining_node_sequences.rs` | Union operator (`union` / `\|`) |
-| 175 | `combining_node_sequences.rs` | Intersect/except operators |
+| ~~84~~ | ~~`combining_node_sequences.rs`~~ | ~~Union operator (`union` / `\|`)~~ **DONE** |
+| ~~175~~ | ~~`combining_node_sequences.rs`~~ | ~~Intersect/except operators~~ **DONE** |
 
 ### Expressions on Sequence Types
 

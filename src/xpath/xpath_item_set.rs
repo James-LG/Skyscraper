@@ -95,6 +95,11 @@ impl<'tree> XpathItemSet<'tree> {
         self.index_set.iter()
     }
 
+    /// Returns `true` if the set contains the given item.
+    pub fn contains(&self, item: &XpathItem<'tree>) -> bool {
+        self.index_set.contains(item)
+    }
+
     /// Return the effective boolean value of the result.
     ///
     /// <https://www.w3.org/TR/2017/REC-xpath-31-20170321/#dt-ebv>
