@@ -102,7 +102,7 @@ All 13 axes parse and evaluate:
 
 ## XPath 3.1 — Built-in Functions
 
-**85** `fn:` functions plus **10** `map:`, **18** `array:`, and **14** `math:` functions (**127 total**) are implemented. All dispatch is in `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs`.
+**89** `fn:` functions plus **10** `map:`, **18** `array:`, and **14** `math:` functions (**131 total**) are implemented. All dispatch is in `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs`.
 
 ### Implemented
 
@@ -110,8 +110,8 @@ All 13 axes parse and evaluate:
 |----------|--------|-------|
 | `fn:root()` | Complete | Special-cased early in eval; always returns document root |
 | `fn:contains(string, string)` | Complete | |
-| `fn:data(item*)` | Complete | TODO: should raise `err:FOTY0013` for function items |
-| `fn:string(item?)` | Complete | TODO: should raise error for function items per spec |
+| `fn:data(item*)` | Complete | Raises `err:FOTY0013` for function items |
+| `fn:string(item?)` | Complete | Raises `err:FOTY0014` for function items |
 | `fn:true()` | Complete | |
 | `fn:false()` | Complete | |
 | `fn:not(item*)` | Complete | |
@@ -191,6 +191,8 @@ All 13 axes parse and evaluate:
 | `fn:outermost(nodes)` | Complete | Filters to nodes with no ancestor in the set |
 | `fn:base-uri(node?)` | Complete | Returns empty string (HTML-only processor) |
 | `fn:document-uri(node?)` | Complete | Returns empty sequence (HTML-only processor) |
+| `fn:error(code?, description?, object?)` | Complete | 0-3 args; default code `err:FOER0000` |
+| `fn:trace(value, label?)` | Complete | Logs to stderr; returns input unchanged |
 
 ### Implemented — Map Functions
 
@@ -257,9 +259,6 @@ All 13 axes parse and evaluate:
 #### Higher-order (medium priority)
 `fn:function-lookup` (requires `xs:QName` atomic type support)
 
-#### Error/Trace (low priority)
-`fn:error`, `fn:trace`
-
 #### QName functions (low priority — less relevant for HTML)
 `fn:QName`, `fn:prefix-from-QName`, `fn:local-name-from-QName`, `fn:namespace-uri-from-QName`, `fn:namespace-uri-for-prefix`, `fn:in-scope-prefixes`, `fn:resolve-QName`
 
@@ -273,7 +272,7 @@ All `*-from-duration`, `*-from-dateTime`, `*-from-date`, `*-from-time`, `fn:curr
 `fn:parse-xml`, `fn:parse-xml-fragment`, `fn:serialize`, `fn:json-doc`, `fn:parse-json`, `fn:json-to-xml`, `fn:xml-to-json`
 
 #### ID functions (low priority)
-`fn:id`, `fn:idref`, `fn:element-with-id`, `fn:generate-id`
+`fn:id`, `fn:idref`, `fn:element-with-id`
 
 ---
 
@@ -313,14 +312,12 @@ The tokenizer implements the WHATWG state machine including named character refe
 |---------|-----|----------|
 | `PINode` (Processing Instruction) | Struct is empty — no `target` or `data` fields | `src/xpath/grammar/data_model/mod.rs:723` |
 | Namespace nodes | Not represented in the tree at all | N/A |
-| `is_root_level` naming | Misleadingly named; should be `is_initial_step` per TODO | `src/xpath/mod.rs:236` |
 
 ---
 
 ## Error Handling Gaps
 
-| Feature | Gap | Location |
-|---------|-----|----------|
-| `fn:data()` on function items | Should raise `err:FOTY0013`, returns placeholder instead | `static_function_calls.rs:275` |
-| `fn:string()` on function items | Should raise error per spec, returns placeholder instead | `static_function_calls.rs:306` |
-| Function dispatch | Unknown functions return a generic error; spec defines `err:XPST0017` | `static_function_calls.rs` |
+All previously identified error handling gaps have been resolved:
+- `fn:data()` now raises `err:FOTY0013` for function items
+- `fn:string()` now raises `err:FOTY0014` for function items
+- Unknown function dispatch now uses `err:XPST0017`
