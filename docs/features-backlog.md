@@ -303,7 +303,7 @@ The tokenizer implements the WHATWG state machine including named character refe
 | ~~Adjust SVG attributes~~ | ~~Done~~ — 62 camelCase attribute name corrections per WHATWG 13.2.6.2 | `src/html/grammar/mod.rs` |
 | Adjust foreign attributes | Partial — attribute names preserved correctly, but `Attribute` struct lacks namespace metadata (xlink:, xml:, xmlns:) | `src/html/grammar/mod.rs` |
 | Foreign content parsing mode | Not implemented — WHATWG 13.2.6.5 "in foreign content" rules not yet present | N/A |
-| SVG element name case correction | Not implemented — SVG element names (e.g. `foreignObject`) not adjusted | N/A |
+| ~~SVG element name case correction~~ | ~~Done~~ — 37 camelCase element name corrections (e.g. `foreignobject` → `foreignObject`) applied in `create_an_element_for_the_token` for SVG namespace | `src/html/grammar/mod.rs` |
 
 ### Not Implemented
 

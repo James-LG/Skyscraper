@@ -252,6 +252,56 @@ pub(crate) static SPECIAL_ELEMENTS: [&str; 83] = [
     "xmp",
 ];
 
+/// Returns the correctly-cased SVG element name for a lowercased tag name,
+/// or `None` if the element name does not need adjustment.
+///
+/// The HTML tokenizer lowercases all tag names, but SVG uses camelCase for
+/// many element names. This table restores the correct casing.
+///
+/// <https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inforeign>
+fn svg_element_name(lowered: &str) -> Option<&'static str> {
+    match lowered {
+        "altglyph" => Some("altGlyph"),
+        "altglyphdef" => Some("altGlyphDef"),
+        "altglyphitem" => Some("altGlyphItem"),
+        "animatecolor" => Some("animateColor"),
+        "animatemotion" => Some("animateMotion"),
+        "animatetransform" => Some("animateTransform"),
+        "clippath" => Some("clipPath"),
+        "feblend" => Some("feBlend"),
+        "fecolormatrix" => Some("feColorMatrix"),
+        "fecomponenttransfer" => Some("feComponentTransfer"),
+        "fecomposite" => Some("feComposite"),
+        "feconvolvematrix" => Some("feConvolveMatrix"),
+        "fediffuselighting" => Some("feDiffuseLighting"),
+        "fedisplacementmap" => Some("feDisplacementMap"),
+        "fedistantlight" => Some("feDistantLight"),
+        "fedropshadow" => Some("feDropShadow"),
+        "feflood" => Some("feFlood"),
+        "fefunca" => Some("feFuncA"),
+        "fefuncb" => Some("feFuncB"),
+        "fefuncg" => Some("feFuncG"),
+        "fefuncr" => Some("feFuncR"),
+        "fegaussianblur" => Some("feGaussianBlur"),
+        "feimage" => Some("feImage"),
+        "femerge" => Some("feMerge"),
+        "femergenode" => Some("feMergeNode"),
+        "femorphology" => Some("feMorphology"),
+        "feoffset" => Some("feOffset"),
+        "fepointlight" => Some("fePointLight"),
+        "fespecularlighting" => Some("feSpecularLighting"),
+        "fespotlight" => Some("feSpotLight"),
+        "fetile" => Some("feTile"),
+        "feturbulence" => Some("feTurbulence"),
+        "foreignobject" => Some("foreignObject"),
+        "glyphref" => Some("glyphRef"),
+        "lineargradient" => Some("linearGradient"),
+        "radialgradient" => Some("radialGradient"),
+        "textpath" => Some("textPath"),
+        _ => None,
+    }
+}
+
 /// Returns the correctly-cased SVG attribute name for a lowercased attribute,
 /// or `None` if the attribute does not need adjustment.
 ///
@@ -625,6 +675,23 @@ impl HtmlParser {
         Ok(())
     }
 
+    /// Adjust SVG tag names on a token.
+    ///
+    /// The HTML tokenizer lowercases all tag names, but SVG uses camelCase for
+    /// many element names. This restores the correct casing.
+    ///
+    /// Per the WHATWG spec, this is called on the token in the "in foreign
+    /// content" rules before element insertion. Until that mode is implemented,
+    /// `create_an_element_for_the_token` also applies the correction as a
+    /// safety net when the namespace is SVG.
+    ///
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inforeign>
+    pub(crate) fn adjust_svg_tag_names(token: &mut TagToken) {
+        if let Some(corrected) = svg_element_name(&token.tag_name) {
+            token.tag_name = String::from(corrected);
+        }
+    }
+
     /// Adjust MathML attributes on a token.
     ///
     /// <https://html.spec.whatwg.org/multipage/parsing.html#adjust-mathml-attributes>
@@ -886,7 +953,17 @@ impl HtmlParser {
         token: TagToken,
         namespace: &str,
     ) -> Result<CreateAnElementForTheTokenResult, HtmlParseError> {
-        let local_name = token.tag_name;
+        let mut local_name = token.tag_name;
+
+        // Adjust SVG element names to their correctly-cased forms.
+        // The tokenizer lowercases all tag names, but SVG uses camelCase
+        // (e.g. "foreignobject" → "foreignObject").
+        if namespace == SVG_NAMESPACE {
+            if let Some(corrected) = svg_element_name(&local_name) {
+                local_name = String::from(corrected);
+            }
+        }
+
         let element = self.create_element(local_name, namespace, None, None)?;
 
         // add the attributes
@@ -2405,5 +2482,143 @@ mod tests {
         assert_eq!(token.attributes[0].name, "viewBox");
         assert_eq!(token.attributes[1].name, "preserveAspectRatio");
         assert_eq!(token.attributes[2].name, "width"); // unchanged
+    }
+
+    #[test]
+    fn svg_element_name_correction_foreignobject() {
+        assert_eq!(svg_element_name("foreignobject"), Some("foreignObject"));
+    }
+
+    #[test]
+    fn svg_element_name_correction_clippath() {
+        assert_eq!(svg_element_name("clippath"), Some("clipPath"));
+    }
+
+    #[test]
+    fn svg_element_name_correction_all_entries() {
+        // Verify all 37 entries in the table return correct values.
+        let cases = [
+            ("altglyph", "altGlyph"),
+            ("altglyphdef", "altGlyphDef"),
+            ("altglyphitem", "altGlyphItem"),
+            ("animatecolor", "animateColor"),
+            ("animatemotion", "animateMotion"),
+            ("animatetransform", "animateTransform"),
+            ("clippath", "clipPath"),
+            ("feblend", "feBlend"),
+            ("fecolormatrix", "feColorMatrix"),
+            ("fecomponenttransfer", "feComponentTransfer"),
+            ("fecomposite", "feComposite"),
+            ("feconvolvematrix", "feConvolveMatrix"),
+            ("fediffuselighting", "feDiffuseLighting"),
+            ("fedisplacementmap", "feDisplacementMap"),
+            ("fedistantlight", "feDistantLight"),
+            ("fedropshadow", "feDropShadow"),
+            ("feflood", "feFlood"),
+            ("fefunca", "feFuncA"),
+            ("fefuncb", "feFuncB"),
+            ("fefuncg", "feFuncG"),
+            ("fefuncr", "feFuncR"),
+            ("fegaussianblur", "feGaussianBlur"),
+            ("feimage", "feImage"),
+            ("femerge", "feMerge"),
+            ("femergenode", "feMergeNode"),
+            ("femorphology", "feMorphology"),
+            ("feoffset", "feOffset"),
+            ("fepointlight", "fePointLight"),
+            ("fespecularlighting", "feSpecularLighting"),
+            ("fespotlight", "feSpotLight"),
+            ("fetile", "feTile"),
+            ("feturbulence", "feTurbulence"),
+            ("foreignobject", "foreignObject"),
+            ("glyphref", "glyphRef"),
+            ("lineargradient", "linearGradient"),
+            ("radialgradient", "radialGradient"),
+            ("textpath", "textPath"),
+        ];
+        for (lowered, expected) in cases {
+            assert_eq!(
+                svg_element_name(lowered),
+                Some(expected),
+                "svg_element_name({lowered:?}) should return {expected:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn svg_element_name_returns_none_for_non_special_names() {
+        assert_eq!(svg_element_name("svg"), None);
+        assert_eq!(svg_element_name("rect"), None);
+        assert_eq!(svg_element_name("circle"), None);
+        assert_eq!(svg_element_name("g"), None);
+        assert_eq!(svg_element_name("path"), None);
+        assert_eq!(svg_element_name("text"), None);
+    }
+
+    #[test]
+    fn adjust_svg_tag_names_corrects_token() {
+        let mut token = TagToken {
+            tag_name: String::from("foreignobject"),
+            self_closing: false,
+            attributes: vec![],
+        };
+        HtmlParser::adjust_svg_tag_names(&mut token);
+        assert_eq!(token.tag_name, "foreignObject");
+    }
+
+    #[test]
+    fn adjust_svg_tag_names_no_op_for_regular_svg_element() {
+        let mut token = TagToken {
+            tag_name: String::from("rect"),
+            self_closing: false,
+            attributes: vec![],
+        };
+        HtmlParser::adjust_svg_tag_names(&mut token);
+        assert_eq!(token.tag_name, "rect");
+    }
+
+    #[test]
+    fn create_element_for_token_corrects_svg_element_name() {
+        let mut parser = HtmlParser::new();
+        let doc_id = parser
+            .arena
+            .new_node(XpathItemTreeNode::DocumentNode(XpathDocumentNode::new()));
+        parser.root_node = Some(doc_id);
+
+        let token = TagToken {
+            tag_name: String::from("foreignobject"),
+            self_closing: false,
+            attributes: vec![],
+        };
+        let result = parser
+            .create_an_element_for_the_token(token, SVG_NAMESPACE)
+            .unwrap();
+        assert_eq!(result.element.name, "foreignObject");
+        assert_eq!(
+            result.element.namespace.as_deref(),
+            Some(SVG_NAMESPACE)
+        );
+    }
+
+    #[test]
+    fn create_element_for_token_does_not_correct_html_namespace() {
+        let mut parser = HtmlParser::new();
+        let doc_id = parser
+            .arena
+            .new_node(XpathItemTreeNode::DocumentNode(XpathDocumentNode::new()));
+        parser.root_node = Some(doc_id);
+
+        // Even though "foreignobject" matches the SVG table, it should NOT be
+        // corrected when created in the HTML namespace.
+        let token = TagToken {
+            tag_name: String::from("foreignobject"),
+            self_closing: false,
+            attributes: vec![],
+        };
+        let result = parser
+            .create_an_element_for_the_token(token, HTML_NAMESPACE)
+            .unwrap();
+        assert_eq!(result.element.name, "foreignobject");
+        assert_eq!(result.element.namespace, None);
     }
 }
