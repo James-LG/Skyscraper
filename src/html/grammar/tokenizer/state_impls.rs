@@ -1230,18 +1230,19 @@ impl<'a> Tokenizer<'a> {
         if next_seven_chars == "[CDATA[" {
             self.input_stream.next_add(7);
 
-            // if there is an adjusted current node
+            // if there is an adjusted current node and it is not in the HTML namespace,
+            // switch to CDATA section state.
             if let Some(node) = self.parser.adjusted_current_node() {
-                // ... and it is an element
                 if let XpathItemTreeNode::ElementNode(element) = node {
-                    // ... not in the html namespace
                     if element.namespace.as_ref().map(String::as_str) != Some(HTML_NAMESPACE) {
                         self.state = TokenizerState::CDATASection;
+                        return Ok(());
                     }
                 }
             }
 
-            // otherwise, this is a parse error
+            // otherwise, this is a cdata-in-html-content parse error;
+            // create a comment token and switch to bogus comment state.
             self.handle_error(TokenizerError::CdataInHtmlContent)?;
 
             self.comment_token = Some(CommentToken::new(String::from("[CDATA[")));
