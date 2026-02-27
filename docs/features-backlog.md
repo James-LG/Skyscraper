@@ -102,7 +102,7 @@ All 13 axes parse and evaluate:
 
 ## XPath 3.1 — Built-in Functions
 
-Only **4** of the 120+ standard functions are implemented. All dispatch is in `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs`.
+**34** of the 120+ standard functions are implemented. All dispatch is in `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs`.
 
 ### Implemented
 
@@ -112,29 +112,56 @@ Only **4** of the 120+ standard functions are implemented. All dispatch is in `s
 | `fn:contains(string, string)` | Complete | |
 | `fn:data(item*)` | Complete | TODO: should raise `err:FOTY0013` for function items |
 | `fn:string(item?)` | Complete | TODO: should raise error for function items per spec |
+| `fn:true()` | Complete | |
+| `fn:false()` | Complete | |
+| `fn:not(item*)` | Complete | |
+| `fn:boolean(item*)` | Complete | |
+| `fn:number(item?)` | Complete | |
+| `fn:abs(numeric)` | Complete | |
+| `fn:ceiling(numeric)` | Complete | |
+| `fn:floor(numeric)` | Complete | |
+| `fn:round(numeric)` | Complete | |
+| `fn:concat(atomic, atomic, ...)` | Complete | |
+| `fn:string-join(string*, string?)` | Complete | |
+| `fn:string-length(string?)` | Complete | |
+| `fn:normalize-space(string?)` | Complete | |
+| `fn:upper-case(string)` | Complete | |
+| `fn:lower-case(string)` | Complete | |
+| `fn:starts-with(string, string)` | Complete | |
+| `fn:ends-with(string, string)` | Complete | |
+| `fn:substring(string, double, double?)` | Complete | |
+| `fn:substring-before(string, string)` | Complete | |
+| `fn:substring-after(string, string)` | Complete | |
+| `fn:translate(string, string, string)` | Complete | |
+| `fn:empty(item*)` | Complete | |
+| `fn:exists(item*)` | Complete | |
+| `fn:count(item*)` | Complete | |
+| `fn:head(item*)` | Complete | |
+| `fn:tail(item*)` | Complete | |
+| `fn:reverse(item*)` | Complete | |
+| `fn:distinct-values(item*)` | Complete | |
+| `fn:sum(item*, item?)` | Complete | |
+| `fn:name(node?)` | Complete | |
+| `fn:local-name(node?)` | Complete | Identical to `fn:name` in HTML-only processor |
+| `fn:position()` | Complete | |
+| `fn:last()` | Complete | |
 
 ### Not Implemented — By Category
 
-#### Boolean (high priority — commonly used)
-`fn:true`, `fn:false`, `fn:not`, `fn:boolean`
-
 #### Numeric (high priority)
-`fn:number`, `fn:abs`, `fn:ceiling`, `fn:floor`, `fn:round`, `fn:round-half-to-even`, `fn:format-integer`, `fn:format-number`
+`fn:round-half-to-even`, `fn:format-integer`, `fn:format-number`
 
 #### String (high priority — commonly used)
-`fn:concat`, `fn:string-join`, `fn:substring`, `fn:string-length`, `fn:normalize-space`, `fn:normalize-unicode`, `fn:upper-case`, `fn:lower-case`, `fn:translate`, `fn:starts-with`, `fn:ends-with`, `fn:substring-before`, `fn:substring-after`, `fn:matches`, `fn:replace`, `fn:tokenize`, `fn:compare`, `fn:codepoint-equal`, `fn:codepoints-to-string`, `fn:string-to-codepoints`, `fn:analyze-string`, `fn:encode-for-uri`, `fn:iri-to-uri`, `fn:escape-html-uri`
+`fn:normalize-unicode`, `fn:matches`, `fn:replace`, `fn:tokenize`, `fn:compare`, `fn:codepoint-equal`, `fn:codepoints-to-string`, `fn:string-to-codepoints`, `fn:analyze-string`, `fn:encode-for-uri`, `fn:iri-to-uri`, `fn:escape-html-uri`
 
 #### Sequence (high priority — commonly used)
-`fn:empty`, `fn:exists`, `fn:count`, `fn:head`, `fn:tail`, `fn:insert-before`, `fn:remove`, `fn:reverse`, `fn:subsequence`, `fn:unordered`, `fn:distinct-values`, `fn:index-of`, `fn:deep-equal`, `fn:zero-or-one`, `fn:one-or-more`, `fn:exactly-one`, `fn:avg`, `fn:max`, `fn:min`, `fn:sum`
+`fn:insert-before`, `fn:remove`, `fn:subsequence`, `fn:unordered`, `fn:index-of`, `fn:deep-equal`, `fn:zero-or-one`, `fn:one-or-more`, `fn:exactly-one`, `fn:avg`, `fn:max`, `fn:min`
 
 #### Node (medium priority)
-`fn:name`, `fn:local-name`, `fn:namespace-uri`, `fn:lang`, `fn:path`, `fn:has-children`, `fn:innermost`, `fn:outermost`
+`fn:namespace-uri`, `fn:lang`, `fn:path`, `fn:has-children`, `fn:innermost`, `fn:outermost`
 
 #### Accessor (medium priority)
 `fn:node-name`, `fn:nilled`, `fn:base-uri`, `fn:document-uri`
-
-#### Context (medium priority)
-`fn:position`, `fn:last` (if not handled already via predicate context)
 
 #### Higher-order (medium priority)
 `fn:for-each`, `fn:filter`, `fn:fold-left`, `fn:fold-right`, `fn:for-each-pair`, `fn:sort`, `fn:apply`, `fn:function-lookup`, `fn:function-name`, `fn:function-arity`
