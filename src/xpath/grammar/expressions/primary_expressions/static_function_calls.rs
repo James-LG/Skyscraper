@@ -632,6 +632,245 @@ fn dispatch_by_local_name<'tree>(
                 AnyAtomicType::Integer(context.size as i64)
             )]))
         }
+        // String functions (regex-based)
+        // https://www.w3.org/TR/xpath-functions-31/#func-matches
+        "matches" => {
+            if args.len() < 2 || args.len() > 3 {
+                return Err(ExpressionApplyError::new(format!(
+                    "fn:matches expects 2 or 3 arguments, got {}",
+                    args.len()
+                )));
+            }
+            let input = if args[0].is_empty() {
+                String::new()
+            } else {
+                func_string(&args[0][0], context.item_tree)
+            };
+            let pattern = if args[1].is_empty() {
+                String::new()
+            } else {
+                func_string(&args[1][0], context.item_tree)
+            };
+            let flags = if args.len() == 3 && !args[2].is_empty() {
+                func_string(&args[2][0], context.item_tree)
+            } else {
+                String::new()
+            };
+            let re = build_regex(&pattern, &flags)?;
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::Boolean(re.is_match(&input))
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-replace
+        "replace" => {
+            if args.len() < 3 || args.len() > 4 {
+                return Err(ExpressionApplyError::new(format!(
+                    "fn:replace expects 3 or 4 arguments, got {}",
+                    args.len()
+                )));
+            }
+            let input = if args[0].is_empty() {
+                String::new()
+            } else {
+                func_string(&args[0][0], context.item_tree)
+            };
+            let pattern = if args[1].is_empty() {
+                String::new()
+            } else {
+                func_string(&args[1][0], context.item_tree)
+            };
+            let replacement = if args[2].is_empty() {
+                String::new()
+            } else {
+                func_string(&args[2][0], context.item_tree)
+            };
+            let flags = if args.len() == 4 && !args[3].is_empty() {
+                func_string(&args[3][0], context.item_tree)
+            } else {
+                String::new()
+            };
+            let re = build_regex(&pattern, &flags)?;
+            let result = re.replace_all(&input, replacement.as_str()).to_string();
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::String(result)
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-tokenize
+        "tokenize" => {
+            if args.is_empty() || args.len() > 3 {
+                return Err(ExpressionApplyError::new(format!(
+                    "fn:tokenize expects 1-3 arguments, got {}",
+                    args.len()
+                )));
+            }
+            let input = if args[0].is_empty() {
+                String::new()
+            } else {
+                func_string(&args[0][0], context.item_tree)
+            };
+            if args.len() == 1 {
+                // 1-arg form: normalize whitespace and split on whitespace.
+                let normalized = input.trim();
+                if normalized.is_empty() {
+                    return Ok(Some(XpathItemSet::new()));
+                }
+                let tokens: XpathItemSet = normalized
+                    .split_whitespace()
+                    .map(|s| XpathItem::AnyAtomicType(AnyAtomicType::String(s.to_string())))
+                    .collect();
+                return Ok(Some(tokens));
+            }
+            let pattern = if args[1].is_empty() {
+                String::new()
+            } else {
+                func_string(&args[1][0], context.item_tree)
+            };
+            let flags = if args.len() == 3 && !args[2].is_empty() {
+                func_string(&args[2][0], context.item_tree)
+            } else {
+                String::new()
+            };
+            let re = build_regex(&pattern, &flags)?;
+            let tokens: XpathItemSet = re
+                .split(&input)
+                .filter(|s| !s.is_empty())
+                .map(|s| XpathItem::AnyAtomicType(AnyAtomicType::String(s.to_string())))
+                .collect();
+            Ok(Some(tokens))
+        }
+        // Remaining sequence functions
+        // https://www.w3.org/TR/xpath-functions-31/#func-subsequence
+        "subsequence" => {
+            if args.len() < 2 || args.len() > 3 {
+                return Err(ExpressionApplyError::new(format!(
+                    "fn:subsequence expects 2 or 3 arguments, got {}",
+                    args.len()
+                )));
+            }
+            let start_double = extract_double(&args[1], context.item_tree)?;
+            let start = (start_double.round() as i64 - 1).max(0) as usize;
+            let seq_len = args[0].len();
+            let start = start.min(seq_len);
+            if args.len() == 3 {
+                let len_double = extract_double(&args[2], context.item_tree)?;
+                let end = ((start_double.round() + len_double.round()) as i64 - 1).max(0) as usize;
+                let end = end.min(seq_len);
+                Ok(Some(args[0].iter().skip(start).take(end - start).cloned().collect()))
+            } else {
+                Ok(Some(args[0].iter().skip(start).cloned().collect()))
+            }
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-insert-before
+        "insert-before" => {
+            check_arity("fn:insert-before", args, 3)?;
+            let pos_double = extract_double(&args[1], context.item_tree)?;
+            let pos = (pos_double.round() as i64 - 1).max(0) as usize;
+            let pos = pos.min(args[0].len());
+            let mut result: Vec<XpathItem> = args[0].iter().cloned().collect();
+            for (i, item) in args[2].iter().enumerate() {
+                result.insert(pos + i, item.clone());
+            }
+            Ok(Some(result.into_iter().collect()))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-remove
+        "remove" => {
+            check_arity("fn:remove", args, 2)?;
+            let pos_double = extract_double(&args[1], context.item_tree)?;
+            let pos = pos_double.round() as i64;
+            // 1-based position; if out of range, return sequence unchanged.
+            if pos < 1 || pos as usize > args[0].len() {
+                return Ok(Some(args[0].clone()));
+            }
+            let idx = (pos - 1) as usize;
+            Ok(Some(
+                args[0]
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| *i != idx)
+                    .map(|(_, item)| item.clone())
+                    .collect(),
+            ))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-index-of
+        "index-of" => {
+            check_arity("fn:index-of", args, 2)?;
+            if args[1].len() != 1 {
+                return Err(ExpressionApplyError::new(
+                    "fn:index-of: search value must be a single item".to_string(),
+                ));
+            }
+            let search = &args[1][0];
+            let positions: XpathItemSet = args[0]
+                .iter()
+                .enumerate()
+                .filter(|(_, item)| *item == search)
+                .map(|(i, _)| XpathItem::AnyAtomicType(AnyAtomicType::Integer(i as i64 + 1)))
+                .collect();
+            Ok(Some(positions))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-zero-or-one
+        "zero-or-one" => {
+            check_arity("fn:zero-or-one", args, 1)?;
+            if args[0].len() > 1 {
+                return Err(ExpressionApplyError::new(format!(
+                    "fn:zero-or-one: sequence has {} items",
+                    args[0].len()
+                )));
+            }
+            Ok(Some(args[0].clone()))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-one-or-more
+        "one-or-more" => {
+            check_arity("fn:one-or-more", args, 1)?;
+            if args[0].is_empty() {
+                return Err(ExpressionApplyError::new(
+                    "fn:one-or-more: sequence is empty".to_string(),
+                ));
+            }
+            Ok(Some(args[0].clone()))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-exactly-one
+        "exactly-one" => {
+            check_arity("fn:exactly-one", args, 1)?;
+            if args[0].len() != 1 {
+                return Err(ExpressionApplyError::new(format!(
+                    "fn:exactly-one: sequence has {} items",
+                    args[0].len()
+                )));
+            }
+            Ok(Some(args[0].clone()))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-avg
+        "avg" => {
+            check_arity("fn:avg", args, 1)?;
+            if args[0].is_empty() {
+                return Ok(Some(XpathItemSet::new()));
+            }
+            let atoms = func_data(&args[0], context.item_tree);
+            let mut total: f64 = 0.0;
+            for atom in &atoms {
+                match atom {
+                    AnyAtomicType::Integer(n) => total += *n as f64,
+                    AnyAtomicType::Float(f) => total += f.0 as f64,
+                    AnyAtomicType::Double(d) => total += d.0,
+                    other => {
+                        return Err(ExpressionApplyError::new(format!(
+                            "fn:avg: non-numeric value {:?}",
+                            other
+                        )));
+                    }
+                }
+            }
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::Double(ordered_float::OrderedFloat(
+                    total / atoms.len() as f64
+                ))
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-max
+        "max" => func_min_max(args, context, false).map(Some),
+        // https://www.w3.org/TR/xpath-functions-31/#func-min
+        "min" => func_min_max(args, context, true).map(Some),
         _ => Ok(None),
     }
 }
@@ -873,6 +1112,100 @@ fn func_sum<'tree>(
     } else {
         Ok(xpath_item_set![XpathItem::AnyAtomicType(
             AnyAtomicType::Double(ordered_float::OrderedFloat(total))
+        )])
+    }
+}
+
+/// Build a `regex::Regex` from an XPath pattern string and flags.
+///
+/// Supported flags: `i` (case-insensitive), `s` (dot-all), `m` (multi-line), `x` (extended).
+fn build_regex(pattern: &str, flags: &str) -> Result<regex::Regex, ExpressionApplyError> {
+    let mut regex_pattern = String::new();
+    if !flags.is_empty() {
+        regex_pattern.push_str("(?");
+        for ch in flags.chars() {
+            match ch {
+                'i' | 's' | 'm' | 'x' => regex_pattern.push(ch),
+                _ => {
+                    return Err(ExpressionApplyError::new(format!(
+                        "unsupported regex flag '{}'",
+                        ch
+                    )));
+                }
+            }
+        }
+        regex_pattern.push(')');
+    }
+    regex_pattern.push_str(pattern);
+    regex::Regex::new(&regex_pattern).map_err(|e| {
+        ExpressionApplyError::new(format!("invalid regex pattern '{}': {}", pattern, e))
+    })
+}
+
+/// Shared implementation for fn:min and fn:max.
+fn func_min_max<'tree>(
+    args: &[XpathItemSet<'tree>],
+    context: &XpathExpressionContext<'tree>,
+    is_min: bool,
+) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
+    check_arity(if is_min { "fn:min" } else { "fn:max" }, args, 1)?;
+    if args[0].is_empty() {
+        return Ok(XpathItemSet::new());
+    }
+    let atoms = func_data(&args[0], context.item_tree);
+    let mut best: f64 = if is_min { f64::INFINITY } else { f64::NEG_INFINITY };
+    let mut all_integers = true;
+    for atom in &atoms {
+        let val = match atom {
+            AnyAtomicType::Integer(n) => *n as f64,
+            AnyAtomicType::Float(f) => {
+                all_integers = false;
+                f.0 as f64
+            }
+            AnyAtomicType::Double(d) => {
+                all_integers = false;
+                d.0
+            }
+            AnyAtomicType::String(s) => {
+                // String comparison: return the lexicographically min/max string.
+                // Switch to string comparison mode.
+                let mut best_str = s.as_str();
+                for other in &atoms {
+                    if let AnyAtomicType::String(os) = other {
+                        if (is_min && os.as_str() < best_str)
+                            || (!is_min && os.as_str() > best_str)
+                        {
+                            best_str = os.as_str();
+                        }
+                    }
+                }
+                return Ok(xpath_item_set![XpathItem::AnyAtomicType(
+                    AnyAtomicType::String(best_str.to_string())
+                )]);
+            }
+            other => {
+                return Err(ExpressionApplyError::new(format!(
+                    "fn:{}: non-comparable value {:?}",
+                    if is_min { "min" } else { "max" },
+                    other
+                )));
+            }
+        };
+        if is_min {
+            if val < best {
+                best = val;
+            }
+        } else if val > best {
+            best = val;
+        }
+    }
+    if all_integers {
+        Ok(xpath_item_set![XpathItem::AnyAtomicType(
+            AnyAtomicType::Integer(best as i64)
+        )])
+    } else {
+        Ok(xpath_item_set![XpathItem::AnyAtomicType(
+            AnyAtomicType::Double(ordered_float::OrderedFloat(best))
         )])
     }
 }

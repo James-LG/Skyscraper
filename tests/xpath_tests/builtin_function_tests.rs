@@ -438,3 +438,188 @@ fn fn_count_with_predicate() {
     let items = xpath.apply(&document).unwrap();
     assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(2)));
 }
+
+// ── Regex-based string functions ─────────────────────────────────────
+
+#[test]
+fn fn_matches_true() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"matches("hello123", "\d+")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true)));
+}
+
+#[test]
+fn fn_matches_false() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"matches("hello", "\d+")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Boolean(false)));
+}
+
+#[test]
+fn fn_matches_case_insensitive() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"matches("Hello", "hello", "i")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true)));
+}
+
+#[test]
+fn fn_replace() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"replace("hello world", "world", "rust")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("hello rust")))
+    );
+}
+
+#[test]
+fn fn_replace_regex() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"replace("abc123def", "\d+", "NUM")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("abcNUMdef")))
+    );
+}
+
+#[test]
+fn fn_tokenize() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"tokenize("a-b-c", "-")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 3);
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("a"))));
+    assert_eq!(items[1], XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("b"))));
+    assert_eq!(items[2], XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("c"))));
+}
+
+#[test]
+fn fn_tokenize_whitespace() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"tokenize("  hello  world  ")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("hello"))));
+    assert_eq!(items[1], XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("world"))));
+}
+
+// ── Additional sequence functions ────────────────────────────────────
+
+#[test]
+fn fn_subsequence() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("subsequence((1, 2, 3, 4, 5), 2, 3)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 3);
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(2)));
+    assert_eq!(items[1], XpathItem::AnyAtomicType(AnyAtomicType::Integer(3)));
+    assert_eq!(items[2], XpathItem::AnyAtomicType(AnyAtomicType::Integer(4)));
+}
+
+#[test]
+fn fn_insert_before() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("insert-before((1, 2, 3), 2, 99)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 4);
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(1)));
+    assert_eq!(items[1], XpathItem::AnyAtomicType(AnyAtomicType::Integer(99)));
+    assert_eq!(items[2], XpathItem::AnyAtomicType(AnyAtomicType::Integer(2)));
+    assert_eq!(items[3], XpathItem::AnyAtomicType(AnyAtomicType::Integer(3)));
+}
+
+#[test]
+fn fn_remove() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("remove((1, 2, 3), 2)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(1)));
+    assert_eq!(items[1], XpathItem::AnyAtomicType(AnyAtomicType::Integer(3)));
+}
+
+#[test]
+fn fn_index_of() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("index-of((10, 20, 30), 20)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(2)));
+}
+
+#[test]
+fn fn_zero_or_one_valid() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("zero-or-one(42)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(42)));
+}
+
+#[test]
+fn fn_one_or_more_error() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("one-or-more(//nonexistent)").unwrap();
+    assert!(xpath.apply(&document).is_err());
+}
+
+#[test]
+fn fn_exactly_one_valid() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("exactly-one(42)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(42)));
+}
+
+#[test]
+fn fn_avg() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("avg((1, 2, 3, 4))").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Double(OrderedFloat(2.5)))
+    );
+}
+
+#[test]
+fn fn_max_integers() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("max((3, 1, 4, 1, 5))").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(5)));
+}
+
+#[test]
+fn fn_min_integers() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("min((3, 1, 4, 1, 5))").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(1)));
+}
+
+#[test]
+fn fn_zero_or_one_error() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("zero-or-one((1, 2))").unwrap();
+    assert!(xpath.apply(&document).is_err());
+}
+
+#[test]
+fn fn_exactly_one_error_empty() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("exactly-one(//nonexistent)").unwrap();
+    assert!(xpath.apply(&document).is_err());
+}
+
+#[test]
+fn fn_exactly_one_error_multiple() {
+    let document = html::parse("<html><body><p>a</p><p>b</p></body></html>").unwrap();
+    let xpath = xpath::parse("exactly-one(//p)").unwrap();
+    assert!(xpath.apply(&document).is_err());
+}
