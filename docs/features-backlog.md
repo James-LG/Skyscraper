@@ -102,7 +102,7 @@ All 13 axes parse and evaluate:
 
 ## XPath 3.1 — Built-in Functions
 
-**34** of the 120+ standard functions are implemented. All dispatch is in `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs`.
+**47** of the 120+ standard functions are implemented. All dispatch is in `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs`.
 
 ### Implemented
 
@@ -145,6 +145,19 @@ All 13 axes parse and evaluate:
 | `fn:local-name(node?)` | Complete | Identical to `fn:name` in HTML-only processor |
 | `fn:position()` | Complete | |
 | `fn:last()` | Complete | |
+| `fn:matches(string, string, string?)` | Complete | Regex-based; supports `i`, `s`, `m`, `x` flags |
+| `fn:replace(string, string, string, string?)` | Complete | Regex-based; XPath `$N` backreferences compatible with Rust regex |
+| `fn:tokenize(string, string?, string?)` | Complete | 1-arg whitespace form and regex form |
+| `fn:subsequence(item*, double, double?)` | Complete | |
+| `fn:insert-before(item*, integer, item*)` | Complete | |
+| `fn:remove(item*, integer)` | Complete | |
+| `fn:index-of(item*, item)` | Complete | |
+| `fn:zero-or-one(item*)` | Complete | Cardinality assertion |
+| `fn:one-or-more(item*)` | Complete | Cardinality assertion |
+| `fn:exactly-one(item*)` | Complete | Cardinality assertion |
+| `fn:avg(item*)` | Complete | Returns `xs:double` |
+| `fn:max(item*)` | Complete | Numeric and string comparison |
+| `fn:min(item*)` | Complete | Numeric and string comparison |
 
 ### Not Implemented — By Category
 
@@ -152,10 +165,10 @@ All 13 axes parse and evaluate:
 `fn:round-half-to-even`, `fn:format-integer`, `fn:format-number`
 
 #### String (high priority — commonly used)
-`fn:normalize-unicode`, `fn:matches`, `fn:replace`, `fn:tokenize`, `fn:compare`, `fn:codepoint-equal`, `fn:codepoints-to-string`, `fn:string-to-codepoints`, `fn:analyze-string`, `fn:encode-for-uri`, `fn:iri-to-uri`, `fn:escape-html-uri`
+`fn:normalize-unicode`, `fn:compare`, `fn:codepoint-equal`, `fn:codepoints-to-string`, `fn:string-to-codepoints`, `fn:analyze-string`, `fn:encode-for-uri`, `fn:iri-to-uri`, `fn:escape-html-uri`
 
 #### Sequence (high priority — commonly used)
-`fn:insert-before`, `fn:remove`, `fn:subsequence`, `fn:unordered`, `fn:index-of`, `fn:deep-equal`, `fn:zero-or-one`, `fn:one-or-more`, `fn:exactly-one`, `fn:avg`, `fn:max`, `fn:min`
+`fn:unordered`, `fn:deep-equal`
 
 #### Node (medium priority)
 `fn:namespace-uri`, `fn:lang`, `fn:path`, `fn:has-children`, `fn:innermost`, `fn:outermost`
