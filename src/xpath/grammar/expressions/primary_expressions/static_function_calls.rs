@@ -121,31 +121,77 @@ impl FunctionCall {
 
 /// The XPath Functions namespace URI.
 const XPATH_FUNCTIONS_NS: &str = "http://www.w3.org/2005/xpath-functions";
+const XPATH_MAP_NS: &str = "http://www.w3.org/2005/xpath-functions/map";
+const XPATH_ARRAY_NS: &str = "http://www.w3.org/2005/xpath-functions/array";
+const XPATH_MATH_NS: &str = "http://www.w3.org/2005/xpath-functions/math";
 
 pub(crate) fn dispatch_function<'tree>(
     name: &EQName,
     args: &[XpathItemSet<'tree>],
     context: &XpathExpressionContext<'tree>,
 ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
-    // Extract the local name for function dispatch. The fn: prefix and the
-    // XPath Functions namespace URI both resolve to the same set of functions.
-    // Unprefixed names are also tried against the default function namespace.
-    let local_name = match name {
+    // Determine namespace and local name for dispatch.
+    enum FnNamespace<'a> {
+        Default(&'a str), // fn: or unprefixed
+        Map(&'a str),
+        Array(&'a str),
+        Math(&'a str),
+    }
+
+    let resolved = match name {
         EQName::QName(qname) => match qname {
-            QName::PrefixedName(p) if p.prefix == "fn" => Some(p.local_part.as_str()),
+            QName::PrefixedName(p) if p.prefix == "fn" => {
+                Some(FnNamespace::Default(&p.local_part))
+            }
+            QName::PrefixedName(p) if p.prefix == "map" => {
+                Some(FnNamespace::Map(&p.local_part))
+            }
+            QName::PrefixedName(p) if p.prefix == "array" => {
+                Some(FnNamespace::Array(&p.local_part))
+            }
+            QName::PrefixedName(p) if p.prefix == "math" => {
+                Some(FnNamespace::Math(&p.local_part))
+            }
             QName::PrefixedName(_) => None,
-            QName::UnprefixedName(n) => Some(n.as_str()),
+            QName::UnprefixedName(n) => Some(FnNamespace::Default(n.as_str())),
         },
         EQName::UriQualifiedName(uqn) if uqn.uri == XPATH_FUNCTIONS_NS => {
-            Some(uqn.name.as_str())
+            Some(FnNamespace::Default(&uqn.name))
+        }
+        EQName::UriQualifiedName(uqn) if uqn.uri == XPATH_MAP_NS => {
+            Some(FnNamespace::Map(&uqn.name))
+        }
+        EQName::UriQualifiedName(uqn) if uqn.uri == XPATH_ARRAY_NS => {
+            Some(FnNamespace::Array(&uqn.name))
+        }
+        EQName::UriQualifiedName(uqn) if uqn.uri == XPATH_MATH_NS => {
+            Some(FnNamespace::Math(&uqn.name))
         }
         EQName::UriQualifiedName(_) => None,
     };
 
-    if let Some(local) = local_name {
-        if let Some(result) = dispatch_by_local_name(local, args, context)? {
-            return Ok(result);
+    match resolved {
+        Some(FnNamespace::Default(local)) => {
+            if let Some(result) = dispatch_by_local_name(local, args, context)? {
+                return Ok(result);
+            }
         }
+        Some(FnNamespace::Map(local)) => {
+            if let Some(result) = dispatch_map_function(local, args, context)? {
+                return Ok(result);
+            }
+        }
+        Some(FnNamespace::Array(local)) => {
+            if let Some(result) = dispatch_array_function(local, args, context)? {
+                return Ok(result);
+            }
+        }
+        Some(FnNamespace::Math(local)) => {
+            if let Some(result) = dispatch_math_function(local, args, context)? {
+                return Ok(result);
+            }
+        }
+        None => {}
     }
 
     Err(ExpressionApplyError {
@@ -1473,6 +1519,610 @@ fn dispatch_by_local_name<'tree>(
     }
 }
 
+/// Dispatch `map:*` functions.
+fn dispatch_map_function<'tree>(
+    local_name: &str,
+    args: &[XpathItemSet<'tree>],
+    context: &XpathExpressionContext<'tree>,
+) -> Result<Option<XpathItemSet<'tree>>, ExpressionApplyError> {
+    match local_name {
+        // https://www.w3.org/TR/xpath-functions-31/#func-map-size
+        "size" => {
+            check_arity("map:size", args, 1)?;
+            let map = extract_map(&args[0], "map:size")?;
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::Integer(map.len() as i64)
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-map-keys
+        "keys" => {
+            check_arity("map:keys", args, 1)?;
+            let map = extract_map(&args[0], "map:keys")?;
+            let keys: XpathItemSet = map
+                .iter()
+                .map(|(k, _)| XpathItem::AnyAtomicType(k.clone()))
+                .collect();
+            Ok(Some(keys))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-map-contains
+        "contains" => {
+            check_arity("map:contains", args, 2)?;
+            let map = extract_map(&args[0], "map:contains")?;
+            if args[1].is_empty() {
+                return Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                    AnyAtomicType::Boolean(false)
+                )]));
+            }
+            let key = match &args[1][0] {
+                XpathItem::AnyAtomicType(a) => a,
+                _ => {
+                    return Err(ExpressionApplyError::new(
+                        "map:contains: key must be an atomic value".to_string(),
+                    ));
+                }
+            };
+            let found = map.iter().any(|(k, _)| k == key);
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::Boolean(found)
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-map-get
+        "get" => {
+            check_arity("map:get", args, 2)?;
+            let map = extract_map(&args[0], "map:get")?;
+            if args[1].is_empty() {
+                return Ok(Some(XpathItemSet::new()));
+            }
+            let key = match &args[1][0] {
+                XpathItem::AnyAtomicType(a) => a,
+                _ => {
+                    return Err(ExpressionApplyError::new(
+                        "map:get: key must be an atomic value".to_string(),
+                    ));
+                }
+            };
+            for (k, v) in map {
+                if k == key {
+                    let result: XpathItemSet = v
+                        .iter()
+                        .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                        .collect();
+                    return Ok(Some(result));
+                }
+            }
+            Ok(Some(XpathItemSet::new()))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-map-put
+        "put" => {
+            check_arity("map:put", args, 3)?;
+            let map = extract_map(&args[0], "map:put")?;
+            if args[1].is_empty() {
+                return Err(ExpressionApplyError::new(
+                    "map:put: key must not be empty".to_string(),
+                ));
+            }
+            let new_key = match &args[1][0] {
+                XpathItem::AnyAtomicType(a) => a.clone(),
+                _ => {
+                    return Err(ExpressionApplyError::new(
+                        "map:put: key must be an atomic value".to_string(),
+                    ));
+                }
+            };
+            let new_val: Vec<AnyAtomicType> = func_data(&args[2], context.item_tree);
+            let mut new_entries: Vec<(AnyAtomicType, Vec<AnyAtomicType>)> = map
+                .iter()
+                .filter(|(k, _)| *k != new_key)
+                .cloned()
+                .collect();
+            new_entries.push((new_key, new_val));
+            Ok(Some(xpath_item_set![XpathItem::Function(Function::Map {
+                entries: new_entries
+            })]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-map-entry
+        "entry" => {
+            check_arity("map:entry", args, 2)?;
+            if args[0].is_empty() {
+                return Err(ExpressionApplyError::new(
+                    "map:entry: key must not be empty".to_string(),
+                ));
+            }
+            let key = match &args[0][0] {
+                XpathItem::AnyAtomicType(a) => a.clone(),
+                _ => {
+                    return Err(ExpressionApplyError::new(
+                        "map:entry: key must be an atomic value".to_string(),
+                    ));
+                }
+            };
+            let val: Vec<AnyAtomicType> = func_data(&args[1], context.item_tree);
+            Ok(Some(xpath_item_set![XpathItem::Function(Function::Map {
+                entries: vec![(key, val)]
+            })]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-map-remove
+        "remove" => {
+            check_arity("map:remove", args, 2)?;
+            let map = extract_map(&args[0], "map:remove")?;
+            let keys_to_remove: Vec<&AnyAtomicType> = args[1]
+                .iter()
+                .filter_map(|item| match item {
+                    XpathItem::AnyAtomicType(a) => Some(a),
+                    _ => None,
+                })
+                .collect();
+            let new_entries: Vec<(AnyAtomicType, Vec<AnyAtomicType>)> = map
+                .iter()
+                .filter(|(k, _)| !keys_to_remove.contains(&k))
+                .cloned()
+                .collect();
+            Ok(Some(xpath_item_set![XpathItem::Function(Function::Map {
+                entries: new_entries
+            })]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-map-merge
+        "merge" => {
+            if args.is_empty() || args.len() > 2 {
+                return Err(ExpressionApplyError::new(format!(
+                    "map:merge expects 1-2 arguments, got {}",
+                    args.len()
+                )));
+            }
+            // Arg 2 is an options map (ignored); default duplicates policy is "use-first".
+            let mut merged: Vec<(AnyAtomicType, Vec<AnyAtomicType>)> = Vec::new();
+            for item in args[0].iter() {
+                if let XpathItem::Function(Function::Map { entries }) = item {
+                    for (k, v) in entries {
+                        // First-wins: only insert if key not already present.
+                        if !merged.iter().any(|(mk, _)| mk == k) {
+                            merged.push((k.clone(), v.clone()));
+                        }
+                    }
+                }
+            }
+            Ok(Some(xpath_item_set![XpathItem::Function(Function::Map {
+                entries: merged
+            })]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-map-for-each
+        "for-each" => {
+            check_arity("map:for-each", args, 2)?;
+            let map = extract_map(&args[0], "map:for-each")?;
+            let func = extract_function_item(&args[1], "map:for-each")?;
+            let mut result = XpathItemSet::new();
+            for (k, v) in map {
+                let key_set = xpath_item_set![XpathItem::AnyAtomicType(k.clone())];
+                let val_set: XpathItemSet = v
+                    .iter()
+                    .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                    .collect();
+                let call_result =
+                    invoke_function_item(func, vec![key_set, val_set], context)?;
+                for r in call_result.into_iter() {
+                    result.insert(r);
+                }
+            }
+            Ok(Some(result))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-map-find
+        "find" => {
+            check_arity("map:find", args, 2)?;
+            if args[1].is_empty() {
+                return Ok(Some(XpathItemSet::new()));
+            }
+            let search_key = match &args[1][0] {
+                XpathItem::AnyAtomicType(a) => a,
+                _ => {
+                    return Err(ExpressionApplyError::new(
+                        "map:find: key must be an atomic value".to_string(),
+                    ));
+                }
+            };
+            // Recursively search all maps in the input for matching keys.
+            let mut results = XpathItemSet::new();
+            func_map_find_recursive(&args[0], search_key, &mut results);
+            Ok(Some(results))
+        }
+        _ => Ok(None),
+    }
+}
+
+/// Dispatch `array:*` functions.
+fn dispatch_array_function<'tree>(
+    local_name: &str,
+    args: &[XpathItemSet<'tree>],
+    context: &XpathExpressionContext<'tree>,
+) -> Result<Option<XpathItemSet<'tree>>, ExpressionApplyError> {
+    match local_name {
+        // https://www.w3.org/TR/xpath-functions-31/#func-array-size
+        "size" => {
+            check_arity("array:size", args, 1)?;
+            let arr = extract_array(&args[0], "array:size")?;
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::Integer(arr.len() as i64)
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-array-get
+        "get" => {
+            check_arity("array:get", args, 2)?;
+            let arr = extract_array(&args[0], "array:get")?;
+            let idx = extract_double(&args[1], context.item_tree)? as usize;
+            if idx < 1 || idx > arr.len() {
+                return Err(ExpressionApplyError::new(format!(
+                    "array:get: index {} out of bounds (array size {})",
+                    idx,
+                    arr.len()
+                )));
+            }
+            let member: XpathItemSet = arr[idx - 1]
+                .iter()
+                .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                .collect();
+            Ok(Some(member))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-array-put
+        "put" => {
+            check_arity("array:put", args, 3)?;
+            let arr = extract_array(&args[0], "array:put")?;
+            let idx = extract_double(&args[1], context.item_tree)? as usize;
+            if idx < 1 || idx > arr.len() {
+                return Err(ExpressionApplyError::new(format!(
+                    "array:put: index {} out of bounds (array size {})",
+                    idx,
+                    arr.len()
+                )));
+            }
+            let new_val: Vec<AnyAtomicType> = func_data(&args[2], context.item_tree);
+            let mut new_members = arr.clone();
+            new_members[idx - 1] = new_val;
+            Ok(Some(xpath_item_set![XpathItem::Function(
+                Function::Array { members: new_members }
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-array-append
+        "append" => {
+            check_arity("array:append", args, 2)?;
+            let arr = extract_array(&args[0], "array:append")?;
+            let new_val: Vec<AnyAtomicType> = func_data(&args[1], context.item_tree);
+            let mut new_members = arr.clone();
+            new_members.push(new_val);
+            Ok(Some(xpath_item_set![XpathItem::Function(
+                Function::Array { members: new_members }
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-array-subarray
+        "subarray" => {
+            if args.len() < 2 || args.len() > 3 {
+                return Err(ExpressionApplyError::new(format!(
+                    "array:subarray expects 2 or 3 arguments, got {}",
+                    args.len()
+                )));
+            }
+            let arr = extract_array(&args[0], "array:subarray")?;
+            let start = extract_double(&args[1], context.item_tree)? as usize;
+            if start < 1 || start > arr.len() + 1 {
+                return Err(ExpressionApplyError::new(format!(
+                    "array:subarray: start {} out of bounds",
+                    start
+                )));
+            }
+            let length = if args.len() == 3 {
+                extract_double(&args[2], context.item_tree)? as usize
+            } else {
+                arr.len() - start + 1
+            };
+            let end = (start - 1 + length).min(arr.len());
+            let new_members = arr[start - 1..end].to_vec();
+            Ok(Some(xpath_item_set![XpathItem::Function(
+                Function::Array { members: new_members }
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-array-remove
+        "remove" => {
+            check_arity("array:remove", args, 2)?;
+            let arr = extract_array(&args[0], "array:remove")?;
+            let positions: Vec<usize> = args[1]
+                .iter()
+                .filter_map(|item| match item {
+                    XpathItem::AnyAtomicType(AnyAtomicType::Integer(n)) => Some(*n as usize),
+                    _ => None,
+                })
+                .collect();
+            let new_members: Vec<Vec<AnyAtomicType>> = arr
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| !positions.contains(&(i + 1)))
+                .map(|(_, m)| m.clone())
+                .collect();
+            Ok(Some(xpath_item_set![XpathItem::Function(
+                Function::Array { members: new_members }
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-array-insert-before
+        "insert-before" => {
+            check_arity("array:insert-before", args, 3)?;
+            let arr = extract_array(&args[0], "array:insert-before")?;
+            let pos = extract_double(&args[1], context.item_tree)? as usize;
+            if pos < 1 || pos > arr.len() + 1 {
+                return Err(ExpressionApplyError::new(format!(
+                    "array:insert-before: position {} out of bounds",
+                    pos
+                )));
+            }
+            let new_val: Vec<AnyAtomicType> = func_data(&args[2], context.item_tree);
+            let mut new_members = arr.clone();
+            new_members.insert(pos - 1, new_val);
+            Ok(Some(xpath_item_set![XpathItem::Function(
+                Function::Array { members: new_members }
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-array-head
+        "head" => {
+            check_arity("array:head", args, 1)?;
+            let arr = extract_array(&args[0], "array:head")?;
+            if arr.is_empty() {
+                return Err(ExpressionApplyError::new(
+                    "array:head: array is empty".to_string(),
+                ));
+            }
+            let member: XpathItemSet = arr[0]
+                .iter()
+                .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                .collect();
+            Ok(Some(member))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-array-tail
+        "tail" => {
+            check_arity("array:tail", args, 1)?;
+            let arr = extract_array(&args[0], "array:tail")?;
+            if arr.is_empty() {
+                return Err(ExpressionApplyError::new(
+                    "array:tail: array is empty".to_string(),
+                ));
+            }
+            let new_members = arr[1..].to_vec();
+            Ok(Some(xpath_item_set![XpathItem::Function(
+                Function::Array { members: new_members }
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-array-reverse
+        "reverse" => {
+            check_arity("array:reverse", args, 1)?;
+            let arr = extract_array(&args[0], "array:reverse")?;
+            let mut new_members = arr.clone();
+            new_members.reverse();
+            Ok(Some(xpath_item_set![XpathItem::Function(
+                Function::Array { members: new_members }
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-array-join
+        "join" => {
+            check_arity("array:join", args, 1)?;
+            let mut all_members: Vec<Vec<AnyAtomicType>> = Vec::new();
+            for item in args[0].iter() {
+                if let XpathItem::Function(Function::Array { members }) = item {
+                    all_members.extend(members.iter().cloned());
+                }
+            }
+            Ok(Some(xpath_item_set![XpathItem::Function(
+                Function::Array { members: all_members }
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-array-flatten
+        "flatten" => {
+            check_arity("array:flatten", args, 1)?;
+            let mut result = XpathItemSet::new();
+            func_array_flatten(&args[0], &mut result);
+            Ok(Some(result))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-array-for-each
+        "for-each" => {
+            check_arity("array:for-each", args, 2)?;
+            let arr = extract_array(&args[0], "array:for-each")?;
+            let func = extract_function_item(&args[1], "array:for-each")?;
+            let mut new_members: Vec<Vec<AnyAtomicType>> = Vec::new();
+            for member in arr {
+                let member_set: XpathItemSet = member
+                    .iter()
+                    .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                    .collect();
+                let call_result =
+                    invoke_function_item(func, vec![member_set], context)?;
+                let atoms = func_data(&call_result, context.item_tree);
+                new_members.push(atoms);
+            }
+            Ok(Some(xpath_item_set![XpathItem::Function(
+                Function::Array { members: new_members }
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-array-filter
+        "filter" => {
+            check_arity("array:filter", args, 2)?;
+            let arr = extract_array(&args[0], "array:filter")?;
+            let func = extract_function_item(&args[1], "array:filter")?;
+            let mut new_members: Vec<Vec<AnyAtomicType>> = Vec::new();
+            for member in arr {
+                let member_set: XpathItemSet = member
+                    .iter()
+                    .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                    .collect();
+                let call_result =
+                    invoke_function_item(func, vec![member_set], context)?;
+                if !call_result.is_empty() {
+                    if let XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true)) = &call_result[0]
+                    {
+                        new_members.push(member.clone());
+                    }
+                }
+            }
+            Ok(Some(xpath_item_set![XpathItem::Function(
+                Function::Array { members: new_members }
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-array-fold-left
+        "fold-left" => {
+            check_arity("array:fold-left", args, 3)?;
+            let arr = extract_array(&args[0], "array:fold-left")?;
+            let func = extract_function_item(&args[2], "array:fold-left")?;
+            let mut accumulator = args[1].clone();
+            for member in arr {
+                let member_set: XpathItemSet = member
+                    .iter()
+                    .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                    .collect();
+                accumulator =
+                    invoke_function_item(func, vec![accumulator, member_set], context)?;
+            }
+            Ok(Some(accumulator))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-array-fold-right
+        "fold-right" => {
+            check_arity("array:fold-right", args, 3)?;
+            let arr = extract_array(&args[0], "array:fold-right")?;
+            let func = extract_function_item(&args[2], "array:fold-right")?;
+            let mut accumulator = args[1].clone();
+            for member in arr.iter().rev() {
+                let member_set: XpathItemSet = member
+                    .iter()
+                    .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                    .collect();
+                accumulator =
+                    invoke_function_item(func, vec![member_set, accumulator], context)?;
+            }
+            Ok(Some(accumulator))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-array-for-each-pair
+        "for-each-pair" => {
+            check_arity("array:for-each-pair", args, 3)?;
+            let arr1 = extract_array(&args[0], "array:for-each-pair")?;
+            let arr2 = extract_array(&args[1], "array:for-each-pair")?;
+            let func = extract_function_item(&args[2], "array:for-each-pair")?;
+            let mut new_members: Vec<Vec<AnyAtomicType>> = Vec::new();
+            for (m1, m2) in arr1.iter().zip(arr2.iter()) {
+                let set1: XpathItemSet = m1.iter().map(|a| XpathItem::AnyAtomicType(a.clone())).collect();
+                let set2: XpathItemSet = m2.iter().map(|a| XpathItem::AnyAtomicType(a.clone())).collect();
+                let call_result = invoke_function_item(func, vec![set1, set2], context)?;
+                let atoms = func_data(&call_result, context.item_tree);
+                new_members.push(atoms);
+            }
+            Ok(Some(xpath_item_set![XpathItem::Function(
+                Function::Array { members: new_members }
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-array-sort
+        "sort" => {
+            if args.is_empty() || args.len() > 3 {
+                return Err(ExpressionApplyError::new(format!(
+                    "array:sort expects 1-3 arguments, got {}",
+                    args.len()
+                )));
+            }
+            let arr = extract_array(&args[0], "array:sort")?;
+            // Spec: array:sort($array, $collation?, $key?). Arg 2 is collation (ignored),
+            // arg 3 is the key function.
+            let key_func_arg = if args.len() == 3 {
+                Some(&args[2])
+            } else {
+                None
+            };
+            let mut members_with_keys: Vec<(Vec<AnyAtomicType>, String)> = Vec::new();
+            for member in arr {
+                let key = if let Some(key_arg) = key_func_arg {
+                    let func = extract_function_item(key_arg, "array:sort")?;
+                    let member_set: XpathItemSet = member
+                        .iter()
+                        .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                        .collect();
+                    let key_result = invoke_function_item(func, vec![member_set], context)?;
+                    if key_result.is_empty() {
+                        String::new()
+                    } else {
+                        func_string(&key_result[0], context.item_tree)
+                    }
+                } else {
+                    member
+                        .iter()
+                        .map(|a| {
+                            func_string(
+                                &XpathItem::AnyAtomicType(a.clone()),
+                                context.item_tree,
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join("")
+                };
+                members_with_keys.push((member.clone(), key));
+            }
+            members_with_keys.sort_by(|(_, ka), (_, kb)| ka.cmp(kb));
+            let new_members: Vec<Vec<AnyAtomicType>> =
+                members_with_keys.into_iter().map(|(m, _)| m).collect();
+            Ok(Some(xpath_item_set![XpathItem::Function(
+                Function::Array { members: new_members }
+            )]))
+        }
+        _ => Ok(None),
+    }
+}
+
+/// Dispatch `math:*` functions.
+fn dispatch_math_function<'tree>(
+    local_name: &str,
+    args: &[XpathItemSet<'tree>],
+    context: &XpathExpressionContext<'tree>,
+) -> Result<Option<XpathItemSet<'tree>>, ExpressionApplyError> {
+    match local_name {
+        "pi" => {
+            check_arity("math:pi", args, 0)?;
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::Double(ordered_float::OrderedFloat(std::f64::consts::PI))
+            )]))
+        }
+        "exp" | "exp10" | "log" | "log10" | "sqrt" | "sin" | "cos" | "tan" | "asin"
+        | "acos" | "atan" => {
+            check_arity(&format!("math:{}", local_name), args, 1)?;
+            if args[0].is_empty() {
+                return Ok(Some(XpathItemSet::new()));
+            }
+            let val = extract_double(&args[0], context.item_tree)?;
+            let result = match local_name {
+                "exp" => val.exp(),
+                "exp10" => 10f64.powf(val),
+                "log" => val.ln(),
+                "log10" => val.log10(),
+                "sqrt" => val.sqrt(),
+                "sin" => val.sin(),
+                "cos" => val.cos(),
+                "tan" => val.tan(),
+                "asin" => val.asin(),
+                "acos" => val.acos(),
+                "atan" => val.atan(),
+                _ => unreachable!(),
+            };
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::Double(ordered_float::OrderedFloat(result))
+            )]))
+        }
+        "pow" | "atan2" => {
+            check_arity(&format!("math:{}", local_name), args, 2)?;
+            if args[0].is_empty() || args[1].is_empty() {
+                return Ok(Some(XpathItemSet::new()));
+            }
+            let x = extract_double(&args[0], context.item_tree)?;
+            let y = extract_double(&args[1], context.item_tree)?;
+            let result = match local_name {
+                "pow" => x.powf(y),
+                "atan2" => x.atan2(y),
+                _ => unreachable!(),
+            };
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::Double(ordered_float::OrderedFloat(result))
+            )]))
+        }
+        _ => Ok(None),
+    }
+}
+
 /// https://developer.mozilla.org/en-US/docs/Web/XPath/Functions/contains
 fn func_contains<'tree>(
     args: &[XpathItemSet<'tree>],
@@ -1989,6 +2639,104 @@ fn extract_function_item<'a, 'tree>(
             "{}: argument is not a function item",
             fn_name
         ))),
+    }
+}
+
+/// Extract a map from the first item of an XpathItemSet.
+fn extract_map<'a>(
+    items: &'a XpathItemSet,
+    fn_name: &str,
+) -> Result<&'a Vec<(AnyAtomicType, Vec<AnyAtomicType>)>, ExpressionApplyError> {
+    if items.is_empty() {
+        return Err(ExpressionApplyError::new(format!(
+            "{}: argument is empty",
+            fn_name
+        )));
+    }
+    match &items[0] {
+        XpathItem::Function(Function::Map { entries }) => Ok(entries),
+        _ => Err(ExpressionApplyError::new(format!(
+            "{}: argument is not a map",
+            fn_name
+        ))),
+    }
+}
+
+/// Extract an array from the first item of an XpathItemSet.
+fn extract_array<'a>(
+    items: &'a XpathItemSet,
+    fn_name: &str,
+) -> Result<&'a Vec<Vec<AnyAtomicType>>, ExpressionApplyError> {
+    if items.is_empty() {
+        return Err(ExpressionApplyError::new(format!(
+            "{}: argument is empty",
+            fn_name
+        )));
+    }
+    match &items[0] {
+        XpathItem::Function(Function::Array { members }) => Ok(members),
+        _ => Err(ExpressionApplyError::new(format!(
+            "{}: argument is not an array",
+            fn_name
+        ))),
+    }
+}
+
+/// Recursively search for map entries with a given key.
+fn func_map_find_recursive<'tree>(
+    items: &XpathItemSet<'tree>,
+    key: &AnyAtomicType,
+    results: &mut XpathItemSet<'tree>,
+) {
+    for item in items.iter() {
+        match item {
+            XpathItem::Function(Function::Map { entries }) => {
+                for (k, v) in entries {
+                    if k == key {
+                        // Return the value as an array.
+                        results.insert(XpathItem::Function(Function::Array {
+                            members: vec![v.clone()],
+                        }));
+                    }
+                    // Recurse into nested map values.
+                    let nested: XpathItemSet = v
+                        .iter()
+                        .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                        .collect();
+                    func_map_find_recursive(&nested, key, results);
+                }
+            }
+            XpathItem::Function(Function::Array { members }) => {
+                for member in members {
+                    let nested: XpathItemSet = member
+                        .iter()
+                        .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                        .collect();
+                    func_map_find_recursive(&nested, key, results);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Recursively flatten arrays into a sequence of atomic values.
+fn func_array_flatten<'tree>(items: &XpathItemSet<'tree>, result: &mut XpathItemSet<'tree>) {
+    for item in items.iter() {
+        match item {
+            XpathItem::Function(Function::Array { members }) => {
+                for member in members {
+                    let nested: XpathItemSet = member
+                        .iter()
+                        .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                        .collect();
+                    func_array_flatten(&nested, result);
+                }
+            }
+            other => {
+                result.insert(other.clone());
+            }
+        }
     }
 }
 

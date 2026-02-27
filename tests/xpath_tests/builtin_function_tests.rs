@@ -1043,3 +1043,207 @@ fn fn_apply() {
         XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("hello world")))
     );
 }
+
+// ── Map functions ────────────────────────────────────────────────────
+
+#[test]
+fn fn_map_size() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"map:size(map { "a": 1, "b": 2 })"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(2)));
+}
+
+#[test]
+fn fn_map_keys() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"map:keys(map { "x": 1, "y": 2 })"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 2);
+}
+
+#[test]
+fn fn_map_contains_true() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"map:contains(map { "a": 1 }, "a")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true)));
+}
+
+#[test]
+fn fn_map_contains_false() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"map:contains(map { "a": 1 }, "b")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Boolean(false)));
+}
+
+#[test]
+fn fn_map_get() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"map:get(map { "x": 42 }, "x")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(42)));
+}
+
+#[test]
+fn fn_map_put() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath =
+        xpath::parse(r#"map:size(map:put(map { "a": 1 }, "b", 2))"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(2)));
+}
+
+#[test]
+fn fn_map_remove() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath =
+        xpath::parse(r#"map:size(map:remove(map { "a": 1, "b": 2 }, "a"))"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(1)));
+}
+
+#[test]
+fn fn_map_entry() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"map:get(map:entry("key", 99), "key")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(99)));
+}
+
+#[test]
+fn fn_map_merge() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(
+        r#"map:size(map:merge((map { "a": 1 }, map { "b": 2 })))"#,
+    )
+    .unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(2)));
+}
+
+#[test]
+fn fn_map_for_each() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(
+        r#"count(map:for-each(map { "a": 1, "b": 2 }, function($k, $v) { $v }))"#,
+    )
+    .unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(2)));
+}
+
+#[test]
+fn fn_map_find() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(
+        r#"count(map:find(map { "a": 1, "b": 2 }, "a"))"#,
+    )
+    .unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(1)));
+}
+
+// ── Array functions ──────────────────────────────────────────────────
+
+#[test]
+fn fn_array_size() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("array:size([1, 2, 3])").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(3)));
+}
+
+#[test]
+fn fn_array_get() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("array:get([10, 20, 30], 2)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(20)));
+}
+
+#[test]
+fn fn_array_head() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("array:head([10, 20, 30])").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(10)));
+}
+
+#[test]
+fn fn_array_tail() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("array:size(array:tail([1, 2, 3]))").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(2)));
+}
+
+#[test]
+fn fn_array_reverse() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("array:get(array:reverse([1, 2, 3]), 1)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(3)));
+}
+
+#[test]
+fn fn_array_append() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("array:size(array:append([1, 2], 3))").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(3)));
+}
+
+#[test]
+fn fn_array_join() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("array:size(array:join(([1, 2], [3, 4])))").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(4)));
+}
+
+#[test]
+fn fn_array_flatten() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("count(array:flatten([1, 2, 3]))").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(3)));
+}
+
+// ── Math functions ───────────────────────────────────────────────────
+
+#[test]
+fn fn_math_pi() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("math:pi()").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    match &items[0] {
+        XpathItem::AnyAtomicType(AnyAtomicType::Double(d)) => {
+            assert!((d.0 - std::f64::consts::PI).abs() < 1e-10);
+        }
+        _ => panic!("Expected double"),
+    }
+}
+
+#[test]
+fn fn_math_sqrt() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("math:sqrt(4)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Double(OrderedFloat(2.0)))
+    );
+}
+
+#[test]
+fn fn_math_pow() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("math:pow(2, 10)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Double(OrderedFloat(1024.0)))
+    );
+}
