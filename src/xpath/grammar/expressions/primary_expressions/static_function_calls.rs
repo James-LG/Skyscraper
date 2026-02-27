@@ -54,10 +54,17 @@ impl FunctionCall {
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         // fn:root is special: its arguments are never evaluated because path
         // expansion passes `self::node()` which may hit unimplemented axes.
-        if let EQName::QName(QName::PrefixedName(p)) = &self.name {
-            if p.prefix == "fn" && p.local_part == "root" {
-                return Ok(xpath_item_set![XpathItem::Node(context.item_tree.root())]);
+        let is_fn_root = match &self.name {
+            EQName::QName(QName::PrefixedName(p)) => {
+                p.prefix == "fn" && p.local_part == "root"
             }
+            EQName::UriQualifiedName(uqn) => {
+                uqn.uri == XPATH_FUNCTIONS_NS && uqn.name == "root"
+            }
+            _ => false,
+        };
+        if is_fn_root {
+            return Ok(xpath_item_set![XpathItem::Node(context.item_tree.root())]);
         }
 
         // Eagerly evaluate arguments, then dispatch through the shared table.
@@ -73,32 +80,84 @@ impl FunctionCall {
 ///
 /// Used by `ArrowExpr::eval` where the left-hand side is prepended as the
 /// first argument.
+
+/// The XPath Functions namespace URI.
+const XPATH_FUNCTIONS_NS: &str = "http://www.w3.org/2005/xpath-functions";
+
 pub(crate) fn dispatch_function<'tree>(
     name: &EQName,
     args: &[XpathItemSet<'tree>],
     context: &XpathExpressionContext<'tree>,
 ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
-    match name {
+    // Extract the local name for function dispatch. The fn: prefix and the
+    // XPath Functions namespace URI both resolve to the same set of functions.
+    // Unprefixed names are also tried against the default function namespace.
+    let local_name = match name {
         EQName::QName(qname) => match qname {
-            QName::PrefixedName(prefixed_name) => {
-                if prefixed_name.prefix == "fn" {
-                    if prefixed_name.local_part == "root" {
-                        return Ok(xpath_item_set![XpathItem::Node(context.item_tree.root())]);
-                    }
-                }
-
-                Err(ExpressionApplyError {
-                    msg: format!("Unknown function {}", name),
-                })
-            }
-            QName::UnprefixedName(unprefixed_name) => match unprefixed_name.as_str() {
-                "contains" => func_contains(args, context),
-                _ => Err(ExpressionApplyError {
-                    msg: format!("Unknown function {}", name),
-                }),
-            },
+            QName::PrefixedName(p) if p.prefix == "fn" => Some(p.local_part.as_str()),
+            QName::PrefixedName(_) => None,
+            QName::UnprefixedName(n) => Some(n.as_str()),
         },
-        EQName::UriQualifiedName(_) => todo!("dispatch_function UriQualifiedName"),
+        EQName::UriQualifiedName(uqn) if uqn.uri == XPATH_FUNCTIONS_NS => {
+            Some(uqn.name.as_str())
+        }
+        EQName::UriQualifiedName(_) => None,
+    };
+
+    if let Some(local) = local_name {
+        if let Some(result) = dispatch_by_local_name(local, args, context)? {
+            return Ok(result);
+        }
+    }
+
+    Err(ExpressionApplyError {
+        msg: format!("Unknown function {}", name),
+    })
+}
+
+/// Dispatch a function by its local name. Returns `Ok(Some(result))` if the
+/// function is known, `Ok(None)` if unrecognized, or `Err` on evaluation error.
+fn dispatch_by_local_name<'tree>(
+    local_name: &str,
+    args: &[XpathItemSet<'tree>],
+    context: &XpathExpressionContext<'tree>,
+) -> Result<Option<XpathItemSet<'tree>>, ExpressionApplyError> {
+    match local_name {
+        "root" => Ok(Some(
+            xpath_item_set![XpathItem::Node(context.item_tree.root())],
+        )),
+        "contains" => func_contains(args, context).map(Some),
+        "data" => {
+            let target = if args.is_empty() {
+                xpath_item_set![context.item.clone()]
+            } else {
+                args[0].clone()
+            };
+            let atoms = func_data(&target, context.item_tree);
+            Ok(Some(
+                atoms
+                    .into_iter()
+                    .map(|a| XpathItem::AnyAtomicType(a))
+                    .collect(),
+            ))
+        }
+        "string" => {
+            let target = if args.is_empty() {
+                &context.item
+            } else if args[0].len() == 1 {
+                &args[0][0]
+            } else {
+                return Err(ExpressionApplyError::new(format!(
+                    "fn:string expects 0 or 1 argument, got sequence of length {}",
+                    args[0].len()
+                )));
+            };
+            let s = func_string(target, context.item_tree);
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::String(s)
+            )]))
+        }
+        _ => Ok(None),
     }
 }
 

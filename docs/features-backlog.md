@@ -217,7 +217,7 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line | Feature |
 |------|---------|
-| 76 | URI-qualified function names |
+| ~~76~~ | ~~URI-qualified function names~~ **DONE** |
 | ~~147–148~~ | ~~`fn:data()` for PI and comment nodes~~ **DONE** |
 | ~~155~~ | ~~`fn:data()` for function items~~ **DONE** |
 | ~~169–170~~ | ~~`fn:string()` for PI and comment nodes~~ **DONE** |
