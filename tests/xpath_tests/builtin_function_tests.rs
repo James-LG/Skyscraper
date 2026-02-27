@@ -1247,3 +1247,133 @@ fn fn_math_pow() {
         XpathItem::AnyAtomicType(AnyAtomicType::Double(OrderedFloat(1024.0)))
     );
 }
+
+// ── Format/normalize/node functions ─────────────────────────────────
+
+#[test]
+fn fn_format_number_basic() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath =
+        xpath::parse(r##"format-number(12345.6, "#,###.00")"##).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("12,345.60")))
+    );
+}
+
+#[test]
+fn fn_format_number_leading_zeros() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("format-number(-6, \"000\")").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("-006")))
+    );
+}
+
+#[test]
+fn fn_format_number_percent() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("format-number(0.14, \"01%\")").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("14%")))
+    );
+}
+
+#[test]
+fn fn_format_number_nan() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath =
+        xpath::parse(r##"format-number(number("NaN"), "#")"##).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("NaN")))
+    );
+}
+
+#[test]
+fn fn_normalize_unicode_nfc() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"normalize-unicode("hello")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("hello")))
+    );
+}
+
+#[test]
+fn fn_normalize_unicode_nfkd() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    // U+00C9 (É) decomposes under NFKD to E + combining acute accent (2 codepoints).
+    let xpath =
+        xpath::parse("string-length(normalize-unicode(\"\u{00C9}\", \"NFKD\")) = 2").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true))
+    );
+}
+
+#[test]
+fn fn_innermost() {
+    let document = html::parse("<html><body><div><p>text</p></div></body></html>").unwrap();
+    // //div returns the outer div; //p returns the inner p.
+    // innermost should exclude div because p is a descendant of div.
+    let xpath = xpath::parse("count(innermost(//div | //p))").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Integer(1))
+    );
+}
+
+#[test]
+fn fn_outermost() {
+    let document = html::parse("<html><body><div><p>text</p></div></body></html>").unwrap();
+    // outermost should exclude p because its ancestor div is in the set.
+    let xpath = xpath::parse("count(outermost(//div | //p))").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Integer(1))
+    );
+}
+
+#[test]
+fn fn_outermost_returns_div() {
+    let document = html::parse("<html><body><div><p>text</p></div></body></html>").unwrap();
+    let xpath = xpath::parse("name(outermost(//div | //p))").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("div")))
+    );
+}
+
+#[test]
+fn fn_base_uri() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"base-uri()"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::new()))
+    );
+}
+
+#[test]
+fn fn_document_uri() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"empty(document-uri())"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true))
+    );
+}

@@ -1515,6 +1515,135 @@ fn dispatch_by_local_name<'tree>(
                 )),
             }
         }
+        // https://www.w3.org/TR/xpath-functions-31/#func-format-number
+        "format-number" => {
+            if args.len() < 2 || args.len() > 3 {
+                return Err(ExpressionApplyError::new(format!(
+                    "fn:format-number expects 2-3 arguments, got {}",
+                    args.len()
+                )));
+            }
+            // Arg 3 (decimal-format-name) is ignored; only default format supported.
+            let value = extract_double(&args[0], context.item_tree)?;
+            let picture = func_string(&args[1][0], context.item_tree);
+            let result = func_format_number(value, &picture)?;
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::String(result)
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-normalize-unicode
+        "normalize-unicode" => {
+            if args.is_empty() || args.len() > 2 {
+                return Err(ExpressionApplyError::new(format!(
+                    "fn:normalize-unicode expects 1-2 arguments, got {}",
+                    args.len()
+                )));
+            }
+            if args[0].is_empty() {
+                return Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                    AnyAtomicType::String(String::new())
+                )]));
+            }
+            let input = func_string(&args[0][0], context.item_tree);
+            let form = if args.len() == 2 {
+                func_string(&args[1][0], context.item_tree)
+                    .trim()
+                    .to_uppercase()
+            } else {
+                "NFC".to_string()
+            };
+            let result = func_normalize_unicode(&input, &form)?;
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::String(result)
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-innermost
+        "innermost" => {
+            check_arity("fn:innermost", args, 1)?;
+            let nodes: Vec<&XpathItemTreeNode> = args[0]
+                .iter()
+                .filter_map(|item| match item {
+                    XpathItem::Node(n) => Some(*n),
+                    _ => None,
+                })
+                .collect();
+            let node_ids: Vec<Option<indextree::NodeId>> =
+                nodes.iter().map(|n| n.node_id()).collect();
+            let mut result = XpathItemSet::new();
+            for (i, node) in nodes.iter().enumerate() {
+                let is_ancestor_of_another = if let Some(my_id) = node_ids[i] {
+                    node_ids.iter().enumerate().any(|(j, other_id)| {
+                        if i == j {
+                            return false;
+                        }
+                        if let Some(other_id) = other_id {
+                            other_id
+                                .ancestors(&context.item_tree.arena)
+                                .any(|anc| anc == my_id)
+                        } else {
+                            false
+                        }
+                    })
+                } else {
+                    false
+                };
+                if !is_ancestor_of_another {
+                    result.insert(XpathItem::Node(node));
+                }
+            }
+            Ok(Some(result))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-outermost
+        "outermost" => {
+            check_arity("fn:outermost", args, 1)?;
+            let nodes: Vec<&XpathItemTreeNode> = args[0]
+                .iter()
+                .filter_map(|item| match item {
+                    XpathItem::Node(n) => Some(*n),
+                    _ => None,
+                })
+                .collect();
+            let node_ids: Vec<Option<indextree::NodeId>> =
+                nodes.iter().map(|n| n.node_id()).collect();
+            let mut result = XpathItemSet::new();
+            for (i, node) in nodes.iter().enumerate() {
+                let has_ancestor_in_set = if let Some(my_id) = node_ids[i] {
+                    my_id.ancestors(&context.item_tree.arena).skip(1).any(|anc| {
+                        node_ids.iter().any(|nid| *nid == Some(anc))
+                    })
+                } else {
+                    false
+                };
+                if !has_ancestor_in_set {
+                    result.insert(XpathItem::Node(node));
+                }
+            }
+            Ok(Some(result))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-base-uri
+        "base-uri" => {
+            if args.len() > 1 {
+                return Err(ExpressionApplyError::new(format!(
+                    "fn:base-uri expects 0-1 arguments, got {}",
+                    args.len()
+                )));
+            }
+            // HTML-only processor: no base URI tracking, return empty string.
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::String(String::new())
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-document-uri
+        "document-uri" => {
+            if args.len() > 1 {
+                return Err(ExpressionApplyError::new(format!(
+                    "fn:document-uri expects 0-1 arguments, got {}",
+                    args.len()
+                )));
+            }
+            // HTML-only processor: no document URI tracking, return empty sequence.
+            Ok(Some(XpathItemSet::new()))
+        }
         _ => Ok(None),
     }
 }
@@ -2737,6 +2866,169 @@ fn func_array_flatten<'tree>(items: &XpathItemSet<'tree>, result: &mut XpathItem
                 result.insert(other.clone());
             }
         }
+    }
+}
+
+/// Format a number according to a picture string (subset of XPath 3.1 spec).
+/// Supports: `#` (optional digit), `0`-`9` (mandatory digit positions), `.` (decimal separator),
+/// `,` (grouping separator), `%` (percent), `;` (sub-picture separator for negatives).
+fn func_format_number(value: f64, picture: &str) -> Result<String, ExpressionApplyError> {
+    if value.is_nan() {
+        return Ok("NaN".to_string());
+    }
+    if value.is_infinite() {
+        return if value > 0.0 {
+            Ok("Infinity".to_string())
+        } else {
+            Ok("-Infinity".to_string())
+        };
+    }
+
+    fn is_digit_char(c: char) -> bool {
+        // In XPath format-number, 0-9 are all mandatory digit positions, # is optional.
+        c.is_ascii_digit() || c == '#'
+    }
+    fn is_active_char(c: char) -> bool {
+        is_digit_char(c) || c == '.' || c == ','
+    }
+
+    // Split into positive/negative sub-pictures.
+    let (pos_pic, neg_pic) = if let Some(idx) = picture.find(';') {
+        (&picture[..idx], Some(&picture[idx + 1..]))
+    } else {
+        (picture.as_ref(), None)
+    };
+
+    let is_negative = value < 0.0;
+    let sub_picture = if is_negative {
+        neg_pic.unwrap_or(pos_pic)
+    } else {
+        pos_pic
+    };
+
+    // Check for percent.
+    let has_percent = sub_picture.contains('%');
+    let abs_value = if has_percent {
+        value.abs() * 100.0
+    } else {
+        value.abs()
+    };
+
+    // Extract prefix and suffix (passive characters before/after the active part).
+    let first_active = sub_picture.find(is_active_char).unwrap_or(sub_picture.len());
+    let last_active = sub_picture.rfind(is_active_char).map(|i| i + 1).unwrap_or(0);
+    let prefix = &sub_picture[..first_active];
+    let suffix = &sub_picture[last_active..];
+    let pattern = &sub_picture[first_active..last_active];
+
+    // Parse the active pattern.
+    let (int_pattern, frac_pattern) = if let Some(dot_pos) = pattern.find('.') {
+        (&pattern[..dot_pos], Some(&pattern[dot_pos + 1..]))
+    } else {
+        (pattern, None)
+    };
+
+    // Determine fractional digits. 0-9 are mandatory, # is optional.
+    let min_frac = frac_pattern.map_or(0, |p| {
+        p.chars().filter(|c| c.is_ascii_digit()).count()
+    });
+    let max_frac = frac_pattern.map_or(0, |p| {
+        p.chars().filter(|c| is_digit_char(*c)).count()
+    });
+
+    // Round to max fractional digits.
+    let factor = 10f64.powi(max_frac as i32);
+    let rounded = (abs_value * factor).round() / factor;
+
+    // Split into integer and fractional string parts.
+    let formatted = format!("{:.prec$}", rounded, prec = max_frac);
+    let (int_str, frac_str) = if let Some(dot) = formatted.find('.') {
+        (&formatted[..dot], Some(&formatted[dot + 1..]))
+    } else {
+        (formatted.as_str(), None)
+    };
+
+    // Determine minimum integer digits (count of 0-9 chars in integer pattern).
+    let min_int = int_pattern.chars().filter(|c| c.is_ascii_digit()).count();
+    let mut int_digits = int_str.to_string();
+    while int_digits.len() < min_int.max(1) {
+        int_digits.insert(0, '0');
+    }
+
+    // Apply grouping separators to integer part.
+    // Determine regular grouping size from the rightmost comma.
+    let group_size = if int_pattern.contains(',') {
+        let after_last_comma =
+            int_pattern.rfind(',').map(|i| &int_pattern[i + 1..]).unwrap_or("");
+        after_last_comma.chars().filter(|c| is_digit_char(*c)).count()
+    } else {
+        0
+    };
+
+    if group_size > 0 {
+        let mut grouped = String::new();
+        for (i, ch) in int_digits.chars().rev().enumerate() {
+            if i > 0 && i % group_size == 0 {
+                grouped.push(',');
+            }
+            grouped.push(ch);
+        }
+        int_digits = grouped.chars().rev().collect();
+    }
+
+    // Build fractional part.
+    let frac_result = if max_frac > 0 {
+        let mut frac = frac_str.unwrap_or("").to_string();
+        // Trim trailing zeros beyond min_frac.
+        while frac.len() > min_frac && frac.ends_with('0') {
+            frac.pop();
+        }
+        // Pad to min_frac.
+        while frac.len() < min_frac {
+            frac.push('0');
+        }
+        if frac.is_empty() {
+            None
+        } else {
+            Some(frac)
+        }
+    } else {
+        None
+    };
+
+    // Assemble the result.
+    let mut result = String::new();
+    if is_negative && neg_pic.is_none() {
+        result.push('-');
+    }
+    result.push_str(prefix);
+    result.push_str(&int_digits);
+    if let Some(frac) = frac_result {
+        result.push('.');
+        result.push_str(&frac);
+    }
+    result.push_str(suffix);
+
+    Ok(result)
+}
+
+/// Apply Unicode normalization to a string.
+fn func_normalize_unicode(input: &str, form: &str) -> Result<String, ExpressionApplyError> {
+    use unicode_normalization::UnicodeNormalization;
+
+    if form.is_empty() {
+        return Ok(input.to_string());
+    }
+
+    match form {
+        "NFC" => Ok(input.nfc().collect()),
+        "NFD" => Ok(input.nfd().collect()),
+        "NFKC" => Ok(input.nfkc().collect()),
+        "NFKD" => Ok(input.nfkd().collect()),
+        _ => Err(ExpressionApplyError::new(format!(
+            "fn:normalize-unicode: unsupported normalization form '{}'",
+            form
+        ))),
     }
 }
 
