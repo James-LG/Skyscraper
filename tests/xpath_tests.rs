@@ -13,6 +13,7 @@ mod xpath_tests {
     mod if_expression_tests;
     mod forward_step_tests;
     mod github_sample_tests;
+    mod instance_of_tests;
     mod logical_expression_tests;
     mod range_expression_tests;
     mod lxml_tests;
