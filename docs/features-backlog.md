@@ -231,10 +231,10 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line | Feature |
 |------|---------|
-| 90 | `self::` axis |
-| 92 | `following-sibling::` axis |
-| 93 | `following::` axis |
-| 94 | `namespace::` axis |
+| ~~90~~ | ~~`self::` axis~~ **DONE** |
+| ~~92~~ | ~~`following-sibling::` axis~~ **DONE** |
+| ~~93~~ | ~~`following::` axis~~ **DONE** |
+| 94 | `namespace::` axis (returns error for HTML) |
 
 ### Reverse Axes
 
@@ -242,10 +242,10 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line | Feature |
 |------|---------|
-| 85 | `ancestor::` axis |
-| 86 | `preceding-sibling::` axis |
-| 87 | `preceding::` axis |
-| 88 | `ancestor-or-self::` axis |
+| ~~85~~ | ~~`ancestor::` axis~~ **DONE** |
+| ~~86~~ | ~~`preceding-sibling::` axis~~ **DONE** |
+| ~~87~~ | ~~`preceding::` axis~~ **DONE** |
+| ~~88~~ | ~~`ancestor-or-self::` axis~~ **DONE** |
 
 ### Node Tests
 

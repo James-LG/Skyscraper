@@ -20,6 +20,7 @@ use crate::xpath::{
 
 use super::{
     axes::forward_axis::ForwardAxis,
+    collect_self_and_descendants,
     node_tests::{BiDirectionalAxis, NodeTest},
 };
 
@@ -87,11 +88,15 @@ fn eval_forward_axis<'tree>(
         ForwardAxis::Child => eval_forward_axis_child(context),
         ForwardAxis::Descendant => eval_forward_axis_descendant(context),
         ForwardAxis::Attribute => eval_forward_axis_attribute(context),
-        ForwardAxis::SelfAxis => todo!("eval_forward_axis ForwardAxis::SelfAxis"),
+        ForwardAxis::SelfAxis => eval_forward_axis_self(context),
         ForwardAxis::DescendantOrSelf => eval_forward_axis_self_or_descendant(context),
-        ForwardAxis::FollowingSibling => todo!("eval_forward_axis ForwardAxis::FollowingSibling"),
-        ForwardAxis::Following => todo!("eval_forward_axis ForwardAxis::Following"),
-        ForwardAxis::Namespace => todo!("eval_forward_axis ForwardAxis::Namespace"),
+        ForwardAxis::FollowingSibling => eval_forward_axis_following_sibling(context),
+        ForwardAxis::Following => eval_forward_axis_following(context),
+        ForwardAxis::Namespace => {
+            return Err(ExpressionApplyError {
+                msg: String::from("namespace:: axis is not supported for HTML documents"),
+            })
+        }
     }?;
 
     let items: XpathItemSet<'tree> = axis_nodes.into_iter().map(XpathItem::Node).collect();
@@ -167,6 +172,69 @@ fn eval_forward_axis_self_or_descendant<'tree>(
     }
 
     nodes.extend(eval_forward_axis_descendant(context)?);
+
+    Ok(nodes)
+}
+
+/// The context node itself.
+fn eval_forward_axis_self<'tree>(
+    context: &XpathExpressionContext<'tree>,
+) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
+    let mut nodes = IndexSet::new();
+
+    if let XpathItem::Node(node) = &context.item {
+        nodes.insert(*node);
+    } else {
+        return Err(ExpressionApplyError {
+            msg: String::from("err:XPTY0020 context item for axis step is not a node"),
+        });
+    }
+
+    Ok(nodes)
+}
+
+/// All siblings of the context node that come after it in document order.
+fn eval_forward_axis_following_sibling<'tree>(
+    context: &XpathExpressionContext<'tree>,
+) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
+    let mut nodes = IndexSet::new();
+
+    if let XpathItem::Node(node) = &context.item {
+        if let Some(node_id) = node.node_id() {
+            let mut next = context.item_tree.arena.get(node_id).and_then(|n| n.next_sibling());
+            while let Some(sibling_id) = next {
+                nodes.insert(context.item_tree.get(sibling_id));
+                next = context.item_tree.arena.get(sibling_id).and_then(|n| n.next_sibling());
+            }
+        }
+    }
+
+    Ok(nodes)
+}
+
+/// All nodes that come after the context node in document order, excluding descendants.
+fn eval_forward_axis_following<'tree>(
+    context: &XpathExpressionContext<'tree>,
+) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
+    let mut nodes = IndexSet::new();
+
+    if let XpathItem::Node(node) = &context.item {
+        if let Some(node_id) = node.node_id() {
+            // Collect all following nodes: for each ancestor (including self),
+            // take all following siblings and their descendants.
+            let mut current = Some(node_id);
+            while let Some(cur_id) = current {
+                // Add all following siblings of current and their descendants.
+                let mut next = context.item_tree.arena.get(cur_id).and_then(|n| n.next_sibling());
+                while let Some(sibling_id) = next {
+                    collect_self_and_descendants(context, sibling_id, &mut nodes);
+                    next = context.item_tree.arena.get(sibling_id).and_then(|n| n.next_sibling());
+                }
+                // Move up to parent.
+                current = context.item_tree.arena.get(cur_id).and_then(|n| n.parent());
+            }
+        }
+    }
 
     Ok(nodes)
 }
