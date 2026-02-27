@@ -102,7 +102,7 @@ All 13 axes parse and evaluate:
 
 ## XPath 3.1 — Built-in Functions
 
-**47** of the 120+ standard functions are implemented. All dispatch is in `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs`.
+**61** of the 120+ standard functions are implemented. All dispatch is in `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs`.
 
 ### Implemented
 
@@ -158,17 +158,25 @@ All 13 axes parse and evaluate:
 | `fn:avg(item*)` | Complete | Returns `xs:double` |
 | `fn:max(item*)` | Complete | Numeric and string comparison |
 | `fn:min(item*)` | Complete | Numeric and string comparison |
+| `fn:round-half-to-even(numeric, integer?)` | Complete | Banker's rounding via `round_ties_even()` |
+| `fn:format-integer(integer, string)` | Complete | Supports `1`, `01`, `a`/`A`, `i`/`I`, `w`/`W` picture strings |
+| `fn:compare(string, string)` | Complete | Returns -1, 0, or 1 |
+| `fn:codepoint-equal(string, string)` | Complete | |
+| `fn:codepoints-to-string(integer*)` | Complete | |
+| `fn:string-to-codepoints(string)` | Complete | |
+| `fn:encode-for-uri(string)` | Complete | RFC 3986 percent-encoding |
+| `fn:iri-to-uri(string)` | Complete | Encodes non-ASCII and disallowed URI characters |
+| `fn:escape-html-uri(string)` | Complete | Encodes characters outside printable ASCII |
+| `fn:deep-equal(item*, item*)` | Complete | Positional comparison using `PartialEq` |
+| `fn:unordered(item*)` | Complete | Identity function (optimization hint) |
 
 ### Not Implemented — By Category
 
 #### Numeric (high priority)
-`fn:round-half-to-even`, `fn:format-integer`, `fn:format-number`
+`fn:format-number`
 
 #### String (high priority — commonly used)
-`fn:normalize-unicode`, `fn:compare`, `fn:codepoint-equal`, `fn:codepoints-to-string`, `fn:string-to-codepoints`, `fn:analyze-string`, `fn:encode-for-uri`, `fn:iri-to-uri`, `fn:escape-html-uri`
-
-#### Sequence (high priority — commonly used)
-`fn:unordered`, `fn:deep-equal`
+`fn:normalize-unicode`, `fn:analyze-string`
 
 #### Node (medium priority)
 `fn:namespace-uri`, `fn:lang`, `fn:path`, `fn:has-children`, `fn:innermost`, `fn:outermost`
