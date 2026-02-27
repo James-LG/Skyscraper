@@ -102,7 +102,7 @@ All 13 axes parse and evaluate:
 
 ## XPath 3.1 — Built-in Functions
 
-**79** `fn:` functions plus **10** `map:`, **18** `array:`, and **14** `math:` functions (**121 total**) are implemented. All dispatch is in `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs`.
+**85** `fn:` functions plus **10** `map:`, **18** `array:`, and **14** `math:` functions (**127 total**) are implemented. All dispatch is in `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs`.
 
 ### Implemented
 
@@ -185,6 +185,12 @@ All 13 axes parse and evaluate:
 | `fn:apply(function, array)` | Complete | Invokes function with array items as arguments |
 | `fn:function-name(function)` | Complete | Returns name for named functions, empty for anonymous |
 | `fn:function-arity(function)` | Complete | Returns arity for all function item types |
+| `fn:format-number(value, picture, name?)` | Complete | Picture string parsing; decimal-format-name ignored |
+| `fn:normalize-unicode(string, form?)` | Complete | NFC, NFD, NFKC, NFKD via `unicode-normalization` crate |
+| `fn:innermost(nodes)` | Complete | Filters to nodes with no descendant in the set |
+| `fn:outermost(nodes)` | Complete | Filters to nodes with no ancestor in the set |
+| `fn:base-uri(node?)` | Complete | Returns empty string (HTML-only processor) |
+| `fn:document-uri(node?)` | Complete | Returns empty sequence (HTML-only processor) |
 
 ### Implemented — Map Functions
 
@@ -245,20 +251,11 @@ All 13 axes parse and evaluate:
 
 ### Not Implemented — By Category
 
-#### Numeric (high priority)
-`fn:format-number`
-
-#### String (high priority — commonly used)
-`fn:normalize-unicode`, `fn:analyze-string`
-
-#### Node (medium priority)
-`fn:innermost`, `fn:outermost`
-
-#### Accessor (medium priority)
-`fn:base-uri`, `fn:document-uri`
+#### String (medium priority)
+`fn:analyze-string` (requires XML node construction for result element)
 
 #### Higher-order (medium priority)
-`fn:function-lookup`
+`fn:function-lookup` (requires `xs:QName` atomic type support)
 
 #### Error/Trace (low priority)
 `fn:error`, `fn:trace`
