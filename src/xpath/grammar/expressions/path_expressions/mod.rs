@@ -75,7 +75,7 @@ impl PathExpr {
         // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-path-expressions
         match self {
             PathExpr::LeadingSlash(expr) => {
-                let expanded_expr = if context.is_root_level {
+                let expanded_expr = if context.is_initial_step {
                     initial_slash_expansion(expr)
                 } else {
                     relative_slash_expansion(expr)
@@ -84,7 +84,7 @@ impl PathExpr {
                 expanded_expr.eval(context)
             }
             PathExpr::LeadingDoubleSlash(expr) => {
-                let expanded_expr = if context.is_root_level {
+                let expanded_expr = if context.is_initial_step {
                     initial_double_slash_expansion(expr)
                 } else {
                     relative_double_slash_expansion(expr)
@@ -254,7 +254,7 @@ impl RelativePathExpr {
                 let inner_context = context.new_with_variables(
                     &this_result,
                     i + 1,
-                    context.is_root_level,
+                    context.is_initial_step,
                 );
 
                 // Recursively evaluate the rest of the steps for this item.
@@ -279,7 +279,7 @@ impl RelativePathExpr {
             let en_context = context.new_with_variables(
                 &e1_result,
                 i + 1,
-                context.is_root_level,
+                context.is_initial_step,
             );
             let result = eval_steps(&en_context, &self.items)?;
             items.extend(result);

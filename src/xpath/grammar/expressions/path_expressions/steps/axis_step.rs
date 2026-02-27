@@ -87,7 +87,7 @@ impl AxisStep {
             let predicate_context = context.new_with_variables(
                 &items,
                 i + 1,
-                context.is_root_level,
+                context.is_initial_step,
             );
             for predicate in self.predicates.iter() {
                 if !predicate.is_match(&predicate_context)? {

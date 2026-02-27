@@ -1377,3 +1377,43 @@ fn fn_document_uri() {
         XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true))
     );
 }
+
+// ── Error handling / fn:error / fn:trace ────────────────────────────
+
+#[test]
+fn fn_data_error_on_function_item() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"data(true#0)"#).unwrap();
+    let result = xpath.apply(&document);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("FOTY0013"));
+}
+
+#[test]
+fn fn_string_error_on_function_item() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"string(true#0)"#).unwrap();
+    let result = xpath.apply(&document);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("FOTY0014"));
+}
+
+#[test]
+fn fn_error_raises() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"error()"#).unwrap();
+    let result = xpath.apply(&document);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("FOER0000"));
+}
+
+#[test]
+fn fn_trace_returns_input() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"trace(42)"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Integer(42))
+    );
+}

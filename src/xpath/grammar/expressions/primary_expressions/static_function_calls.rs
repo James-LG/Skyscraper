@@ -194,9 +194,10 @@ pub(crate) fn dispatch_function<'tree>(
         None => {}
     }
 
-    Err(ExpressionApplyError {
-        msg: format!("Unknown function {}", name),
-    })
+    Err(ExpressionApplyError::new(format!(
+        "err:XPST0017: unknown function '{}'",
+        name
+    )))
 }
 
 /// Dispatch a function by its local name. Returns `Ok(Some(result))` if the
@@ -217,6 +218,14 @@ fn dispatch_by_local_name<'tree>(
             } else {
                 args[0].clone()
             };
+            // Per spec, fn:data raises err:FOTY0013 for function items.
+            for item in target.iter() {
+                if matches!(item, XpathItem::Function(_)) {
+                    return Err(ExpressionApplyError::new(
+                        "err:FOTY0013: fn:data is not defined for function items".to_string(),
+                    ));
+                }
+            }
             let atoms = func_data(&target, context.item_tree);
             Ok(Some(
                 atoms
@@ -236,6 +245,12 @@ fn dispatch_by_local_name<'tree>(
                     args[0].len()
                 )));
             };
+            // Per spec, fn:string raises an error for function items.
+            if matches!(target, XpathItem::Function(_)) {
+                return Err(ExpressionApplyError::new(
+                    "err:FOTY0014: fn:string is not defined for function items".to_string(),
+                ));
+            }
             let s = func_string(target, context.item_tree);
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::String(s)
@@ -1643,6 +1658,48 @@ fn dispatch_by_local_name<'tree>(
             }
             // HTML-only processor: no document URI tracking, return empty sequence.
             Ok(Some(XpathItemSet::new()))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-error
+        "error" => {
+            if args.len() > 3 {
+                return Err(ExpressionApplyError::new(format!(
+                    "fn:error expects 0-3 arguments, got {}",
+                    args.len()
+                )));
+            }
+            // Extract error description from arg 2 if present, otherwise use arg 1 as code.
+            let msg = if args.len() >= 2 && !args[1].is_empty() {
+                func_string(&args[1][0], context.item_tree)
+            } else if !args.is_empty() && !args[0].is_empty() {
+                func_string(&args[0][0], context.item_tree)
+            } else {
+                "err:FOER0000".to_string()
+            };
+            Err(ExpressionApplyError::new(msg))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-trace
+        "trace" => {
+            if args.is_empty() || args.len() > 2 {
+                return Err(ExpressionApplyError::new(format!(
+                    "fn:trace expects 1-2 arguments, got {}",
+                    args.len()
+                )));
+            }
+            let label = if args.len() == 2 && !args[1].is_empty() {
+                func_string(&args[1][0], context.item_tree)
+            } else {
+                String::new()
+            };
+            // Log the trace to stderr, then return the input unchanged.
+            for item in args[0].iter() {
+                let s = func_string(item, context.item_tree);
+                if label.is_empty() {
+                    eprintln!("[fn:trace] {}", s);
+                } else {
+                    eprintln!("[fn:trace] {}: {}", label, s);
+                }
+            }
+            Ok(Some(args[0].clone()))
         }
         _ => Ok(None),
     }

@@ -94,7 +94,7 @@ fn eval_reverse_axis<'tree>(
 
     for (i, _node) in items.iter().enumerate() {
         let node_test_context =
-            context.new_with_variables(&items, i + 1, context.is_root_level);
+            context.new_with_variables(&items, i + 1, context.is_initial_step);
 
         if let Some(result) =
             node_test.eval(BiDirectionalAxis::ReverseAxis(axis), &node_test_context)?

@@ -229,11 +229,11 @@ pub(crate) struct XpathExpressionContext<'tree> {
     #[allow(unused)]
     size: usize,
 
-    /// `true` if this expression is being applied to the root item tree;
-    /// `false` if this expression is being applied to a specific item in the tree.
+    /// `true` if this is the initial step of a path expression evaluation;
+    /// `false` for subsequent steps within a relative path.
     ///
-    /// This should not be modified for the entire evaluation cycle of an expression.
-    is_root_level: bool, // TODO: This should be `is_initial_step`; it's not used for the root level
+    /// This determines how leading `/` and `//` are expanded.
+    is_initial_step: bool,
 
     /// Variable bindings in scope (e.g. from `for` or `let` expressions).
     variables: HashMap<String, XpathItemSet<'tree>>,
@@ -243,14 +243,14 @@ impl<'tree> XpathExpressionContext<'tree> {
     pub fn new_single(
         item_tree: &'tree XpathItemTree,
         item: XpathItem<'tree>,
-        is_root_level: bool,
+        is_initial_step: bool,
     ) -> Self {
         Self {
             item_tree,
             item,
             position: 1,
             size: 1,
-            is_root_level,
+            is_initial_step,
             variables: HashMap::new(),
         }
     }
@@ -261,14 +261,14 @@ impl<'tree> XpathExpressionContext<'tree> {
         &self,
         items: &XpathItemSet<'tree>,
         position: usize,
-        is_root_level: bool,
+        is_initial_step: bool,
     ) -> Self {
         Self {
             item_tree: self.item_tree,
             item: items[position - 1].clone(),
             position,
             size: items.len(),
-            is_root_level,
+            is_initial_step,
             variables: self.variables.clone(),
         }
     }
@@ -278,14 +278,14 @@ impl<'tree> XpathExpressionContext<'tree> {
     pub fn new_single_with_variables(
         &self,
         item: XpathItem<'tree>,
-        is_root_level: bool,
+        is_initial_step: bool,
     ) -> Self {
         Self {
             item_tree: self.item_tree,
             item,
             position: 1,
             size: 1,
-            is_root_level,
+            is_initial_step,
             variables: self.variables.clone(),
         }
     }
@@ -304,7 +304,7 @@ impl<'tree> XpathExpressionContext<'tree> {
             item: self.item.clone(),
             position: self.position,
             size: self.size,
-            is_root_level: self.is_root_level,
+            is_initial_step: self.is_initial_step,
             variables,
         }
     }
@@ -328,7 +328,7 @@ impl<'tree> XpathExpressionContext<'tree> {
             item: self.item.clone(),
             position: self.position,
             size: self.size,
-            is_root_level: self.is_root_level,
+            is_initial_step: self.is_initial_step,
             variables,
         }
     }
