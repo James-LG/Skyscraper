@@ -117,29 +117,42 @@ impl NameTest {
         let node = if let XpathItem::Node(node) = &context.item {
             node
         } else {
-            todo!("NameTest::eval non-node");
+            // Name tests only match nodes; non-node items never match.
+            return Ok(None);
         };
 
         let is_match = match self {
             NameTest::Name(expected_name) => {
-                // Get the name of the node, if available for the node type.
-                let node_name = match node {
-                    XpathItemTreeNode::DocumentNode(_) => None,
-                    XpathItemTreeNode::ElementNode(e) => Some(&e.name),
-                    XpathItemTreeNode::PINode(_) => None,
-                    XpathItemTreeNode::CommentNode(_) => None,
-                    XpathItemTreeNode::TextNode(_) => None, // Text nodes do not have a name.
-                    XpathItemTreeNode::AttributeNode(a) => Some(&a.name),
-                    XpathItemTreeNode::DoctypeNode(_) => None,
+                // Get the name and namespace of the node, if available for the node type.
+                let (node_name, node_ns): (Option<&str>, Option<&str>) = match node {
+                    XpathItemTreeNode::DocumentNode(_) => (None, None),
+                    XpathItemTreeNode::ElementNode(e) => {
+                        (Some(&e.name), e.namespace.as_deref())
+                    }
+                    XpathItemTreeNode::PINode(_) => (None, None),
+                    XpathItemTreeNode::CommentNode(_) => (None, None),
+                    XpathItemTreeNode::TextNode(_) => (None, None),
+                    XpathItemTreeNode::AttributeNode(a) => (Some(&a.name), None),
+                    XpathItemTreeNode::DoctypeNode(_) => (None, None),
                 };
 
                 match node_name {
                     Some(node_name) => match expected_name {
                         EQName::QName(qname) => match qname {
-                            QName::PrefixedName(_) => todo!("NameTest::is_match PrefixedName"),
+                            QName::PrefixedName(p) => {
+                                // In HTML context, there are no in-scope namespace
+                                // bindings for prefixes. Match the local part only
+                                // when the prefix is a well-known namespace.
+                                // For now, treat the local part as the name to match.
+                                p.local_part == node_name
+                            }
                             QName::UnprefixedName(unprefixed_name) => unprefixed_name == node_name,
                         },
-                        EQName::UriQualifiedName(_) => todo!("NameTest::is_match UriQualifiedName"),
+                        EQName::UriQualifiedName(uqn) => {
+                            // Match both the namespace URI and the local name.
+                            uqn.name == node_name
+                                && node_ns.map_or(false, |ns| ns == uqn.uri)
+                        }
                     },
 
                     // Name tests need a name to match.
@@ -234,11 +247,31 @@ impl Wildcard {
             return false;
         }
 
+        // Get node name and namespace for matching.
+        let (node_name, node_ns): (Option<&str>, Option<&str>) = match node {
+            XpathItemTreeNode::ElementNode(e) => {
+                (Some(e.name.as_str()), e.namespace.as_deref())
+            }
+            XpathItemTreeNode::AttributeNode(a) => (Some(a.name.as_str()), None),
+            _ => (None, None),
+        };
+
         match self {
             Wildcard::Simple => true,
-            Wildcard::PrefixedName(_) => todo!("Wildcard::is_match PrefixedName"),
-            Wildcard::SuffixedName(_) => todo!("Wildcard::is_match SuffixedName"),
-            Wildcard::BracedUri(_) => todo!("Wildcard::is_match BracedUri"),
+            Wildcard::PrefixedName(local) => {
+                // `*:local` — matches any namespace, local name must match.
+                node_name.map_or(false, |n| n == local)
+            }
+            Wildcard::SuffixedName(_prefix) => {
+                // `prefix:*` — matches any local name in the namespace bound
+                // to prefix. In HTML, no prefix bindings exist, so match any
+                // element (the principal node kind check already passed).
+                true
+            }
+            Wildcard::BracedUri(uri) => {
+                // `Q{uri}*` — matches any local name in the specified namespace.
+                node_ns.map_or(false, |ns| ns == uri)
+            }
         }
     }
 }

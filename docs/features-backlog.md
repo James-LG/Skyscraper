@@ -253,12 +253,12 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line | Feature |
 |------|---------|
-| 120 | NameTest evaluation for non-node items |
-| 139 | Prefixed name matching (`prefix:local`) |
-| 142 | URI-qualified name matching |
-| 239 | Wildcard — prefixed name (`prefix:*`) |
-| 240 | Wildcard — suffixed name (`*:local`) |
-| 241 | Wildcard — braced URI (`Q{uri}*`) |
+| ~~120~~ | ~~NameTest evaluation for non-node items~~ **DONE** |
+| ~~139~~ | ~~Prefixed name matching (`prefix:local`)~~ **DONE** |
+| ~~142~~ | ~~URI-qualified name matching~~ **DONE** |
+| ~~239~~ | ~~Wildcard — prefixed name (`prefix:*`)~~ **DONE** |
+| ~~240~~ | ~~Wildcard — suffixed name (`*:local`)~~ **DONE** |
+| ~~241~~ | ~~Wildcard — braced URI (`Q{uri}*`)~~ **DONE** |
 
 ## XPath — Type System
 

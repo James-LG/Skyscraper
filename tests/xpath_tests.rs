@@ -22,6 +22,7 @@ mod xpath_tests {
     mod instance_of_tests;
     mod logical_expression_tests;
     mod map_constructor_tests;
+    mod node_test_tests;
     mod postfix_expression_tests;
     mod range_expression_tests;
     mod reverse_axis_tests;
