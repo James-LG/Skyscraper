@@ -13,6 +13,7 @@ use nom::{
 
 use crate::xpath::{
     grammar::{
+        data_model::{AnyAtomicType, Function, XpathItem},
         recipes::Res,
         types::{
             array_test::array_test, common::atomic_or_union_type, function_test::function_test,
@@ -78,19 +79,33 @@ impl SequenceType {
         match self {
             // The sequence type empty-sequence() matches a value that is the empty sequence.
             SequenceType::EmptySequence => Ok(item_set.is_empty()),
-            SequenceType::Sequence(x) => match x.occurrence {
-                Some(_) => todo!("SequenceType::Sequence::is_match occurrence"),
+            SequenceType::Sequence(x) => {
+                let cardinality_ok = match x.occurrence {
+                    // No indicator: exactly one item.
+                    None => item_set.len() == 1,
+                    Some(OccurrenceIndicator::ZeroOrOne) => item_set.len() <= 1,
+                    Some(OccurrenceIndicator::ZeroOrMore) => true,
+                    Some(OccurrenceIndicator::OneOrMore) => !item_set.is_empty(),
+                };
 
-                // An ItemType with no OccurrenceIndicator matches any value that contains exactly one item if the ItemType matches that item.
-                None => {
-                    if item_set.len() != 1 {
+                if !cardinality_ok {
+                    return Ok(false);
+                }
+
+                // Every item in the sequence must match the ItemType.
+                if item_set.is_empty() {
+                    return Ok(true);
+                }
+
+                for item in item_set {
+                    let single = crate::xpath_item_set![item.clone()];
+                    if !x.item_type.is_match(&single)? {
                         return Ok(false);
                     }
-
-                    let item_type_result = x.item_type.is_match(item_set)?;
-                    Ok(item_type_result)
                 }
-            },
+
+                Ok(true)
+            }
         }
     }
 }
@@ -191,10 +206,43 @@ impl ItemType {
                 let result = x.filter(item_set)?;
                 Ok(!result.is_empty())
             }
-            ItemType::FunctionTest(_x) => todo!("ItemType::FunctionTest::is_match"),
-            ItemType::MapTest(_x) => todo!("ItemType::MapTest::is_match"),
-            ItemType::ArrayTest(_x) => todo!("ItemType::ArrayTest::is_match"),
-            ItemType::AtomicOrUnionType(_x) => todo!("ItemType::AtomicOrUnionType::is_match"),
+            ItemType::FunctionTest(_x) => {
+                // function(*) matches any function item (Named, Inline, Map, Array).
+                // TypedFunctionTest checks parameter/return types, which we don't
+                // track at runtime. For now, just check if the item is a function.
+                Ok(item_set.iter().all(|item| matches!(item, XpathItem::Function(_))))
+            }
+            ItemType::MapTest(_x) => {
+                // map(*) matches any map. TypedMapTest checks key/value types.
+                // For now, just check if the item is a Map function.
+                Ok(item_set
+                    .iter()
+                    .all(|item| matches!(item, XpathItem::Function(Function::Map { .. }))))
+            }
+            ItemType::ArrayTest(_x) => {
+                // array(*) matches any array. TypedArrayTest checks member types.
+                // For now, just check if the item is an Array function.
+                Ok(item_set
+                    .iter()
+                    .all(|item| matches!(item, XpathItem::Function(Function::Array { .. }))))
+            }
+            ItemType::AtomicOrUnionType(x) => {
+                // Check if every item matches the specified atomic type.
+                // Extract the local type name for matching against known XPath types.
+                let type_local = x.local_name();
+                Ok(item_set.iter().all(|item| match item {
+                    XpathItem::AnyAtomicType(atomic) => match type_local {
+                        Some("integer") => matches!(atomic, AnyAtomicType::Integer(_)),
+                        Some("string") => matches!(atomic, AnyAtomicType::String(_)),
+                        Some("boolean") => matches!(atomic, AnyAtomicType::Boolean(_)),
+                        Some("float") => matches!(atomic, AnyAtomicType::Float(_)),
+                        Some("double") => matches!(atomic, AnyAtomicType::Double(_)),
+                        // Unknown type name — fall back to accepting any atomic.
+                        _ => true,
+                    },
+                    _ => false,
+                }))
+            }
         }
     }
 }

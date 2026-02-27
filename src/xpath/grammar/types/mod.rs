@@ -440,6 +440,19 @@ pub enum PITestValue {
 #[derive(PartialEq, Debug, Clone)]
 pub struct AtomicOrUnionType(EQName);
 
+impl AtomicOrUnionType {
+    /// Extract the local type name for matching against known XPath built-in types.
+    pub(crate) fn local_name(&self) -> Option<&str> {
+        match &self.0 {
+            EQName::QName(qname) => match qname {
+                QName::PrefixedName(p) => Some(&p.local_part),
+                QName::UnprefixedName(name) => Some(name),
+            },
+            EQName::UriQualifiedName(uqn) => Some(&uqn.name),
+        }
+    }
+}
+
 impl Display for AtomicOrUnionType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)

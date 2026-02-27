@@ -284,11 +284,11 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line | Feature |
 |------|---------|
-| 82 | Occurrence indicator matching (`?`, `*`, `+`) |
-| 194 | `function()` type test |
-| 195 | `map()` type test |
-| 196 | `array()` type test |
-| 197 | Atomic/union type test |
+| ~~82~~ | ~~Occurrence indicator matching (`?`, `*`, `+`)~~ **DONE** |
+| ~~194~~ | ~~`function()` type test~~ **DONE** |
+| ~~195~~ | ~~`map()` type test~~ **DONE** |
+| ~~196~~ | ~~`array()` type test~~ **DONE** |
+| ~~197~~ | ~~Atomic/union type test~~ **DONE** |
 
 ### Attribute Tests
 

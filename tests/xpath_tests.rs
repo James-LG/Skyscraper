@@ -27,6 +27,7 @@ mod xpath_tests {
     mod postfix_expression_tests;
     mod range_expression_tests;
     mod reverse_axis_tests;
+    mod sequence_type_tests;
     mod lxml_tests;
     mod simple_map_tests;
     mod string_concat_tests;
