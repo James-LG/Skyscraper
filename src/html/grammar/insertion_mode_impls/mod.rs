@@ -15,6 +15,7 @@ use super::{
 };
 
 pub(crate) mod in_body_insertion_mode;
+pub(crate) mod in_foreign_content;
 
 pub use in_body_insertion_mode::*;
 

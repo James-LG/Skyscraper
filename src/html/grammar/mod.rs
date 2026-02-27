@@ -680,10 +680,9 @@ impl HtmlParser {
     /// The HTML tokenizer lowercases all tag names, but SVG uses camelCase for
     /// many element names. This restores the correct casing.
     ///
-    /// Per the WHATWG spec, this is called on the token in the "in foreign
-    /// content" rules before element insertion. Until that mode is implemented,
-    /// `create_an_element_for_the_token` also applies the correction as a
-    /// safety net when the namespace is SVG.
+    /// Called on start tag tokens in the "in foreign content" rules before
+    /// element insertion (WHATWG 13.2.6.5). Also applied as a safety net in
+    /// `create_an_element_for_the_token` when the namespace is SVG.
     ///
     /// <https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inforeign>
     pub(crate) fn adjust_svg_tag_names(token: &mut TagToken) {
@@ -730,6 +729,178 @@ impl HtmlParser {
         // The Attribute struct lacks prefix/namespace fields, so namespace
         // assignment is not yet possible. Attribute names (e.g. "xlink:href")
         // are already correct as strings from the tokenizer.
+    }
+
+    /// Returns the namespace of the given element node, or `None` if the node
+    /// is not an element.
+    ///
+    /// HTML elements return `HTML_NAMESPACE`, MathML elements return
+    /// `MATHML_NAMESPACE`, SVG elements return `SVG_NAMESPACE`.
+    pub(crate) fn element_namespace(&self, node_id: NodeId) -> Option<&str> {
+        if let Some(node) = self.arena.get(node_id) {
+            if let XpathItemTreeNode::ElementNode(element) = node.get() {
+                return Some(
+                    element
+                        .namespace
+                        .as_deref()
+                        .unwrap_or(HTML_NAMESPACE),
+                );
+            }
+        }
+        None
+    }
+
+    /// Returns the tag name of the given element node, or `None` if the node
+    /// is not an element.
+    pub(crate) fn element_name(&self, node_id: NodeId) -> Option<&str> {
+        if let Some(node) = self.arena.get(node_id) {
+            if let XpathItemTreeNode::ElementNode(element) = node.get() {
+                return Some(&element.name);
+            }
+        }
+        None
+    }
+
+    /// An element is a MathML text integration point if it is one of the
+    /// MathML elements `mi`, `mo`, `mn`, `ms`, or `mtext`.
+    ///
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#mathml-text-integration-point>
+    pub(crate) fn is_mathml_text_integration_point(&self, node_id: NodeId) -> bool {
+        if let Some(ns) = self.element_namespace(node_id) {
+            if ns == MATHML_NAMESPACE {
+                if let Some(name) = self.element_name(node_id) {
+                    return matches!(name, "mi" | "mo" | "mn" | "ms" | "mtext");
+                }
+            }
+        }
+        false
+    }
+
+    /// An element is an HTML integration point if it is one of the SVG
+    /// elements `foreignObject`, `desc`, or `title`, or a MathML
+    /// `annotation-xml` element whose start tag token had an `encoding`
+    /// attribute with the value `text/html` or `application/xhtml+xml`
+    /// (ASCII case-insensitive).
+    ///
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#html-integration-point>
+    pub(crate) fn is_html_integration_point(&self, node_id: NodeId) -> bool {
+        let ns = match self.element_namespace(node_id) {
+            Some(ns) => ns,
+            None => return false,
+        };
+        let name = match self.element_name(node_id) {
+            Some(name) => name,
+            None => return false,
+        };
+
+        if ns == SVG_NAMESPACE {
+            return matches!(name, "foreignObject" | "desc" | "title");
+        }
+
+        if ns == MATHML_NAMESPACE && name == "annotation-xml" {
+            // Check for encoding attribute among children
+            for child_id in node_id.children(&self.arena) {
+                if let Some(child) = self.arena.get(child_id) {
+                    if let XpathItemTreeNode::AttributeNode(attr) = child.get() {
+                        if attr.name == "encoding" {
+                            let val = attr.value.to_ascii_lowercase();
+                            if val == "text/html" || val == "application/xhtml+xml" {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    /// The adjusted current node's ID, or `None` if the stack is empty.
+    pub(crate) fn adjusted_current_node_id_opt(&self) -> Option<NodeId> {
+        if let Some(context_element) = self.context_element {
+            if self.open_elements.len() == 1 {
+                return Some(context_element);
+            }
+        }
+        self.current_node_id()
+    }
+
+    /// Determines whether the given token should be processed using the rules
+    /// for parsing tokens in foreign content rather than the current insertion
+    /// mode.
+    ///
+    /// This implements the tree construction dispatcher check from WHATWG 13.2.6.
+    ///
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#tree-construction-dispatcher>
+    pub(crate) fn should_process_as_foreign_content(&self, token: &HtmlToken) -> bool {
+        // If the stack of open elements is empty, use HTML rules.
+        if self.open_elements.is_empty() {
+            return false;
+        }
+
+        let acn_id = match self.adjusted_current_node_id_opt() {
+            Some(id) => id,
+            None => return false,
+        };
+
+        let acn_ns = match self.element_namespace(acn_id) {
+            Some(ns) => ns,
+            None => return false,
+        };
+
+        // If the adjusted current node is in the HTML namespace, use HTML rules.
+        if acn_ns == HTML_NAMESPACE {
+            return false;
+        }
+
+        // If the adjusted current node is a MathML text integration point and
+        // the token is a start tag whose tag name is neither "mglyph" nor "malignmark":
+        if self.is_mathml_text_integration_point(acn_id) {
+            match token {
+                HtmlToken::TagToken(TagTokenType::StartTag(tag))
+                    if tag.tag_name != "mglyph" && tag.tag_name != "malignmark" =>
+                {
+                    return false;
+                }
+                // MathML text integration point + character token: use HTML rules.
+                HtmlToken::Character(_) => return false,
+                _ => {}
+            }
+        }
+
+        // If the adjusted current node is a MathML annotation-xml element and
+        // the token is a start tag whose tag name is "svg":
+        if acn_ns == MATHML_NAMESPACE {
+            if let Some(name) = self.element_name(acn_id) {
+                if name == "annotation-xml" {
+                    if let HtmlToken::TagToken(TagTokenType::StartTag(tag)) = token {
+                        if tag.tag_name == "svg" {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+
+        // If the adjusted current node is an HTML integration point and the
+        // token is a start tag or character token:
+        if self.is_html_integration_point(acn_id) {
+            match token {
+                HtmlToken::TagToken(TagTokenType::StartTag(_)) | HtmlToken::Character(_) => {
+                    return false;
+                }
+                _ => {}
+            }
+        }
+
+        // If the token is an end-of-file token, use HTML rules.
+        if matches!(token, HtmlToken::EndOfFile) {
+            return false;
+        }
+
+        // Otherwise, use foreign content rules.
+        true
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#insert-an-html-element>
@@ -1898,6 +2069,21 @@ impl Parser for HtmlParser {
             if matches!(token, HtmlToken::Character(chars::LINE_FEED)) {
                 return Ok(Acknowledgement::no());
             }
+        }
+
+        // Tree construction dispatcher (WHATWG 13.2.6):
+        // Process the token using the rules for the current insertion mode in
+        // HTML content, UNLESS all of the following conditions are met, in
+        // which case process using the rules for parsing tokens in foreign
+        // content:
+        //   - the stack of open elements is not empty
+        //   - the adjusted current node is not in the HTML namespace
+        //   - it's not a MathML text integration point receiving a non-mglyph/malignmark start tag or character
+        //   - it's not a MathML annotation-xml receiving an "svg" start tag
+        //   - it's not an HTML integration point receiving a start tag or character
+        //   - it's not an EOF token
+        if self.should_process_as_foreign_content(&token) {
+            return self.in_foreign_content(token);
         }
 
         self.handle_token(token, self.insertion_mode)

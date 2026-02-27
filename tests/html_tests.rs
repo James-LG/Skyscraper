@@ -6,6 +6,7 @@ mod html_tests {
     mod html_after_head_tests;
     mod html_basic_tests;
     mod html_before_head_tests;
+    mod html_foreign_content_tests;
     mod html_fragment_tests;
     mod html_frameset_tests;
     mod html_github_tests;

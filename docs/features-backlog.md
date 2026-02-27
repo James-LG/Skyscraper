@@ -302,7 +302,7 @@ The tokenizer implements the WHATWG state machine including named character refe
 | ~~Adjust MathML attributes~~ | ~~Done~~ — `definitionurl` → `definitionURL` per WHATWG 13.2.6.1 | `src/html/grammar/mod.rs` |
 | ~~Adjust SVG attributes~~ | ~~Done~~ — 62 camelCase attribute name corrections per WHATWG 13.2.6.2 | `src/html/grammar/mod.rs` |
 | Adjust foreign attributes | Partial — attribute names preserved correctly, but `Attribute` struct lacks namespace metadata (xlink:, xml:, xmlns:) | `src/html/grammar/mod.rs` |
-| Foreign content parsing mode | Not implemented — WHATWG 13.2.6.5 "in foreign content" rules not yet present | N/A |
+| ~~Foreign content parsing mode~~ | ~~Done~~ — tree construction dispatcher + full token processing rules per WHATWG 13.2.6.5; breakout tags, MathML text integration points, HTML integration points (SVG foreignObject/desc/title, MathML annotation-xml with encoding), end-tag walk-up algorithm | `src/html/grammar/insertion_mode_impls/in_foreign_content.rs` |
 | ~~SVG element name case correction~~ | ~~Done~~ — 37 camelCase element name corrections (e.g. `foreignobject` → `foreignObject`) applied in `create_an_element_for_the_token` for SVG namespace | `src/html/grammar/mod.rs` |
 
 ### Not Implemented
