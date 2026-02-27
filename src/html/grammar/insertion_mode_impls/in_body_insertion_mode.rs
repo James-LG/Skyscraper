@@ -1020,11 +1020,11 @@ impl HtmlParser {
 
                 self.insert_an_html_element(token)?;
             }
-            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "math" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(mut token)) if token.tag_name == "math" => {
                 self.reconstruct_the_active_formatting_elements()?;
 
-                // TODO: adjust MathML attributes
-                // TODO: adjust foreign attributes
+                Self::adjust_mathml_attributes(&mut token);
+                Self::adjust_foreign_attributes(&mut token);
 
                 let self_closing = token.self_closing;
                 self.insert_foreign_element(token, MATHML_NAMESPACE, false)?;
@@ -1034,11 +1034,11 @@ impl HtmlParser {
                     return Ok(Acknowledgement::yes());
                 }
             }
-            HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "svg" => {
+            HtmlToken::TagToken(TagTokenType::StartTag(mut token)) if token.tag_name == "svg" => {
                 self.reconstruct_the_active_formatting_elements()?;
 
-                // TODO: adjust SVG attribtues
-                // TODO: adjust foreign attributes
+                Self::adjust_svg_attributes(&mut token);
+                Self::adjust_foreign_attributes(&mut token);
 
                 let self_closing = token.self_closing;
                 self.insert_foreign_element(token, SVG_NAMESPACE, false)?;

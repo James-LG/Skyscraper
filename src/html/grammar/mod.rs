@@ -252,6 +252,74 @@ pub(crate) static SPECIAL_ELEMENTS: [&str; 83] = [
     "xmp",
 ];
 
+/// Returns the correctly-cased SVG attribute name for a lowercased attribute,
+/// or `None` if the attribute does not need adjustment.
+///
+/// <https://html.spec.whatwg.org/multipage/parsing.html#adjust-svg-attributes>
+fn svg_attribute_name(lowered: &str) -> Option<&'static str> {
+    match lowered {
+        "attributename" => Some("attributeName"),
+        "attributetype" => Some("attributeType"),
+        "basefrequency" => Some("baseFrequency"),
+        "baseprofile" => Some("baseProfile"),
+        "calcmode" => Some("calcMode"),
+        "clippathunits" => Some("clipPathUnits"),
+        "diffuseconstant" => Some("diffuseConstant"),
+        "edgemode" => Some("edgeMode"),
+        "filterunits" => Some("filterUnits"),
+        "glyphref" => Some("glyphRef"),
+        "gradienttransform" => Some("gradientTransform"),
+        "gradientunits" => Some("gradientUnits"),
+        "kernelmatrix" => Some("kernelMatrix"),
+        "kernelunitlength" => Some("kernelUnitLength"),
+        "keypoints" => Some("keyPoints"),
+        "keysplines" => Some("keySplines"),
+        "keytimes" => Some("keyTimes"),
+        "lengthadjust" => Some("lengthAdjust"),
+        "limitingconeangle" => Some("limitingConeAngle"),
+        "markerheight" => Some("markerHeight"),
+        "markerunits" => Some("markerUnits"),
+        "markerwidth" => Some("markerWidth"),
+        "maskcontentunits" => Some("maskContentUnits"),
+        "maskunits" => Some("maskUnits"),
+        "numoctaves" => Some("numOctaves"),
+        "pathlength" => Some("pathLength"),
+        "patterncontentunits" => Some("patternContentUnits"),
+        "patterntransform" => Some("patternTransform"),
+        "patternunits" => Some("patternUnits"),
+        "pointsatx" => Some("pointsAtX"),
+        "pointsaty" => Some("pointsAtY"),
+        "pointsatz" => Some("pointsAtZ"),
+        "preservealpha" => Some("preserveAlpha"),
+        "preserveaspectratio" => Some("preserveAspectRatio"),
+        "primitiveunits" => Some("primitiveUnits"),
+        "refx" => Some("refX"),
+        "refy" => Some("refY"),
+        "repeatcount" => Some("repeatCount"),
+        "repeatdur" => Some("repeatDur"),
+        "requiredextensions" => Some("requiredExtensions"),
+        "requiredfeatures" => Some("requiredFeatures"),
+        "specularconstant" => Some("specularConstant"),
+        "specularexponent" => Some("specularExponent"),
+        "spreadmethod" => Some("spreadMethod"),
+        "startoffset" => Some("startOffset"),
+        "stddeviation" => Some("stdDeviation"),
+        "stitchtiles" => Some("stitchTiles"),
+        "surfacescale" => Some("surfaceScale"),
+        "systemlanguage" => Some("systemLanguage"),
+        "tablevalues" => Some("tableValues"),
+        "targetx" => Some("targetX"),
+        "targety" => Some("targetY"),
+        "textlength" => Some("textLength"),
+        "viewbox" => Some("viewBox"),
+        "viewtarget" => Some("viewTarget"),
+        "xchannelselector" => Some("xChannelSelector"),
+        "ychannelselector" => Some("yChannelSelector"),
+        "zoomandpan" => Some("zoomAndPan"),
+        _ => None,
+    }
+}
+
 /// Represents a position in the tree where a new node should be inserted.
 ///
 /// This is used by the "appropriate place for inserting a node" algorithm
@@ -557,6 +625,46 @@ impl HtmlParser {
         Ok(())
     }
 
+    /// Adjust MathML attributes on a token.
+    ///
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#adjust-mathml-attributes>
+    pub(crate) fn adjust_mathml_attributes(token: &mut TagToken) {
+        for attr in &mut token.attributes {
+            if attr.name == "definitionurl" {
+                attr.name = String::from("definitionURL");
+            }
+        }
+    }
+
+    /// Adjust SVG attributes on a token.
+    ///
+    /// The HTML tokenizer lowercases all attribute names, but SVG uses camelCase
+    /// for many attributes. This restores the correct casing.
+    ///
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#adjust-svg-attributes>
+    pub(crate) fn adjust_svg_attributes(token: &mut TagToken) {
+        for attr in &mut token.attributes {
+            if let Some(corrected) = svg_attribute_name(&attr.name) {
+                attr.name = String::from(corrected);
+            }
+        }
+    }
+
+    /// Adjust foreign attributes on a token.
+    ///
+    /// Per WHATWG, this sets the prefix, local name, and namespace on attributes
+    /// like `xlink:href`, `xml:lang`, and `xmlns`. Since the [`Attribute`] struct
+    /// does not currently carry namespace metadata, this is a no-op. The attribute
+    /// names are already correctly preserved as-is from the tokenizer (e.g.
+    /// `xlink:href`).
+    ///
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#adjust-foreign-attributes>
+    pub(crate) fn adjust_foreign_attributes(_token: &mut TagToken) {
+        // The Attribute struct lacks prefix/namespace fields, so namespace
+        // assignment is not yet possible. Attribute names (e.g. "xlink:href")
+        // are already correct as strings from the tokenizer.
+    }
+
     /// <https://html.spec.whatwg.org/multipage/parsing.html#insert-an-html-element>
     pub(crate) fn insert_an_html_element(
         &mut self,
@@ -802,8 +910,13 @@ impl HtmlParser {
         prefix: Option<&str>,
         is: Option<&str>,
     ) -> Result<ElementNode, HtmlParseError> {
-        // TODO: namespace?
-        let element = ElementNode::new(local_name);
+        let mut element = ElementNode::new(local_name);
+
+        // Set namespace for non-HTML elements (MathML, SVG).
+        // HTML elements keep namespace as None since it is the default.
+        if namespace != HTML_NAMESPACE {
+            element.namespace = Some(namespace.to_string());
+        }
 
         Ok(element)
     }
@@ -2220,5 +2333,77 @@ mod tests {
                 tag
             );
         }
+    }
+
+    #[test]
+    fn svg_attribute_name_returns_correct_casing() {
+        assert_eq!(svg_attribute_name("viewbox"), Some("viewBox"));
+        assert_eq!(svg_attribute_name("preserveaspectratio"), Some("preserveAspectRatio"));
+        assert_eq!(svg_attribute_name("attributename"), Some("attributeName"));
+        assert_eq!(svg_attribute_name("gradientunits"), Some("gradientUnits"));
+        assert_eq!(svg_attribute_name("stddeviation"), Some("stdDeviation"));
+        assert_eq!(svg_attribute_name("xchannelselector"), Some("xChannelSelector"));
+    }
+
+    #[test]
+    fn svg_attribute_name_returns_none_for_non_adjusted() {
+        assert_eq!(svg_attribute_name("width"), None);
+        assert_eq!(svg_attribute_name("height"), None);
+        assert_eq!(svg_attribute_name("fill"), None);
+        assert_eq!(svg_attribute_name("class"), None);
+        assert_eq!(svg_attribute_name("nonexistent"), None);
+    }
+
+    #[test]
+    fn adjust_mathml_attributes_renames_definitionurl() {
+        let mut token = TagToken::new(String::from("math"));
+        token.attributes.push(tokenizer::Attribute {
+            name: String::from("definitionurl"),
+            value: String::from("http://example.com"),
+            prefix: String::new(),
+            original_name: None,
+        });
+        HtmlParser::adjust_mathml_attributes(&mut token);
+        assert_eq!(token.attributes[0].name, "definitionURL");
+    }
+
+    #[test]
+    fn adjust_mathml_attributes_does_not_change_other_attributes() {
+        let mut token = TagToken::new(String::from("math"));
+        token.attributes.push(tokenizer::Attribute {
+            name: String::from("display"),
+            value: String::from("block"),
+            prefix: String::new(),
+            original_name: None,
+        });
+        HtmlParser::adjust_mathml_attributes(&mut token);
+        assert_eq!(token.attributes[0].name, "display");
+    }
+
+    #[test]
+    fn adjust_svg_attributes_fixes_casing() {
+        let mut token = TagToken::new(String::from("svg"));
+        token.attributes.push(tokenizer::Attribute {
+            name: String::from("viewbox"),
+            value: String::from("0 0 100 100"),
+            prefix: String::new(),
+            original_name: None,
+        });
+        token.attributes.push(tokenizer::Attribute {
+            name: String::from("preserveaspectratio"),
+            value: String::from("xMidYMid"),
+            prefix: String::new(),
+            original_name: None,
+        });
+        token.attributes.push(tokenizer::Attribute {
+            name: String::from("width"),
+            value: String::from("100"),
+            prefix: String::new(),
+            original_name: None,
+        });
+        HtmlParser::adjust_svg_attributes(&mut token);
+        assert_eq!(token.attributes[0].name, "viewBox");
+        assert_eq!(token.attributes[1].name, "preserveAspectRatio");
+        assert_eq!(token.attributes[2].name, "width"); // unchanged
     }
 }

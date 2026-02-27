@@ -294,11 +294,21 @@ The tokenizer implements the WHATWG state machine including named character refe
 | Declarative Shadow DOM | Not supported (noted in comment) | `src/html/grammar/insertion_mode_impls/mod.rs:317` |
 | ~~HTML fragment parsing algorithm~~ | ~~Done~~ — `parse_fragment()` implements WHATWG 13.4 | `src/html/grammar/mod.rs` |
 
+### Partially Implemented — Foreign Content
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| ~~Namespace assignment~~ | ~~Done~~ — `create_element` now sets namespace on MathML/SVG elements | `src/html/grammar/mod.rs` |
+| ~~Adjust MathML attributes~~ | ~~Done~~ — `definitionurl` → `definitionURL` per WHATWG 13.2.6.1 | `src/html/grammar/mod.rs` |
+| ~~Adjust SVG attributes~~ | ~~Done~~ — 62 camelCase attribute name corrections per WHATWG 13.2.6.2 | `src/html/grammar/mod.rs` |
+| Adjust foreign attributes | Partial — attribute names preserved correctly, but `Attribute` struct lacks namespace metadata (xlink:, xml:, xmlns:) | `src/html/grammar/mod.rs` |
+| Foreign content parsing mode | Not implemented — WHATWG 13.2.6.5 "in foreign content" rules not yet present | N/A |
+| SVG element name case correction | Not implemented — SVG element names (e.g. `foreignObject`) not adjusted | N/A |
+
 ### Not Implemented
 
 | Feature | Notes |
 |---------|-------|
-| `<math>` and `<svg>` foreign content | WHATWG defines special parsing rules for MathML and SVG embedded in HTML |
 | Adoption agency algorithm edge cases | Implementation exists but full spec coverage not verified |
 | Foster parenting | May have edge cases not covered |
 

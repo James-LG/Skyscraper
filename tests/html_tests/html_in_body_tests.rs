@@ -1,4 +1,5 @@
 use skyscraper::html;
+use skyscraper::xpath::grammar::XpathItemTreeNode;
 
 /// A NULL character (U+0000) inside the body should be treated as a parse error
 /// and ignored per WHATWG 13.2.6.4.7.
@@ -679,5 +680,143 @@ fn doctype_in_body_is_ignored() {
     assert!(
         output.contains("<p>text</p>"),
         "Body content should be preserved: {output:?}"
+    );
+}
+
+// --- Foreign content attribute adjustment tests (WHATWG 13.2.6.1–13.2.6.3) ---
+
+/// MathML elements should have their namespace set to the MathML namespace.
+#[test]
+fn math_element_has_mathml_namespace() {
+    let tree = html::parse("<html><body><math><mi>x</mi></math></body></html>").unwrap();
+    let math_element = tree
+        .iter()
+        .find_map(|node| match node {
+            XpathItemTreeNode::ElementNode(e) if e.name == "math" => Some(e),
+            _ => None,
+        })
+        .expect("math element should be present");
+    assert_eq!(
+        math_element.namespace.as_deref(),
+        Some("http://www.w3.org/1998/Math/MathML"),
+        "math element should have MathML namespace"
+    );
+}
+
+/// SVG elements should have their namespace set to the SVG namespace.
+#[test]
+fn svg_element_has_svg_namespace() {
+    let tree = html::parse("<html><body><svg></svg></body></html>").unwrap();
+    let svg_element = tree
+        .iter()
+        .find_map(|node| match node {
+            XpathItemTreeNode::ElementNode(e) if e.name == "svg" => Some(e),
+            _ => None,
+        })
+        .expect("svg element should be present");
+    assert_eq!(
+        svg_element.namespace.as_deref(),
+        Some("http://www.w3.org/2000/svg"),
+        "svg element should have SVG namespace"
+    );
+}
+
+/// Regular HTML elements should NOT have a namespace set (namespace is None).
+#[test]
+fn html_element_has_no_namespace() {
+    let tree = html::parse("<html><body><p>text</p></body></html>").unwrap();
+    let p_element = tree
+        .iter()
+        .find_map(|node| match node {
+            XpathItemTreeNode::ElementNode(e) if e.name == "p" => Some(e),
+            _ => None,
+        })
+        .expect("p element should be present");
+    assert_eq!(
+        p_element.namespace, None,
+        "HTML elements should have no namespace (None)"
+    );
+}
+
+/// The "adjust MathML attributes" algorithm should rename the `definitionurl`
+/// attribute to `definitionURL` (WHATWG 13.2.6.1).
+#[test]
+fn math_definitionurl_attribute_is_adjusted() {
+    let text = r#"<html><body><math definitionurl="http://example.com"></math></body></html>"#;
+    let tree = html::parse(text).unwrap();
+    let output = tree.to_string();
+    assert!(
+        output.contains(r#"definitionURL="http://example.com""#),
+        "definitionurl should be adjusted to definitionURL: {output:?}"
+    );
+    assert!(
+        !output.contains(r#"definitionurl="#),
+        "lowercased definitionurl should not remain: {output:?}"
+    );
+}
+
+/// The "adjust SVG attributes" algorithm should correct camelCase on SVG
+/// attribute names that the tokenizer has lowercased (WHATWG 13.2.6.2).
+#[test]
+fn svg_viewbox_attribute_is_adjusted_to_camel_case() {
+    let text = r#"<html><body><svg viewBox="0 0 100 100"></svg></body></html>"#;
+    let tree = html::parse(text).unwrap();
+    let output = tree.to_string();
+    assert!(
+        output.contains(r#"viewBox="0 0 100 100""#),
+        "viewBox should preserve correct casing: {output:?}"
+    );
+}
+
+/// Multiple SVG attributes should all be adjusted correctly.
+#[test]
+fn svg_multiple_attributes_are_adjusted() {
+    let text = r#"<html><body><svg viewBox="0 0 10 10" preserveAspectRatio="xMidYMid"></svg></body></html>"#;
+    let tree = html::parse(text).unwrap();
+    let output = tree.to_string();
+    assert!(
+        output.contains(r#"viewBox="0 0 10 10""#),
+        "viewBox should be correctly cased: {output:?}"
+    );
+    assert!(
+        output.contains(r#"preserveAspectRatio="xMidYMid""#),
+        "preserveAspectRatio should be correctly cased: {output:?}"
+    );
+}
+
+/// Self-closing <math/> with attributes should have adjusted attributes.
+#[test]
+fn math_self_closing_with_definitionurl() {
+    let text =
+        r#"<html><body><math definitionurl="http://example.com"/><p>after</p></body></html>"#;
+    let tree = html::parse(text).unwrap();
+    let output = tree.to_string();
+    assert!(
+        output.contains(r#"definitionURL="http://example.com""#),
+        "definitionURL should be adjusted on self-closing math: {output:?}"
+    );
+    assert!(
+        output.contains("<p>after</p>"),
+        "content after self-closing math should be preserved: {output:?}"
+    );
+}
+
+/// Non-adjusted attributes on SVG should remain lowercase.
+#[test]
+fn svg_regular_attributes_stay_lowercase() {
+    let text = r#"<html><body><svg width="100" height="100" fill="none"></svg></body></html>"#;
+    let tree = html::parse(text).unwrap();
+    let output = tree.to_string();
+    assert!(
+        output.contains(r#"width="100""#),
+        "width should remain lowercase: {output:?}"
+    );
+    assert!(
+        output.contains(r#"height="100""#),
+        "height should remain lowercase: {output:?}"
+    );
+    assert!(
+        output.contains(r#"fill="none""#),
+        "fill should remain lowercase: {output:?}"
     );
 }

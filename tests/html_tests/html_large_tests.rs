@@ -153,7 +153,7 @@ fn parse_should_return_document() {
                                                         ("style", "box-sizing: content-box; color: var(--color-icon-primary);"),
                                                         ("width", "32"),
                                                         ("height", "32"),
-                                                        ("viewbox", "0 0 16 16"),
+                                                        ("viewBox", "0 0 16 16"),
                                                         ("fill", "none"),
                                                         ("data-view-component", "true"),
                                                         ("class", "anim-rotate"),
@@ -190,7 +190,7 @@ fn parse_should_return_document() {
                                                 svg.add_attributes_str(vec![
                                                     ("aria-hidden", "true"),
                                                     ("height", "16"),
-                                                    ("viewbox", "0 0 16 16"),
+                                                    ("viewBox", "0 0 16 16"),
                                                     ("version", "1.1"),
                                                     ("width", "16"),
                                                     ("data-view-component", "true"),
