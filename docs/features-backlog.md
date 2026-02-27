@@ -301,7 +301,7 @@ The tokenizer implements the WHATWG state machine including named character refe
 | ~~Namespace assignment~~ | ~~Done~~ — `create_element` now sets namespace on MathML/SVG elements | `src/html/grammar/mod.rs` |
 | ~~Adjust MathML attributes~~ | ~~Done~~ — `definitionurl` → `definitionURL` per WHATWG 13.2.6.1 | `src/html/grammar/mod.rs` |
 | ~~Adjust SVG attributes~~ | ~~Done~~ — 62 camelCase attribute name corrections per WHATWG 13.2.6.2 | `src/html/grammar/mod.rs` |
-| Adjust foreign attributes | Partial — attribute names preserved correctly, but `Attribute` struct lacks namespace metadata (xlink:, xml:, xmlns:) | `src/html/grammar/mod.rs` |
+| ~~Adjust foreign attributes~~ | ~~Done~~ — `Attribute` and `AttributeNode` structs now carry `namespace: Option<String>`; `adjust_foreign_attributes` sets xlink, xml, and xmlns namespaces per WHATWG 13.2.6.3 | `src/html/grammar/mod.rs` |
 | ~~Foreign content parsing mode~~ | ~~Done~~ — tree construction dispatcher + full token processing rules per WHATWG 13.2.6.5; breakout tags, MathML text integration points, HTML integration points (SVG foreignObject/desc/title, MathML annotation-xml with encoding), end-tag walk-up algorithm | `src/html/grammar/insertion_mode_impls/in_foreign_content.rs` |
 | ~~SVG element name case correction~~ | ~~Done~~ — 37 camelCase element name corrections (e.g. `foreignobject` → `foreignObject`) applied in `create_an_element_for_the_token` for SVG namespace | `src/html/grammar/mod.rs` |
 

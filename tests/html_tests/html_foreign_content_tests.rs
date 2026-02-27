@@ -457,3 +457,177 @@ fn mathml_attribute_adjustment_in_foreign_content() {
         "definitionurl should be adjusted to definitionURL in foreign content: {output:?}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Foreign attribute namespace assignment (WHATWG 13.2.6.3)
+// ---------------------------------------------------------------------------
+
+/// xlink:href in SVG foreign content should get the xlink namespace.
+#[test]
+fn foreign_attribute_xlink_href_gets_xlink_namespace() {
+    let text =
+        r##"<html><body><svg><use xlink:href="#icon"></use></svg></body></html>"##;
+    let document = html::parse(text).unwrap();
+    let attr = document
+        .iter()
+        .find_map(|node| match node {
+            XpathItemTreeNode::AttributeNode(a) if a.name == "xlink:href" => Some(a),
+            _ => None,
+        })
+        .expect("xlink:href attribute should be present");
+    assert_eq!(
+        attr.namespace.as_deref(),
+        Some("http://www.w3.org/1999/xlink"),
+        "xlink:href should have the xlink namespace"
+    );
+}
+
+/// All xlink:* attributes should get the xlink namespace.
+#[test]
+fn foreign_attribute_all_xlink_variants_get_namespace() {
+    let text = r##"<html><body><svg><a xlink:actuate="onRequest" xlink:arcrole="http://example.com" xlink:href="#" xlink:role="http://example.com" xlink:show="new" xlink:title="link" xlink:type="simple"></a></svg></body></html>"##;
+    let document = html::parse(text).unwrap();
+    let xlink_attrs: Vec<_> = document
+        .iter()
+        .filter_map(|node| match node {
+            XpathItemTreeNode::AttributeNode(a) if a.name.starts_with("xlink:") => Some(a),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(xlink_attrs.len(), 7, "all 7 xlink:* attributes should be present");
+    for attr in &xlink_attrs {
+        assert_eq!(
+            attr.namespace.as_deref(),
+            Some("http://www.w3.org/1999/xlink"),
+            "{} should have the xlink namespace",
+            attr.name
+        );
+    }
+}
+
+/// xml:lang in SVG foreign content should get the XML namespace.
+#[test]
+fn foreign_attribute_xml_lang_gets_xml_namespace() {
+    let text =
+        r#"<html><body><svg xml:lang="en"><text>hello</text></svg></body></html>"#;
+    let document = html::parse(text).unwrap();
+    let attr = document
+        .iter()
+        .find_map(|node| match node {
+            XpathItemTreeNode::AttributeNode(a) if a.name == "xml:lang" => Some(a),
+            _ => None,
+        })
+        .expect("xml:lang attribute should be present");
+    assert_eq!(
+        attr.namespace.as_deref(),
+        Some("http://www.w3.org/XML/1998/namespace"),
+        "xml:lang should have the XML namespace"
+    );
+}
+
+/// xml:space in SVG foreign content should get the XML namespace.
+#[test]
+fn foreign_attribute_xml_space_gets_xml_namespace() {
+    let text =
+        r#"<html><body><svg xml:space="preserve"><text>hello</text></svg></body></html>"#;
+    let document = html::parse(text).unwrap();
+    let attr = document
+        .iter()
+        .find_map(|node| match node {
+            XpathItemTreeNode::AttributeNode(a) if a.name == "xml:space" => Some(a),
+            _ => None,
+        })
+        .expect("xml:space attribute should be present");
+    assert_eq!(
+        attr.namespace.as_deref(),
+        Some("http://www.w3.org/XML/1998/namespace"),
+        "xml:space should have the XML namespace"
+    );
+}
+
+/// xmlns on an SVG element should get the xmlns namespace.
+#[test]
+fn foreign_attribute_xmlns_gets_xmlns_namespace() {
+    let text =
+        r#"<html><body><svg xmlns="http://www.w3.org/2000/svg"><rect/></svg></body></html>"#;
+    let document = html::parse(text).unwrap();
+    let attr = document
+        .iter()
+        .find_map(|node| match node {
+            XpathItemTreeNode::AttributeNode(a) if a.name == "xmlns" => Some(a),
+            _ => None,
+        })
+        .expect("xmlns attribute should be present");
+    assert_eq!(
+        attr.namespace.as_deref(),
+        Some("http://www.w3.org/2000/xmlns/"),
+        "xmlns should have the xmlns namespace"
+    );
+}
+
+/// xmlns:xlink on an SVG element should get the xmlns namespace.
+#[test]
+fn foreign_attribute_xmlns_xlink_gets_xmlns_namespace() {
+    let text =
+        r##"<html><body><svg xmlns:xlink="http://www.w3.org/1999/xlink"><use xlink:href="#icon"/></svg></body></html>"##;
+    let document = html::parse(text).unwrap();
+    let attr = document
+        .iter()
+        .find_map(|node| match node {
+            XpathItemTreeNode::AttributeNode(a) if a.name == "xmlns:xlink" => Some(a),
+            _ => None,
+        })
+        .expect("xmlns:xlink attribute should be present");
+    assert_eq!(
+        attr.namespace.as_deref(),
+        Some("http://www.w3.org/2000/xmlns/"),
+        "xmlns:xlink should have the xmlns namespace"
+    );
+}
+
+/// Regular attributes in foreign content should NOT get a namespace.
+#[test]
+fn regular_attributes_in_foreign_content_have_no_namespace() {
+    let text =
+        r#"<html><body><svg><rect width="100" height="50"></rect></svg></body></html>"#;
+    let document = html::parse(text).unwrap();
+    let attrs: Vec<_> = document
+        .iter()
+        .filter_map(|node| match node {
+            XpathItemTreeNode::AttributeNode(a)
+                if a.name == "width" || a.name == "height" =>
+            {
+                Some(a)
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(attrs.len(), 2, "width and height should be present");
+    for attr in &attrs {
+        assert_eq!(
+            attr.namespace, None,
+            "{} should have no namespace",
+            attr.name
+        );
+    }
+}
+
+/// Foreign attribute namespace assignment should work for MathML elements too.
+#[test]
+fn foreign_attribute_xlink_in_mathml_gets_namespace() {
+    let text =
+        r##"<html><body><math><mrow xlink:href="#ref"></mrow></math></body></html>"##;
+    let document = html::parse(text).unwrap();
+    let attr = document
+        .iter()
+        .find_map(|node| match node {
+            XpathItemTreeNode::AttributeNode(a) if a.name == "xlink:href" => Some(a),
+            _ => None,
+        })
+        .expect("xlink:href attribute should be present on MathML element");
+    assert_eq!(
+        attr.namespace.as_deref(),
+        Some("http://www.w3.org/1999/xlink"),
+        "xlink:href in MathML should have the xlink namespace"
+    );
+}

@@ -641,6 +641,13 @@ pub struct AttributeNode {
     /// Original attribute name before lowercasing (e.g. "viewBox").
     /// Used for round-trip fidelity in Raw display mode.
     pub original_name: Option<String>,
+
+    /// The namespace URI of this attribute, if any.
+    ///
+    /// Set for foreign attributes like `xlink:href` (xlink namespace),
+    /// `xml:lang` (XML namespace), and `xmlns` (xmlns namespace)
+    /// per WHATWG 13.2.6.3.
+    pub namespace: Option<String>,
 }
 
 impl Debug for AttributeNode {
@@ -662,15 +669,17 @@ impl AttributeNode {
             value,
             prefix: String::from(" "),
             original_name: None,
+            namespace: None,
         }
     }
 
-    /// Create a new attribute node with a custom prefix and original name.
+    /// Create a new attribute node with a custom prefix, original name, and namespace.
     pub(crate) fn with_prefix(
         name: String,
         value: String,
         prefix: String,
         original_name: Option<String>,
+        namespace: Option<String>,
     ) -> Self {
         Self {
             id: None,
@@ -678,6 +687,7 @@ impl AttributeNode {
             value,
             prefix,
             original_name,
+            namespace,
         }
     }
 

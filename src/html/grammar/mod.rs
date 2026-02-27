@@ -370,6 +370,31 @@ fn svg_attribute_name(lowered: &str) -> Option<&'static str> {
     }
 }
 
+/// The XLink namespace URI.
+const XLINK_NAMESPACE: &str = "http://www.w3.org/1999/xlink";
+
+/// The XML namespace URI.
+const XML_NAMESPACE: &str = "http://www.w3.org/XML/1998/namespace";
+
+/// The XMLNS namespace URI.
+const XMLNS_NAMESPACE: &str = "http://www.w3.org/2000/xmlns/";
+
+/// Returns the namespace URI for a foreign attribute, if any.
+///
+/// Per WHATWG 13.2.6.3, certain attributes in foreign content (SVG, MathML)
+/// are assigned to the xlink, xml, or xmlns namespaces.
+///
+/// <https://html.spec.whatwg.org/multipage/parsing.html#adjust-foreign-attributes>
+fn foreign_attribute_namespace(name: &str) -> Option<&'static str> {
+    match name {
+        "xlink:actuate" | "xlink:arcrole" | "xlink:href" | "xlink:role" | "xlink:show"
+        | "xlink:title" | "xlink:type" => Some(XLINK_NAMESPACE),
+        "xml:lang" | "xml:space" => Some(XML_NAMESPACE),
+        "xmlns" | "xmlns:xlink" => Some(XMLNS_NAMESPACE),
+        _ => None,
+    }
+}
+
 /// Represents a position in the tree where a new node should be inserted.
 ///
 /// This is used by the "appropriate place for inserting a node" algorithm
@@ -718,17 +743,14 @@ impl HtmlParser {
 
     /// Adjust foreign attributes on a token.
     ///
-    /// Per WHATWG, this sets the prefix, local name, and namespace on attributes
-    /// like `xlink:href`, `xml:lang`, and `xmlns`. Since the [`Attribute`] struct
-    /// does not currently carry namespace metadata, this is a no-op. The attribute
-    /// names are already correctly preserved as-is from the tokenizer (e.g.
-    /// `xlink:href`).
+    /// Sets the namespace on attributes like `xlink:href`, `xml:lang`, and
+    /// `xmlns` per the WHATWG spec table.
     ///
     /// <https://html.spec.whatwg.org/multipage/parsing.html#adjust-foreign-attributes>
-    pub(crate) fn adjust_foreign_attributes(_token: &mut TagToken) {
-        // The Attribute struct lacks prefix/namespace fields, so namespace
-        // assignment is not yet possible. Attribute names (e.g. "xlink:href")
-        // are already correct as strings from the tokenizer.
+    pub(crate) fn adjust_foreign_attributes(token: &mut TagToken) {
+        for attr in &mut token.attributes {
+            attr.namespace = foreign_attribute_namespace(&attr.name).map(String::from);
+        }
     }
 
     /// Returns the namespace of the given element node, or `None` if the node
@@ -1141,7 +1163,7 @@ impl HtmlParser {
         let attributes: Vec<AttributeNode> = token
             .attributes
             .into_iter()
-            .map(|attribute| AttributeNode::with_prefix(attribute.name, attribute.value, attribute.prefix, attribute.original_name))
+            .map(|attribute| AttributeNode::with_prefix(attribute.name, attribute.value, attribute.prefix, attribute.original_name, attribute.namespace))
             .collect();
 
         Ok(CreateAnElementForTheTokenResult {
@@ -2625,6 +2647,7 @@ mod tests {
             value: String::from("http://example.com"),
             prefix: String::new(),
             original_name: None,
+            namespace: None,
         });
         HtmlParser::adjust_mathml_attributes(&mut token);
         assert_eq!(token.attributes[0].name, "definitionURL");
@@ -2638,6 +2661,7 @@ mod tests {
             value: String::from("block"),
             prefix: String::new(),
             original_name: None,
+            namespace: None,
         });
         HtmlParser::adjust_mathml_attributes(&mut token);
         assert_eq!(token.attributes[0].name, "display");
@@ -2651,18 +2675,21 @@ mod tests {
             value: String::from("0 0 100 100"),
             prefix: String::new(),
             original_name: None,
+            namespace: None,
         });
         token.attributes.push(tokenizer::Attribute {
             name: String::from("preserveaspectratio"),
             value: String::from("xMidYMid"),
             prefix: String::new(),
             original_name: None,
+            namespace: None,
         });
         token.attributes.push(tokenizer::Attribute {
             name: String::from("width"),
             value: String::from("100"),
             prefix: String::new(),
             original_name: None,
+            namespace: None,
         });
         HtmlParser::adjust_svg_attributes(&mut token);
         assert_eq!(token.attributes[0].name, "viewBox");
@@ -2806,5 +2833,71 @@ mod tests {
             .unwrap();
         assert_eq!(result.element.name, "foreignobject");
         assert_eq!(result.element.namespace, None);
+    }
+
+    #[test]
+    fn foreign_attribute_namespace_xlink() {
+        let xlink_ns = "http://www.w3.org/1999/xlink";
+        assert_eq!(foreign_attribute_namespace("xlink:actuate"), Some(xlink_ns));
+        assert_eq!(foreign_attribute_namespace("xlink:arcrole"), Some(xlink_ns));
+        assert_eq!(foreign_attribute_namespace("xlink:href"), Some(xlink_ns));
+        assert_eq!(foreign_attribute_namespace("xlink:role"), Some(xlink_ns));
+        assert_eq!(foreign_attribute_namespace("xlink:show"), Some(xlink_ns));
+        assert_eq!(foreign_attribute_namespace("xlink:title"), Some(xlink_ns));
+        assert_eq!(foreign_attribute_namespace("xlink:type"), Some(xlink_ns));
+    }
+
+    #[test]
+    fn foreign_attribute_namespace_xml() {
+        let xml_ns = "http://www.w3.org/XML/1998/namespace";
+        assert_eq!(foreign_attribute_namespace("xml:lang"), Some(xml_ns));
+        assert_eq!(foreign_attribute_namespace("xml:space"), Some(xml_ns));
+    }
+
+    #[test]
+    fn foreign_attribute_namespace_xmlns() {
+        let xmlns_ns = "http://www.w3.org/2000/xmlns/";
+        assert_eq!(foreign_attribute_namespace("xmlns"), Some(xmlns_ns));
+        assert_eq!(foreign_attribute_namespace("xmlns:xlink"), Some(xmlns_ns));
+    }
+
+    #[test]
+    fn foreign_attribute_namespace_returns_none_for_regular() {
+        assert_eq!(foreign_attribute_namespace("class"), None);
+        assert_eq!(foreign_attribute_namespace("id"), None);
+        assert_eq!(foreign_attribute_namespace("href"), None);
+        assert_eq!(foreign_attribute_namespace("viewBox"), None);
+        assert_eq!(foreign_attribute_namespace("width"), None);
+    }
+
+    #[test]
+    fn adjust_foreign_attributes_sets_namespace_on_xlink_href() {
+        let mut token = TagToken::new(String::from("use"));
+        token.attributes.push(tokenizer::Attribute {
+            name: String::from("xlink:href"),
+            value: String::from("#icon"),
+            prefix: String::new(),
+            original_name: None,
+            namespace: None,
+        });
+        HtmlParser::adjust_foreign_attributes(&mut token);
+        assert_eq!(
+            token.attributes[0].namespace.as_deref(),
+            Some("http://www.w3.org/1999/xlink")
+        );
+    }
+
+    #[test]
+    fn adjust_foreign_attributes_does_not_set_namespace_on_regular_attributes() {
+        let mut token = TagToken::new(String::from("rect"));
+        token.attributes.push(tokenizer::Attribute {
+            name: String::from("width"),
+            value: String::from("100"),
+            prefix: String::new(),
+            original_name: None,
+            namespace: None,
+        });
+        HtmlParser::adjust_foreign_attributes(&mut token);
+        assert_eq!(token.attributes[0].namespace, None);
     }
 }

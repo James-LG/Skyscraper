@@ -118,6 +118,11 @@ pub struct Attribute {
     /// Original attribute name as written in source (before lowercasing).
     /// Used for round-trip fidelity in Raw display mode.
     pub original_name: Option<String>,
+    /// The namespace URI of this attribute, if any.
+    ///
+    /// Set by `adjust_foreign_attributes` for attributes like `xlink:href`,
+    /// `xml:lang`, and `xmlns` per WHATWG 13.2.6.3.
+    pub namespace: Option<String>,
 }
 
 impl Attribute {
@@ -127,6 +132,7 @@ impl Attribute {
             value,
             prefix: String::new(),
             original_name: None,
+            namespace: None,
         }
     }
 }

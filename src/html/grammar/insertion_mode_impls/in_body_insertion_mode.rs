@@ -120,7 +120,7 @@ impl HtmlParser {
                         let top_node_id = *self.open_elements.first().unwrap();
 
                         let attr_node_id = self.new_node(XpathItemTreeNode::AttributeNode(
-                            AttributeNode::with_prefix(attribute.name, attribute.value, attribute.prefix, attribute.original_name),
+                            AttributeNode::with_prefix(attribute.name, attribute.value, attribute.prefix, attribute.original_name, attribute.namespace),
                         ));
                         top_node_id.append(attr_node_id, &mut self.arena);
                     }
