@@ -29,6 +29,7 @@ use once_cell::sync::Lazy;
 use regex::{Captures, Regex};
 
 pub use crate::html::grammar::parse;
+pub use crate::html::grammar::parse_fragment;
 
 /// List of HTML tags that do not have end tags and cannot have any content.
 static VOID_TAGS: Lazy<Vec<&'static str>> = Lazy::new(|| {

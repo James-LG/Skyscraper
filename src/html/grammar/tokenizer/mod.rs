@@ -376,6 +376,10 @@ impl<'a> Tokenizer<'a> {
         self.error_handler = Some(error_handler);
     }
 
+    pub fn set_state(&mut self, state: TokenizerState) {
+        self.state = state;
+    }
+
     pub fn emit(&mut self, token: HtmlToken) -> Result<(), HtmlParseError> {
         if let HtmlToken::TagToken(TagTokenType::StartTag(tag)) = &token {
             self.last_emitted_start_tag = Some(tag.clone());

@@ -127,6 +127,28 @@ pub fn parse(text: &str) -> Result<XpathItemTree, HtmlParseError> {
     parser.parse(text)
 }
 
+/// Parse an HTML fragment as if it were the innerHTML of a context element.
+///
+/// This implements the HTML fragment parsing algorithm (WHATWG 13.4).
+/// The `context_element_name` specifies the tag name of the context element
+/// (e.g., `"div"`, `"table"`, `"title"`).
+///
+/// # Example
+/// ```rust
+/// use skyscraper::html::{self, grammar::HtmlParseError};
+/// # fn main() -> Result<(), HtmlParseError> {
+/// let tree = html::parse_fragment("div", "<p>Hello</p>")?;
+/// # Ok(())
+/// # }
+/// ```
+pub fn parse_fragment(
+    context_element_name: &str,
+    text: &str,
+) -> Result<XpathItemTree, HtmlParseError> {
+    let mut parser = HtmlParser::new();
+    parser.parse_fragment(context_element_name, text)
+}
+
 /// <https://infra.spec.whatwg.org/#html-namespace>
 pub(crate) const HTML_NAMESPACE: &str = "http://www.w3.org/1999/xhtml";
 
@@ -364,6 +386,74 @@ impl HtmlParser {
         Ok(document)
     }
 
+    /// Parse an HTML fragment using the HTML fragment parsing algorithm.
+    ///
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#parsing-html-fragments>
+    pub fn parse_fragment(
+        &mut self,
+        context_element_name: &str,
+        text: &str,
+    ) -> Result<XpathItemTree, HtmlParseError> {
+        // 1. Create a new Document node.
+        let document_node_id = self
+            .arena
+            .new_node(XpathItemTreeNode::DocumentNode(XpathDocumentNode::new()));
+        self.root_node = Some(document_node_id);
+
+        // 2. Create the context element as a detached node in the arena
+        //    (used by adjusted_current_node when open_elements has only one entry).
+        let context_element = ElementNode::new(context_element_name.to_string());
+        let context_element_id =
+            self.new_node(XpathItemTreeNode::ElementNode(context_element));
+        self.context_element = Some(context_element_id);
+
+        // WHATWG 13.4 step 8: set form element pointer if context is a form.
+        if context_element_name == "form" {
+            self.form_element_pointer = Some(context_element_id);
+        }
+
+        // 3. Create an html element, append to document, push onto open_elements.
+        let html_element = ElementNode::new("html".to_string());
+        let html_id = self.new_node(XpathItemTreeNode::ElementNode(html_element));
+        document_node_id.append(html_id, &mut self.arena);
+        self.open_elements.push(html_id);
+
+        // 4. If context is "template", push InTemplate onto template_insertion_modes.
+        if context_element_name == "template" {
+            self.template_insertion_modes.push(InsertionMode::InTemplate);
+        }
+
+        // 5. Reset the insertion mode appropriately.
+        self.reset_the_insertion_mode_appropriately()?;
+
+        // 6. Determine initial tokenizer state based on context element name.
+        // Note: "noscript" would be RAWTEXT if scripting were enabled, but
+        // Skyscraper does not support scripting, so it falls through to Data.
+        let initial_state = match context_element_name {
+            "title" | "textarea" => TokenizerState::RCDATA,
+            "style" | "xmp" | "iframe" | "noembed" | "noframes" => TokenizerState::RAWTEXT,
+            "script" => TokenizerState::ScriptData,
+            "plaintext" => TokenizerState::PLAINTEXT,
+            _ => TokenizerState::Data,
+        };
+
+        // 7. Create tokenizer, set initial state, and run.
+        let chars: Vec<char> = text.chars().collect();
+        let input_stream = VecPointerRef::new(&chars);
+        let mut tokenizer = tokenizer::Tokenizer::new(input_stream, Box::new(self));
+        let tokenizer_error_handler = tokenizer::DefaultTokenizerErrorHandler;
+        tokenizer.set_error_handler(Box::new(&tokenizer_error_handler));
+        tokenizer.set_state(initial_state);
+
+        while !tokenizer.is_terminated() {
+            tokenizer.step()?;
+        }
+
+        let arena = std::mem::replace(&mut self.arena, Arena::new());
+        let document = XpathItemTree::new(arena, document_node_id);
+        Ok(document)
+    }
+
     /// <https://html.spec.whatwg.org/multipage/parsing.html#current-node>
     pub(crate) fn current_node(&self) -> Option<&XpathItemTreeNode> {
         self.open_elements
@@ -390,6 +480,10 @@ impl HtmlParser {
     pub(crate) fn current_node_as_element_result(&self) -> Result<&ElementNode, HtmlParseError> {
         self.current_node_as_element()
             .ok_or(HtmlParseError::new("current node is not an element"))
+    }
+
+    pub(crate) fn is_fragment_parser(&self) -> bool {
+        self.context_element.is_some()
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#current-template-insertion-mode>
@@ -1290,10 +1384,13 @@ impl HtmlParser {
             last: bool,
         ) -> Result<(), HtmlParseError> {
             let mut last = last;
+            let mut node_id = node_id;
             if node_id == parser.open_elements[0] {
                 last = true;
 
-                // TODO: html fragment parsing algorithm
+                if let Some(context_element) = parser.context_element {
+                    node_id = context_element;
+                }
             }
 
             return step_4(parser, node_id, last);
@@ -1362,6 +1459,9 @@ impl HtmlParser {
                 .map_err(|_| HtmlParseError::new("node is not an element node"))?;
 
             if node.name == "select" {
+                if last {
+                    return step_4_8_done(parser);
+                }
                 return step_4_3_loop(parser, node_id, last);
             }
 

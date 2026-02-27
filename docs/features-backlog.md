@@ -292,7 +292,7 @@ The tokenizer implements the WHATWG state machine including named character refe
 | ~~AfterBody — DocType token~~ | ~~Done~~ — parse error, ignore | `src/html/grammar/insertion_mode_impls/mod.rs:723-727` |
 | ~~AfterAfterBody — Comment token~~ | ~~Done~~ — insert as last child of Document | `src/html/grammar/insertion_mode_impls/mod.rs:763-768` |
 | Declarative Shadow DOM | Not supported (noted in comment) | `src/html/grammar/insertion_mode_impls/mod.rs:317` |
-| HTML fragment parsing algorithm | Not implemented (noted in TODO comment) | `src/html/grammar/insertion_mode_impls/mod.rs:712` |
+| ~~HTML fragment parsing algorithm~~ | ~~Done~~ — `parse_fragment()` implements WHATWG 13.4 | `src/html/grammar/mod.rs` |
 
 ### Not Implemented
 

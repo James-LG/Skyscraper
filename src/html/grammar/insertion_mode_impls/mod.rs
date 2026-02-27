@@ -734,9 +734,14 @@ impl HtmlParser {
                 )?;
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "html" => {
-                // TODO: If parser was created as part of the HTML fragment parsing algorithm...
-
-                self.insertion_mode = InsertionMode::AfterAfterBody;
+                if self.is_fragment_parser() {
+                    // Parse error. Ignore the token.
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "unexpected </html> end tag in fragment parser after body",
+                    )))?;
+                } else {
+                    self.insertion_mode = InsertionMode::AfterAfterBody;
+                }
             }
             HtmlToken::EndOfFile => {
                 self.stop_parsing()?;
@@ -863,12 +868,14 @@ impl HtmlParser {
                     // If the parser was not created as part of the HTML fragment parsing algorithm
                     // (fragment case), and the current node is no longer a frameset element, then
                     // switch the insertion mode to "after frameset".
-                    let is_frameset = self
-                        .current_node_as_element()
-                        .map(|el| el.name == "frameset")
-                        .unwrap_or(false);
-                    if !is_frameset {
-                        self.insertion_mode = InsertionMode::AfterFrameset;
+                    if !self.is_fragment_parser() {
+                        let is_frameset = self
+                            .current_node_as_element()
+                            .map(|el| el.name == "frameset")
+                            .unwrap_or(false);
+                        if !is_frameset {
+                            self.insertion_mode = InsertionMode::AfterFrameset;
+                        }
                     }
                 }
             }
