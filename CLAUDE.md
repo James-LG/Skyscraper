@@ -78,6 +78,15 @@ Both modules use **nom** parser combinators extensively. The `recipes.rs` and `w
 
 Tests use `indoc` for readable multi-line HTML strings and `proptest` for property-based testing.
 
+## Reference Specifications (`.context/`)
+
+The `.context/` directory (gitignored) contains downloaded W3C specifications for offline reference. New resources can be added here as needed to avoid refetching.
+
+Current contents:
+- `xpath-31-spec.html` — [XPath 3.1](https://www.w3.org/TR/2017/REC-xpath-31-20170321/) (W3C Recommendation)
+- `xpath-datamodel-31-spec.html` — [XPath Data Model 3.1](https://www.w3.org/TR/2017/REC-xpath-datamodel-31-20170321/) (W3C Recommendation)
+- `xpath-functions-31-spec.html` — [XPath Functions and Operators 3.1](https://www.w3.org/TR/2017/REC-xpath-functions-31-20170321/) (W3C Recommendation)
+
 ## CI
 
 GitHub Actions (`.github/workflows/rust.yml`): runs `cargo test` in a devcontainer on ubuntu-latest, plus stack overflow tests on windows-latest with Rust nightly.

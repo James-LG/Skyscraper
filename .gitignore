@@ -4,3 +4,4 @@ test.html
 .env/
 .venv/
 log.txt
+.context/
