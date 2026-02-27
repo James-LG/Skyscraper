@@ -1437,6 +1437,30 @@ impl HtmlParser {
         self.has_an_element_in_the_specific_scope(tag_names, ELEMENT_IN_SCOPE_TYPES.to_vec())
     }
 
+    /// Check whether a specific node (by [`NodeId`]) is in scope.
+    ///
+    /// NodeId-based variant of
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-scope>.
+    ///
+    /// Walks the stack of open elements from the top. Returns `true` if the
+    /// target node is found before any scope-barrier element
+    /// ([`ELEMENT_IN_SCOPE_TYPES`]).
+    pub(crate) fn has_node_in_scope(&self, target: NodeId) -> bool {
+        for node_id in self.open_elements.iter().rev() {
+            if *node_id == target {
+                return true;
+            }
+            if let Some(node) = self.arena.get(*node_id) {
+                if let XpathItemTreeNode::ElementNode(element) = node.get() {
+                    if ELEMENT_IN_SCOPE_TYPES.contains(&element.name.as_str()) {
+                        return false;
+                    }
+                }
+            }
+        }
+        false
+    }
+
     /// <https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-button-scope>
     pub(crate) fn has_an_element_in_button_scope(&self, tag_name: &str) -> bool {
         let mut element_types = ELEMENT_IN_SCOPE_TYPES.to_vec();

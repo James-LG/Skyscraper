@@ -135,6 +135,68 @@ fn adoption_agency_em_and_strong() {
     assert!(test_framework::compare_documents(expected, document, true));
 }
 
+/// WHATWG adoption agency Step 4.6: if the formatting element is in the stack
+/// of open elements but NOT in scope, the end tag should be ignored.
+/// Here `<table>` is a scope barrier (in ELEMENT_IN_SCOPE_TYPES) that does NOT
+/// push a marker onto active formatting, so `<b>` remains findable in step 4.3
+/// but is unreachable via the scope walk.
+#[test]
+fn adoption_agency_formatting_element_not_in_scope_table_barrier() {
+    let text = r#"<body><b><table></b></table></body>"#;
+
+    let document = html::parse(text).unwrap();
+
+    // `</b>` is encountered inside InTable, processed via InBody.
+    // `b` is in active formatting and in the stack, but `table` is a scope
+    // barrier so `b` is not in scope.  Per spec step 4.6 the end tag is
+    // ignored, leaving `b` open with `table` as its child.
+    let expected = DocumentBuilder::new()
+        .add_element("html", |html| {
+            html.add_element("head", |head| head)
+                .add_element("body", |body| {
+                    body.add_element("b", |b| {
+                        b.add_element("table", |table| table)
+                    })
+                })
+        })
+        .build()
+        .unwrap();
+
+    assert!(test_framework::compare_documents(expected, document, true));
+}
+
+/// Same as above but with text before and after the table inside the `<b>`.
+/// The text before the table should be a child of `<b>`, the table should also
+/// be a child of `<b>`, and text after `</table>` (while `<b>` is still open)
+/// should also be a child of `<b>`.
+#[test]
+fn adoption_agency_formatting_not_in_scope_with_surrounding_text() {
+    let text = r#"<body><b>before<table></b></table>after</b></body>"#;
+
+    let document = html::parse(text).unwrap();
+
+    // "before" is added to `b` before the table is opened.
+    // `</b>` inside the table context is ignored (not in scope).
+    // `</table>` closes the table, returning to InBody with `b` still open.
+    // "after" is added to `b`.
+    // The second `</b>` closes `b` normally.
+    let expected = DocumentBuilder::new()
+        .add_element("html", |html| {
+            html.add_element("head", |head| head)
+                .add_element("body", |body| {
+                    body.add_element("b", |b| {
+                        b.add_text("before")
+                            .add_element("table", |table| table)
+                            .add_text("after")
+                    })
+                })
+        })
+        .build()
+        .unwrap();
+
+    assert!(test_framework::compare_documents(expected, document, true));
+}
+
 /// Test that the GitHub sample HTML can be parsed without panicking.
 /// The full round-trip check is in html_github_tests; this confirms no panic.
 #[test]

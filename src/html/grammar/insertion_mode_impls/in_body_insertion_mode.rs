@@ -1238,8 +1238,13 @@ impl HtmlParser {
 
             let formatting_in_stack_index = formatting_in_stack.unwrap();
 
-            // Step 4.6: If the formatting element is not in scope
-            // (simplified: just check it's in the stack)
+            // Step 4.6: If the formatting element is not in scope, parse error; return.
+            if !self.has_node_in_scope(formatting_element_id) {
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "formatting element is not in scope",
+                )))?;
+                return Ok(());
+            }
 
             // Step 4.7: If the formatting element is not the current node
             if self.current_node_id() != Some(formatting_element_id) {

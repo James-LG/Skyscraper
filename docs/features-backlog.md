@@ -309,7 +309,7 @@ The tokenizer implements the WHATWG state machine including named character refe
 
 | Feature | Notes |
 |---------|-------|
-| Adoption agency algorithm edge cases | Implementation exists but full spec coverage not verified |
+| ~~Adoption agency algorithm edge cases~~ | ~~Done~~ — Step 4.6 now performs a proper scope check via `has_node_in_scope` (`src/html/grammar/insertion_mode_impls/in_body_insertion_mode.rs:1241`); formatting elements behind scope barriers (e.g. `table`) are correctly ignored per WHATWG spec |
 | Foster parenting | May have edge cases not covered |
 
 ---
