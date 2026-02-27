@@ -106,6 +106,85 @@ fn arrow_with_let_variable() {
     );
 }
 
+/// Arrow with VarRef function specifier: `let $f := fn:contains#2 return "hello" => $f("ell")`.
+/// The variable `$f` holds a named function reference, used as the arrow target.
+#[test]
+fn arrow_varref_function_specifier() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse(
+        r#"let $f := fn:contains#2 return "hello" => $f("ell")"#,
+    )
+    .unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true))
+    );
+}
+
+/// Arrow with VarRef specifier returning false.
+#[test]
+fn arrow_varref_function_specifier_false() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse(
+        r#"let $f := fn:contains#2 return "hello" => $f("xyz")"#,
+    )
+    .unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(false))
+    );
+}
+
+/// Arrow with ParenthesizedExpr function specifier:
+/// `"hello" => (fn:contains#2)("ell")`.
+#[test]
+fn arrow_parenthesized_function_specifier() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse(
+        r#""hello" => (fn:contains#2)("ell")"#,
+    )
+    .unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true))
+    );
+}
+
+/// Arrow with inline function via ParenthesizedExpr:
+/// `"hello" => (function($s, $sub) { contains($s, $sub) })("ell")`.
+#[test]
+fn arrow_parenthesized_inline_function_specifier() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse(
+        r#""hello" => (function($s, $sub) { contains($s, $sub) })("ell")"#,
+    )
+    .unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true))
+    );
+}
+
 /// Arrow with `if`: `if (1) then "hello" => contains("ell") else 0`.
 #[test]
 fn arrow_with_if() {

@@ -6,6 +6,7 @@ use nom::{branch::alt, bytes::complete::tag, error::context, multi::many0, seque
 
 use crate::xpath::{
     grammar::{
+        data_model::{Function, XpathItem},
         expressions::primary_expressions::{
             parenthesized_expressions::parenthesized_expr, variable_references::var_ref,
         },
@@ -20,6 +21,7 @@ use crate::xpath::{
 use super::{
     arithmetic_expressions::{unary_expr, UnaryExpr},
     common::{argument_list, ArgumentList},
+    postfix_expressions::invoke_function_item,
     primary_expressions::{
         parenthesized_expressions::ParenthesizedExpr,
         static_function_calls::dispatch_function,
@@ -87,32 +89,34 @@ impl ArrowExpr {
         // Chain through each arrow item: result => func(args)
         // is equivalent to func(result, args).
         for item in &self.items {
-            match &item.function_specifier {
-                ArrowFunctionSpecifier::Name(name) => {
-                    // Evaluate the explicit arguments.
-                    let mut args = vec![result];
-                    for arg in &item.arguments.0 {
-                        args.push(arg.eval(context)?);
-                    }
-
-                    // Dispatch the function with the LHS prepended as the first argument.
-                    result = dispatch_function(name, &args, context)?;
-                }
-                ArrowFunctionSpecifier::VarRef(_) => {
-                    return Err(ExpressionApplyError {
-                        msg: String::from(
-                            "ArrowExpr: VarRef function specifier not yet supported",
-                        ),
-                    });
-                }
-                ArrowFunctionSpecifier::ParenthesizedExpr(_) => {
-                    return Err(ExpressionApplyError {
-                        msg: String::from(
-                            "ArrowExpr: ParenthesizedExpr function specifier not yet supported",
-                        ),
-                    });
-                }
+            // Build the argument list with the LHS prepended.
+            let mut args = vec![result];
+            for arg in &item.arguments.0 {
+                args.push(arg.eval(context)?);
             }
+
+            result = match &item.function_specifier {
+                ArrowFunctionSpecifier::Name(name) => {
+                    dispatch_function(name, &args, context)?
+                }
+                ArrowFunctionSpecifier::VarRef(var_ref) => {
+                    let name = var_ref.name().to_string();
+                    let func_set = context.get_variable(&name).ok_or_else(|| {
+                        ExpressionApplyError::new(format!(
+                            "ArrowExpr: undefined variable ${}",
+                            name
+                        ))
+                    })?;
+                    let func = extract_function_item(func_set, &format!("${}", name))?;
+                    invoke_function_item(func, args, context)?
+                }
+                ArrowFunctionSpecifier::ParenthesizedExpr(paren_expr) => {
+                    let func_set = paren_expr.eval(context)?;
+                    let func =
+                        extract_function_item(&func_set, "parenthesized expression")?;
+                    invoke_function_item(func, args, context)?
+                }
+            };
         }
 
         Ok(result)
@@ -128,6 +132,28 @@ pub struct ArrowExprItem {
 impl Display for ArrowExprItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}{}", self.function_specifier, self.arguments)
+    }
+}
+
+/// Extract a single function item from an XpathItemSet, returning a descriptive
+/// error if the set doesn't contain exactly one function item.
+fn extract_function_item<'a, 'tree>(
+    items: &'a XpathItemSet<'tree>,
+    source_desc: &str,
+) -> Result<&'a Function, ExpressionApplyError> {
+    if items.len() != 1 {
+        return Err(ExpressionApplyError::new(format!(
+            "ArrowExpr: {} must be a single function item, got {} items",
+            source_desc,
+            items.len()
+        )));
+    }
+    match &items[0] {
+        XpathItem::Function(f) => Ok(f),
+        _ => Err(ExpressionApplyError::new(format!(
+            "ArrowExpr: {} is not a function item",
+            source_desc
+        ))),
     }
 }
 

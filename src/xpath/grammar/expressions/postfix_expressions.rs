@@ -233,6 +233,18 @@ fn eval_dynamic_function_call<'tree>(
         arg_values.push(arg.eval(context)?);
     }
 
+    invoke_function_item(func, arg_values, context)
+}
+
+/// Invoke a function item with pre-evaluated argument values.
+///
+/// This is shared between dynamic function calls (postfix `$f(args)`) and the
+/// arrow operator (`expr => $f(args)`).
+pub(crate) fn invoke_function_item<'tree>(
+    func: &Function,
+    arg_values: Vec<XpathItemSet<'tree>>,
+    context: &XpathExpressionContext<'tree>,
+) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
     match func {
         Function::Named { name, arity } => {
             if arg_values.len() as u32 != *arity {
