@@ -246,7 +246,22 @@ impl PrimaryExpr {
                     members
                 })])
             }
-            PrimaryExpr::UnaryLookup(_) => todo!("PrimaryExpr::UnaryLookup eval"),
+            PrimaryExpr::UnaryLookup(ul) => {
+                // Unary lookup ?key is equivalent to .?key — it applies
+                // the key specifier to the context item.
+                let func = match &context.item {
+                    XpathItem::Function(f) => f,
+                    other => {
+                        return Err(ExpressionApplyError::new(format!(
+                            "Unary lookup requires context item to be a map or array, got {:?}",
+                            other
+                        )));
+                    }
+                };
+                super::maps_and_arrays::lookup_operator::apply_key_specifier(
+                    func, &ul.0, context,
+                )
+            }
         }
     }
 }

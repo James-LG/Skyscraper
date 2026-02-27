@@ -110,12 +110,29 @@ impl PostfixExpr {
                 PostfixExprItem::ArgumentList(args) => {
                     result = eval_dynamic_function_call(&result, args, context)?;
                 }
-                PostfixExprItem::Lookup(_) => {
-                    return Err(ExpressionApplyError {
-                        msg: String::from(
-                            "PostfixExpr: postfix lookup not yet supported",
-                        ),
-                    });
+                PostfixExprItem::Lookup(lookup) => {
+                    // Postfix lookup applies the key specifier to each item
+                    // in the result set and collects all results.
+                    let mut new_result = XpathItemSet::new();
+                    for item in result.iter() {
+                        let func = match item {
+                            XpathItem::Function(f) => f,
+                            other => {
+                                return Err(ExpressionApplyError::new(format!(
+                                    "Postfix lookup requires a map or array, got {:?}",
+                                    other
+                                )));
+                            }
+                        };
+                        let lookup_result =
+                            super::maps_and_arrays::lookup_operator::apply_key_specifier(
+                                func, &lookup.0, context,
+                            )?;
+                        for item in lookup_result.iter() {
+                            new_result.insert(item.clone());
+                        }
+                    }
+                    result = new_result;
                 }
             }
         }
@@ -262,80 +279,33 @@ fn eval_dynamic_function_call<'tree>(
             })?;
             body_expr.eval(&inner_context)
         }
-        Function::Map { entries } => {
-            // Maps can be called as functions: $map("key") returns the value
-            // for that key. Exactly one argument is required.
+        Function::Map { .. } | Function::Array { .. } => {
+            // Maps and arrays can be called as functions with a single argument:
+            // $map("key") or $array(N). Validate arity, extract the argument,
+            // and delegate to the shared lookup helpers.
             if arg_values.len() != 1 {
                 return Err(ExpressionApplyError::new(format!(
-                    "Map lookup requires exactly 1 argument, got {}",
+                    "Map/array function call requires exactly 1 argument, got {}",
                     arg_values.len()
                 )));
             }
             let key_set = &arg_values[0];
             if key_set.len() != 1 {
                 return Err(ExpressionApplyError::new(format!(
-                    "Map lookup key must be a single item, got {}",
+                    "Map/array function call argument must be a single item, got {}",
                     key_set.len()
                 )));
             }
             let key = match &key_set[0] {
-                XpathItem::AnyAtomicType(a) => a,
-                _ => {
-                    return Err(ExpressionApplyError::new(
-                        "Map lookup key must be an atomic value".to_string(),
-                    ));
-                }
-            };
-            // Find the entry with the matching key.
-            for (k, v) in entries {
-                if k == key {
-                    return Ok(v
-                        .iter()
-                        .map(|a| XpathItem::AnyAtomicType(a.clone()))
-                        .collect());
-                }
-            }
-            // Key not found — return empty sequence.
-            Ok(XpathItemSet::new())
-        }
-        Function::Array { members } => {
-            // Arrays can be called as functions: $array(N) returns the Nth
-            // member (1-indexed). Exactly one integer argument is required.
-            if arg_values.len() != 1 {
-                return Err(ExpressionApplyError::new(format!(
-                    "Array lookup requires exactly 1 argument, got {}",
-                    arg_values.len()
-                )));
-            }
-            let idx_set = &arg_values[0];
-            if idx_set.len() != 1 {
-                return Err(ExpressionApplyError::new(format!(
-                    "Array lookup index must be a single item, got {}",
-                    idx_set.len()
-                )));
-            }
-            let idx = match &idx_set[0] {
-                XpathItem::AnyAtomicType(AnyAtomicType::Integer(n)) => *n,
+                XpathItem::AnyAtomicType(a) => a.clone(),
                 other => {
                     return Err(ExpressionApplyError::new(format!(
-                        "Array lookup index must be an integer, got {:?}",
+                        "Map/array function call argument must be an atomic value, got {:?}",
                         other
                     )));
                 }
             };
-            // idx >= 1 is guaranteed when the second condition is evaluated.
-            if idx < 1 || idx as usize > members.len() {
-                return Err(ExpressionApplyError::new(format!(
-                    "Array index {} out of bounds (array size: {})",
-                    idx,
-                    members.len()
-                )));
-            }
-            let member = &members[(idx - 1) as usize];
-            Ok(member
-                .iter()
-                .map(|a| XpathItem::AnyAtomicType(a.clone()))
-                .collect())
+            super::maps_and_arrays::lookup_operator::call_with_key(func, &key)
         }
     }
 }
