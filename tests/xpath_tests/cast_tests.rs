@@ -126,3 +126,67 @@ fn cast_no_clause_returns_base() {
         XpathItem::AnyAtomicType(AnyAtomicType::Integer(42))
     );
 }
+
+/// Cast with URI-qualified type name: `42 cast as Q{http://www.w3.org/2001/XMLSchema}string`.
+#[test]
+fn cast_uri_qualified_string() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath =
+        xpath::parse(r#"42 cast as Q{http://www.w3.org/2001/XMLSchema}string"#).unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("42")))
+    );
+}
+
+/// Cast with URI-qualified type name to integer: `"99" cast as Q{http://www.w3.org/2001/XMLSchema}integer`.
+#[test]
+fn cast_uri_qualified_integer() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath =
+        xpath::parse(r#""99" cast as Q{http://www.w3.org/2001/XMLSchema}integer"#).unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Integer(99))
+    );
+}
+
+/// Cast with URI-qualified type name to double: `42 cast as Q{http://www.w3.org/2001/XMLSchema}double`.
+#[test]
+fn cast_uri_qualified_double() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath =
+        xpath::parse(r#"42 cast as Q{http://www.w3.org/2001/XMLSchema}double"#).unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Double(OrderedFloat(42.0)))
+    );
+}
+
+/// Cast with unsupported URI namespace should error.
+#[test]
+fn cast_uri_qualified_unsupported_namespace_fails() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath =
+        xpath::parse(r#"42 cast as Q{http://example.com/types}string"#).unwrap();
+
+    let result = xpath.apply(&document);
+    assert!(result.is_err());
+}

@@ -109,9 +109,18 @@ impl CastExpr {
                     }
                 }
             },
-            EQName::UriQualifiedName(_) => Err(ExpressionApplyError {
-                msg: String::from("cast as: URI-qualified type names not yet supported"),
-            }),
+            EQName::UriQualifiedName(uqn) => {
+                if uqn.uri == "http://www.w3.org/2001/XMLSchema" {
+                    Ok(uqn.name.clone())
+                } else {
+                    Err(ExpressionApplyError {
+                        msg: format!(
+                            "cast as: unsupported type namespace '{}'",
+                            uqn.uri
+                        ),
+                    })
+                }
+            }
         }
     }
 
