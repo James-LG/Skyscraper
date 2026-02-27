@@ -111,6 +111,7 @@ impl XpathItemTreeNode {
             XpathItemTreeNode::TextNode(t) => Some(t.id()),
             XpathItemTreeNode::AttributeNode(a) => Some(a.id()),
             XpathItemTreeNode::CommentNode(c) => Some(c.id()),
+            XpathItemTreeNode::PINode(p) => Some(p.id()),
             _ => None,
         }
     }
@@ -120,6 +121,7 @@ impl XpathItemTreeNode {
             XpathItemTreeNode::ElementNode(e) => Some(e.id()),
             XpathItemTreeNode::TextNode(t) => Some(t.id()),
             XpathItemTreeNode::AttributeNode(a) => Some(a.id()),
+            XpathItemTreeNode::PINode(p) => Some(p.id()),
             _ => None,
         };
 
@@ -153,7 +155,7 @@ impl XpathItemTreeNode {
         match self {
             XpathItemTreeNode::DocumentNode(node) => node.text_content(tree),
             XpathItemTreeNode::ElementNode(node) => node.text_content(tree),
-            XpathItemTreeNode::PINode(_) => String::from(""),
+            XpathItemTreeNode::PINode(node) => node.data.clone(),
             XpathItemTreeNode::CommentNode(_) => String::from(""),
             XpathItemTreeNode::TextNode(node) => node.content.to_string(),
             XpathItemTreeNode::AttributeNode(_) => String::from(""),
@@ -176,7 +178,7 @@ impl XpathItemTreeNode {
         match self {
             XpathItemTreeNode::DocumentNode(node) => node.text(tree),
             XpathItemTreeNode::ElementNode(node) => node.text(tree),
-            XpathItemTreeNode::PINode(_) => None,
+            XpathItemTreeNode::PINode(node) => Some(node.data.clone()),
             XpathItemTreeNode::CommentNode(_) => None,
             XpathItemTreeNode::TextNode(node) => Some(node.content.to_string()),
             XpathItemTreeNode::AttributeNode(_) => None,

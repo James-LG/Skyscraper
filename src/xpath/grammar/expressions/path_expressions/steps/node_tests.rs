@@ -60,7 +60,8 @@ impl NodeTest {
     ) -> Result<Option<&'tree XpathItemTreeNode>, ExpressionApplyError> {
         match self {
             NodeTest::KindTest(test) => {
-                let filtered_nodes = test.filter(&xpath_item_set![context.item.clone()])?;
+                let filtered_nodes =
+                    test.filter(&xpath_item_set![context.item.clone()], context.item_tree)?;
 
                 if !filtered_nodes.is_empty() {
                     let node: &'tree XpathItemTreeNode = filtered_nodes.into_iter().next().unwrap();

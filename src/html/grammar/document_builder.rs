@@ -4,7 +4,8 @@ use thiserror::Error;
 use crate::xpath::{
     grammar::{
         data_model::{
-            AttributeNode, CommentNode, DoctypeNode, ElementNode, TextNode, XpathDocumentNode,
+            AttributeNode, CommentNode, DoctypeNode, ElementNode, PINode, TextNode,
+            XpathDocumentNode,
         },
         XpathItemTreeNode,
     },
@@ -68,6 +69,18 @@ impl DocumentBuilder {
                 .unwrap()
                 .set_id(child_id);
 
+            Ok(child_id)
+        }));
+
+        self
+    }
+
+    /// Add a processing instruction node to the document.
+    pub fn add_processing_instruction(mut self, target: &str, data: &str) -> Self {
+        let target = target.to_string();
+        let data = data.to_string();
+        self.funcs.push(Box::new(move |arena, _| {
+            let child_id = PINode::create(target, data, arena);
             Ok(child_id)
         }));
 
@@ -211,6 +224,18 @@ impl<'arena> ElementBuilder<'arena> {
                 .unwrap()
                 .set_id(child_id);
 
+            Ok(child_id)
+        }));
+
+        self
+    }
+
+    /// Add a processing instruction node as a child of this element.
+    pub fn add_processing_instruction(mut self, target: &str, data: &str) -> Self {
+        let target = target.to_string();
+        let data = data.to_string();
+        self.funcs.push(Box::new(move |arena, _| {
+            let child_id = PINode::create(target, data, arena);
             Ok(child_id)
         }));
 

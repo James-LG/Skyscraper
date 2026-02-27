@@ -61,7 +61,7 @@ All 13 axes parse and evaluate:
 ### Fully Implemented
 
 - Name tests: QName, `*`, `*:localname`, `prefix:*`, `Q{uri}name`
-- Kind tests: `node()`, `text()`, `comment()`, `element()`, `element(name)`, `element(*)`, `attribute()`, `attribute(name)`, `attribute(*)`, `item()`
+- Kind tests: `node()`, `text()`, `comment()`, `element()`, `element(name)`, `element(*)`, `attribute()`, `attribute(name)`, `attribute(*)`, `item()`, `document-node()`, `document-node(element-test)`, `processing-instruction()`, `processing-instruction(name)`
 - Schema-aware tests (correctly return empty for non-schema-aware processor): `schema-element()`, `schema-attribute()`
 - Function/map/array tests: `function(*)`, `map(*)`, `array(*)`
 
@@ -69,8 +69,6 @@ All 13 axes parse and evaluate:
 
 | Feature | Gap | Location |
 |---------|-----|----------|
-| `document-node(element-test)` | Parametrized form parses but matches any document node (superset) | `src/xpath/grammar/types/mod.rs:295-300` |
-| `processing-instruction(name)` | Parses, but `PINode` struct is empty — no target field to match against | `src/xpath/grammar/data_model/mod.rs:723` |
 | `namespace-node()` | Parses but always returns empty for HTML | `src/xpath/grammar/types/mod.rs:184-187` |
 | Typed function/map/array tests | `function(T as S)`, `map(K,V)`, `array(T)` parse but parameter/return types are not validated at runtime | `src/xpath/grammar/types/sequence_type.rs:211-213` |
 
@@ -310,7 +308,6 @@ The tokenizer implements the WHATWG state machine including named character refe
 
 | Feature | Gap | Location |
 |---------|-----|----------|
-| `PINode` (Processing Instruction) | Struct is empty — no `target` or `data` fields | `src/xpath/grammar/data_model/mod.rs:723` |
 | Namespace nodes | Not represented in the tree at all | N/A |
 
 ---

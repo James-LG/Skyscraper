@@ -1,4 +1,9 @@
-use skyscraper::{html, xpath};
+use skyscraper::{
+    html,
+    html::grammar::document_builder::DocumentBuilder,
+    xpath,
+    xpath::grammar::data_model::{AnyAtomicType, XpathItem},
+};
 
 /// `element()` with no arguments matches any element.
 #[test]
@@ -115,4 +120,177 @@ fn pi_test_named_display() {
 fn schema_attribute_test_display() {
     let xpath = xpath::parse("//schema-attribute(price)").unwrap();
     assert_eq!(xpath.to_string(), "//schema-attribute(price)");
+}
+
+/// `document-node()` matches the root document node via `instance of`.
+#[test]
+fn document_node_test_matches_root() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    // fn:root() returns the document node; check it's a document-node()
+    let xpath = xpath::parse("fn:root(.) instance of document-node()").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true)),
+        "root should be a document-node()"
+    );
+}
+
+/// `document-node(element(html))` matches a document whose single element child is `html`.
+#[test]
+fn document_node_element_test_matches_html() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath =
+        xpath::parse("fn:root(.) instance of document-node(element(html))").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true)),
+        "document should match document-node(element(html))"
+    );
+}
+
+/// `document-node(element(wrong))` does NOT match when element name doesn't match.
+#[test]
+fn document_node_element_test_wrong_name() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath =
+        xpath::parse("fn:root(.) instance of document-node(element(wrong))").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(false)),
+        "document should NOT match document-node(element(wrong))"
+    );
+}
+
+/// `document-node(element(*))` matches any document with a single element child.
+#[test]
+fn document_node_element_wildcard_matches() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath =
+        xpath::parse("fn:root(.) instance of document-node(element(*))").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true)),
+        "document should match document-node(element(*))"
+    );
+}
+
+/// `processing-instruction()` matches PI nodes.
+#[test]
+fn pi_test_matches_pi_nodes() {
+    let document = DocumentBuilder::new()
+        .add_element("root", |e| {
+            e.add_processing_instruction("xml-stylesheet", "type=\"text/xsl\"")
+                .add_text("hello")
+        })
+        .build()
+        .unwrap();
+
+    let xpath = xpath::parse("//processing-instruction()").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1, "should match 1 PI node: {items:?}");
+}
+
+/// `processing-instruction(name)` matches PIs with the specified target.
+#[test]
+fn pi_test_named_matches_target() {
+    let document = DocumentBuilder::new()
+        .add_element("root", |e| {
+            e.add_processing_instruction("xml-stylesheet", "type=\"text/xsl\"")
+                .add_processing_instruction("php", "echo 'hello';")
+        })
+        .build()
+        .unwrap();
+
+    let xpath = xpath::parse("//processing-instruction(php)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1, "should match only the php PI: {items:?}");
+}
+
+/// `processing-instruction(name)` doesn't match PIs with different targets.
+#[test]
+fn pi_test_named_no_match() {
+    let document = DocumentBuilder::new()
+        .add_element("root", |e| {
+            e.add_processing_instruction("xml-stylesheet", "type=\"text/xsl\"")
+        })
+        .build()
+        .unwrap();
+
+    let xpath = xpath::parse("//processing-instruction(php)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 0, "should match nothing: {items:?}");
+}
+
+/// PI node string value is its data content.
+#[test]
+fn pi_node_string_value() {
+    let document = DocumentBuilder::new()
+        .add_element("root", |e| {
+            e.add_processing_instruction("xml-stylesheet", "type=\"text/xsl\"")
+        })
+        .build()
+        .unwrap();
+
+    let xpath = xpath::parse("string(//processing-instruction())").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(
+            "type=\"text/xsl\"".to_string()
+        ))
+    );
+}
+
+/// PI node name returns its target.
+#[test]
+fn pi_node_name_value() {
+    let document = DocumentBuilder::new()
+        .add_element("root", |e| {
+            e.add_processing_instruction("xml-stylesheet", "type=\"text/xsl\"")
+        })
+        .build()
+        .unwrap();
+
+    let xpath = xpath::parse("name(//processing-instruction())").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(
+            "xml-stylesheet".to_string()
+        ))
+    );
+}
+
+/// PI node with empty data returns empty string.
+#[test]
+fn pi_node_empty_data_string_value() {
+    let document = DocumentBuilder::new()
+        .add_element("root", |e| {
+            e.add_processing_instruction("target", "")
+        })
+        .build()
+        .unwrap();
+
+    let xpath = xpath::parse("string(//processing-instruction())").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::new()))
+    );
 }

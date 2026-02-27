@@ -646,6 +646,7 @@ fn dispatch_by_local_name<'tree>(
                 XpathItem::Node(node) => match node {
                     XpathItemTreeNode::ElementNode(e) => e.name.clone(),
                     XpathItemTreeNode::AttributeNode(a) => a.name.clone(),
+                    XpathItemTreeNode::PINode(pi) => pi.target.clone(),
                     _ => String::new(),
                 },
                 _ => String::new(),
@@ -673,6 +674,7 @@ fn dispatch_by_local_name<'tree>(
                 XpathItem::Node(node) => match node {
                     XpathItemTreeNode::ElementNode(e) => e.name.clone(),
                     XpathItemTreeNode::AttributeNode(a) => a.name.clone(),
+                    XpathItemTreeNode::PINode(pi) => pi.target.clone(),
                     _ => String::new(),
                 },
                 _ => String::new(),
@@ -1286,6 +1288,7 @@ fn dispatch_by_local_name<'tree>(
                     let name = match node {
                         XpathItemTreeNode::ElementNode(e) => Some(e.name.clone()),
                         XpathItemTreeNode::AttributeNode(a) => Some(a.name.clone()),
+                        XpathItemTreeNode::PINode(pi) => Some(pi.target.clone()),
                         _ => None,
                     };
                     match name {
@@ -2374,7 +2377,7 @@ pub(crate) fn func_data<'tree>(
                 XpathItemTreeNode::ElementNode(_) => {
                     AnyAtomicType::String(node.text_content(item_tree))
                 }
-                XpathItemTreeNode::PINode(_) => AnyAtomicType::String(String::new()),
+                XpathItemTreeNode::PINode(pi) => AnyAtomicType::String(pi.data.clone()),
                 XpathItemTreeNode::CommentNode(c) => {
                     AnyAtomicType::String(c.content.clone())
                 }
@@ -2402,7 +2405,7 @@ pub(crate) fn func_string<'tree>(item: &XpathItem, item_tree: &'tree XpathItemTr
         XpathItem::Node(node) => match node {
             XpathItemTreeNode::DocumentNode(_) => node.text_content(item_tree),
             XpathItemTreeNode::ElementNode(_) => node.text_content(item_tree),
-            XpathItemTreeNode::PINode(_) => String::new(),
+            XpathItemTreeNode::PINode(pi) => pi.data.clone(),
             XpathItemTreeNode::CommentNode(c) => c.content.clone(),
             XpathItemTreeNode::TextNode(text) => text.content.clone(),
             XpathItemTreeNode::AttributeNode(attribute) => attribute.value.clone(),

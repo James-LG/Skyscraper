@@ -718,14 +718,70 @@ impl PartialEq for AttributeNode {
 }
 
 /// <https://www.w3.org/TR/xpath-datamodel-31/#ProcessingInstructionNode>
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash, Clone)]
+#[derive(PartialOrd, Eq, Ord, Debug, Hash, Clone)]
 pub struct PINode {
-    // TODO
+    /// The target of the processing instruction (an NCName).
+    pub target: String,
+
+    /// The string content after the target.
+    pub data: String,
+
+    /// The ID of the processing instruction node.
+    id: Option<NodeId>,
+}
+
+impl PINode {
+    /// Create a new processing instruction node.
+    pub(crate) fn new(target: String, data: String) -> Self {
+        Self {
+            target,
+            data,
+            id: None,
+        }
+    }
+
+    pub(crate) fn create(
+        target: String,
+        data: String,
+        arena: &mut Arena<XpathItemTreeNode>,
+    ) -> NodeId {
+        let node_id = arena.new_node(XpathItemTreeNode::PINode(PINode::new(target, data)));
+
+        arena
+            .get_mut(node_id)
+            .unwrap()
+            .get_mut()
+            .as_pi_node_mut()
+            .unwrap()
+            .set_id(node_id);
+
+        node_id
+    }
+
+    /// Set the ID of the processing instruction node.
+    pub(crate) fn set_id(&mut self, id: NodeId) {
+        self.id = Some(id);
+    }
+
+    /// Get the ID of the processing instruction node.
+    pub(crate) fn id(&self) -> NodeId {
+        self.id.unwrap()
+    }
+}
+
+impl PartialEq for PINode {
+    fn eq(&self, other: &Self) -> bool {
+        self.target == other.target && self.data == other.data
+    }
 }
 
 impl Display for PINode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<??>")
+        if self.data.is_empty() {
+            write!(f, "<?{}?>", self.target)
+        } else {
+            write!(f, "<?{} {}?>", self.target, self.data)
+        }
     }
 }
 

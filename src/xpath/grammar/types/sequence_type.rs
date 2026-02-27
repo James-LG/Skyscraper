@@ -20,6 +20,7 @@ use crate::xpath::{
             kind_test, map_test::map_test,
         },
         whitespace_recipes::ws,
+        XpathItemTree,
     },
     xpath_item_set::XpathItemSet,
     ExpressionApplyError,
@@ -75,6 +76,7 @@ impl SequenceType {
     pub(crate) fn is_match<'tree>(
         &self,
         item_set: &XpathItemSet<'tree>,
+        item_tree: &'tree XpathItemTree,
     ) -> Result<bool, ExpressionApplyError> {
         match self {
             // The sequence type empty-sequence() matches a value that is the empty sequence.
@@ -99,7 +101,7 @@ impl SequenceType {
 
                 for item in item_set {
                     let single = crate::xpath_item_set![item.clone()];
-                    if !x.item_type.is_match(&single)? {
+                    if !x.item_type.is_match(&single, item_tree)? {
                         return Ok(false);
                     }
                 }
@@ -198,12 +200,13 @@ impl ItemType {
     pub(crate) fn is_match<'tree>(
         &self,
         item_set: &XpathItemSet<'tree>,
+        item_tree: &'tree XpathItemTree,
     ) -> Result<bool, ExpressionApplyError> {
         match self {
             // item() matches any single item.
             ItemType::Item => Ok(true),
             ItemType::KindTest(x) => {
-                let result = x.filter(item_set)?;
+                let result = x.filter(item_set, item_tree)?;
                 Ok(!result.is_empty())
             }
             ItemType::FunctionTest(_x) => {

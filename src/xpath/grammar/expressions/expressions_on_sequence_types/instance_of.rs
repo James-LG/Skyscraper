@@ -74,7 +74,7 @@ impl InstanceofExpr {
         };
 
         // Check if the result matches the sequence type.
-        let matches = seq_type.is_match(&result)?;
+        let matches = seq_type.is_match(&result, context.item_tree)?;
         Ok(xpath_item_set![XpathItem::AnyAtomicType(
             AnyAtomicType::Boolean(matches)
         )])

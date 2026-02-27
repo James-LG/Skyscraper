@@ -30,7 +30,7 @@ use super::{
     recipes::Res,
     terminal_symbols::UriQualifiedName,
     xml_names::{nc_name, QName},
-    XpathItemTreeNode,
+    XpathItemTree, XpathItemTreeNode,
 };
 
 pub mod array_test;
@@ -136,6 +136,7 @@ impl KindTest {
     pub(crate) fn filter<'tree>(
         &self,
         item_set: &XpathItemSet<'tree>,
+        item_tree: &'tree XpathItemTree,
     ) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
         match self {
             KindTest::AnyKindTest => {
@@ -186,7 +187,7 @@ impl KindTest {
                 // Always return empty.
                 Ok(IndexSet::new())
             }
-            KindTest::DocumentTest(x) => x.filter(item_set),
+            KindTest::DocumentTest(x) => x.filter(item_set, item_tree),
             KindTest::ElementTest(x) => x.filter(item_set),
             KindTest::AttributeTest(x) => {
                 let mut filtered_nodes = IndexSet::new();
@@ -277,6 +278,7 @@ impl DocumentTest {
     pub(crate) fn filter<'tree>(
         &self,
         item_set: &XpathItemSet<'tree>,
+        item_tree: &'tree XpathItemTree,
     ) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
         match &self.value {
             // document-node() matches any document node.
@@ -285,7 +287,7 @@ impl DocumentTest {
 
                 for item in item_set {
                     if let XpathItem::Node(node) = item {
-                        if matches!(node, XpathItemTreeNode::DocumentNode(_),) {
+                        if matches!(node, XpathItemTreeNode::DocumentNode(_)) {
                             filtered_nodes.insert(*node);
                         }
                     }
@@ -293,18 +295,47 @@ impl DocumentTest {
 
                 Ok(filtered_nodes)
             }
-            // document-node(E) matches any document node whose content matches E.
-            // Full evaluation requires tree traversal to inspect children, which
-            // the current filter API doesn't support (no tree reference). For now,
-            // match any document node — this is a superset of the correct behavior
-            // and avoids panicking.
-            Some(_) => {
+            // document-node(E) matches a document node that has exactly one
+            // element child and that child matches the element/schema-element test.
+            Some(doc_test_value) => {
                 let mut filtered_nodes = IndexSet::new();
 
                 for item in item_set {
                     if let XpathItem::Node(node) = item {
-                        if matches!(node, XpathItemTreeNode::DocumentNode(_)) {
-                            filtered_nodes.insert(*node);
+                        if let XpathItemTreeNode::DocumentNode(_) = node {
+                            // Get the children of the document node.
+                            let children = node.children(item_tree);
+
+                            // Count element children.
+                            let element_children: Vec<&'tree XpathItemTreeNode> = children
+                                .into_iter()
+                                .filter(|c| matches!(c, XpathItemTreeNode::ElementNode(_)))
+                                .collect();
+
+                            // Must have exactly one element child.
+                            if element_children.len() != 1 {
+                                continue;
+                            }
+
+                            // Check if the element child matches the test.
+                            let child_set: XpathItemSet<'tree> = element_children
+                                .into_iter()
+                                .map(XpathItem::Node)
+                                .collect();
+
+                            let matches = match doc_test_value {
+                                DocumentTestValue::ElementTest(et) => {
+                                    !et.filter(&child_set)?.is_empty()
+                                }
+                                DocumentTestValue::SchemaElementTest(_) => {
+                                    // Schema tests always return empty in HTML.
+                                    false
+                                }
+                            };
+
+                            if matches {
+                                filtered_nodes.insert(*node);
+                            }
                         }
                     }
                 }
@@ -402,11 +433,14 @@ impl PITest {
 
         for item in item_set {
             if let XpathItem::Node(node) = item {
-                if matches!(node, XpathItemTreeNode::PINode(_)) {
-                    // PINode currently has no target/name field, so
-                    // processing-instruction() matches all PI nodes and
-                    // processing-instruction(name) cannot match any.
-                    let matches = self.val.is_none();
+                if let XpathItemTreeNode::PINode(pi) = node {
+                    let matches = match &self.val {
+                        // processing-instruction() matches all PI nodes.
+                        None => true,
+                        // processing-instruction(name) matches PIs whose target equals name.
+                        Some(PITestValue::NCName(name)) => pi.target == *name,
+                        Some(PITestValue::StringLiteral(name)) => pi.target == *name,
+                    };
                     if matches {
                         filtered_nodes.insert(*node);
                     }
