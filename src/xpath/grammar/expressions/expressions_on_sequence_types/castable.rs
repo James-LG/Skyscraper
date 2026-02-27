@@ -4,10 +4,18 @@ use std::fmt::Display;
 
 use nom::{bytes::complete::tag, combinator::opt, error::context};
 
-use crate::xpath::{
-    grammar::{recipes::Res, whitespace_recipes::sep},
-    xpath_item_set::XpathItemSet,
-    ExpressionApplyError, XpathExpressionContext,
+use crate::{
+    xpath::{
+        grammar::{
+            data_model::{AnyAtomicType, XpathItem},
+            expressions::primary_expressions::static_function_calls::func_data,
+            recipes::Res,
+            whitespace_recipes::sep,
+        },
+        xpath_item_set::XpathItemSet,
+        ExpressionApplyError, XpathExpressionContext,
+    },
+    xpath_item_set,
 };
 
 use super::cast::{cast_expr, single_type, CastExpr, SingleType};
@@ -59,13 +67,34 @@ impl CastableExpr {
         // Evaluate the first expression.
         let result = self.expr.eval(context)?;
 
-        // If there's only one parameter, return it's eval.
-        if self.cast_type.is_none() {
-            return Ok(result);
+        // If there's no `castable as` clause, return the base expression's eval.
+        let single_type = match &self.cast_type {
+            Some(t) => t,
+            None => return Ok(result),
+        };
+
+        // If `?` is present and the sequence is empty, castable is true.
+        if single_type.has_question_mark && result.is_empty() {
+            return Ok(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::Boolean(true)
+            )]);
         }
 
-        // Otherwise, do the operation.
-        todo!("CastableExpr::eval treat operator")
+        // Atomize to check if we have exactly one value.
+        let atomized = func_data(&result, context.item_tree);
+        if atomized.len() != 1 {
+            return Ok(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::Boolean(false)
+            )]);
+        }
+
+        // Try the cast — if it succeeds, castable is true.
+        let target_name = CastExpr::resolve_type_name(&single_type.type_name)?;
+        let castable = CastExpr::cast_atomic(&atomized[0], &target_name).is_ok();
+
+        Ok(xpath_item_set![XpathItem::AnyAtomicType(
+            AnyAtomicType::Boolean(castable)
+        )])
     }
 }
 

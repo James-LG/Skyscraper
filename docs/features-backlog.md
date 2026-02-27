@@ -188,8 +188,8 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 | Line | File | Feature |
 |------|------|---------|
 | ~~72~~ | ~~`instance_of.rs`~~ | ~~`instance of` operator~~ **DONE** |
-| 65 | `cast.rs` | `cast as` operator |
-| 68 | `castable.rs` | `castable as` operator |
+| ~~65~~ | ~~`cast.rs`~~ | ~~`cast as` operator~~ **DONE** |
+| ~~68~~ | ~~`castable.rs`~~ | ~~`castable as` operator~~ **DONE** |
 
 ### Postfix Expressions
 

@@ -385,7 +385,7 @@ pub fn simple_type_name(input: &str) -> Res<&str, SimpleTypeName> {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct SimpleTypeName(TypeName);
+pub struct SimpleTypeName(pub TypeName);
 
 impl Display for SimpleTypeName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
