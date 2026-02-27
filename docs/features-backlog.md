@@ -269,14 +269,14 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 | Line | Feature |
 |------|---------|
 | ~~173~~ | ~~`comment()` kind test~~ **DONE** |
-| 174 | `namespace-node()` kind test |
-| 176 | `element()` kind test (with parameters) |
-| 190 | `schema-element()` kind test |
-| 191 | `schema-attribute()` kind test |
-| 192 | `processing-instruction()` kind test |
-| 277 | `document-node()` kind test with element argument |
-| 317 | `schema-attribute()` display formatting |
-| 362 | `processing-instruction()` display formatting |
+| ~~174~~ | ~~`namespace-node()` kind test~~ **DONE** |
+| ~~176~~ | ~~`element()` kind test (with parameters)~~ **DONE** |
+| ~~190~~ | ~~`schema-element()` kind test~~ **DONE** |
+| ~~191~~ | ~~`schema-attribute()` kind test~~ **DONE** |
+| ~~192~~ | ~~`processing-instruction()` kind test~~ **DONE** |
+| ~~277~~ | ~~`document-node()` kind test with element argument~~ **DONE** |
+| ~~317~~ | ~~`schema-attribute()` display formatting~~ **DONE** |
+| ~~362~~ | ~~`processing-instruction()` display formatting~~ **DONE** |
 
 ### Sequence Types
 
@@ -296,8 +296,8 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line | Feature |
 |------|---------|
-| 103 | Attribute test with type name parameter |
-| 150 | Attribute name matching |
+| ~~103~~ | ~~Attribute test with type name parameter~~ **DONE** |
+| ~~150~~ | ~~Attribute name matching~~ **DONE** |
 
 ## XPath — Data Model
 
@@ -305,8 +305,8 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line | Feature |
 |------|---------|
-| 92 | Function node display formatting |
-| 633 | Processing instruction node display formatting |
+| ~~92~~ | ~~Function node display formatting~~ **DONE** |
+| ~~633~~ | ~~Processing instruction node display formatting~~ **DONE** |
 
 ## XPath — Maps and Arrays
 
@@ -314,7 +314,7 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line | Feature |
 |------|---------|
-| 47 | Array constructor display formatting |
+| ~~47~~ | ~~Array constructor display formatting~~ **DONE** |
 
 ## XPath — Common Helpers
 

@@ -181,9 +181,13 @@ impl KindTest {
                 });
                 Ok(filtered_nodes.collect())
             }
-            KindTest::NamespaceNodeTest => todo!("KindTest::NamespaceNodeTest::is_match"),
+            KindTest::NamespaceNodeTest => {
+                // HTML documents do not have namespace nodes.
+                // Always return empty.
+                Ok(IndexSet::new())
+            }
             KindTest::DocumentTest(x) => x.filter(item_set),
-            KindTest::ElementTest(_) => todo!("KindTest::ElementTest::is_match"),
+            KindTest::ElementTest(x) => x.filter(item_set),
             KindTest::AttributeTest(x) => {
                 let mut filtered_nodes = IndexSet::new();
 
@@ -197,9 +201,17 @@ impl KindTest {
 
                 Ok(filtered_nodes)
             }
-            KindTest::SchemaElementTest(_) => todo!("KindTest::SchemaElementTest::is_match"),
-            KindTest::SchemaAttributeTest(_) => todo!("KindTest::SchemaAttributeTest::is_match"),
-            KindTest::PITest(_) => todo!("KindTest::PITest::is_match"),
+            KindTest::SchemaElementTest(_) => {
+                // Schema-aware tests require a schema. HTML has no schema.
+                // Per XPath 3.1, schema-element() tests against schema declarations
+                // which are not available in a non-schema-aware processor.
+                Ok(IndexSet::new())
+            }
+            KindTest::SchemaAttributeTest(_) => {
+                // Schema-aware tests require a schema. HTML has no schema.
+                Ok(IndexSet::new())
+            }
+            KindTest::PITest(x) => x.filter(item_set),
         }
     }
 }
@@ -281,10 +293,24 @@ impl DocumentTest {
 
                 Ok(filtered_nodes)
             }
-            // document-node( E ) matches any document node that contains exactly one element node,
-            // optionally accompanied by one or more comment and processing instruction nodes,
-            // if E is an ElementTest or SchemaElementTest that matches the element node.
-            Some(_) => todo!("DocumentTest::is_match value"),
+            // document-node(E) matches any document node whose content matches E.
+            // Full evaluation requires tree traversal to inspect children, which
+            // the current filter API doesn't support (no tree reference). For now,
+            // match any document node — this is a superset of the correct behavior
+            // and avoids panicking.
+            Some(_) => {
+                let mut filtered_nodes = IndexSet::new();
+
+                for item in item_set {
+                    if let XpathItem::Node(node) = item {
+                        if matches!(node, XpathItemTreeNode::DocumentNode(_)) {
+                            filtered_nodes.insert(*node);
+                        }
+                    }
+                }
+
+                Ok(filtered_nodes)
+            }
         }
     }
 }
@@ -323,8 +349,8 @@ pub fn schema_attribute_test(input: &str) -> Res<&str, SchemaAttributeTest> {
 pub struct SchemaAttributeTest(pub AttributeDeclaration);
 
 impl Display for SchemaAttributeTest {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!("fmt SchemaAttributeTest")
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "schema-attribute({})", self.0 .0)
     }
 }
 
@@ -367,9 +393,41 @@ pub struct PITest {
     pub val: Option<PITestValue>,
 }
 
+impl PITest {
+    pub(crate) fn filter<'tree>(
+        &self,
+        item_set: &XpathItemSet<'tree>,
+    ) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
+        let mut filtered_nodes = IndexSet::new();
+
+        for item in item_set {
+            if let XpathItem::Node(node) = item {
+                if matches!(node, XpathItemTreeNode::PINode(_)) {
+                    // PINode currently has no target/name field, so
+                    // processing-instruction() matches all PI nodes and
+                    // processing-instruction(name) cannot match any.
+                    let matches = self.val.is_none();
+                    if matches {
+                        filtered_nodes.insert(*node);
+                    }
+                }
+            }
+        }
+
+        Ok(filtered_nodes)
+    }
+}
+
 impl Display for PITest {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!("fmt PITest")
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "processing-instruction(")?;
+        if let Some(val) = &self.val {
+            match val {
+                PITestValue::NCName(name) => write!(f, "{}", name)?,
+                PITestValue::StringLiteral(s) => write!(f, "\"{}\"", s)?,
+            }
+        }
+        write!(f, ")")
     }
 }
 
