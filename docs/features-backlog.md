@@ -102,7 +102,7 @@ All 13 axes parse and evaluate:
 
 ## XPath 3.1 — Built-in Functions
 
-**61** of the 120+ standard functions are implemented. All dispatch is in `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs`.
+**79** of the 120+ standard functions are implemented. All dispatch is in `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs`.
 
 ### Implemented
 
@@ -169,6 +169,22 @@ All 13 axes parse and evaluate:
 | `fn:escape-html-uri(string)` | Complete | Encodes characters outside printable ASCII |
 | `fn:deep-equal(item*, item*)` | Complete | Positional comparison using `PartialEq` |
 | `fn:unordered(item*)` | Complete | Identity function (optimization hint) |
+| `fn:has-children(node?)` | Complete | |
+| `fn:path(node?)` | Complete | Returns XPath path expression with positional predicates |
+| `fn:namespace-uri(node?)` | Complete | Always returns empty string (HTML-only processor) |
+| `fn:lang(string)` | Complete | Walks up ancestors looking for `lang`/`xml:lang` attribute |
+| `fn:node-name(node?)` | Complete | Returns element/attribute name |
+| `fn:nilled(node?)` | Complete | Always returns false (HTML-only processor) |
+| `fn:generate-id(node?)` | Complete | Returns `N{node_id}` |
+| `fn:for-each(item*, function)` | Complete | Higher-order: applies function to each item |
+| `fn:filter(item*, function)` | Complete | Higher-order: keeps items where function returns true |
+| `fn:fold-left(item*, item, function)` | Complete | Higher-order: left fold with accumulator |
+| `fn:fold-right(item*, item, function)` | Complete | Higher-order: right fold with accumulator |
+| `fn:for-each-pair(item*, item*, function)` | Complete | Higher-order: pairwise application |
+| `fn:sort(item*, string?, function?)` | Complete | 1-3 arg form; collation ignored, key function supported |
+| `fn:apply(function, array)` | Complete | Invokes function with array items as arguments |
+| `fn:function-name(function)` | Complete | Returns name for named functions, empty for anonymous |
+| `fn:function-arity(function)` | Complete | Returns arity for all function item types |
 
 ### Not Implemented — By Category
 
@@ -179,13 +195,13 @@ All 13 axes parse and evaluate:
 `fn:normalize-unicode`, `fn:analyze-string`
 
 #### Node (medium priority)
-`fn:namespace-uri`, `fn:lang`, `fn:path`, `fn:has-children`, `fn:innermost`, `fn:outermost`
+`fn:innermost`, `fn:outermost`
 
 #### Accessor (medium priority)
-`fn:node-name`, `fn:nilled`, `fn:base-uri`, `fn:document-uri`
+`fn:base-uri`, `fn:document-uri`
 
 #### Higher-order (medium priority)
-`fn:for-each`, `fn:filter`, `fn:fold-left`, `fn:fold-right`, `fn:for-each-pair`, `fn:sort`, `fn:apply`, `fn:function-lookup`, `fn:function-name`, `fn:function-arity`
+`fn:function-lookup`
 
 #### Map functions (medium priority)
 `map:merge`, `map:size`, `map:keys`, `map:contains`, `map:get`, `map:find`, `map:put`, `map:entry`, `map:remove`, `map:for-each`
