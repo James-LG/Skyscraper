@@ -8,7 +8,10 @@ use crate::{
     xpath::{
         grammar::{
             data_model::{AnyAtomicType, Function, XpathItem},
-            expressions::common::{argument_list, Argument, ArgumentList},
+            expressions::{
+                common::{argument_list, Argument, ArgumentList},
+                postfix_expressions::invoke_function_item,
+            },
             recipes::Res,
             types::{eq_name, EQName},
             whitespace_recipes::ws,
@@ -1118,6 +1121,354 @@ fn dispatch_by_local_name<'tree>(
             check_arity("fn:unordered", args, 1)?;
             Ok(Some(args[0].clone()))
         }
+        // Node functions
+        // https://www.w3.org/TR/xpath-functions-31/#func-has-children
+        "has-children" => {
+            let target = if args.is_empty() {
+                &context.item
+            } else {
+                check_arity("fn:has-children", args, 1)?;
+                if args[0].is_empty() {
+                    return Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                        AnyAtomicType::Boolean(false)
+                    )]));
+                }
+                &args[0][0]
+            };
+            let has = match target {
+                XpathItem::Node(node) => !node.children(context.item_tree).is_empty(),
+                _ => false,
+            };
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::Boolean(has)
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-path
+        "path" => {
+            let target = if args.is_empty() {
+                &context.item
+            } else {
+                check_arity("fn:path", args, 1)?;
+                if args[0].is_empty() {
+                    return Ok(Some(XpathItemSet::new()));
+                }
+                &args[0][0]
+            };
+            match target {
+                XpathItem::Node(node) => {
+                    let path = func_node_path(node, context.item_tree);
+                    Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                        AnyAtomicType::String(path)
+                    )]))
+                }
+                _ => Err(ExpressionApplyError::new(
+                    "fn:path: argument is not a node".to_string(),
+                )),
+            }
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-namespace-uri
+        "namespace-uri" => {
+            // HTML-only processor: namespace URI is always empty.
+            if !args.is_empty() {
+                check_arity("fn:namespace-uri", args, 1)?;
+            }
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::String(String::new())
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-lang
+        "lang" => {
+            check_arity("fn:lang", args, 1)?;
+            let test_lang = if args[0].is_empty() {
+                String::new()
+            } else {
+                func_string(&args[0][0], context.item_tree)
+            };
+            let test_lang_lower = test_lang.to_lowercase();
+            // Walk up from context node looking for xml:lang or lang attribute.
+            let mut result = false;
+            if let XpathItem::Node(node) = &context.item {
+                let mut current = Some(*node);
+                while let Some(cur) = current {
+                    if let XpathItemTreeNode::ElementNode(e) = cur {
+                        let lang_attr = e.attributes(context.item_tree)
+                            .into_iter()
+                            .find(|a| a.name == "lang" || a.name == "xml:lang");
+                        if let Some(attr) = lang_attr {
+                            let lang_lower = attr.value.to_lowercase();
+                            result = lang_lower == test_lang_lower
+                                || lang_lower.starts_with(&format!("{}-", test_lang_lower));
+                            break;
+                        }
+                    }
+                    current = cur.parent(context.item_tree);
+                }
+            }
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::Boolean(result)
+            )]))
+        }
+        // Accessor functions
+        // https://www.w3.org/TR/xpath-functions-31/#func-node-name
+        "node-name" => {
+            let target = if args.is_empty() {
+                &context.item
+            } else {
+                check_arity("fn:node-name", args, 1)?;
+                if args[0].is_empty() {
+                    return Ok(Some(XpathItemSet::new()));
+                }
+                &args[0][0]
+            };
+            match target {
+                XpathItem::Node(node) => {
+                    let name = match node {
+                        XpathItemTreeNode::ElementNode(e) => Some(e.name.clone()),
+                        XpathItemTreeNode::AttributeNode(a) => Some(a.name.clone()),
+                        _ => None,
+                    };
+                    match name {
+                        Some(n) => Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                            AnyAtomicType::String(n)
+                        )])),
+                        None => Ok(Some(XpathItemSet::new())),
+                    }
+                }
+                _ => Ok(Some(XpathItemSet::new())),
+            }
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-nilled
+        "nilled" => {
+            // HTML-only processor: elements are never nilled.
+            if !args.is_empty() {
+                check_arity("fn:nilled", args, 1)?;
+            }
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::Boolean(false)
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-generate-id
+        "generate-id" => {
+            let target = if args.is_empty() {
+                &context.item
+            } else {
+                check_arity("fn:generate-id", args, 1)?;
+                if args[0].is_empty() {
+                    return Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                        AnyAtomicType::String(String::new())
+                    )]));
+                }
+                &args[0][0]
+            };
+            let id = match target {
+                XpathItem::Node(node) => {
+                    if let Some(node_id) = node.node_id() {
+                        format!("N{}", usize::from(node_id))
+                    } else {
+                        String::from("N0")
+                    }
+                }
+                _ => String::new(),
+            };
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::String(id)
+            )]))
+        }
+        // Higher-order functions
+        // https://www.w3.org/TR/xpath-functions-31/#func-for-each
+        "for-each" => {
+            check_arity("fn:for-each", args, 2)?;
+            let func = extract_function_item(&args[1], "fn:for-each")?;
+            let mut result = XpathItemSet::new();
+            for item in args[0].iter() {
+                let call_result = invoke_function_item(
+                    func,
+                    vec![xpath_item_set![item.clone()]],
+                    context,
+                )?;
+                for r in call_result.into_iter() {
+                    result.insert(r);
+                }
+            }
+            Ok(Some(result))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-filter
+        "filter" => {
+            check_arity("fn:filter", args, 2)?;
+            let func = extract_function_item(&args[1], "fn:filter")?;
+            let mut result = XpathItemSet::new();
+            for item in args[0].iter() {
+                let call_result = invoke_function_item(
+                    func,
+                    vec![xpath_item_set![item.clone()]],
+                    context,
+                )?;
+                if !call_result.is_empty() {
+                    if let XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true)) = &call_result[0]
+                    {
+                        result.insert(item.clone());
+                    }
+                }
+            }
+            Ok(Some(result))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-fold-left
+        "fold-left" => {
+            check_arity("fn:fold-left", args, 3)?;
+            let func = extract_function_item(&args[2], "fn:fold-left")?;
+            let mut accumulator = args[1].clone();
+            for item in args[0].iter() {
+                accumulator = invoke_function_item(
+                    func,
+                    vec![accumulator, xpath_item_set![item.clone()]],
+                    context,
+                )?;
+            }
+            Ok(Some(accumulator))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-fold-right
+        "fold-right" => {
+            check_arity("fn:fold-right", args, 3)?;
+            let func = extract_function_item(&args[2], "fn:fold-right")?;
+            let items: Vec<_> = args[0].iter().cloned().collect();
+            let mut accumulator = args[1].clone();
+            for item in items.into_iter().rev() {
+                accumulator = invoke_function_item(
+                    func,
+                    vec![xpath_item_set![item], accumulator],
+                    context,
+                )?;
+            }
+            Ok(Some(accumulator))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-for-each-pair
+        "for-each-pair" => {
+            check_arity("fn:for-each-pair", args, 3)?;
+            let func = extract_function_item(&args[2], "fn:for-each-pair")?;
+            let mut result = XpathItemSet::new();
+            for (a, b) in args[0].iter().zip(args[1].iter()) {
+                let call_result = invoke_function_item(
+                    func,
+                    vec![xpath_item_set![a.clone()], xpath_item_set![b.clone()]],
+                    context,
+                )?;
+                for r in call_result.into_iter() {
+                    result.insert(r);
+                }
+            }
+            Ok(Some(result))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-sort
+        "sort" => {
+            if args.is_empty() || args.len() > 3 {
+                return Err(ExpressionApplyError::new(format!(
+                    "fn:sort expects 1-3 arguments, got {}",
+                    args.len()
+                )));
+            }
+            let mut items: Vec<XpathItem> = args[0].iter().cloned().collect();
+            // Spec: fn:sort($input, $collation?, $key?). Arg 2 is collation (ignored),
+            // arg 3 is the key function.
+            let key_func_arg = if args.len() == 3 {
+                Some(&args[2])
+            } else {
+                None
+            };
+            if let Some(key_arg) = key_func_arg {
+                let func = extract_function_item(key_arg, "fn:sort")?;
+                let mut keyed: Vec<(XpathItem, XpathItemSet)> = Vec::new();
+                for item in &items {
+                    let key = invoke_function_item(
+                        func,
+                        vec![xpath_item_set![item.clone()]],
+                        context,
+                    )?;
+                    keyed.push((item.clone(), key));
+                }
+                keyed.sort_by(|(_, ka), (_, kb)| {
+                    let a_str = if ka.is_empty() {
+                        String::new()
+                    } else {
+                        func_string(&ka[0], context.item_tree)
+                    };
+                    let b_str = if kb.is_empty() {
+                        String::new()
+                    } else {
+                        func_string(&kb[0], context.item_tree)
+                    };
+                    a_str.cmp(&b_str)
+                });
+                let result: XpathItemSet = keyed.into_iter().map(|(item, _)| item).collect();
+                Ok(Some(result))
+            } else {
+                // Sort by string value.
+                items.sort_by(|a, b| {
+                    let a_str = func_string(a, context.item_tree);
+                    let b_str = func_string(b, context.item_tree);
+                    a_str.cmp(&b_str)
+                });
+                Ok(Some(items.into_iter().collect()))
+            }
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-apply
+        "apply" => {
+            check_arity("fn:apply", args, 2)?;
+            let func = extract_function_item(&args[0], "fn:apply")?;
+            // Second argument must be an array — but since we don't have typed arrays,
+            // treat the second argument as a sequence of arguments.
+            let call_args: Vec<XpathItemSet> = args[1]
+                .iter()
+                .map(|item| xpath_item_set![item.clone()])
+                .collect();
+            invoke_function_item(func, call_args, context).map(Some)
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-function-name
+        "function-name" => {
+            check_arity("fn:function-name", args, 1)?;
+            if args[0].is_empty() {
+                return Ok(Some(XpathItemSet::new()));
+            }
+            match &args[0][0] {
+                XpathItem::Function(Function::Named { name, .. }) => {
+                    Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                        AnyAtomicType::String(name.clone())
+                    )]))
+                }
+                XpathItem::Function(_) => Ok(Some(XpathItemSet::new())),
+                _ => Err(ExpressionApplyError::new(
+                    "fn:function-name: argument is not a function".to_string(),
+                )),
+            }
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-function-arity
+        "function-arity" => {
+            check_arity("fn:function-arity", args, 1)?;
+            if args[0].is_empty() {
+                return Err(ExpressionApplyError::new(
+                    "fn:function-arity: argument is empty".to_string(),
+                ));
+            }
+            match &args[0][0] {
+                XpathItem::Function(Function::Named { arity, .. }) => {
+                    Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                        AnyAtomicType::Integer(*arity as i64)
+                    )]))
+                }
+                XpathItem::Function(Function::Inline { params, .. }) => {
+                    Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                        AnyAtomicType::Integer(params.len() as i64)
+                    )]))
+                }
+                XpathItem::Function(Function::Map { .. }) | XpathItem::Function(Function::Array { .. }) => {
+                    Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                        AnyAtomicType::Integer(1)
+                    )]))
+                }
+                _ => Err(ExpressionApplyError::new(
+                    "fn:function-arity: argument is not a function".to_string(),
+                )),
+            }
+        }
         _ => Ok(None),
     }
 }
@@ -1542,6 +1893,103 @@ fn func_number_to_words(n: i64) -> String {
         parts.push(ones[n as usize].to_string());
     }
     parts.join(" ")
+}
+
+/// Build the XPath path expression for a node (e.g., `/document-node()/html[1]/body[1]`).
+fn func_node_path(node: &XpathItemTreeNode, tree: &XpathItemTree) -> String {
+    match node {
+        XpathItemTreeNode::DocumentNode(_) => "/".to_string(),
+        _ => {
+            // Walk up to root, collecting path segments.
+            let mut segments = Vec::new();
+            let mut current = Some(node);
+            while let Some(cur) = current {
+                match cur {
+                    XpathItemTreeNode::DocumentNode(_) => break,
+                    XpathItemTreeNode::ElementNode(e) => {
+                        // Count preceding siblings with the same name for the positional predicate.
+                        let pos = if let Some(nid) = cur.node_id() {
+                            let mut count = 1;
+                            let mut prev = tree.arena.get(nid).and_then(|n| n.previous_sibling());
+                            while let Some(sib_id) = prev {
+                                if let XpathItemTreeNode::ElementNode(se) = tree.get(sib_id) {
+                                    if se.name == e.name {
+                                        count += 1;
+                                    }
+                                }
+                                prev = tree.arena.get(sib_id).and_then(|n| n.previous_sibling());
+                            }
+                            count
+                        } else {
+                            1
+                        };
+                        segments.push(format!("{}[{}]", e.name, pos));
+                    }
+                    XpathItemTreeNode::AttributeNode(a) => {
+                        segments.push(format!("@{}", a.name));
+                    }
+                    XpathItemTreeNode::TextNode(_) => {
+                        // Count preceding text siblings.
+                        let pos = if let Some(nid) = cur.node_id() {
+                            let mut count = 1;
+                            let mut prev = tree.arena.get(nid).and_then(|n| n.previous_sibling());
+                            while let Some(sib_id) = prev {
+                                if matches!(tree.get(sib_id), XpathItemTreeNode::TextNode(_)) {
+                                    count += 1;
+                                }
+                                prev = tree.arena.get(sib_id).and_then(|n| n.previous_sibling());
+                            }
+                            count
+                        } else {
+                            1
+                        };
+                        segments.push(format!("text()[{}]", pos));
+                    }
+                    XpathItemTreeNode::CommentNode(_) => {
+                        let pos = if let Some(nid) = cur.node_id() {
+                            let mut count = 1;
+                            let mut prev = tree.arena.get(nid).and_then(|n| n.previous_sibling());
+                            while let Some(sib_id) = prev {
+                                if matches!(tree.get(sib_id), XpathItemTreeNode::CommentNode(_)) {
+                                    count += 1;
+                                }
+                                prev = tree.arena.get(sib_id).and_then(|n| n.previous_sibling());
+                            }
+                            count
+                        } else {
+                            1
+                        };
+                        segments.push(format!("comment()[{}]", pos));
+                    }
+                    _ => segments.push("?".to_string()),
+                }
+                current = cur.parent(tree);
+            }
+            segments.reverse();
+            format!("/{}", segments.join("/"))
+        }
+    }
+}
+
+/// Extract a function item from an XpathItemSet, returning an error if it's not a single function.
+fn extract_function_item<'a, 'tree>(
+    items: &'a XpathItemSet<'tree>,
+    fn_name: &str,
+) -> Result<&'a Function, ExpressionApplyError> {
+    if items.len() != 1 {
+        return Err(ExpressionApplyError::new(format!(
+            "{}: function argument must be a single function item, got {} items",
+            fn_name,
+            items.len()
+        )));
+    }
+    match &items[0] {
+        XpathItem::Function(f) => Ok(f),
+        _ => Err(ExpressionApplyError::new(format!(
+            "{}: argument is not a function item",
+            fn_name
+        ))),
+    }
 }
 
 #[cfg(test)]

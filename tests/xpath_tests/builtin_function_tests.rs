@@ -822,3 +822,224 @@ fn fn_unordered() {
     let items = xpath.apply(&document).unwrap();
     assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(3)));
 }
+
+// ── Node functions ───────────────────────────────────────────────────
+
+#[test]
+fn fn_has_children_true() {
+    let document = html::parse("<html><body><p>text</p></body></html>").unwrap();
+    let xpath = xpath::parse("//body/has-children()").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true)));
+}
+
+#[test]
+fn fn_has_children_false() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    // head is auto-generated and empty.
+    let xpath = xpath::parse("has-children(//head)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Boolean(false)));
+}
+
+#[test]
+fn fn_path_element() {
+    let document = html::parse("<html><body><p>hello</p></body></html>").unwrap();
+    let xpath = xpath::parse("path(//p)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    let path_str = match &items[0] {
+        XpathItem::AnyAtomicType(AnyAtomicType::String(s)) => s.clone(),
+        _ => panic!("Expected string"),
+    };
+    assert!(path_str.contains("html"), "path should contain 'html': {}", path_str);
+    assert!(path_str.contains("body"), "path should contain 'body': {}", path_str);
+    assert!(path_str.ends_with("p[1]"), "path should end with 'p[1]': {}", path_str);
+}
+
+#[test]
+fn fn_namespace_uri_empty() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"namespace-uri(//body)"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::new()))
+    );
+}
+
+#[test]
+fn fn_lang_match() {
+    let document =
+        html::parse(r#"<html lang="en-US"><body><p>hello</p></body></html>"#).unwrap();
+    let xpath = xpath::parse(r#"//p/lang("en")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true)));
+}
+
+#[test]
+fn fn_lang_no_match() {
+    let document =
+        html::parse(r#"<html lang="en-US"><body><p>hello</p></body></html>"#).unwrap();
+    let xpath = xpath::parse(r#"//p/lang("fr")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Boolean(false)));
+}
+
+// ── Accessor functions ───────────────────────────────────────────────
+
+#[test]
+fn fn_node_name_element() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("node-name(//body)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("body")))
+    );
+}
+
+#[test]
+fn fn_nilled_false() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("nilled(//body)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Boolean(false)));
+}
+
+#[test]
+fn fn_generate_id() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("generate-id(//body)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    // Should return a non-empty string starting with N.
+    match &items[0] {
+        XpathItem::AnyAtomicType(AnyAtomicType::String(s)) => {
+            assert!(s.starts_with('N'), "generate-id should start with 'N': {}", s);
+            assert!(s.len() > 1, "generate-id should not be empty");
+        }
+        _ => panic!("Expected string"),
+    }
+}
+
+// ── Higher-order functions ───────────────────────────────────────────
+
+#[test]
+fn fn_for_each() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath =
+        xpath::parse("for-each((1, 2, 3), function($x) { $x * 2 })").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 3);
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(2)));
+    assert_eq!(items[1], XpathItem::AnyAtomicType(AnyAtomicType::Integer(4)));
+    assert_eq!(items[2], XpathItem::AnyAtomicType(AnyAtomicType::Integer(6)));
+}
+
+#[test]
+fn fn_filter() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath =
+        xpath::parse("filter((1, 2, 3, 4, 5), function($x) { $x > 3 })").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(4)));
+    assert_eq!(items[1], XpathItem::AnyAtomicType(AnyAtomicType::Integer(5)));
+}
+
+#[test]
+fn fn_fold_left() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(
+        "fold-left((1, 2, 3), 0, function($acc, $x) { $acc + $x })",
+    )
+    .unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(6)));
+}
+
+#[test]
+fn fn_fold_right() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(
+        r#"fold-right(("a", "b", "c"), "", function($x, $acc) { concat($x, $acc) })"#,
+    )
+    .unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("abc")))
+    );
+}
+
+#[test]
+fn fn_for_each_pair() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(
+        "for-each-pair((1, 2, 3), (4, 5, 6), function($a, $b) { $a + $b })",
+    )
+    .unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 3);
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(5)));
+    assert_eq!(items[1], XpathItem::AnyAtomicType(AnyAtomicType::Integer(7)));
+    assert_eq!(items[2], XpathItem::AnyAtomicType(AnyAtomicType::Integer(9)));
+}
+
+#[test]
+fn fn_sort_default() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"sort(("banana", "apple", "cherry"))"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 3);
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("apple")))
+    );
+    assert_eq!(
+        items[1],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("banana")))
+    );
+    assert_eq!(
+        items[2],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("cherry")))
+    );
+}
+
+#[test]
+fn fn_function_name() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("function-name(fn:abs#1)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("fn:abs")))
+    );
+}
+
+#[test]
+fn fn_function_arity() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("function-arity(fn:contains#2)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(2)));
+}
+
+#[test]
+fn fn_function_arity_inline() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath =
+        xpath::parse("function-arity(function($x, $y) { $x + $y })").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(2)));
+}
+
+#[test]
+fn fn_apply() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("apply(fn:concat#2, (\"hello \", \"world\"))").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("hello world")))
+    );
+}
