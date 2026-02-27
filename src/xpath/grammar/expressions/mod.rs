@@ -119,8 +119,7 @@ impl Xpath {
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         let context =
             XpathExpressionContext::new_single(item_tree, XpathItem::Node(item_tree.root()), true);
-        let mut item_set = self.eval(&context)?;
-        // TODO: Why was this sorted? item_set.sort();
+        let item_set = self.eval(&context)?;
         Ok(item_set)
     }
 
