@@ -218,7 +218,34 @@ impl PrimaryExpr {
                     entries
                 })])
             }
-            PrimaryExpr::ArrayConstructor(_) => todo!("PrimaryExpr::ArrayConstructor eval"),
+            PrimaryExpr::ArrayConstructor(ac) => {
+                let members = match ac {
+                    ArrayConstructor::SquareArrayConstructor(sq) => {
+                        // Each ExprSingle produces one member (a sequence).
+                        let mut members = Vec::new();
+                        for entry in &sq.entries {
+                            let value_set = entry.eval(context)?;
+                            let atoms = func_data(&value_set, context.item_tree);
+                            members.push(atoms);
+                        }
+                        members
+                    }
+                    ArrayConstructor::CurlyArrayConstructor(cu) => {
+                        // The enclosed expression produces a sequence; each item
+                        // becomes one member (a singleton sequence).
+                        if let Some(expr) = cu.enclosed_expr().expr() {
+                            let value_set = expr.eval(context)?;
+                            let atoms = func_data(&value_set, context.item_tree);
+                            atoms.into_iter().map(|a| vec![a]).collect()
+                        } else {
+                            Vec::new()
+                        }
+                    }
+                };
+                Ok(xpath_item_set![XpathItem::Function(Function::Array {
+                    members
+                })])
+            }
             PrimaryExpr::UnaryLookup(_) => todo!("PrimaryExpr::UnaryLookup eval"),
         }
     }

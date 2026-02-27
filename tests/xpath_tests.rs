@@ -3,6 +3,7 @@ mod test_framework;
 mod xpath_tests {
     mod apply_to_item_tests;
     mod arithmetic_expression_tests;
+    mod array_constructor_tests;
     mod arrow_operator_tests;
     mod cast_tests;
     mod castable_tests;

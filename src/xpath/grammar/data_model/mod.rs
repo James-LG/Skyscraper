@@ -113,6 +113,13 @@ pub enum Function {
         /// The map entries as (key, value-sequence) pairs.
         entries: Vec<(AnyAtomicType, Vec<AnyAtomicType>)>,
     },
+    /// An XPath 3.1 array, e.g. `[1, 2, 3]` or `array { 1, 2, 3 }`.
+    ///
+    /// Each member is a sequence of atomic values (atomized on construction).
+    Array {
+        /// The array members, each of which is a sequence of atomic values.
+        members: Vec<Vec<AnyAtomicType>>,
+    },
 }
 
 impl Display for Function {
@@ -155,6 +162,27 @@ impl Display for Function {
                     }
                 }
                 write!(f, " }}")
+            }
+            Function::Array { members } => {
+                write!(f, "[")?;
+                for (i, member) in members.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    if member.len() == 1 {
+                        write!(f, "{}", member[0])?;
+                    } else {
+                        write!(f, "(")?;
+                        for (j, v) in member.iter().enumerate() {
+                            if j > 0 {
+                                write!(f, ", ")?;
+                            }
+                            write!(f, "{}", v)?;
+                        }
+                        write!(f, ")")?;
+                    }
+                }
+                write!(f, "]")
             }
         }
     }

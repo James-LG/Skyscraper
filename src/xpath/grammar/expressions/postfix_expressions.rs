@@ -298,6 +298,45 @@ fn eval_dynamic_function_call<'tree>(
             // Key not found — return empty sequence.
             Ok(XpathItemSet::new())
         }
+        Function::Array { members } => {
+            // Arrays can be called as functions: $array(N) returns the Nth
+            // member (1-indexed). Exactly one integer argument is required.
+            if arg_values.len() != 1 {
+                return Err(ExpressionApplyError::new(format!(
+                    "Array lookup requires exactly 1 argument, got {}",
+                    arg_values.len()
+                )));
+            }
+            let idx_set = &arg_values[0];
+            if idx_set.len() != 1 {
+                return Err(ExpressionApplyError::new(format!(
+                    "Array lookup index must be a single item, got {}",
+                    idx_set.len()
+                )));
+            }
+            let idx = match &idx_set[0] {
+                XpathItem::AnyAtomicType(AnyAtomicType::Integer(n)) => *n,
+                other => {
+                    return Err(ExpressionApplyError::new(format!(
+                        "Array lookup index must be an integer, got {:?}",
+                        other
+                    )));
+                }
+            };
+            // idx >= 1 is guaranteed when the second condition is evaluated.
+            if idx < 1 || idx as usize > members.len() {
+                return Err(ExpressionApplyError::new(format!(
+                    "Array index {} out of bounds (array size: {})",
+                    idx,
+                    members.len()
+                )));
+            }
+            let member = &members[(idx - 1) as usize];
+            Ok(member
+                .iter()
+                .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                .collect())
+        }
     }
 }
 
