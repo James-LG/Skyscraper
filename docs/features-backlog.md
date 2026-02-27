@@ -205,7 +205,7 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line | Feature |
 |------|---------|
-| 147 | Variable references (`$var`) |
+| ~~147~~ | ~~Variable references (`$var`)~~ **DONE** |
 | 154 | Function item expressions (named function references, inline functions) |
 | 155 | Map constructors (`map { ... }`) |
 | 156 | Array constructors (`[ ... ]` / `array { ... }`) |
@@ -218,9 +218,9 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 | Line | Feature |
 |------|---------|
 | 76 | URI-qualified function names |
-| 147–148 | `fn:data()` for PI and comment nodes |
+| ~~147–148~~ | ~~`fn:data()` for PI and comment nodes~~ **DONE** |
 | 155 | `fn:data()` for function items |
-| 169–170 | `fn:string()` for PI and comment nodes |
+| ~~169–170~~ | ~~`fn:string()` for PI and comment nodes~~ **DONE** |
 | 182 | `fn:string()` for function items |
 
 ## XPath — Path Expression Axes
@@ -268,7 +268,7 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line | Feature |
 |------|---------|
-| 173 | `comment()` kind test |
+| ~~173~~ | ~~`comment()` kind test~~ **DONE** |
 | 174 | `namespace-node()` kind test |
 | 176 | `element()` kind test (with parameters) |
 | 190 | `schema-element()` kind test |

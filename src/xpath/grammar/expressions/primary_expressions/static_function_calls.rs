@@ -167,8 +167,10 @@ pub(crate) fn func_data<'tree>(
                 XpathItemTreeNode::ElementNode(_) => {
                     AnyAtomicType::String(node.text_content(item_tree))
                 }
-                XpathItemTreeNode::PINode(_) => todo!("func_data PINode"),
-                XpathItemTreeNode::CommentNode(_) => todo!("func_data CommentNode"),
+                XpathItemTreeNode::PINode(_) => AnyAtomicType::String(String::new()),
+                XpathItemTreeNode::CommentNode(c) => {
+                    AnyAtomicType::String(c.content.clone())
+                }
                 XpathItemTreeNode::TextNode(text) => AnyAtomicType::String(text.content.clone()),
                 &XpathItemTreeNode::AttributeNode(attribute) => {
                     AnyAtomicType::String(attribute.value.clone())
@@ -189,8 +191,8 @@ pub(crate) fn func_string<'tree>(item: &XpathItem, item_tree: &'tree XpathItemTr
         XpathItem::Node(node) => match node {
             XpathItemTreeNode::DocumentNode(_) => node.text_content(item_tree),
             XpathItemTreeNode::ElementNode(_) => node.text_content(item_tree),
-            XpathItemTreeNode::PINode(_) => todo!("func_string PINode"),
-            XpathItemTreeNode::CommentNode(_) => todo!("func_string CommentNode"),
+            XpathItemTreeNode::PINode(_) => String::new(),
+            XpathItemTreeNode::CommentNode(c) => c.content.clone(),
             XpathItemTreeNode::TextNode(text) => text.content.clone(),
             XpathItemTreeNode::AttributeNode(attribute) => attribute.value.clone(),
             XpathItemTreeNode::DoctypeNode(_) => String::new(),

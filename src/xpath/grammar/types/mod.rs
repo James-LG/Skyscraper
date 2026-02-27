@@ -170,7 +170,17 @@ impl KindTest {
 
                 Ok(filtered_nodes.collect())
             }
-            KindTest::CommentTest => todo!("KindTest::CommentTest::is_match"),
+            KindTest::CommentTest => {
+                let filtered_nodes = item_set.iter().filter_map(|item| {
+                    if let XpathItem::Node(node) = item {
+                        if matches!(node, XpathItemTreeNode::CommentNode(_)) {
+                            return Some(*node);
+                        }
+                    }
+                    None
+                });
+                Ok(filtered_nodes.collect())
+            }
             KindTest::NamespaceNodeTest => todo!("KindTest::NamespaceNodeTest::is_match"),
             KindTest::DocumentTest(x) => x.filter(item_set),
             KindTest::ElementTest(_) => todo!("KindTest::ElementTest::is_match"),
