@@ -105,6 +105,14 @@ pub enum Function {
         /// The source text of the function body expression (inside the braces).
         body_source: String,
     },
+    /// An XPath 3.1 map, e.g. `map { "x": 1, "y": 2 }`.
+    ///
+    /// Values are atomized on construction; node values are converted to their
+    /// string representations.
+    Map {
+        /// The map entries as (key, value-sequence) pairs.
+        entries: Vec<(AnyAtomicType, Vec<AnyAtomicType>)>,
+    },
 }
 
 impl Display for Function {
@@ -123,6 +131,30 @@ impl Display for Function {
                     write!(f, "${}", param)?;
                 }
                 write!(f, ") {{ {} }}", body_source)
+            }
+            Function::Map { entries } => {
+                write!(f, "map {{")?;
+                for (i, (key, values)) in entries.iter().enumerate() {
+                    if i == 0 {
+                        write!(f, " ")?;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}: ", key)?;
+                    if values.len() == 1 {
+                        write!(f, "{}", values[0])?;
+                    } else {
+                        write!(f, "(")?;
+                        for (j, v) in values.iter().enumerate() {
+                            if j > 0 {
+                                write!(f, ", ")?;
+                            }
+                            write!(f, "{}", v)?;
+                        }
+                        write!(f, ")")?;
+                    }
+                }
+                write!(f, " }}")
             }
         }
     }

@@ -207,7 +207,7 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 |------|---------|
 | ~~147~~ | ~~Variable references (`$var`)~~ **DONE** |
 | ~~154~~ | ~~Function item expressions (named function references, inline functions)~~ **DONE** |
-| 155 | Map constructors (`map { ... }`) |
+| ~~155~~ | ~~Map constructors (`map { ... }`)~~ **DONE** |
 | 156 | Array constructors (`[ ... ]` / `array { ... }`) |
 | 157 | Unary lookup (`?key`) |
 

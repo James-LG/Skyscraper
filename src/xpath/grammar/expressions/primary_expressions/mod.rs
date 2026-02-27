@@ -17,7 +17,8 @@ use crate::{
                     inline_function_expressions::inline_function_expr, literals::literal,
                     named_function_references::named_function_ref,
                     parenthesized_expressions::parenthesized_expr,
-                    static_function_calls::function_call, variable_references::var_ref,
+                    static_function_calls::{func_data, function_call},
+                    variable_references::var_ref,
                 },
             },
             recipes::{max, Res},
@@ -188,7 +189,35 @@ impl PrimaryExpr {
                     })])
                 }
             },
-            PrimaryExpr::MapConstructor(_) => todo!("PrimaryExpr::MapConstructor eval"),
+            PrimaryExpr::MapConstructor(mc) => {
+                let mut entries = Vec::new();
+                for entry in &mc.entries {
+                    // Evaluate the key — must produce a single atomic value.
+                    let key_set = entry.key.eval(context)?;
+                    let key_atoms = func_data(&key_set, context.item_tree);
+                    if key_atoms.len() != 1 {
+                        return Err(ExpressionApplyError::new(format!(
+                            "Map key must be a single atomic value, got {} values",
+                            key_atoms.len()
+                        )));
+                    }
+                    let key = key_atoms.into_iter().next().unwrap();
+                    // XPath 3.1 requires err:XQDY0137 for duplicate keys.
+                    if entries.iter().any(|(k, _)| k == &key) {
+                        return Err(ExpressionApplyError::new(format!(
+                            "Duplicate key in map constructor: {}",
+                            key
+                        )));
+                    }
+                    // Evaluate the value and atomize.
+                    let value_set = entry.value.eval(context)?;
+                    let value_atoms = func_data(&value_set, context.item_tree);
+                    entries.push((key, value_atoms));
+                }
+                Ok(xpath_item_set![XpathItem::Function(Function::Map {
+                    entries
+                })])
+            }
             PrimaryExpr::ArrayConstructor(_) => todo!("PrimaryExpr::ArrayConstructor eval"),
             PrimaryExpr::UnaryLookup(_) => todo!("PrimaryExpr::UnaryLookup eval"),
         }

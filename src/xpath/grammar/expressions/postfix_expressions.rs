@@ -262,6 +262,42 @@ fn eval_dynamic_function_call<'tree>(
             })?;
             body_expr.eval(&inner_context)
         }
+        Function::Map { entries } => {
+            // Maps can be called as functions: $map("key") returns the value
+            // for that key. Exactly one argument is required.
+            if arg_values.len() != 1 {
+                return Err(ExpressionApplyError::new(format!(
+                    "Map lookup requires exactly 1 argument, got {}",
+                    arg_values.len()
+                )));
+            }
+            let key_set = &arg_values[0];
+            if key_set.len() != 1 {
+                return Err(ExpressionApplyError::new(format!(
+                    "Map lookup key must be a single item, got {}",
+                    key_set.len()
+                )));
+            }
+            let key = match &key_set[0] {
+                XpathItem::AnyAtomicType(a) => a,
+                _ => {
+                    return Err(ExpressionApplyError::new(
+                        "Map lookup key must be an atomic value".to_string(),
+                    ));
+                }
+            };
+            // Find the entry with the matching key.
+            for (k, v) in entries {
+                if k == key {
+                    return Ok(v
+                        .iter()
+                        .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                        .collect());
+                }
+            }
+            // Key not found — return empty sequence.
+            Ok(XpathItemSet::new())
+        }
     }
 }
 
