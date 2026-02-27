@@ -14,6 +14,7 @@ mod xpath_tests {
     mod github_sample_tests;
     mod logical_expression_tests;
     mod lxml_tests;
+    mod simple_map_tests;
     mod string_concat_tests;
     mod treat_tests;
     mod type_matching_tests;

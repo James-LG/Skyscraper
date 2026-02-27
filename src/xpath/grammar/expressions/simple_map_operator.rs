@@ -49,15 +49,28 @@ impl SimpleMapExpr {
         context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         // Evaluate the first expression.
-        let result = self.expr.eval(context)?;
+        let mut result = self.expr.eval(context)?;
 
-        // If there's only one parameter, return it's eval.
+        // If there are no map items, return the base expression's eval.
         if self.items.is_empty() {
             return Ok(result);
         }
 
-        // Otherwise, do the operation.
-        todo!("SimpleMapExpr::eval operator")
+        // For each map item (E1 ! E2 ! E3 ...):
+        // evaluate the RHS for each item in the LHS result,
+        // using that item as the context item.
+        for map_expr in &self.items {
+            let mut next_result = XpathItemSet::new();
+            for item in &result {
+                let inner_context =
+                    context.new_single_with_variables(item.clone(), false);
+                let inner_result = map_expr.eval(&inner_context)?;
+                next_result.extend(inner_result);
+            }
+            result = next_result;
+        }
+
+        Ok(result)
     }
 }
 

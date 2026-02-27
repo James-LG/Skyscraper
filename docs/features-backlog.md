@@ -169,7 +169,7 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line | Feature |
 |------|---------|
-| 60 | Simple map operator (`!`) |
+| ~~60~~ | ~~Simple map operator (`!`)~~ **DONE** |
 
 ### Sequence Expressions
 
