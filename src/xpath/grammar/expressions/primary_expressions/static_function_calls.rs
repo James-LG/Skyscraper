@@ -7,8 +7,8 @@ use nom::error::context;
 use crate::{
     xpath::{
         grammar::{
-            data_model::{AnyAtomicType, XpathItem},
-            expressions::common::{argument_list, ArgumentList},
+            data_model::{AnyAtomicType, Function, XpathItem},
+            expressions::common::{argument_list, Argument, ArgumentList},
             recipes::Res,
             types::{eq_name, EQName},
             whitespace_recipes::ws,
@@ -65,6 +65,41 @@ impl FunctionCall {
         };
         if is_fn_root {
             return Ok(xpath_item_set![XpathItem::Node(context.item_tree.root())]);
+        }
+
+        // Check for partial function application (argument placeholders).
+        let has_placeholder = self
+            .argument_list
+            .0
+            .iter()
+            .any(|a| matches!(a, Argument::ArgumentPlaceHolder));
+
+        if has_placeholder {
+            // Build an inline function that captures the concrete arguments
+            // and leaves placeholders as parameters.
+            let mut params = Vec::new();
+            let mut body_args = Vec::new();
+            let mut placeholder_idx = 0u32;
+
+            for arg in &self.argument_list.0 {
+                match arg {
+                    Argument::ArgumentPlaceHolder => {
+                        let param_name = format!("__placeholder_{}", placeholder_idx);
+                        body_args.push(format!("${}", param_name));
+                        params.push(param_name);
+                        placeholder_idx += 1;
+                    }
+                    Argument::ExprSingle(expr) => {
+                        body_args.push(format!("{}", expr));
+                    }
+                }
+            }
+
+            let body_source = format!("{}({})", self.name, body_args.join(", "));
+            return Ok(xpath_item_set![XpathItem::Function(Function::Inline {
+                params,
+                body_source,
+            })]);
         }
 
         // Eagerly evaluate arguments, then dispatch through the shared table.
