@@ -554,7 +554,24 @@ impl HtmlParser {
                 self.insert_character(vec![c])?;
             }
             HtmlToken::EndOfFile => {
-                todo!()
+                // Parse error.
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "unexpected end-of-file in text insertion mode",
+                )))?;
+
+                // If the current node is a script element, then set its
+                // "already started" flag. (Scripting is not supported.)
+
+                // Pop the current node off the stack of open elements.
+                self.open_elements.pop().expect("open elements is empty");
+
+                // Switch the insertion mode to the original insertion mode.
+                self.insertion_mode = self
+                    .original_insertion_mode
+                    .expect("original insertion mode is None");
+
+                // Reprocess the token.
+                self.token_emitted(HtmlToken::EndOfFile)?;
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "script" => {
                 let script = self.current_node_as_element_result()?;

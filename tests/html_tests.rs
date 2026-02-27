@@ -14,5 +14,6 @@ mod html_tests {
     mod html_in_table_tests;
     mod html_initial_mode_tests;
     mod html_large_tests;
+    mod html_text_mode_tests;
     mod html_tokenizer_tests;
 }

@@ -181,7 +181,7 @@ The tokenizer implements the WHATWG state machine including named character refe
 
 | Feature | Gap | Location |
 |---------|-----|----------|
-| Text insertion mode — EOF handling | `todo!()` — should parse error and switch to original insertion mode | `src/html/grammar/insertion_mode_impls/mod.rs:557` |
+| ~~Text insertion mode — EOF handling~~ | ~~Done~~ — parse error, pop node, switch to original mode, reprocess EOF | `src/html/grammar/insertion_mode_impls/mod.rs:556-573` |
 | AfterBody — Comment token | `todo!()` — should insert as last child of `<html>` | `src/html/grammar/insertion_mode_impls/mod.rs:700` |
 | AfterBody — DocType token | `todo!()` — should be a parse error (ignore) | `src/html/grammar/insertion_mode_impls/mod.rs:703` |
 | AfterAfterBody — Comment token | `todo!()` — should insert as last child of Document | `src/html/grammar/insertion_mode_impls/mod.rs:739` |
