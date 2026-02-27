@@ -3,6 +3,22 @@ use skyscraper::{
     xpath::{self, grammar::data_model::XpathItem},
 };
 
+// ── parent:: of attribute ────────────────────────────────────────────
+
+/// `@class/..` should return the parent element of the attribute.
+#[test]
+fn parent_of_attribute_returns_element() {
+    let text = r#"<html><body><div class="main">hello</div></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("//div/@class/..").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    let node = items[0].extract_as_node();
+    assert_eq!(node.extract_as_element_node().name, "div");
+}
+
 // ── ancestor:: axis ──────────────────────────────────────────────────
 
 /// `ancestor::*` returns all ancestors of the context node.

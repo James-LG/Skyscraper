@@ -51,8 +51,8 @@ All 13 axes parse and evaluate:
 
 | Feature | Gap | Location |
 |---------|-----|----------|
-| `namespace::` axis | Parses, but returns error at eval time ("not supported for HTML documents") | `src/xpath/grammar/expressions/path_expressions/steps/forward_step.rs:97` |
-| `parent::` on attributes | Attribute nodes don't link back to their parent element | `src/xpath/grammar/expressions/path_expressions/steps/reverse_step.rs:116` |
+| `namespace::` axis | Parses, but returns error at eval time ("not supported for HTML documents") — intentional for HTML-only processor | `src/xpath/grammar/expressions/path_expressions/steps/forward_step.rs:97` |
+| ~~`parent::` on attributes~~ | ~~Done~~ — Already works via arena tree; stale TODO removed, test added | `src/xpath/grammar/expressions/path_expressions/steps/reverse_step.rs:115` |
 
 ---
 
