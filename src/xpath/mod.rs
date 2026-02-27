@@ -313,6 +313,25 @@ impl<'tree> XpathExpressionContext<'tree> {
     pub fn get_variable(&self, name: &str) -> Option<&XpathItemSet<'tree>> {
         self.variables.get(name)
     }
+
+    /// Create a new context with multiple additional variable bindings.
+    pub fn with_variables_iter(
+        &self,
+        bindings: impl IntoIterator<Item = (String, XpathItemSet<'tree>)>,
+    ) -> Self {
+        let mut variables = self.variables.clone();
+        for (name, value) in bindings {
+            variables.insert(name, value);
+        }
+        Self {
+            item_tree: self.item_tree,
+            item: self.item.clone(),
+            position: self.position,
+            size: self.size,
+            is_root_level: self.is_root_level,
+            variables,
+        }
+    }
 }
 
 #[cfg(test)]

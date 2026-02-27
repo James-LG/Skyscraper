@@ -7,7 +7,7 @@ use nom::{branch::alt, character::complete::char, error::context};
 use crate::{
     xpath::{
         grammar::{
-            data_model::XpathItem,
+            data_model::{Function, XpathItem},
             expressions::{
                 maps_and_arrays::{
                     arrays::array_constructor, lookup_operator::unary_lookup::unary_lookup,
@@ -160,7 +160,34 @@ impl PrimaryExpr {
                 Ok(xpath_item_set![context.item.clone()])
             }
             PrimaryExpr::FunctionCall(expr) => expr.eval(context),
-            PrimaryExpr::FunctionItemExpr(_) => todo!("PrimaryExpr::FunctionItemExpr eval"),
+            PrimaryExpr::FunctionItemExpr(expr) => match expr {
+                FunctionItemExpr::NamedFunctionRef(named_ref) => {
+                    Ok(xpath_item_set![XpathItem::Function(Function::Named {
+                        name: named_ref.name.to_string(),
+                        arity: named_ref.number,
+                    })])
+                }
+                FunctionItemExpr::InlineFunctionExpr(inline) => {
+                    let params = if let Some(param_list) = &inline.param_list {
+                        param_list
+                            .params()
+                            .iter()
+                            .map(|p| p.name.to_string())
+                            .collect()
+                    } else {
+                        Vec::new()
+                    };
+                    let body_source = inline
+                        .body
+                        .expr()
+                        .map(|e| e.to_string())
+                        .unwrap_or_default();
+                    Ok(xpath_item_set![XpathItem::Function(Function::Inline {
+                        params,
+                        body_source,
+                    })])
+                }
+            },
             PrimaryExpr::MapConstructor(_) => todo!("PrimaryExpr::MapConstructor eval"),
             PrimaryExpr::ArrayConstructor(_) => todo!("PrimaryExpr::ArrayConstructor eval"),
             PrimaryExpr::UnaryLookup(_) => todo!("PrimaryExpr::UnaryLookup eval"),
@@ -194,7 +221,10 @@ pub enum FunctionItemExpr {
 }
 
 impl Display for FunctionItemExpr {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!("fmt FunctionItemExpr")
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FunctionItemExpr::NamedFunctionRef(x) => write!(f, "{}", x),
+            FunctionItemExpr::InlineFunctionExpr(x) => write!(f, "{}", x),
+        }
     }
 }

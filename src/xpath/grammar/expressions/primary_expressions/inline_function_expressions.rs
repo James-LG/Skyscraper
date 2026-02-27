@@ -18,6 +18,8 @@ use crate::xpath::grammar::{
 
 use super::enclosed_expressions::{enclosed_expr, EnclosedExpr};
 
+use crate::xpath::grammar::expressions::Expr;
+
 pub fn inline_function_expr(input: &str) -> Res<&str, InlineFunctionExpr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-InlineFunctionExpr
 
@@ -81,6 +83,13 @@ pub fn param_list(input: &str) -> Res<&str, ParamList> {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct ParamList(Vec<Param>);
+
+impl ParamList {
+    /// Get the parameters in this list.
+    pub fn params(&self) -> &[Param] {
+        &self.0
+    }
+}
 
 impl Display for ParamList {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -152,6 +161,13 @@ pub fn function_body(input: &str) -> Res<&str, FunctionBody> {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct FunctionBody(pub EnclosedExpr);
+
+impl FunctionBody {
+    /// Get the inner expression, if any.
+    pub fn expr(&self) -> Option<&Expr> {
+        self.0.expr()
+    }
+}
 
 impl Display for FunctionBody {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

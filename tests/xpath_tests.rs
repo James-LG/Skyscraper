@@ -10,6 +10,7 @@ mod xpath_tests {
     mod comparison_expression_tests;
     mod contains_tests;
     mod for_expression_tests;
+    mod function_item_tests;
     mod let_expression_tests;
     mod quantified_expression_tests;
     mod if_expression_tests;

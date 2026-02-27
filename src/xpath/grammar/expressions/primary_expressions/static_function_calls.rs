@@ -177,7 +177,11 @@ pub(crate) fn func_data<'tree>(
                 }
                 XpathItemTreeNode::DoctypeNode(_) => AnyAtomicType::String(String::new()),
             },
-            XpathItem::Function(_) => todo!("func_data Function"),
+            XpathItem::Function(_) => {
+                // TODO: Per XPath 3.1, this should raise err:FOTY0013.
+                // Returning a placeholder because func_data's signature doesn't support errors.
+                AnyAtomicType::String(String::from("[function item]"))
+            }
             XpathItem::AnyAtomicType(atomic) => atomic.clone(),
         }
     }
@@ -204,7 +208,12 @@ pub(crate) fn func_string<'tree>(item: &XpathItem, item_tree: &'tree XpathItemTr
             AnyAtomicType::Double(n) => n.to_string(),
             AnyAtomicType::String(s) => s.clone(),
         },
-        XpathItem::Function(_) => todo!("func_string Function"),
+        XpathItem::Function(_) => {
+            // TODO: Per XPath 3.1, fn:string is not defined for function items
+            // and should raise an error. Returning placeholder because the
+            // signature doesn't support errors.
+            String::from("[function item]")
+        }
     }
 }
 

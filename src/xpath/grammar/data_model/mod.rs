@@ -82,14 +82,49 @@ impl Display for AnyAtomicType {
 }
 
 /// <https://www.w3.org/TR/xpath-datamodel-31/#dt-function-item>
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash)]
-pub struct Function {
-    // TODO
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+pub enum Function {
+    /// A reference to a named function, e.g. `fn:abs#1`.
+    Named {
+        /// The function name as a string (e.g. "fn:abs").
+        name: String,
+        /// The arity of the function.
+        arity: u32,
+    },
+    /// An inline function expression, e.g. `function($x) { $x + 1 }`.
+    ///
+    /// The body is stored as source text rather than a parsed AST to avoid
+    /// circular module dependencies (`data_model` cannot import `expressions`).
+    /// It is re-parsed via `expr()` each time the function is called.
+    ///
+    /// Note: inline functions do not currently capture closure variables from the
+    /// definition scope. They evaluate using the caller's variable context.
+    Inline {
+        /// The parameter names.
+        params: Vec<String>,
+        /// The source text of the function body expression (inside the braces).
+        body_source: String,
+    },
 }
 
 impl Display for Function {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!("Function::fmt")
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Function::Named { name, arity } => write!(f, "{}#{}", name, arity),
+            Function::Inline {
+                params,
+                body_source,
+            } => {
+                write!(f, "function(")?;
+                for (i, param) in params.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "${}", param)?;
+                }
+                write!(f, ") {{ {} }}", body_source)
+            }
+        }
     }
 }
 

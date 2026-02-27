@@ -6,7 +6,7 @@ use nom::{branch::alt, character::complete::char, error::context, multi::many0, 
 
 use crate::xpath::{
     grammar::{
-        data_model::{AnyAtomicType, XpathItem},
+        data_model::{AnyAtomicType, Function, XpathItem},
         expressions::{
             common::argument_list, maps_and_arrays::lookup_operator::postfix_lookup::lookup,
             primary_expressions::primary_expr,
@@ -19,8 +19,13 @@ use crate::xpath::{
 
 use super::{
     common::ArgumentList, expr, maps_and_arrays::lookup_operator::postfix_lookup::Lookup,
-    primary_expressions::PrimaryExpr, Expr,
+    primary_expressions::{
+        static_function_calls::dispatch_function, PrimaryExpr,
+    },
+    Expr,
 };
+
+use crate::xpath::grammar::types::eq_name;
 
 pub fn postfix_expr(input: &str) -> Res<&str, PostfixExpr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-PostfixExpr
@@ -102,12 +107,8 @@ impl PostfixExpr {
                     }
                     result = filtered;
                 }
-                PostfixExprItem::ArgumentList(_) => {
-                    return Err(ExpressionApplyError {
-                        msg: String::from(
-                            "PostfixExpr: dynamic function calls not yet supported",
-                        ),
-                    });
+                PostfixExprItem::ArgumentList(args) => {
+                    result = eval_dynamic_function_call(&result, args, context)?;
                 }
                 PostfixExprItem::Lookup(_) => {
                     return Err(ExpressionApplyError {
@@ -182,6 +183,85 @@ impl Predicate {
         }
 
         Ok(res.boolean())
+    }
+}
+
+/// Evaluate a dynamic function call: the result set should contain a single
+/// function item, and the argument list provides the call arguments.
+fn eval_dynamic_function_call<'tree>(
+    result: &XpathItemSet<'tree>,
+    args: &ArgumentList,
+    context: &XpathExpressionContext<'tree>,
+) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
+    if result.len() != 1 {
+        return Err(ExpressionApplyError::new(format!(
+            "Dynamic function call requires exactly one item, got {}",
+            result.len()
+        )));
+    }
+
+    let func = match &result[0] {
+        XpathItem::Function(f) => f,
+        other => {
+            return Err(ExpressionApplyError::new(format!(
+                "Dynamic function call requires a function item, got {:?}",
+                other
+            )));
+        }
+    };
+
+    // Evaluate the call arguments.
+    let mut arg_values = Vec::new();
+    for arg in &args.0 {
+        arg_values.push(arg.eval(context)?);
+    }
+
+    match func {
+        Function::Named { name, arity } => {
+            if arg_values.len() as u32 != *arity {
+                return Err(ExpressionApplyError::new(format!(
+                    "Function {}#{} expects {} arguments, got {}",
+                    name,
+                    arity,
+                    arity,
+                    arg_values.len()
+                )));
+            }
+            // Re-parse the name to an EQName and dispatch.
+            let (_, parsed_name) = eq_name(name).map_err(|e| {
+                ExpressionApplyError::new(format!(
+                    "Failed to parse function name '{}': {}",
+                    name, e
+                ))
+            })?;
+            dispatch_function(&parsed_name, &arg_values, context)
+        }
+        Function::Inline {
+            params,
+            body_source,
+        } => {
+            if arg_values.len() != params.len() {
+                return Err(ExpressionApplyError::new(format!(
+                    "Inline function expects {} arguments, got {}",
+                    params.len(),
+                    arg_values.len()
+                )));
+            }
+            // Re-parse the body source and evaluate.
+            if body_source.is_empty() {
+                return Ok(XpathItemSet::new());
+            }
+            // Bind parameters to argument values.
+            let bindings = params.iter().cloned().zip(arg_values);
+            let inner_context = context.with_variables_iter(bindings);
+            let (_, body_expr) = expr(body_source).map_err(|e| {
+                ExpressionApplyError::new(format!(
+                    "Failed to parse inline function body '{}': {}",
+                    body_source, e
+                ))
+            })?;
+            body_expr.eval(&inner_context)
+        }
     }
 }
 

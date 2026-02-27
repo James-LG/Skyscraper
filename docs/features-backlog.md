@@ -206,7 +206,7 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 | Line | Feature |
 |------|---------|
 | ~~147~~ | ~~Variable references (`$var`)~~ **DONE** |
-| 154 | Function item expressions (named function references, inline functions) |
+| ~~154~~ | ~~Function item expressions (named function references, inline functions)~~ **DONE** |
 | 155 | Map constructors (`map { ... }`) |
 | 156 | Array constructors (`[ ... ]` / `array { ... }`) |
 | 157 | Unary lookup (`?key`) |
@@ -219,9 +219,9 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 |------|---------|
 | 76 | URI-qualified function names |
 | ~~147–148~~ | ~~`fn:data()` for PI and comment nodes~~ **DONE** |
-| 155 | `fn:data()` for function items |
+| ~~155~~ | ~~`fn:data()` for function items~~ **DONE** |
 | ~~169–170~~ | ~~`fn:string()` for PI and comment nodes~~ **DONE** |
-| 182 | `fn:string()` for function items |
+| ~~182~~ | ~~`fn:string()` for function items~~ **DONE** |
 
 ## XPath — Path Expression Axes
 
@@ -234,7 +234,7 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 | ~~90~~ | ~~`self::` axis~~ **DONE** |
 | ~~92~~ | ~~`following-sibling::` axis~~ **DONE** |
 | ~~93~~ | ~~`following::` axis~~ **DONE** |
-| 94 | `namespace::` axis (returns error for HTML) |
+| ~~94~~ | ~~`namespace::` axis (returns error for HTML)~~ **DONE** |
 
 ### Reverse Axes
 
