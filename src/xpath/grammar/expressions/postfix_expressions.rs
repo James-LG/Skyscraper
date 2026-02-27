@@ -78,13 +78,48 @@ impl PostfixExpr {
         &self,
         context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
-        let res = self.expr.eval(context)?;
+        let mut result = self.expr.eval(context)?;
 
-        if !self.items.is_empty() {
-            todo!("PostfixExpr eval items")
+        // If there are no postfix items, return the primary expression's eval.
+        if self.items.is_empty() {
+            return Ok(result);
         }
 
-        Ok(res)
+        // Apply each postfix item in sequence.
+        for item in &self.items {
+            match item {
+                PostfixExprItem::Predicate(predicate) => {
+                    let mut filtered = XpathItemSet::new();
+                    for (i, _) in result.iter().enumerate() {
+                        let predicate_context = context.new_with_variables(
+                            &result,
+                            i + 1,
+                            false,
+                        );
+                        if predicate.is_match(&predicate_context)? {
+                            filtered.insert(result[i].clone());
+                        }
+                    }
+                    result = filtered;
+                }
+                PostfixExprItem::ArgumentList(_) => {
+                    return Err(ExpressionApplyError {
+                        msg: String::from(
+                            "PostfixExpr: dynamic function calls not yet supported",
+                        ),
+                    });
+                }
+                PostfixExprItem::Lookup(_) => {
+                    return Err(ExpressionApplyError {
+                        msg: String::from(
+                            "PostfixExpr: postfix lookup not yet supported",
+                        ),
+                    });
+                }
+            }
+        }
+
+        Ok(result)
     }
 }
 

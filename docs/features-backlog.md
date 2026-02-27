@@ -197,7 +197,7 @@ Missing features noted by `todo!()` stubs in the codebase. Organized by module.
 
 | Line | Feature |
 |------|---------|
-| 84 | Postfix expression evaluation (predicate/argument chains on primary expressions) |
+| ~~84~~ | ~~Postfix expression evaluation (predicate/argument chains on primary expressions)~~ **DONE** |
 
 ### Primary Expressions
 
