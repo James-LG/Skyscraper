@@ -871,6 +871,253 @@ fn dispatch_by_local_name<'tree>(
         "max" => func_min_max(args, context, false).map(Some),
         // https://www.w3.org/TR/xpath-functions-31/#func-min
         "min" => func_min_max(args, context, true).map(Some),
+        // Additional numeric functions
+        // https://www.w3.org/TR/xpath-functions-31/#func-round-half-to-even
+        "round-half-to-even" => {
+            if args.is_empty() || args.len() > 2 {
+                return Err(ExpressionApplyError::new(format!(
+                    "fn:round-half-to-even expects 1 or 2 arguments, got {}",
+                    args.len()
+                )));
+            }
+            let precision = if args.len() == 2 {
+                extract_double(&args[1], context.item_tree)? as i32
+            } else {
+                0
+            };
+            let factor = 10f64.powi(precision);
+            func_numeric_unary(
+                &args[0],
+                |n| {
+                    let v = (n as f64 * factor).round_ties_even() / factor;
+                    v as i64
+                },
+                |f| {
+                    let v = (f as f64 * factor as f64).round_ties_even() / factor as f64;
+                    v as f32
+                },
+                |d| (d * factor as f64).round_ties_even() / factor as f64,
+            )
+            .map(Some)
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-format-integer
+        "format-integer" => {
+            check_arity("fn:format-integer", args, 2)?;
+            let n = extract_double(&args[0], context.item_tree)? as i64;
+            let picture = if args[1].is_empty() {
+                String::new()
+            } else {
+                func_string(&args[1][0], context.item_tree)
+            };
+            let result = match picture.as_str() {
+                "1" => n.to_string(),
+                "01" => format!("{:02}", n),
+                "001" => format!("{:03}", n),
+                "a" => {
+                    if n >= 1 && n <= 26 {
+                        String::from((b'a' + (n - 1) as u8) as char)
+                    } else {
+                        n.to_string()
+                    }
+                }
+                "A" => {
+                    if n >= 1 && n <= 26 {
+                        String::from((b'A' + (n - 1) as u8) as char)
+                    } else {
+                        n.to_string()
+                    }
+                }
+                "i" => func_to_roman(n).map(|r| r.to_lowercase()).unwrap_or_else(|| n.to_string()),
+                "I" => func_to_roman(n).unwrap_or_else(|| n.to_string()),
+                "w" => func_number_to_words(n).to_lowercase(),
+                "W" => func_number_to_words(n).to_uppercase(),
+                _ => n.to_string(),
+            };
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::String(result)
+            )]))
+        }
+        // Additional string functions
+        // https://www.w3.org/TR/xpath-functions-31/#func-compare
+        "compare" => {
+            check_arity("fn:compare", args, 2)?;
+            if args[0].is_empty() || args[1].is_empty() {
+                return Ok(Some(XpathItemSet::new()));
+            }
+            let a = func_string(&args[0][0], context.item_tree);
+            let b = func_string(&args[1][0], context.item_tree);
+            let result = match a.cmp(&b) {
+                std::cmp::Ordering::Less => -1,
+                std::cmp::Ordering::Equal => 0,
+                std::cmp::Ordering::Greater => 1,
+            };
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::Integer(result)
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-codepoint-equal
+        "codepoint-equal" => {
+            check_arity("fn:codepoint-equal", args, 2)?;
+            if args[0].is_empty() || args[1].is_empty() {
+                return Ok(Some(XpathItemSet::new()));
+            }
+            let a = func_string(&args[0][0], context.item_tree);
+            let b = func_string(&args[1][0], context.item_tree);
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::Boolean(a == b)
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-codepoints-to-string
+        "codepoints-to-string" => {
+            check_arity("fn:codepoints-to-string", args, 1)?;
+            let mut result = String::new();
+            for item in args[0].iter() {
+                let atoms = func_data(
+                    &xpath_item_set![item.clone()],
+                    context.item_tree,
+                );
+                for atom in atoms {
+                    match atom {
+                        AnyAtomicType::Integer(n) => {
+                            let ch = char::from_u32(n as u32).ok_or_else(|| {
+                                ExpressionApplyError::new(format!(
+                                    "fn:codepoints-to-string: invalid codepoint {}",
+                                    n
+                                ))
+                            })?;
+                            result.push(ch);
+                        }
+                        _ => {
+                            return Err(ExpressionApplyError::new(
+                                "fn:codepoints-to-string: expected integer codepoints"
+                                    .to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::String(result)
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-string-to-codepoints
+        "string-to-codepoints" => {
+            check_arity("fn:string-to-codepoints", args, 1)?;
+            if args[0].is_empty() {
+                return Ok(Some(XpathItemSet::new()));
+            }
+            let s = func_string(&args[0][0], context.item_tree);
+            if s.is_empty() {
+                return Ok(Some(XpathItemSet::new()));
+            }
+            let codepoints: XpathItemSet = s
+                .chars()
+                .map(|c| XpathItem::AnyAtomicType(AnyAtomicType::Integer(c as i64)))
+                .collect();
+            Ok(Some(codepoints))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-encode-for-uri
+        "encode-for-uri" => {
+            check_arity("fn:encode-for-uri", args, 1)?;
+            let s = if args[0].is_empty() {
+                String::new()
+            } else {
+                func_string(&args[0][0], context.item_tree)
+            };
+            let encoded: String = s
+                .chars()
+                .map(|c| {
+                    if c.is_ascii_alphanumeric() || "-._~".contains(c) {
+                        c.to_string()
+                    } else {
+                        let mut buf = [0u8; 4];
+                        c.encode_utf8(&mut buf);
+                        buf[..c.len_utf8()]
+                            .iter()
+                            .map(|b| format!("%{:02X}", b))
+                            .collect()
+                    }
+                })
+                .collect();
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::String(encoded)
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-iri-to-uri
+        "iri-to-uri" => {
+            check_arity("fn:iri-to-uri", args, 1)?;
+            let s = if args[0].is_empty() {
+                String::new()
+            } else {
+                func_string(&args[0][0], context.item_tree)
+            };
+            // Encode only non-ASCII and disallowed URI characters; preserve
+            // characters that are valid in a URI (including %, /, ?, #, etc.).
+            let encoded: String = s
+                .chars()
+                .map(|c| {
+                    if c.is_ascii() && !c.is_ascii_control() && c != ' ' {
+                        c.to_string()
+                    } else {
+                        let mut buf = [0u8; 4];
+                        c.encode_utf8(&mut buf);
+                        buf[..c.len_utf8()]
+                            .iter()
+                            .map(|b| format!("%{:02X}", b))
+                            .collect()
+                    }
+                })
+                .collect();
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::String(encoded)
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-escape-html-uri
+        "escape-html-uri" => {
+            check_arity("fn:escape-html-uri", args, 1)?;
+            let s = if args[0].is_empty() {
+                String::new()
+            } else {
+                func_string(&args[0][0], context.item_tree)
+            };
+            // Escape characters outside the printable ASCII range (0x20-0x7E).
+            let encoded: String = s
+                .chars()
+                .map(|c| {
+                    if c as u32 >= 0x20 && c as u32 <= 0x7E {
+                        c.to_string()
+                    } else {
+                        let mut buf = [0u8; 4];
+                        c.encode_utf8(&mut buf);
+                        buf[..c.len_utf8()]
+                            .iter()
+                            .map(|b| format!("%{:02X}", b))
+                            .collect()
+                    }
+                })
+                .collect();
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::String(encoded)
+            )]))
+        }
+        // Additional sequence functions
+        // https://www.w3.org/TR/xpath-functions-31/#func-deep-equal
+        "deep-equal" => {
+            check_arity("fn:deep-equal", args, 2)?;
+            let equal = args[0].len() == args[1].len()
+                && args[0]
+                    .iter()
+                    .zip(args[1].iter())
+                    .all(|(a, b)| a == b);
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::Boolean(equal)
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-unordered
+        "unordered" => {
+            check_arity("fn:unordered", args, 1)?;
+            Ok(Some(args[0].clone()))
+        }
         _ => Ok(None),
     }
 }
@@ -1208,6 +1455,93 @@ fn func_min_max<'tree>(
             AnyAtomicType::Double(ordered_float::OrderedFloat(best))
         )])
     }
+}
+
+/// Convert a positive integer to a Roman numeral string. Returns None for values outside 1-3999.
+fn func_to_roman(n: i64) -> Option<String> {
+    if n < 1 || n > 3999 {
+        return None;
+    }
+    let mut n = n as usize;
+    let table = [
+        (1000, "M"),
+        (900, "CM"),
+        (500, "D"),
+        (400, "CD"),
+        (100, "C"),
+        (90, "XC"),
+        (50, "L"),
+        (40, "XL"),
+        (10, "X"),
+        (9, "IX"),
+        (5, "V"),
+        (4, "IV"),
+        (1, "I"),
+    ];
+    let mut result = String::new();
+    for &(value, numeral) in &table {
+        while n >= value {
+            result.push_str(numeral);
+            n -= value;
+        }
+    }
+    Some(result)
+}
+
+/// Convert an integer to English words (simplified). Falls back to digits for
+/// values outside the supported range.
+fn func_number_to_words(n: i64) -> String {
+    if n == 0 {
+        return "Zero".to_string();
+    }
+    let negative = n < 0;
+    let n = n.unsigned_abs();
+    // Fall back to digits for values too large for word representation.
+    if n >= 20_000 {
+        return if negative {
+            format!("Minus {}", n)
+        } else {
+            n.to_string()
+        };
+    }
+    let ones = [
+        "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
+        "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen",
+        "Eighteen", "Nineteen",
+    ];
+    let tens = [
+        "", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety",
+    ];
+    let mut parts = Vec::new();
+    if negative {
+        parts.push("Minus".to_string());
+    }
+    if n >= 1000 {
+        let thousands = n / 1000;
+        parts.push(format!("{} Thousand", ones[thousands as usize]));
+        let remainder = n % 1000;
+        if remainder > 0 {
+            parts.push(func_number_to_words(remainder as i64));
+        }
+    } else if n >= 100 {
+        let hundreds = n / 100;
+        parts.push(format!("{} Hundred", ones[hundreds as usize]));
+        let remainder = n % 100;
+        if remainder > 0 {
+            parts.push(func_number_to_words(remainder as i64));
+        }
+    } else if n >= 20 {
+        let t = n / 10;
+        let o = n % 10;
+        if o > 0 {
+            parts.push(format!("{} {}", tens[t as usize], ones[o as usize]));
+        } else {
+            parts.push(tens[t as usize].to_string());
+        }
+    } else {
+        parts.push(ones[n as usize].to_string());
+    }
+    parts.join(" ")
 }
 
 #[cfg(test)]
