@@ -1378,6 +1378,125 @@ fn fn_document_uri() {
     );
 }
 
+// ── ID functions ─────────────────────────────────────────────────────
+
+#[test]
+fn fn_id_single() {
+    let document =
+        html::parse(r#"<html><body><div id="myid">hello</div></body></html>"#).unwrap();
+    let xpath = xpath::parse(r#"id("myid")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    let node = items[0].extract_as_node();
+    assert_eq!(node.text_content(&document), "hello");
+}
+
+#[test]
+fn fn_id_multiple_space_separated() {
+    let document = html::parse(
+        r#"<html><body><div id="a">1</div><div id="b">2</div><div id="c">3</div></body></html>"#,
+    )
+    .unwrap();
+    let xpath = xpath::parse(r#"id("a c")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0].extract_as_node().text_content(&document), "1");
+    assert_eq!(items[1].extract_as_node().text_content(&document), "3");
+}
+
+#[test]
+fn fn_id_multiple_args() {
+    let document = html::parse(
+        r#"<html><body><div id="a">1</div><div id="b">2</div></body></html>"#,
+    )
+    .unwrap();
+    let xpath = xpath::parse(r#"id(("a", "b"))"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0].extract_as_node().text_content(&document), "1");
+    assert_eq!(items[1].extract_as_node().text_content(&document), "2");
+}
+
+#[test]
+fn fn_id_not_found() {
+    let document = html::parse(r#"<html><body><div id="x">hi</div></body></html>"#).unwrap();
+    let xpath = xpath::parse(r#"id("nonexistent")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 0);
+}
+
+#[test]
+fn fn_id_document_order() {
+    let document = html::parse(
+        r#"<html><body><div id="z">first</div><div id="a">second</div></body></html>"#,
+    )
+    .unwrap();
+    // Pass IDs in reverse of document order.
+    let xpath = xpath::parse(r#"id("a z")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 2);
+    // Results should be in document order regardless of arg order.
+    assert_eq!(items[0].extract_as_node().text_content(&document), "first");
+    assert_eq!(items[1].extract_as_node().text_content(&document), "second");
+}
+
+#[test]
+fn fn_id_duplicate_ids() {
+    let document = html::parse(
+        r#"<html><body><div id="dup">first</div><div id="dup">second</div></body></html>"#,
+    )
+    .unwrap();
+    let xpath = xpath::parse(r#"id("dup")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    // Non-validating processor: returns all elements with matching id attribute.
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0].extract_as_node().text_content(&document), "first");
+    assert_eq!(items[1].extract_as_node().text_content(&document), "second");
+}
+
+#[test]
+fn fn_id_whitespace_handling() {
+    let document = html::parse(
+        r#"<html><body><div id="x">found</div></body></html>"#,
+    )
+    .unwrap();
+    let xpath = xpath::parse(r#"id("  x  ")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].extract_as_node().text_content(&document), "found");
+}
+
+#[test]
+fn fn_element_with_id() {
+    let document =
+        html::parse(r#"<html><body><div id="eid">target</div></body></html>"#).unwrap();
+    let xpath = xpath::parse(r#"element-with-id("eid")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].extract_as_node().text_content(&document), "target");
+}
+
+#[test]
+fn fn_idref_returns_empty() {
+    let document =
+        html::parse(r#"<html><body><div id="x">hello</div></body></html>"#).unwrap();
+    let xpath = xpath::parse(r#"idref("x")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 0);
+}
+
+#[test]
+fn fn_id_with_node_arg() {
+    let document =
+        html::parse(r#"<html><body><div id="n">found</div></body></html>"#).unwrap();
+    // 2-arg form: $node determines target document. Since we only have one
+    // document, behavior is identical to the 1-arg form.
+    let xpath = xpath::parse(r#"id("n", //body)"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].extract_as_node().text_content(&document), "found");
+}
+
 // ── Error handling / fn:error / fn:trace ────────────────────────────
 
 #[test]

@@ -1704,6 +1704,51 @@ fn dispatch_by_local_name<'tree>(
             }
             Ok(Some(args[0].clone()))
         }
+        // ID functions
+        // https://www.w3.org/TR/xpath-functions-31/#func-id
+        // https://www.w3.org/TR/xpath-functions-31/#func-element-with-id
+        "id" | "element-with-id" => {
+            if args.is_empty() || args.len() > 2 {
+                return Err(ExpressionApplyError::new(format!(
+                    "fn:{} expects 1-2 arguments, got {}",
+                    local_name,
+                    args.len()
+                )));
+            }
+            // Collect target IDs by tokenizing each string arg on whitespace.
+            let mut target_ids = std::collections::HashSet::new();
+            for item in args[0].iter() {
+                let s = func_string(item, context.item_tree);
+                for token in s.split_whitespace() {
+                    target_ids.insert(token.to_string());
+                }
+            }
+            // Find elements with matching id attributes.
+            let mut result = XpathItemSet::new();
+            for node in context.item_tree.iter() {
+                if let XpathItemTreeNode::ElementNode(e) = node {
+                    if let Some(id_val) = e.get_attribute(context.item_tree, "id") {
+                        if target_ids.contains(id_val) {
+                            result.insert(XpathItem::Node(node));
+                        }
+                    }
+                }
+            }
+            result.sort_by_document_order();
+            Ok(Some(result))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-idref
+        "idref" => {
+            // For non-schema-aware processors, no nodes have the is-idrefs
+            // property, so this always returns an empty sequence.
+            if args.is_empty() || args.len() > 2 {
+                return Err(ExpressionApplyError::new(format!(
+                    "fn:idref expects 1-2 arguments, got {}",
+                    args.len()
+                )));
+            }
+            Ok(Some(XpathItemSet::new()))
+        }
         _ => Ok(None),
     }
 }

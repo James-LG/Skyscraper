@@ -100,7 +100,7 @@ All 13 axes parse and evaluate:
 
 ## XPath 3.1 — Built-in Functions
 
-**89** `fn:` functions plus **10** `map:`, **18** `array:`, and **14** `math:` functions (**131 total**) are implemented. All dispatch is in `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs`.
+**92** `fn:` functions plus **10** `map:`, **18** `array:`, and **14** `math:` functions (**134 total**) are implemented. All dispatch is in `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs`.
 
 ### Implemented
 
@@ -191,6 +191,9 @@ All 13 axes parse and evaluate:
 | `fn:document-uri(node?)` | Complete | Returns empty sequence (HTML-only processor) |
 | `fn:error(code?, description?, object?)` | Complete | 0-3 args; default code `err:FOER0000` |
 | `fn:trace(value, label?)` | Complete | Logs to stderr; returns input unchanged |
+| `fn:id(string*, node?)` | Complete | Tokenizes on whitespace; finds elements by `id` attribute; document order |
+| `fn:element-with-id(string*, node?)` | Complete | Identical to `fn:id` for non-schema-aware (HTML) processor |
+| `fn:idref(string*, node?)` | Complete | Always returns empty sequence (no `is-idrefs` in HTML) |
 
 ### Implemented — Map Functions
 
@@ -269,8 +272,8 @@ All `*-from-duration`, `*-from-dateTime`, `*-from-date`, `*-from-time`, `fn:curr
 #### Parsing/Serialization (low priority)
 `fn:parse-xml`, `fn:parse-xml-fragment`, `fn:serialize`, `fn:json-doc`, `fn:parse-json`, `fn:json-to-xml`, `fn:xml-to-json`
 
-#### ID functions (low priority)
-`fn:id`, `fn:idref`, `fn:element-with-id`
+#### ~~ID functions (low priority)~~ — Done
+~~`fn:id`, `fn:idref`, `fn:element-with-id`~~
 
 ---
 
