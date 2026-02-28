@@ -256,3 +256,321 @@ fn test_item_count1() {
     assert_eq!(lxml_count, skyscraper_elements.len());
 }
 
+/// Helper: run a full comparison test between skyscraper and lxml for a given XPath.
+fn run_lxml_comparison(xpath: &str) {
+    let html_text = GITHUB_HTML.to_string();
+
+    let html_document = html::parse(&html_text).unwrap();
+    let xpath_expr = xpath::parse(xpath).unwrap();
+
+    let lxml_elements = get_lxml_elements(xpath, html_text);
+    let skyscraper_elements = xpath_expr.apply(&html_document).unwrap();
+
+    let converted_skyscraper_elems =
+        skyscraper_to_lxml_elements(&html_document, skyscraper_elements);
+
+    compare_skyscraper_to_lxml(lxml_elements, converted_skyscraper_elems);
+}
+
+/// Helper: run a count-only comparison test between skyscraper and lxml for a given XPath.
+fn run_lxml_count_comparison(xpath: &str) {
+    let html_text = GITHUB_HTML.to_string();
+
+    let html_document = html::parse(&html_text).unwrap();
+    let xpath_expr = xpath::parse(xpath).unwrap();
+
+    let lxml_output = get_lxml_output(xpath, html_text, true);
+    let skyscraper_elements = xpath_expr.apply(&html_document).unwrap();
+
+    let output = String::from_utf8_lossy(&lxml_output.stdout);
+    let lxml_count = output.trim().parse::<usize>().unwrap();
+    assert!(lxml_count > 0, "lxml returned 0 results for '{}'", xpath);
+    assert_eq!(lxml_count, skyscraper_elements.len());
+}
+
+// ===== Simple element selection =====
+
+/// Select all span elements.
+#[test]
+fn test_select_all_spans() {
+    run_lxml_comparison("//span");
+}
+
+/// Select all anchor elements.
+#[test]
+fn test_select_all_anchors() {
+    run_lxml_comparison("//a");
+}
+
+/// Select all list items.
+#[test]
+fn test_select_all_li() {
+    run_lxml_comparison("//li");
+}
+
+/// Select all paragraph elements.
+#[test]
+fn test_select_all_p() {
+    run_lxml_comparison("//p");
+}
+
+/// Select all h1 elements.
+#[test]
+fn test_select_all_h1() {
+    run_lxml_comparison("//h1");
+}
+
+/// Select all button elements.
+#[test]
+fn test_select_all_buttons() {
+    run_lxml_comparison("//button");
+}
+
+/// Select all summary elements.
+#[test]
+fn test_select_all_summary() {
+    run_lxml_comparison("//summary");
+}
+
+/// Select all img elements (void element).
+#[test]
+fn test_select_all_img() {
+    run_lxml_comparison("//img");
+}
+
+/// Select all meta elements (void element).
+#[test]
+fn test_select_all_meta() {
+    run_lxml_comparison("//meta");
+}
+
+/// Select all link elements (void element).
+#[test]
+fn test_select_all_link() {
+    run_lxml_comparison("//link");
+}
+
+/// Select all input elements (void element).
+#[test]
+fn test_select_all_input() {
+    run_lxml_comparison("//input");
+}
+
+/// Select all form elements.
+#[test]
+fn test_select_all_form() {
+    run_lxml_comparison("//form");
+}
+
+/// Select all svg elements.
+#[test]
+fn test_select_all_svg() {
+    run_lxml_comparison("//svg");
+}
+
+// ===== Child axis / multi-step paths =====
+
+/// Select anchors that are direct children of list items.
+#[test]
+fn test_child_li_a() {
+    run_lxml_comparison("//li/a");
+}
+
+/// Select list items that are direct children of unordered lists.
+#[test]
+fn test_child_ul_li() {
+    run_lxml_comparison("//ul/li");
+}
+
+/// Select spans that are direct children of divs.
+#[test]
+fn test_child_div_span() {
+    run_lxml_comparison("//div/span");
+}
+
+/// Select divs that are direct children of a specific div.
+#[test]
+fn test_child_of_specific_div() {
+    run_lxml_comparison("//div[@class='position-relative']/div");
+}
+
+// ===== Descendant axis =====
+
+/// Select anchors that are descendants of nav elements.
+#[test]
+fn test_descendant_nav_a() {
+    run_lxml_comparison("//nav//a");
+}
+
+/// Select anchors descended from header > nav chain.
+#[test]
+fn test_descendant_header_nav_a() {
+    run_lxml_comparison("//header//nav//a");
+}
+
+/// Select summary elements descended from details.
+#[test]
+fn test_descendant_details_summary() {
+    run_lxml_comparison("//details//summary");
+}
+
+/// Select spans descended from a specific div.
+#[test]
+fn test_descendant_specific_div_span() {
+    run_lxml_comparison("//div[@class='position-relative']//span");
+}
+
+// ===== Parent axis =====
+
+/// Select parent elements of all anchors.
+#[test]
+fn test_parent_axis() {
+    run_lxml_comparison("//a/..");
+}
+
+// ===== Attribute predicates =====
+
+/// Select anchors with contains() on href attribute.
+#[test]
+fn test_attr_contains_href() {
+    run_lxml_comparison("//a[contains(@href, 'github')]");
+}
+
+/// Select anchors with contains() on class attribute.
+#[test]
+fn test_attr_contains_class() {
+    run_lxml_comparison("//a[contains(@class, 'Link')]");
+}
+
+/// Select spans that have a class attribute.
+#[test]
+fn test_attr_has_class() {
+    run_lxml_comparison("//span[@class]");
+}
+
+/// Select divs that have an id attribute.
+#[test]
+fn test_attr_has_id() {
+    run_lxml_comparison("//div[@id]");
+}
+
+/// Select anchors that have both class and href attributes.
+#[test]
+fn test_attr_multiple_existence() {
+    run_lxml_comparison("//a[@class and @href]");
+}
+
+/// Select divs with an exact class match.
+#[test]
+fn test_attr_exact_class() {
+    run_lxml_comparison("//div[@class='position-relative']");
+}
+
+/// Select spans with a data-content attribute.
+#[test]
+fn test_attr_data_content() {
+    run_lxml_comparison("//span[@data-content]");
+}
+
+/// Select anchors with aria-label attribute.
+#[test]
+fn test_attr_aria_label() {
+    run_lxml_comparison("//a[@aria-label]");
+}
+
+/// Select anchors with data-analytics-event attribute.
+#[test]
+fn test_attr_data_analytics() {
+    run_lxml_comparison("//a[@data-analytics-event]");
+}
+
+/// Select images with alt attribute.
+#[test]
+fn test_attr_img_alt() {
+    run_lxml_comparison("//img[@alt]");
+}
+
+/// Select images with src attribute.
+#[test]
+fn test_attr_img_src() {
+    run_lxml_comparison("//img[@src]");
+}
+
+// ===== Negation predicate =====
+
+/// Select anchors that do NOT have a class attribute.
+#[test]
+fn test_not_attr() {
+    run_lxml_comparison("//a[not(@class)]");
+}
+
+/// Select anchors with href but without class.
+#[test]
+fn test_attr_and_not() {
+    run_lxml_comparison("//a[@href and not(@class)]");
+}
+
+// ===== Wildcard =====
+
+/// Select all elements (wildcard) with a specific attribute.
+#[test]
+fn test_wildcard_with_attr() {
+    run_lxml_count_comparison("//*[@role]");
+}
+
+// ===== Positional predicates =====
+
+/// Select the first anchor element using a filter expression.
+#[test]
+fn test_positional_first() {
+    run_lxml_comparison("(//a)[1]");
+}
+
+/// Select the last span element using a filter expression.
+#[test]
+fn test_positional_last() {
+    run_lxml_comparison("(//span)[last()]");
+}
+
+/// Select list items in the first 3 positions.
+#[test]
+fn test_positional_lte() {
+    run_lxml_comparison("//li[position() <= 3]");
+}
+
+// ===== String function predicates =====
+
+/// Select spans where string-length of class attribute is greater than 20.
+#[test]
+fn test_string_length_predicate() {
+    run_lxml_comparison("//span[string-length(@class) > 20]");
+}
+
+// ===== Existential element predicates =====
+
+/// Select divs that contain at least one svg descendant.
+#[test]
+fn test_element_exists_descendant() {
+    run_lxml_count_comparison("//div[.//svg]");
+}
+
+/// Select divs that contain a direct child paragraph.
+#[test]
+fn test_element_exists_child() {
+    run_lxml_comparison("//div[p]");
+}
+
+/// Select unordered lists that contain li > a chains.
+#[test]
+fn test_element_exists_nested() {
+    run_lxml_comparison("//ul[li/a]");
+}
+
+// ===== count() function in predicates =====
+
+/// Select divs with more than zero direct anchor children.
+#[test]
+fn test_count_predicate() {
+    run_lxml_count_comparison("//div[count(a) > 0]");
+}
+
