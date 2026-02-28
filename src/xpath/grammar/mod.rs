@@ -275,11 +275,31 @@ pub struct XpathItemTree {
 
     /// The root node of the document.
     pub(crate) root_node: NodeId,
+
+    /// The document's quirks mode, as determined by the DOCTYPE.
+    pub(crate) quirks_mode: crate::html::grammar::QuirksMode,
 }
 
 impl XpathItemTree {
     pub(crate) fn new(arena: Arena<XpathItemTreeNode>, root_node: NodeId) -> Self {
-        XpathItemTree { arena, root_node }
+        Self::new_with_quirks_mode(arena, root_node, crate::html::grammar::QuirksMode::NoQuirks)
+    }
+
+    pub(crate) fn new_with_quirks_mode(
+        arena: Arena<XpathItemTreeNode>,
+        root_node: NodeId,
+        quirks_mode: crate::html::grammar::QuirksMode,
+    ) -> Self {
+        XpathItemTree {
+            arena,
+            root_node,
+            quirks_mode,
+        }
+    }
+
+    /// Get the document's quirks mode.
+    pub fn quirks_mode(&self) -> crate::html::grammar::QuirksMode {
+        self.quirks_mode
     }
 
     pub(crate) fn get_index_node(&self, id: NodeId) -> &indextree::Node<XpathItemTreeNode> {
@@ -401,6 +421,7 @@ impl From<&HtmlDocument> for XpathItemTree {
         XpathItemTree {
             arena: item_arena,
             root_node: root_node_id,
+            quirks_mode: crate::html::grammar::QuirksMode::NoQuirks,
         }
     }
 }

@@ -1637,13 +1637,13 @@ impl<'a> Tokenizer<'a> {
                     .collect::<String>();
 
                 if next_six_chars.eq_ignore_ascii_case("PUBLIC") {
-                    self.input_stream.next_add(5);
+                    self.input_stream.next_add(6);
                     self.state = TokenizerState::AfterDOCTYPEPublicKeyword;
                     return Ok(());
                 }
 
                 if next_six_chars.eq_ignore_ascii_case("SYSTEM") {
-                    self.input_stream.next_add(5);
+                    self.input_stream.next_add(6);
                     self.state = TokenizerState::AfterDOCTYPESystemKeyword;
                     return Ok(());
                 }
@@ -2205,7 +2205,7 @@ impl<'a> Tokenizer<'a> {
                 // then flush the code points consumed as a character reference,
                 // and switch to the return state
                 if self.charref_in_attribute() && char_ref.chars().last() != Some(';') {
-                    if let Some(c) = self.input_stream.peek() {
+                    if let Some(c) = self.input_stream.current() {
                         match c {
                             '=' => {
                                 historical_reasons(self)?;
@@ -2224,8 +2224,10 @@ impl<'a> Tokenizer<'a> {
                     self.handle_error(TokenizerError::MissingSemicolonAfterCharacterReference)?;
                 }
 
-                // TODO: this will always be true since it's not matching character by character and every
-                // known named character reference ends with a semicolon
+                // The matched key may or may not end with ';'. The NAMED_CHARACTER_REFS
+                // HashMap contains both forms (e.g. "&AElig" and "&AElig;"), and our
+                // longest-match algorithm correctly picks the best match. For entries
+                // without a trailing ';', the semicolon check above fires the parse error.
                 self.temporary_buffer.clear();
                 let char_ref_characters = NAMED_CHARACTER_REFS.get(&char_ref.as_ref()).unwrap();
 

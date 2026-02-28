@@ -1082,7 +1082,11 @@ fn doctype_with_public_identifier() {
     let text = r#"<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html><head></head><body></body></html>"#;
     let document = html::parse(text).unwrap();
     let expected = DocumentBuilder::new()
-        .add_doctype("html")
+        .add_doctype_full(
+            "html",
+            Some("-//W3C//DTD XHTML 1.0 Strict//EN"),
+            Some("http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"),
+        )
         .add_element("html", |html| {
             html.add_element("head", |head| head)
                 .add_element("body", |body| body)
@@ -1097,7 +1101,7 @@ fn doctype_with_system_identifier() {
     let text = r#"<!DOCTYPE html SYSTEM "about:legacy-compat"><html><head></head><body></body></html>"#;
     let document = html::parse(text).unwrap();
     let expected = DocumentBuilder::new()
-        .add_doctype("html")
+        .add_doctype_full("html", None, Some("about:legacy-compat"))
         .add_element("html", |html| {
             html.add_element("head", |head| head)
                 .add_element("body", |body| body)
@@ -1898,4 +1902,89 @@ fn duplicate_attribute_case_insensitive() {
         .unwrap();
 
     assert!(test_framework::compare_documents(expected, document, true));
+}
+
+// ============================================================================
+// Named character reference without semicolon tests
+// ============================================================================
+
+/// A named character reference without a semicolon in body text should still
+/// resolve to the correct character (with a parse error emitted internally).
+/// `&AElig` (without `;`) should resolve to `Æ` (U+00C6).
+#[test]
+fn named_char_ref_without_semicolon_in_body() {
+    let text = "<html><body><p>&AElig</p></body></html>";
+    let document = html::parse(text).unwrap();
+    let expected = DocumentBuilder::new()
+        .add_element("html", |html| {
+            html.add_element("head", |head| head)
+                .add_element("body", |body| {
+                    body.add_element("p", |p| p.add_text("\u{00C6}"))
+                })
+        })
+        .build()
+        .unwrap();
+    assert!(test_framework::compare_documents(expected, document, true));
+}
+
+/// In an attribute value, a named character reference without a semicolon
+/// followed by an alphanumeric character should NOT be resolved (historical
+/// reasons per WHATWG). `&AEligx` in an attribute should be kept literal.
+#[test]
+fn named_char_ref_without_semicolon_in_attribute_followed_by_alpha() {
+    let text = r#"<html><body><a href="?a=&AEligx">link</a></body></html>"#;
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    // The &AElig should NOT be resolved because it's followed by 'x' in an attribute.
+    assert!(
+        output.contains("&amp;AEligx") || output.contains("&AEligx"),
+        "Named char ref without semicolon followed by alpha in attribute should be literal: {output:?}"
+    );
+}
+
+/// In an attribute value, a named character reference without a semicolon
+/// followed by `=` should NOT be resolved (historical reasons per WHATWG).
+#[test]
+fn named_char_ref_without_semicolon_in_attribute_followed_by_equals() {
+    let text = r#"<html><body><a href="?&AElig=1">link</a></body></html>"#;
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    // The &AElig should NOT be resolved because it's followed by '=' in an attribute.
+    assert!(
+        output.contains("&amp;AElig=") || output.contains("&AElig="),
+        "Named char ref without semicolon followed by = in attribute should be literal: {output:?}"
+    );
+}
+
+/// A named character reference WITH a semicolon should always resolve,
+/// regardless of context.
+#[test]
+fn named_char_ref_with_semicolon_always_resolves() {
+    // In body text
+    let text_body = "<html><body><p>&AElig;</p></body></html>";
+    let doc_body = html::parse(text_body).unwrap();
+    let expected_body = DocumentBuilder::new()
+        .add_element("html", |html| {
+            html.add_element("head", |head| head)
+                .add_element("body", |body| {
+                    body.add_element("p", |p| p.add_text("\u{00C6}"))
+                })
+        })
+        .build()
+        .unwrap();
+    assert!(test_framework::compare_documents(
+        expected_body,
+        doc_body,
+        true
+    ));
+
+    // In attribute value
+    let text_attr = r#"<html><body><a href="?a=&AElig;x">link</a></body></html>"#;
+    let doc_attr = html::parse(text_attr).unwrap();
+    let output_attr = doc_attr.to_string();
+    // With semicolon, it should always be resolved, even followed by alpha in attribute.
+    assert!(
+        output_attr.contains("\u{00C6}x"),
+        "Named char ref with semicolon should always resolve: {output_attr:?}"
+    );
 }

@@ -11,13 +11,151 @@ use crate::{
 use super::{
     chars,
     tokenizer::{HtmlToken, Parser, TagToken, TagTokenType},
-    Acknowledgement, HtmlParseError, HtmlParser, HtmlParserError, InsertionMode, HTML_NAMESPACE,
+    Acknowledgement, HtmlParseError, HtmlParser, HtmlParserError, InsertionMode, QuirksMode,
+    HTML_NAMESPACE,
 };
 
 pub(crate) mod in_body_insertion_mode;
 pub(crate) mod in_foreign_content;
 
 pub use in_body_insertion_mode::*;
+
+/// Determine the quirks mode from a DOCTYPE token per WHATWG 13.2.6.4.1.
+fn determine_quirks_mode(
+    force_quirks: bool,
+    name: &str,
+    public_id: Option<&str>,
+    system_id: Option<&str>,
+) -> QuirksMode {
+    if force_quirks || name != "html" {
+        return QuirksMode::Quirks;
+    }
+
+    let public_lower = public_id.map(|s| s.to_ascii_lowercase());
+    let public_lower_ref = public_lower.as_deref();
+
+    // Exact public identifier matches that trigger quirks mode.
+    const QUIRKY_PUBLIC_MATCHES: &[&str] = &[
+        "-//w3o//dtd w3 html strict 3.0//en//",
+        "-/w3c/dtd html 4.0 transitional/en",
+        "html",
+    ];
+
+    if let Some(pid) = public_lower_ref {
+        if QUIRKY_PUBLIC_MATCHES.contains(&pid) {
+            return QuirksMode::Quirks;
+        }
+    }
+
+    // Exact system identifier match that triggers quirks mode.
+    if let Some(sid) = system_id {
+        if sid.eq_ignore_ascii_case("http://www.ibm.com/data/dtd/v11/ibmxhtml1-transitional.dtd") {
+            return QuirksMode::Quirks;
+        }
+    }
+
+    // Public identifier prefixes that trigger quirks mode (case-insensitive).
+    const QUIRKY_PUBLIC_PREFIXES: &[&str] = &[
+        "+//silmaril//dtd html pro v0r11 19970101//",
+        "-//as//dtd html 3.0 aswedit + extensions//",
+        "-//advasoft ltd//dtd html 3.0 aswedit + extensions//",
+        "-//ietf//dtd html 2.0 level 1//",
+        "-//ietf//dtd html 2.0 level 2//",
+        "-//ietf//dtd html 2.0 strict level 1//",
+        "-//ietf//dtd html 2.0 strict level 2//",
+        "-//ietf//dtd html 2.0 strict//",
+        "-//ietf//dtd html 2.0//",
+        "-//ietf//dtd html 2.1e//",
+        "-//ietf//dtd html 3.0//",
+        "-//ietf//dtd html 3.2 final//",
+        "-//ietf//dtd html 3.2//",
+        "-//ietf//dtd html 3//",
+        "-//ietf//dtd html level 0//",
+        "-//ietf//dtd html level 1//",
+        "-//ietf//dtd html level 2//",
+        "-//ietf//dtd html level 3//",
+        "-//ietf//dtd html strict level 0//",
+        "-//ietf//dtd html strict level 1//",
+        "-//ietf//dtd html strict level 2//",
+        "-//ietf//dtd html strict level 3//",
+        "-//ietf//dtd html strict//",
+        "-//ietf//dtd html//",
+        "-//metrius//dtd metrius presentational//",
+        "-//microsoft//dtd internet explorer 2.0 html strict//",
+        "-//microsoft//dtd internet explorer 2.0 html//",
+        "-//microsoft//dtd internet explorer 2.0 tables//",
+        "-//microsoft//dtd internet explorer 3.0 html strict//",
+        "-//microsoft//dtd internet explorer 3.0 html//",
+        "-//microsoft//dtd internet explorer 3.0 tables//",
+        "-//netscape comm. corp.//dtd html//",
+        "-//netscape comm. corp.//dtd strict html//",
+        "-//o'reilly and associates//dtd html 2.0//",
+        "-//o'reilly and associates//dtd html extended 1.0//",
+        "-//o'reilly and associates//dtd html extended relaxed 1.0//",
+        "-//sq//dtd html 2.0 hotmetal + extensions//",
+        "-//softquad software//dtd hotmetal pro 6.0::19990601::extensions to html 4.0//",
+        "-//softquad//dtd hotmetal pro 4.0::19971010::extensions to html 4.0//",
+        "-//spyglass//dtd html 2.0 extended//",
+        "-//sun microsystems corp.//dtd hotjava html//",
+        "-//sun microsystems corp.//dtd hotjava strict html//",
+        "-//w3c//dtd html 3 1995-03-24//",
+        "-//w3c//dtd html 3.2 draft//",
+        "-//w3c//dtd html 3.2 final//",
+        "-//w3c//dtd html 3.2//",
+        "-//w3c//dtd html 3.2s draft//",
+        "-//w3c//dtd html 4.0 frameset//",
+        "-//w3c//dtd html 4.0 transitional//",
+        "-//w3c//dtd html experimental 19960712//",
+        "-//w3c//dtd html experimental 970421//",
+        "-//w3c//dtd w3 html//",
+        "-//w3o//dtd w3 html 3.0//",
+        "-//webtechs//dtd mozilla html 2.0//",
+        "-//webtechs//dtd mozilla html//",
+    ];
+
+    if let Some(pid) = public_lower_ref {
+        if QUIRKY_PUBLIC_PREFIXES.iter().any(|prefix| pid.starts_with(prefix)) {
+            return QuirksMode::Quirks;
+        }
+    }
+
+    // Public identifier prefixes that trigger quirks if system identifier is missing.
+    const HTML4_PUBLIC_PREFIXES: &[&str] = &[
+        "-//w3c//dtd html 4.01 frameset//",
+        "-//w3c//dtd html 4.01 transitional//",
+    ];
+
+    if system_id.is_none() {
+        if let Some(pid) = public_lower_ref {
+            if HTML4_PUBLIC_PREFIXES.iter().any(|prefix| pid.starts_with(prefix)) {
+                return QuirksMode::Quirks;
+            }
+        }
+    }
+
+    // Limited quirks mode checks.
+    const LIMITED_QUIRKY_PUBLIC_PREFIXES: &[&str] = &[
+        "-//w3c//dtd xhtml 1.0 frameset//",
+        "-//w3c//dtd xhtml 1.0 transitional//",
+    ];
+
+    if let Some(pid) = public_lower_ref {
+        if LIMITED_QUIRKY_PUBLIC_PREFIXES.iter().any(|prefix| pid.starts_with(prefix)) {
+            return QuirksMode::LimitedQuirks;
+        }
+    }
+
+    // HTML 4.01 Frameset/Transitional with system identifier → limited quirks.
+    if system_id.is_some() {
+        if let Some(pid) = public_lower_ref {
+            if HTML4_PUBLIC_PREFIXES.iter().any(|prefix| pid.starts_with(prefix)) {
+                return QuirksMode::LimitedQuirks;
+            }
+        }
+    }
+
+    QuirksMode::NoQuirks
+}
 
 impl HtmlParser {
     /// <https://html.spec.whatwg.org/multipage/parsing.html#the-initial-insertion-mode>
@@ -45,6 +183,14 @@ impl HtmlParser {
                 self.insert_a_comment(comment, Some(parent))?;
             }
             HtmlToken::DocType(doctype) => {
+                // Determine quirks mode per WHATWG 13.2.6.4.1.
+                self.quirks_mode = determine_quirks_mode(
+                    doctype.force_quirks,
+                    &doctype.name,
+                    doctype.public_identifier.as_deref(),
+                    doctype.system_identifier.as_deref(),
+                );
+
                 // Append a DocumentType node to the Document node.
                 let doctype_node = XpathItemTreeNode::DoctypeNode(DoctypeNode::new(
                     doctype.name,
@@ -61,8 +207,9 @@ impl HtmlParser {
                 self.insertion_mode = InsertionMode::BeforeHtml;
             }
             _ => {
-                // TODO: If the document is not an iframe srcdoc document, then this is a parse error;
-                //       if the parser cannot change the mode flag is false, set the Document to quirks mode.
+                // WHATWG 13.2.6.4.1: If the document is not an iframe srcdoc document,
+                // this is a parse error; set the Document to quirks mode.
+                self.quirks_mode = QuirksMode::Quirks;
 
                 self.insertion_mode = InsertionMode::BeforeHtml;
                 self.token_emitted(token)?;

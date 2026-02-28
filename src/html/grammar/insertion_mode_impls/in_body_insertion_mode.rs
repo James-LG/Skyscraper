@@ -9,7 +9,10 @@ use crate::{
 };
 
 use super::{
-    super::tokenizer::{HtmlToken, Parser, TagToken, TagTokenType},
+    super::{
+        tokenizer::{HtmlToken, Parser, TagToken, TagTokenType},
+        QuirksMode,
+    },
     chars, Acknowledgement, HtmlParseError, HtmlParser, HtmlParserError, InsertionMode,
 };
 
@@ -808,8 +811,10 @@ impl HtmlParser {
                 }
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "table" => {
-                // TODO: If the Document is not set to quirks mode, and ...
-                if self.has_an_element_in_button_scope("p") {
+                // WHATWG: If the Document is not set to quirks mode, close the p element.
+                if self.quirks_mode != QuirksMode::Quirks
+                    && self.has_an_element_in_button_scope("p")
+                {
                     self.close_a_p_element()?;
                 }
 

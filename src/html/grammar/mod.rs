@@ -28,6 +28,17 @@ pub mod document_builder;
 mod insertion_mode_impls;
 mod tokenizer;
 
+/// The document's quirks mode, determined by the DOCTYPE (WHATWG 13.2.6.4.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QuirksMode {
+    /// No quirks mode (standards mode).
+    NoQuirks,
+    /// Limited quirks mode (almost standards mode).
+    LimitedQuirks,
+    /// Quirks mode.
+    Quirks,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum InsertionMode {
     Initial,
@@ -480,6 +491,7 @@ pub struct HtmlParser {
     form_element_pointer: Option<NodeId>,
     pending_table_character_tokens: Vec<HtmlToken>,
     skip_next_line_feed: bool,
+    quirks_mode: QuirksMode,
 }
 
 impl HtmlParser {
@@ -500,6 +512,7 @@ impl HtmlParser {
             form_element_pointer: None,
             pending_table_character_tokens: Vec::new(),
             skip_next_line_feed: false,
+            quirks_mode: QuirksMode::NoQuirks,
         }
     }
 
@@ -525,7 +538,7 @@ impl HtmlParser {
         }
 
         let arena = std::mem::replace(&mut self.arena, Arena::new());
-        let document = XpathItemTree::new(arena, document_node_id);
+        let document = XpathItemTree::new_with_quirks_mode(arena, document_node_id, self.quirks_mode);
         Ok(document)
     }
 
@@ -593,7 +606,7 @@ impl HtmlParser {
         }
 
         let arena = std::mem::replace(&mut self.arena, Arena::new());
-        let document = XpathItemTree::new(arena, document_node_id);
+        let document = XpathItemTree::new_with_quirks_mode(arena, document_node_id, self.quirks_mode);
         Ok(document)
     }
 
@@ -1099,11 +1112,12 @@ impl HtmlParser {
             InsertionPosition::LastChildOf(target)
         };
 
-        // 3. If the adjusted insertion location is inside a template element,
-        //    let it instead be inside the template element's template contents.
-        // TODO: When template contents (document fragment) support is added,
-        // this step must redirect insertion into the template's content fragment.
-        // Currently a no-op since template contents are the template element itself.
+        // 3. WHATWG says to redirect into the template element's "template contents"
+        //    (a DocumentFragment). We intentionally keep children directly under the
+        //    template element: Skyscraper has no DOM API (no `template.content`), the
+        //    inertness guarantees are already satisfied (no script execution), and
+        //    direct children are more useful for XPath queries (e.g. `//template/div`).
+        //    This matches html5ever's rcdom behavior.
 
         Ok(adjusted_insertion_location)
     }

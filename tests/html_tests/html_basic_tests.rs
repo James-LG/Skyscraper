@@ -210,7 +210,11 @@ fn doctype_should_skip_verbose_doctype() {
 
     // assert
     let expected = DocumentBuilder::new()
-        .add_doctype("html")
+        .add_doctype_full(
+            "html",
+            Some("-//W3C//DTD XHTML 1.0 Transitional//EN"),
+            Some("http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"),
+        )
         .add_element("html", |html| {
             html.add_element("head", |head| head)
                 .add_element("body", |body| {

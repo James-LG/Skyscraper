@@ -99,6 +99,26 @@ impl DocumentBuilder {
         self
     }
 
+    /// Add a DOCTYPE node with optional public and system identifiers.
+    pub fn add_doctype_full(
+        mut self,
+        name: &str,
+        public_id: Option<&str>,
+        system_id: Option<&str>,
+    ) -> Self {
+        let name = name.to_string();
+        let public_id = public_id.map(|s| s.to_string());
+        let system_id = system_id.map(|s| s.to_string());
+        self.funcs.push(Box::new(move |arena, _| {
+            let child_id = arena.new_node(XpathItemTreeNode::DoctypeNode(DoctypeNode::new(
+                name, public_id, system_id,
+            )));
+            Ok(child_id)
+        }));
+
+        self
+    }
+
     pub fn build(mut self) -> Result<XpathItemTree, DocumentBuilderError> {
         let document_node_id = self
             .arena

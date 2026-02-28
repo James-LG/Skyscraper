@@ -25,16 +25,11 @@ Last audited: 2026-02-27.
 - Sequence construction: comma operator
 - Set operations: `union` / `|`, `intersect`, `except` (with document ordering)
 - Maps and arrays: constructors, lookup via `?`, wildcard lookups, parenthesized key expressions
-- `instance of`, `castable as`, `treat as`
+- `instance of`, `castable as`, `cast as`, `treat as`
+- Arrow operator (`=>`) with all function specifier forms (EQName, VarRef, ParenthesizedExpr)
 - Partial function application via argument placeholders (`?`)
 
-### Partially Implemented
-
-| Feature | Gap | Location |
-|---------|-----|----------|
-| ~~Arrow operator (`=>`)~~ | ~~Done~~ — VarRef and ParenthesizedExpr function specifiers now supported | `src/xpath/grammar/expressions/arrow_operator.rs` |
-| ~~`cast as`~~ | ~~Done~~ — URI-qualified type names (`Q{uri}type`) now supported for `xs` namespace | `src/xpath/grammar/expressions/expressions_on_sequence_types/cast.rs:113` |
-| ~~Item sorting~~ | ~~Done~~ — Stale TODO removed; sorting is already handled at the correct level (path expressions and set operations) | `src/xpath/grammar/expressions/mod.rs` |
+No remaining expression-level gaps. All expression types from XPath 3.1 are implemented.
 
 ---
 
@@ -47,12 +42,11 @@ All 13 axes parse and evaluate:
 **Forward:** `child`, `descendant`, `attribute`, `self`, `descendant-or-self`, `following-sibling`, `following`
 **Reverse:** `parent`, `ancestor`, `preceding-sibling`, `preceding`, `ancestor-or-self`
 
-### Partially Implemented
+### Not Applicable
 
-| Feature | Gap | Location |
-|---------|-----|----------|
-| `namespace::` axis | Parses, but returns error at eval time ("not supported for HTML documents") — intentional for HTML-only processor | `src/xpath/grammar/expressions/path_expressions/steps/forward_step.rs:97` |
-| ~~`parent::` on attributes~~ | ~~Done~~ — Already works via arena tree; stale TODO removed, test added | `src/xpath/grammar/expressions/path_expressions/steps/reverse_step.rs:115` |
+| Feature | Notes |
+|---------|-------|
+| `namespace::` axis | Parses, but returns error at eval time — intentional for HTML-only processor (no namespace nodes) | `src/xpath/grammar/expressions/path_expressions/steps/forward_step.rs:97` |
 
 ---
 
@@ -60,17 +54,17 @@ All 13 axes parse and evaluate:
 
 ### Fully Implemented
 
-- Name tests: QName, `*`, `*:localname`, `prefix:*`, `Q{uri}name`
+- Name tests: QName, `*`, `*:localname`, `Q{uri}name`
 - Kind tests: `node()`, `text()`, `comment()`, `element()`, `element(name)`, `element(*)`, `attribute()`, `attribute(name)`, `attribute(*)`, `item()`, `document-node()`, `document-node(element-test)`, `processing-instruction()`, `processing-instruction(name)`
 - Schema-aware tests (correctly return empty for non-schema-aware processor): `schema-element()`, `schema-attribute()`
-- Function/map/array tests: `function(*)`, `map(*)`, `array(*)`
+- Function/map/array tests: `function(*)`, `map(*)`, `array(*)`, `map(K,V)`, `array(T)`, `function(T1,...) as R`
 
 ### Partially Implemented
 
 | Feature | Gap | Location |
 |---------|-----|----------|
 | `namespace-node()` | Parses but always returns empty for HTML | `src/xpath/grammar/types/mod.rs:184-187` |
-| ~~Typed function/map/array tests~~ | ~~Done~~ — `map(K,V)` validates key/value types, `array(T)` validates member types, `function(T1,...) as R` validates arity; used by `instance of` and `treat as` | `src/xpath/grammar/types/sequence_type.rs` |
+| `prefix:*` wildcard | Ignores the prefix and matches all elements; should only match elements in the namespace bound to the prefix (SVG/MathML namespaces are now tracked on elements) | `src/xpath/grammar/expressions/path_expressions/steps/node_tests.rs:266-270` |
 
 ---
 
@@ -82,6 +76,12 @@ All 13 axes parse and evaluate:
 - Occurrence indicators: `?`, `*`, `+`
 - `empty-sequence()` matching
 - Cast rules between the 5 implemented atomic types
+
+### Partially Implemented
+
+| Feature | Gap | Location |
+|---------|-----|----------|
+| Unknown type names in `instance of` / `treat as` | `atomic_matches_type_name` silently returns `true` for unrecognized type names (e.g. `xs:anyAtomicType`, `xs:untypedAtomic`); should raise `err:XPST0051` | `src/xpath/grammar/types/sequence_type.rs:205-215` |
 
 ### Not Implemented
 
@@ -100,7 +100,7 @@ All 13 axes parse and evaluate:
 
 ## XPath 3.1 — Built-in Functions
 
-**92** `fn:` functions plus **10** `map:`, **18** `array:`, and **14** `math:` functions (**134 total**) are implemented. All dispatch is in `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs`.
+**88** `fn:` functions plus **10** `map:`, **18** `array:`, and **14** `math:` functions (**130 total**) are implemented. All dispatch is in `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs`.
 
 ### Implemented
 
@@ -272,9 +272,6 @@ All `*-from-duration`, `*-from-dateTime`, `*-from-date`, `*-from-time`, `fn:curr
 #### Parsing/Serialization (low priority)
 `fn:parse-xml`, `fn:parse-xml-fragment`, `fn:serialize`, `fn:json-doc`, `fn:parse-json`, `fn:json-to-xml`, `fn:xml-to-json`
 
-#### ~~ID functions (low priority)~~ — Done
-~~`fn:id`, `fn:idref`, `fn:element-with-id`~~
-
 ---
 
 ## HTML Parser — WHATWG Compliance
@@ -286,35 +283,23 @@ Initial, BeforeHtml, BeforeHead, InHead, InHeadNoscript, AfterHead, InBody, Text
 
 The tokenizer implements the WHATWG state machine including named character references.
 
-### Partially Implemented / `todo!()` Stubs
+Foreign content parsing is fully implemented: tree construction dispatcher, breakout tags, MathML/SVG text/HTML integration points, attribute adjustment (MathML, SVG, foreign), SVG element name case correction, namespace assignment, and end-tag walk-up algorithm.
 
-| Feature | Gap | Location |
-|---------|-----|----------|
-| ~~Text insertion mode — EOF handling~~ | ~~Done~~ — parse error, pop node, switch to original mode, reprocess EOF | `src/html/grammar/insertion_mode_impls/mod.rs:556-573` |
-| ~~AfterBody — Comment token~~ | ~~Done~~ — insert as last child of `<html>` element | `src/html/grammar/insertion_mode_impls/mod.rs:716-722` |
-| ~~AfterBody — DocType token~~ | ~~Done~~ — parse error, ignore | `src/html/grammar/insertion_mode_impls/mod.rs:723-727` |
-| ~~AfterAfterBody — Comment token~~ | ~~Done~~ — insert as last child of Document | `src/html/grammar/insertion_mode_impls/mod.rs:763-768` |
-| Declarative Shadow DOM | Not supported (noted in comment) | `src/html/grammar/insertion_mode_impls/mod.rs:317` |
-| ~~HTML fragment parsing algorithm~~ | ~~Done~~ — `parse_fragment()` implements WHATWG 13.4 | `src/html/grammar/mod.rs` |
+Additional completed features: adoption agency algorithm (with scope checks), foster parenting, duplicate attribute deduplication, fragment parsing algorithm, quirks mode determination (WHATWG 13.2.6.4.1), named character reference matching (including semicolon-less references with historical attribute handling).
 
-### Partially Implemented — Foreign Content
+### Design Decisions
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| ~~Namespace assignment~~ | ~~Done~~ — `create_element` now sets namespace on MathML/SVG elements | `src/html/grammar/mod.rs` |
-| ~~Adjust MathML attributes~~ | ~~Done~~ — `definitionurl` → `definitionURL` per WHATWG 13.2.6.1 | `src/html/grammar/mod.rs` |
-| ~~Adjust SVG attributes~~ | ~~Done~~ — 62 camelCase attribute name corrections per WHATWG 13.2.6.2 | `src/html/grammar/mod.rs` |
-| ~~Adjust foreign attributes~~ | ~~Done~~ — `Attribute` and `AttributeNode` structs now carry `namespace: Option<String>`; `adjust_foreign_attributes` sets xlink, xml, and xmlns namespaces per WHATWG 13.2.6.3 | `src/html/grammar/mod.rs` |
-| ~~Foreign content parsing mode~~ | ~~Done~~ — tree construction dispatcher + full token processing rules per WHATWG 13.2.6.5; breakout tags, MathML text integration points, HTML integration points (SVG foreignObject/desc/title, MathML annotation-xml with encoding), end-tag walk-up algorithm | `src/html/grammar/insertion_mode_impls/in_foreign_content.rs` |
-| ~~SVG element name case correction~~ | ~~Done~~ — 37 camelCase element name corrections (e.g. `foreignobject` → `foreignObject`) applied in `create_an_element_for_the_token` for SVG namespace | `src/html/grammar/mod.rs` |
+| Feature | Decision | Rationale |
+|---------|----------|-----------|
+| `<template>` content model | Children are kept directly under the template element, not in a separate `DocumentFragment` | Skyscraper has no DOM API (`template.content`), inertness is already satisfied (no script execution), and direct children are more useful for XPath queries (e.g. `//template/div`). Same approach as html5ever's rcdom. |
 
-### Not Implemented
+### Not Implemented / Intentionally Omitted
 
 | Feature | Notes |
 |---------|-------|
-| ~~Adoption agency algorithm edge cases~~ | ~~Done~~ — Step 4.6 now performs a proper scope check via `has_node_in_scope` (`src/html/grammar/insertion_mode_impls/in_body_insertion_mode.rs:1241`); formatting elements behind scope barriers (e.g. `table`) are correctly ignored per WHATWG spec |
-| ~~Foster parenting~~ | ~~Done~~ — Verified with comprehensive edge-case tests: element/text/mixed foster parenting, multiple foster-parented elements, foster parenting after table rows, anchor elements, bold text; all pass correctly |
-| ~~Duplicate attribute deduplication~~ | ~~Done~~ — `emit_current_tag_token` now deduplicates attributes per WHATWG 13.2.5.34, keeping the first occurrence and emitting a `DuplicateAttribute` parse error for subsequent duplicates (`src/html/grammar/tokenizer/mod.rs`) |
+| Scripting | All script-related processing is intentionally omitted (prepare-the-script-element algorithm, script execution, `DOMContentLoaded` / `load` events). `<script>` content is correctly consumed via ScriptData tokenizer state but never executed. `<noscript>` is treated as if scripting is disabled (correct for a scraper). |
+| Declarative Shadow DOM | `<template shadowrootmode="...">` is treated as a plain `<template>` | `src/html/grammar/insertion_mode_impls/mod.rs:317` |
+| `<meta>` encoding change | Spec requires checking charset/http-equiv/content attributes to potentially change character encoding; no-op since Skyscraper operates on already-decoded Rust `char` data | `src/html/grammar/insertion_mode_impls/mod.rs:267` |
 
 ---
 
@@ -323,12 +308,17 @@ The tokenizer implements the WHATWG state machine including named character refe
 | Feature | Gap | Location |
 |---------|-----|----------|
 | Namespace nodes | Not represented in the tree at all | N/A |
+| `CommentNode` string value | `text_content()` returns `""` instead of the comment's content string; per XPath 3.1 §6.7.6, the string value of a comment node is its content | `src/xpath/grammar/mod.rs:159` |
+| `CommentNode` parent navigation | `XpathItemTreeNode::parent()` is missing a `CommentNode` arm — falls through to `None`, breaking `parent::` axis and ancestor navigation from comment nodes | `src/xpath/grammar/mod.rs:119-132` |
+| `DoctypeNode` in XPath tree | `DoctypeNode` is not a valid XPath 3.1 node type but is present in `XpathItemTreeNode`; `node()` kind test matches it (should not), and it has no `node_id()` or `parent()` (falls through to `None`) | `src/xpath/grammar/mod.rs:108-132`, `src/xpath/grammar/types/mod.rs:142-157` |
+| `From<&HtmlDocument>` conversion | Only converts `HtmlNode::Tag` and `HtmlNode::Text` — comments, PIs, and doctypes in an `HtmlDocument` are silently dropped during conversion to `XpathItemTree`. The direct `html::parse()` path does not have this limitation. | `src/xpath/grammar/mod.rs:321-406` |
 
 ---
 
 ## Error Handling Gaps
 
-All previously identified error handling gaps have been resolved:
-- `fn:data()` now raises `err:FOTY0013` for function items
-- `fn:string()` now raises `err:FOTY0014` for function items
-- Unknown function dispatch now uses `err:XPST0017`
+| Feature | Gap | Location |
+|---------|-----|----------|
+| `func_data` internal helper | When called indirectly (via `fn:distinct-values`, `fn:sum`, `fn:avg`, `fn:max`, `fn:min`, etc.), function items are silently atomized to the placeholder string `"[function item]"` instead of raising `err:FOTY0013`. The top-level `fn:data()` dispatch correctly raises the error, but the infallible helper's return type (`Vec<AnyAtomicType>`) prevents error propagation. | `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs:2435-2439` |
+| `func_string` internal helper | Same issue: function items are silently stringified to `"[function item]"` instead of raising `err:FOTY0014` when called indirectly (via `fn:concat`, `fn:string-join`, `fn:starts-with`, etc.). The top-level `fn:string()` dispatch is correct. | `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs:2466-2471` |
+| Unknown function dispatch | Complete — uses `err:XPST0017` | |
