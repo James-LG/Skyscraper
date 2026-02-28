@@ -258,12 +258,15 @@ fn test_item_count1() {
 
 /// Helper: run a full comparison test between skyscraper and lxml for a given XPath.
 fn run_lxml_comparison(xpath: &str) {
-    let html_text = GITHUB_HTML.to_string();
+    run_lxml_comparison_with_html(xpath, GITHUB_HTML);
+}
 
-    let html_document = html::parse(&html_text).unwrap();
+/// Helper: run a full comparison test with custom HTML.
+fn run_lxml_comparison_with_html(xpath: &str, html_text: &str) {
+    let html_document = html::parse(html_text).unwrap();
     let xpath_expr = xpath::parse(xpath).unwrap();
 
-    let lxml_elements = get_lxml_elements(xpath, html_text);
+    let lxml_elements = get_lxml_elements(xpath, html_text.to_string());
     let skyscraper_elements = xpath_expr.apply(&html_document).unwrap();
 
     let converted_skyscraper_elems =
@@ -274,12 +277,15 @@ fn run_lxml_comparison(xpath: &str) {
 
 /// Helper: run a count-only comparison test between skyscraper and lxml for a given XPath.
 fn run_lxml_count_comparison(xpath: &str) {
-    let html_text = GITHUB_HTML.to_string();
+    run_lxml_count_comparison_with_html(xpath, GITHUB_HTML);
+}
 
-    let html_document = html::parse(&html_text).unwrap();
+/// Helper: run a count-only comparison test with custom HTML.
+fn run_lxml_count_comparison_with_html(xpath: &str, html_text: &str) {
+    let html_document = html::parse(html_text).unwrap();
     let xpath_expr = xpath::parse(xpath).unwrap();
 
-    let lxml_output = get_lxml_output(xpath, html_text, true);
+    let lxml_output = get_lxml_output(xpath, html_text.to_string(), true);
     let skyscraper_elements = xpath_expr.apply(&html_document).unwrap();
 
     let output = String::from_utf8_lossy(&lxml_output.stdout);
@@ -572,5 +578,636 @@ fn test_element_exists_nested() {
 #[test]
 fn test_count_predicate() {
     run_lxml_count_comparison("//div[count(a) > 0]");
+}
+
+// ===== Union expressions =====
+
+/// Select both anchors and spans via union operator.
+#[test]
+fn test_union_a_or_span() {
+    run_lxml_count_comparison("//a | //span");
+}
+
+// ===== Or predicate =====
+
+/// Select anchors matching either of two class substrings.
+#[test]
+fn test_or_predicate() {
+    run_lxml_comparison("//a[contains(@class, 'Link') or contains(@class, 'btn')]");
+}
+
+/// Select list items containing either anchors or spans.
+#[test]
+fn test_or_predicate_child_element() {
+    run_lxml_comparison("//li[a or span]");
+}
+
+// ===== Not-equal comparison =====
+
+/// Select divs whose class is not a specific value.
+#[test]
+fn test_not_equal_attr() {
+    run_lxml_count_comparison("//div[@class != 'position-relative']");
+}
+
+// ===== Ancestor axis =====
+
+/// Select ancestor divs of a deeply nested element.
+#[test]
+fn test_ancestor_axis() {
+    run_lxml_comparison("//a[@rel='author']/ancestor::div");
+}
+
+/// Select all ancestor divs of a specific class of div.
+#[test]
+fn test_ancestor_axis_from_class() {
+    run_lxml_comparison("//div[@class='position-relative']/ancestor::div");
+}
+
+/// Select the nearest ancestor div.
+#[test]
+fn test_ancestor_axis_positional() {
+    run_lxml_comparison("//a[@rel='author']/ancestor::div[1]");
+}
+
+/// Select the outermost ancestor div.
+#[test]
+fn test_ancestor_axis_last() {
+    run_lxml_comparison("//a[@rel='author']/ancestor::div[last()]");
+}
+
+/// Select nearest ancestor of any type.
+#[test]
+fn test_ancestor_wildcard() {
+    run_lxml_comparison("//a[@rel='author']/ancestor::*[1]");
+}
+
+// ===== Ancestor-or-self axis =====
+
+/// Select self and all ancestor divs.
+#[test]
+fn test_ancestor_or_self_axis() {
+    run_lxml_comparison("//div[@class='position-relative']/ancestor-or-self::div");
+}
+
+// ===== Self axis =====
+
+/// Select self node via explicit self axis.
+#[test]
+fn test_self_axis() {
+    run_lxml_comparison("//a[@rel='author']/self::a");
+}
+
+// ===== Following-sibling axis =====
+
+/// Select following sibling list items.
+#[test]
+fn test_following_sibling() {
+    run_lxml_comparison("//li/following-sibling::li");
+}
+
+/// Select divs with a class that have a following sibling div.
+#[test]
+fn test_following_sibling_predicate() {
+    run_lxml_count_comparison("//div[@class][following-sibling::div]");
+}
+
+// ===== Preceding-sibling axis =====
+
+/// Select preceding sibling list items.
+#[test]
+fn test_preceding_sibling() {
+    run_lxml_comparison("//li/preceding-sibling::li");
+}
+
+/// Select divs with a class that have a preceding sibling div.
+#[test]
+fn test_preceding_sibling_predicate() {
+    run_lxml_count_comparison("//div[@class][preceding-sibling::div]");
+}
+
+// ===== Following axis =====
+
+/// Select h2 elements following any h1.
+#[test]
+fn test_following_axis() {
+    run_lxml_comparison("//h1/following::h2");
+}
+
+// ===== Preceding axis =====
+
+/// Select h1 elements preceding any h2.
+#[test]
+fn test_preceding_axis() {
+    run_lxml_comparison("//h2/preceding::h1");
+}
+
+// ===== Multiple chained predicates =====
+
+/// Chain two attribute predicates plus positional.
+#[test]
+fn test_chained_predicates() {
+    run_lxml_count_comparison("//a[@class][contains(@href, 'github')][1]");
+}
+
+/// Two attribute-existence predicates.
+#[test]
+fn test_two_attr_predicates() {
+    run_lxml_comparison("//div[@class][span]");
+}
+
+// ===== Nested predicates =====
+
+/// Select divs that contain a div that contains an anchor.
+#[test]
+fn test_nested_predicate() {
+    run_lxml_comparison("//div[div[a]]");
+}
+
+/// Select list items containing anchors with href.
+#[test]
+fn test_nested_attr_predicate() {
+    run_lxml_comparison("//li[a[@href]]");
+}
+
+/// Select divs containing anchors with class.
+#[test]
+fn test_nested_attr_predicate2() {
+    run_lxml_comparison("//div[a[@class]]");
+}
+
+// ===== Compound negation predicates =====
+
+/// Select anchors with href that do not start with #.
+#[test]
+fn test_compound_negation() {
+    run_lxml_count_comparison("//a[@href][not(starts-with(@href, '#'))]");
+}
+
+// ===== Positional in context =====
+
+/// Select positional range of divs.
+#[test]
+fn test_positional_range() {
+    run_lxml_comparison("(//div)[position() >= 3 and position() <= 5]");
+}
+
+/// Select first li child of each ul.
+#[test]
+fn test_positional_first_child() {
+    run_lxml_comparison("//ul/li[1]");
+}
+
+/// Select last li child of each ul.
+#[test]
+fn test_positional_last_child() {
+    run_lxml_comparison("//ul/li[last()]");
+}
+
+/// Select the last div among siblings at each level.
+#[test]
+fn test_positional_last_sibling() {
+    run_lxml_count_comparison("//div[last()]");
+}
+
+/// Select the first div among siblings at each level.
+#[test]
+fn test_positional_first_sibling() {
+    run_lxml_count_comparison("//div[1]");
+}
+
+// ===== String functions in predicates =====
+
+/// Select anchors with long href values.
+#[test]
+fn test_string_length_href() {
+    run_lxml_comparison("//a[string-length(@href) > 50]");
+}
+
+/// Select anchors where normalize-space matches exactly.
+#[test]
+fn test_normalize_space_predicate() {
+    run_lxml_comparison("//a[normalize-space(@class) = 'Link--secondary']");
+}
+
+/// Select anchors whose text content contains a specific string.
+#[test]
+fn test_contains_text_content() {
+    run_lxml_comparison("//a[contains(., 'James')]");
+}
+
+/// Select divs whose text content contains a specific string.
+#[test]
+fn test_contains_dot_text() {
+    run_lxml_count_comparison("//div[contains(., 'Skyscraper')]");
+}
+
+/// Select anchors with non-empty normalized text.
+#[test]
+fn test_string_length_normalize_space_dot() {
+    run_lxml_count_comparison("//a[string-length(normalize-space(.)) > 0]");
+}
+
+// ===== Absolute paths =====
+
+/// Select divs with id via absolute path from root.
+#[test]
+fn test_absolute_path() {
+    run_lxml_comparison("/html/body//div[@id]");
+}
+
+/// Select direct child divs of body.
+#[test]
+fn test_absolute_path_direct_children() {
+    run_lxml_comparison("/html/body/div");
+}
+
+// ===== Parent axis combined with child step =====
+
+/// Navigate up to parent then back down to sibling span.
+#[test]
+fn test_parent_then_child() {
+    run_lxml_comparison("//a[@href]/../span");
+}
+
+// ===== count() with higher thresholds =====
+
+/// Select divs with many child divs.
+#[test]
+fn test_count_many_children() {
+    run_lxml_count_comparison("//div[count(div) > 3]");
+}
+
+/// Select divs with many children of any kind.
+#[test]
+fn test_count_wildcard_children() {
+    run_lxml_count_comparison("//div[count(*) > 10]");
+}
+
+// ===== Custom HTML tests for targeted feature coverage =====
+
+static CUSTOM_HTML: &str = r#"<html><body>
+<div id="root">
+  <ul class="list">
+    <li class="item first">Alpha</li>
+    <li class="item">Beta</li>
+    <li class="item last">Gamma</li>
+  </ul>
+  <div class="content">
+    <p>Hello <strong>bold</strong> world</p>
+    <p class="intro">Second <em>emphasized</em> paragraph</p>
+  </div>
+  <table>
+    <tr><td class="c1">A1</td><td class="c2">A2</td></tr>
+    <tr><td class="c1">B1</td><td class="c2">B2</td></tr>
+  </table>
+  <div class="nested">
+    <div class="inner"><span data-x="1">deep</span></div>
+  </div>
+  <div class="siblings">
+    <span class="a">first</span>
+    <span class="b">second</span>
+    <span class="c">third</span>
+  </div>
+</div>
+</body></html>"#;
+
+/// following-sibling on custom HTML with known structure.
+#[test]
+fn test_custom_following_sibling() {
+    run_lxml_comparison_with_html("//li[@class='item first']/following-sibling::li", CUSTOM_HTML);
+}
+
+/// preceding-sibling on custom HTML with known structure.
+#[test]
+fn test_custom_preceding_sibling() {
+    run_lxml_comparison_with_html("//li[@class='item last']/preceding-sibling::li", CUSTOM_HTML);
+}
+
+/// ancestor axis on custom HTML.
+#[test]
+fn test_custom_ancestor() {
+    run_lxml_comparison_with_html("//strong/ancestor::div", CUSTOM_HTML);
+}
+
+/// ancestor-or-self axis on custom HTML.
+#[test]
+fn test_custom_ancestor_or_self() {
+    run_lxml_comparison_with_html("//div[@class='inner']/ancestor-or-self::div", CUSTOM_HTML);
+}
+
+/// following axis on custom HTML.
+#[test]
+fn test_custom_following() {
+    run_lxml_comparison_with_html("//ul/following::div", CUSTOM_HTML);
+}
+
+/// preceding axis on custom HTML.
+#[test]
+fn test_custom_preceding() {
+    run_lxml_comparison_with_html("//table/preceding::div", CUSTOM_HTML);
+}
+
+/// self axis with type test on custom HTML.
+#[test]
+fn test_custom_self_axis() {
+    run_lxml_comparison_with_html("//p/self::p", CUSTOM_HTML);
+}
+
+/// union expression on custom HTML.
+#[test]
+fn test_custom_union() {
+    run_lxml_count_comparison_with_html("//strong | //em", CUSTOM_HTML);
+}
+
+/// Navigate parent then into sibling on custom HTML.
+#[test]
+fn test_custom_parent_then_sibling() {
+    run_lxml_comparison_with_html("//strong/..", CUSTOM_HTML);
+}
+
+/// Multiple steps with mixed axes on custom HTML.
+#[test]
+fn test_custom_child_descendant_mix() {
+    run_lxml_comparison_with_html("//div[@id='root']/div//span", CUSTOM_HTML);
+}
+
+/// Nested predicates on custom HTML.
+#[test]
+fn test_custom_nested_predicate() {
+    run_lxml_comparison_with_html("//div[p[strong]]", CUSTOM_HTML);
+}
+
+/// or predicate on custom HTML.
+#[test]
+fn test_custom_or_predicate() {
+    run_lxml_comparison_with_html("//li[@class='item first' or @class='item last']", CUSTOM_HTML);
+}
+
+/// contains on text content on custom HTML.
+#[test]
+fn test_custom_contains_dot() {
+    run_lxml_comparison_with_html("//p[contains(., 'bold')]", CUSTOM_HTML);
+}
+
+/// Positional predicate [1] in context of each parent on custom HTML.
+#[test]
+fn test_custom_positional_first_td() {
+    run_lxml_comparison_with_html("//tr/td[1]", CUSTOM_HTML);
+}
+
+/// Positional predicate [last()] in context of each parent on custom HTML.
+#[test]
+fn test_custom_positional_last_td() {
+    run_lxml_comparison_with_html("//tr/td[last()]", CUSTOM_HTML);
+}
+
+/// Wildcard descendant selection on custom HTML.
+#[test]
+fn test_custom_wildcard_descendants() {
+    run_lxml_count_comparison_with_html("//div[@class='content']//*", CUSTOM_HTML);
+}
+
+/// Chain: descendant -> attribute predicate -> child on custom HTML.
+#[test]
+fn test_custom_multi_step_chain() {
+    run_lxml_comparison_with_html("//div[@class='nested']//span[@data-x]", CUSTOM_HTML);
+}
+
+/// Select siblings following the first span in siblings div.
+#[test]
+fn test_custom_following_sibling_span() {
+    run_lxml_comparison_with_html(
+        "//div[@class='siblings']/span[@class='a']/following-sibling::span",
+        CUSTOM_HTML,
+    );
+}
+
+/// not() combined with contains() on custom HTML.
+#[test]
+fn test_custom_not_contains() {
+    run_lxml_comparison_with_html("//li[not(contains(@class, 'first'))]", CUSTOM_HTML);
+}
+
+/// String comparison with normalize-space on custom HTML.
+#[test]
+fn test_custom_normalize_space() {
+    run_lxml_comparison_with_html("//li[normalize-space(.) = 'Beta']", CUSTOM_HTML);
+}
+
+// ===== Additional complex expressions targeting different failure modes =====
+
+/// Select script elements with a type attribute.
+#[test]
+fn test_select_script_with_type() {
+    run_lxml_comparison("//script[@type]");
+}
+
+/// Select script with a specific type.
+#[test]
+fn test_select_script_exact_type() {
+    run_lxml_comparison("//script[@type='application/json']");
+}
+
+/// Select label elements.
+#[test]
+fn test_select_all_label() {
+    run_lxml_comparison("//label");
+}
+
+/// Select header elements.
+#[test]
+fn test_select_all_header() {
+    run_lxml_comparison("//header");
+}
+
+/// Select footer elements.
+#[test]
+fn test_select_all_footer() {
+    run_lxml_comparison("//footer");
+}
+
+/// Select nav elements.
+#[test]
+fn test_select_all_nav() {
+    run_lxml_comparison("//nav");
+}
+
+/// Select the single main element.
+#[test]
+fn test_select_main() {
+    run_lxml_comparison("//main");
+}
+
+/// Select the article element.
+#[test]
+fn test_select_article() {
+    run_lxml_comparison("//article");
+}
+
+/// Select the style element.
+#[test]
+fn test_select_style() {
+    run_lxml_comparison("//style");
+}
+
+// ===== substring() function =====
+
+/// Select anchors whose href starts with 'https' using substring.
+#[test]
+fn test_substring_predicate() {
+    run_lxml_count_comparison("//a[substring(@href, 1, 5) = 'https']");
+}
+
+// ===== translate() function =====
+
+/// Use translate to do case-insensitive comparison.
+#[test]
+fn test_translate_predicate() {
+    run_lxml_comparison("//a[translate(@rel, 'AUTHOR', 'author') = 'author']");
+}
+
+// ===== string() function =====
+
+/// Select anchors whose string value exactly matches.
+#[test]
+fn test_string_function_exact() {
+    run_lxml_comparison("//a[string(.) = 'James-LG']");
+}
+
+/// Select divs where string(@class) is truthy (non-empty).
+#[test]
+fn test_string_function_truthy() {
+    run_lxml_count_comparison("//div[string(@class)]");
+}
+
+// ===== boolean() function =====
+
+/// Select divs where boolean(@class) is true.
+#[test]
+fn test_boolean_function() {
+    run_lxml_count_comparison("//div[boolean(@class)]");
+}
+
+// ===== Leaf node selection =====
+
+/// Select divs with no child elements.
+#[test]
+fn test_leaf_div() {
+    run_lxml_count_comparison("//div[count(child::*) = 0]");
+}
+
+/// Select spans with no child elements.
+#[test]
+fn test_leaf_span() {
+    run_lxml_count_comparison("//span[not(child::*)]");
+}
+
+// ===== Modular arithmetic =====
+
+/// Select odd-positioned divs with [1] predicate.
+#[test]
+fn test_mod_positional() {
+    run_lxml_count_comparison("//div[position() mod 2 = 1][1]");
+}
+
+// ===== starts-with on class =====
+
+/// Select divs whose class starts with a prefix.
+#[test]
+fn test_starts_with_class() {
+    run_lxml_comparison("//div[starts-with(@class, 'position')]");
+}
+
+// ===== Following-sibling with wildcard =====
+
+/// Select the immediate following sibling of any type for divs with class.
+#[test]
+fn test_following_sibling_wildcard() {
+    run_lxml_count_comparison("//div[@class]/following-sibling::*[1]");
+}
+
+// ===== Preceding axis with positional =====
+
+/// Select the first preceding anchor before a specific element.
+#[test]
+fn test_preceding_with_positional() {
+    run_lxml_comparison("//a[@rel='author']/preceding::a[1]");
+}
+
+// ===== Following-sibling with positional =====
+
+/// Select first following-sibling after each h2[1].
+#[test]
+fn test_following_sibling_after_h2() {
+    run_lxml_count_comparison("//h2[1]/following-sibling::*[1]");
+}
+
+// ===== Large text content predicate =====
+
+/// Select divs with very long text content.
+#[test]
+fn test_string_length_dot() {
+    run_lxml_count_comparison("//div[string-length(.) > 1000]");
+}
+
+// ===== Deep nesting with attribute paths on custom HTML =====
+
+static CUSTOM_HTML_DEEP: &str = r#"<html><body>
+<div id="a">
+  <div id="b">
+    <div id="c">
+      <span class="deep">found</span>
+    </div>
+  </div>
+</div>
+<div id="flat">
+  <span class="x">one</span>
+  <span class="y">two</span>
+  <span class="z">three</span>
+</div>
+<ul>
+  <li>1<ul><li>1.1</li><li>1.2</li></ul></li>
+  <li>2<ul><li>2.1</li><li>2.2</li></ul></li>
+</ul>
+</body></html>"#;
+
+/// Ancestor chain on deeply nested elements.
+#[test]
+fn test_custom_deep_ancestor_chain() {
+    run_lxml_comparison_with_html("//span[@class='deep']/ancestor::div", CUSTOM_HTML_DEEP);
+}
+
+/// Nested list: select inner list items.
+#[test]
+fn test_custom_nested_list_items() {
+    run_lxml_comparison_with_html("//ul/li/ul/li", CUSTOM_HTML_DEEP);
+}
+
+/// Nested list: select outer list items (which contain inner text too).
+#[test]
+fn test_custom_outer_list_items() {
+    run_lxml_comparison_with_html("//body/ul/li", CUSTOM_HTML_DEEP);
+}
+
+/// Preceding-sibling with positional on flat structure.
+#[test]
+fn test_custom_preceding_sibling_positional() {
+    run_lxml_comparison_with_html(
+        "//span[@class='z']/preceding-sibling::span[1]",
+        CUSTOM_HTML_DEEP,
+    );
+}
+
+/// Following with nested lists.
+#[test]
+fn test_custom_nested_list_following() {
+    run_lxml_comparison_with_html("//div[@id='a']/following::div", CUSTOM_HTML_DEEP);
+}
+
+/// Absolute path into deeply nested element.
+#[test]
+fn test_custom_deep_absolute_path() {
+    run_lxml_comparison_with_html("/html/body/div/div/div/span", CUSTOM_HTML_DEEP);
 }
 
