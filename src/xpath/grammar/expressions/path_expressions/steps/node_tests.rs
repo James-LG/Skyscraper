@@ -130,17 +130,28 @@ impl NameTest {
 
         let is_match = match self {
             NameTest::Name(expected_name) => {
+                // A name test is true only if the node is the principal node kind
+                // for the axis. (XPath 3.1 §2.5.4.2)
+                // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#dt-principal-node-kind
+                let is_principal_node_kind = match axis {
+                    BiDirectionalAxis::ForwardAxis(ForwardAxis::Attribute) => {
+                        matches!(node, XpathItemTreeNode::AttributeNode(_))
+                    }
+                    _ => {
+                        matches!(node, XpathItemTreeNode::ElementNode(_))
+                    }
+                };
+
+                if !is_principal_node_kind {
+                    false
+                } else {
                 // Get the name and namespace of the node, if available for the node type.
                 let (node_name, node_ns): (Option<&str>, Option<&str>) = match node {
-                    XpathItemTreeNode::DocumentNode(_) => (None, None),
                     XpathItemTreeNode::ElementNode(e) => {
                         (Some(&e.name), e.namespace.as_deref())
                     }
-                    XpathItemTreeNode::PINode(_) => (None, None),
-                    XpathItemTreeNode::CommentNode(_) => (None, None),
-                    XpathItemTreeNode::TextNode(_) => (None, None),
                     XpathItemTreeNode::AttributeNode(a) => (Some(&a.name), None),
-                    XpathItemTreeNode::DoctypeNode(_) => (None, None),
+                    _ => (None, None),
                 };
 
                 match node_name {
@@ -165,6 +176,7 @@ impl NameTest {
                     // Name tests need a name to match.
                     // If the node does not have a name, it cannot match.
                     None => false,
+                }
                 }
             }
             NameTest::Wildcard(wildcard) => wildcard.is_match(axis, node)?,
