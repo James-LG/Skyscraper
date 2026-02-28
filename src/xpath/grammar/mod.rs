@@ -112,7 +112,8 @@ impl XpathItemTreeNode {
             XpathItemTreeNode::AttributeNode(a) => Some(a.id()),
             XpathItemTreeNode::CommentNode(c) => Some(c.id()),
             XpathItemTreeNode::PINode(p) => Some(p.id()),
-            _ => None,
+            XpathItemTreeNode::DoctypeNode(d) => Some(d.id()),
+            XpathItemTreeNode::DocumentNode(_) => None,
         }
     }
 

@@ -192,13 +192,12 @@ impl HtmlParser {
                 );
 
                 // Append a DocumentType node to the Document node.
-                let doctype_node = XpathItemTreeNode::DoctypeNode(DoctypeNode::new(
+                let doctype_id = DoctypeNode::create(
                     doctype.name,
                     doctype.public_identifier,
                     doctype.system_identifier,
-                ));
-
-                let doctype_id = self.arena.new_node(doctype_node);
+                    &mut self.arena,
+                );
 
                 self.root_node
                     .ok_or(HtmlParseError::new("root node is None"))?

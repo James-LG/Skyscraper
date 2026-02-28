@@ -358,3 +358,81 @@ fn pi_node_empty_data_string_value() {
         XpathItem::AnyAtomicType(AnyAtomicType::String(String::new()))
     );
 }
+
+/// `node()` should NOT match DoctypeNode (DOCTYPE is not a valid XPath 3.1 node type).
+#[test]
+fn node_test_excludes_doctype() {
+    // Parse HTML with DOCTYPE — the direct path creates a DoctypeNode child of the document.
+    let text = "<!DOCTYPE html><html><head></head><body></body></html>";
+    let document = html::parse(text).unwrap();
+
+    // /node() selects the document's children that are XPath node types.
+    // DOCTYPE should be excluded; only the <html> element should match.
+    let xpath = xpath::parse("/node()").unwrap();
+    let items = xpath.apply(&document).unwrap();
+
+    assert_eq!(items.len(), 1, "node() should return only the html element, not the doctype");
+    let node = items[0].as_node().unwrap();
+    let element = node.as_element_node().unwrap();
+    assert_eq!(element.name, "html");
+}
+
+/// `node()` should not match DoctypeNode even in a DocumentBuilder tree.
+#[test]
+fn node_test_excludes_doctype_in_builder() {
+    let document = DocumentBuilder::new()
+        .add_doctype("html")
+        .add_element("html", |e| {
+            e.add_element("body", |e| e.add_text("hello"))
+        })
+        .build()
+        .unwrap();
+
+    let xpath = xpath::parse("/node()").unwrap();
+    let items = xpath.apply(&document).unwrap();
+
+    // Only the html element should match, not the doctype.
+    assert_eq!(items.len(), 1, "should match only the html element: {items:?}");
+    let node = items[0].as_node().unwrap();
+    let element = node.as_element_node().unwrap();
+    assert_eq!(element.name, "html");
+}
+
+/// DoctypeNode should have a working parent() — it should navigate to the document node.
+#[test]
+fn doctype_node_has_parent() {
+    use skyscraper::xpath::grammar::XpathItemTreeNode;
+
+    let text = "<!DOCTYPE html><html><head></head><body></body></html>";
+    let document = html::parse(text).unwrap();
+
+    // Find the DoctypeNode by iterating the tree.
+    let doctype = document.iter().find(|node| {
+        matches!(node, XpathItemTreeNode::DoctypeNode(_))
+    });
+
+    assert!(doctype.is_some(), "DoctypeNode should exist in the tree");
+    let doctype = doctype.unwrap();
+    let parent = doctype.parent(&document);
+    assert!(parent.is_some(), "DoctypeNode should have a parent");
+    assert!(
+        matches!(parent.unwrap(), XpathItemTreeNode::DocumentNode(_)),
+        "DoctypeNode parent should be the document node"
+    );
+}
+
+/// count(/node()) should not count the DoctypeNode.
+#[test]
+fn count_node_excludes_doctype() {
+    let text = "<!DOCTYPE html><html><head></head><body></body></html>";
+    let document = html::parse(text).unwrap();
+
+    let xpath = xpath::parse("count(/node())").unwrap();
+    let items = xpath.apply(&document).unwrap();
+
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Integer(1)),
+        "count(/node()) should be 1 (only the html element, not the doctype)"
+    );
+}

@@ -862,7 +862,11 @@ impl PartialEq for CommentNode {
 }
 
 /// A document type node representing `<!DOCTYPE ...>`.
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash, Clone)]
+///
+/// Note: DOCTYPE is not a valid XPath 3.1 node type. It is kept in the tree
+/// for serialization fidelity but is excluded from `node()` kind tests and
+/// axis traversal results.
+#[derive(PartialOrd, Eq, Ord, Debug, Hash, Clone)]
 pub struct DoctypeNode {
     /// The name of the document type (e.g. "html").
     pub name: String,
@@ -872,6 +876,9 @@ pub struct DoctypeNode {
 
     /// The system identifier, if present.
     pub system_id: Option<String>,
+
+    /// The ID of the doctype node in the arena.
+    id: Option<NodeId>,
 }
 
 impl DoctypeNode {
@@ -880,7 +887,47 @@ impl DoctypeNode {
             name,
             public_id,
             system_id,
+            id: None,
         }
+    }
+
+    pub(crate) fn create(
+        name: String,
+        public_id: Option<String>,
+        system_id: Option<String>,
+        arena: &mut Arena<XpathItemTreeNode>,
+    ) -> NodeId {
+        let node_id = arena.new_node(XpathItemTreeNode::DoctypeNode(DoctypeNode::new(
+            name, public_id, system_id,
+        )));
+
+        arena
+            .get_mut(node_id)
+            .unwrap()
+            .get_mut()
+            .as_doctype_node_mut()
+            .unwrap()
+            .set_id(node_id);
+
+        node_id
+    }
+
+    /// Set the ID of the doctype node.
+    pub(crate) fn set_id(&mut self, id: NodeId) {
+        self.id = Some(id);
+    }
+
+    /// Get the ID of the doctype node.
+    pub(crate) fn id(&self) -> NodeId {
+        self.id.unwrap()
+    }
+}
+
+impl PartialEq for DoctypeNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.public_id == other.public_id
+            && self.system_id == other.system_id
     }
 }
 

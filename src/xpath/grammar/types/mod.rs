@@ -141,13 +141,15 @@ impl KindTest {
         match self {
             KindTest::AnyKindTest => {
                 // AnyKindTest is `node()`.
-                // Select all node types.
+                // Select all XPath 3.1 node types.
+                // Exclude AttributeNode (attributes are not on the child axis)
+                // and DoctypeNode (not a valid XPath 3.1 node type).
                 let filtered_nodes = item_set.iter().filter_map(|item| {
                     if let XpathItem::Node(node) = item {
-                        if let XpathItemTreeNode::AttributeNode(_) = node {
-                            None
-                        } else {
-                            Some(*node)
+                        match node {
+                            XpathItemTreeNode::AttributeNode(_)
+                            | XpathItemTreeNode::DoctypeNode(_) => None,
+                            _ => Some(*node),
                         }
                     } else {
                         None

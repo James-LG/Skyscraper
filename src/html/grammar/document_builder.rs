@@ -90,9 +90,7 @@ impl DocumentBuilder {
     pub fn add_doctype(mut self, name: &str) -> Self {
         let name = name.to_string();
         self.funcs.push(Box::new(move |arena, _| {
-            let child_id = arena.new_node(XpathItemTreeNode::DoctypeNode(DoctypeNode::new(
-                name, None, None,
-            )));
+            let child_id = DoctypeNode::create(name, None, None, arena);
             Ok(child_id)
         }));
 
@@ -110,9 +108,7 @@ impl DocumentBuilder {
         let public_id = public_id.map(|s| s.to_string());
         let system_id = system_id.map(|s| s.to_string());
         self.funcs.push(Box::new(move |arena, _| {
-            let child_id = arena.new_node(XpathItemTreeNode::DoctypeNode(DoctypeNode::new(
-                name, public_id, system_id,
-            )));
+            let child_id = DoctypeNode::create(name, public_id, system_id, arena);
             Ok(child_id)
         }));
 

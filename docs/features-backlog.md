@@ -311,7 +311,7 @@ Additional completed features: adoption agency algorithm (with scope checks), fo
 | Feature | Gap | Location |
 |---------|-----|----------|
 | Namespace nodes | Not represented in the tree at all | N/A |
-| `DoctypeNode` in XPath tree | `DoctypeNode` is not a valid XPath 3.1 node type but is present in `XpathItemTreeNode`; `node()` kind test matches it (should not), and it has no `node_id()` or `parent()` (falls through to `None`) | `src/xpath/grammar/mod.rs:108-132`, `src/xpath/grammar/types/mod.rs:142-157` |
+| `DoctypeNode` in XPath tree | Complete — `DoctypeNode` now has an `id` field with `set_id()`/`id()` methods; `node()` kind test excludes it; `node_id()` and `parent()` work correctly. Kept in tree for serialization fidelity. | |
 | `From<&HtmlDocument>` conversion | Only converts `HtmlNode::Tag` and `HtmlNode::Text` — comments, PIs, and doctypes in an `HtmlDocument` are silently dropped during conversion to `XpathItemTree`. The direct `html::parse()` path does not have this limitation. | `src/xpath/grammar/mod.rs:321-406` |
 
 ---
