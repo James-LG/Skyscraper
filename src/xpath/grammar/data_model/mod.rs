@@ -487,6 +487,9 @@ impl ElementNode {
 
     /// Text before the first subelement. This is either a string or the value None, if there was no text.
     ///
+    /// Only returns text that appears before the first child element, comment, or processing
+    /// instruction node. Attribute nodes are not considered children for this purpose.
+    ///
     /// Use [`ElementNode::text_content`] to get all text _including_ text in descendant nodes.
     ///
     /// # Arguments
@@ -495,43 +498,26 @@ impl ElementNode {
     ///
     /// # Returns
     ///
-    /// A string of all text contained in this element.
+    /// The text before the first subelement, or `None` if there is no such text.
     pub fn text(&self, tree: &XpathItemTree) -> Option<String> {
-        let strings: Vec<String> =
-            // Get all children.
-            Self::get_all_text_nodes(tree, self, false)
-            .into_iter()
-            .map(|x| x.content)
-            .collect();
-
-        strings.into_iter().next()
-    }
-
-    fn get_all_text_nodes(
-        tree: &XpathItemTree,
-        node: &ElementNode,
-        recurse: bool,
-    ) -> Vec<TextNode> {
-        node
-            // Get all children of the given node.
-            .children(tree)
-            // Combine all the direct and indirect children into a Vec.
-            .fold(Vec::new(), |mut v, child| {
-                match child {
-                    XpathItemTreeNode::ElementNode(child_element) => {
-                        if recurse {
-                            // If this child is an element node, get all the text nodes in it.
-                            v.extend(Self::get_all_text_nodes(tree, &child_element, recurse));
-                        }
-                    }
-                    XpathItemTreeNode::TextNode(text) => {
-                        // If this child is a text node, push it to the Vec.
-                        v.push(text.clone());
-                    }
-                    _ => {}
+        let mut texts = Vec::new();
+        for child in self.children(tree) {
+            match child {
+                XpathItemTreeNode::TextNode(text) => {
+                    texts.push(text.content.clone());
                 }
-                v
-            })
+                // Attribute nodes are metadata, not positional children.
+                XpathItemTreeNode::AttributeNode(_) => {}
+                // Stop at the first element, comment, PI, or other non-text child.
+                _ => break,
+            }
+        }
+
+        if texts.is_empty() {
+            None
+        } else {
+            Some(texts.join(""))
+        }
     }
 
     /// Get the [XpathItem] representation of the element.
