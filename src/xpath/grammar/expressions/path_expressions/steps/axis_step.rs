@@ -71,14 +71,23 @@ impl AxisStep {
         context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         let nodes = self.step_type.eval(context)?;
-        let items: XpathItemSet<'tree> = nodes.into_iter().map(XpathItem::Node).collect();
+        let mut items: XpathItemSet<'tree> = nodes.into_iter().map(XpathItem::Node).collect();
 
         // If there are no predicates, return expression result.
         if self.predicates.is_empty() {
             return Ok(items);
         }
 
-        // Otherwise, filter using predicates.
+        // For reverse axes, context positions are assigned in reverse document
+        // order (XPath 3.1 §3.3.2.2), so position 1 is the node closest to
+        // the context node.
+        let is_reverse = matches!(self.step_type, AxisStepType::ReverseStep(_));
+        if is_reverse {
+            items.sort_by_document_order();
+            items.reverse();
+        }
+
+        // Filter using predicates.
         let mut filtered_items = XpathItemSet::new();
         for (i, item) in items.iter().enumerate() {
             // All predicates must match for a node to be selected.
@@ -98,6 +107,11 @@ impl AxisStep {
             if is_match {
                 filtered_items.insert(item.clone());
             }
+        }
+
+        // Restore document order for the final result.
+        if is_reverse {
+            filtered_items.sort_by_document_order();
         }
 
         Ok(filtered_items)

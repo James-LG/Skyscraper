@@ -125,6 +125,11 @@ impl<'tree> XpathItemSet<'tree> {
         }
     }
 
+    /// Reverse the order of items in the set.
+    pub(crate) fn reverse(&mut self) {
+        self.index_set.reverse();
+    }
+
     /// Sort items by document order (arena NodeId).
     ///
     /// Items that are nodes are sorted by their NodeId, which corresponds to
