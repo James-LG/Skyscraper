@@ -130,8 +130,22 @@ fn compare_skyscraper_to_lxml(
                 "Text mismatch at index {}",
                 i
             );
+            // Compare attributes case-insensitively for keys because lxml
+            // lowercases all HTML attribute names, while skyscraper correctly
+            // preserves SVG attribute casing per the WHATWG spec (e.g.
+            // "viewBox" vs lxml's "viewbox").
+            let lxml_lower: HashMap<String, String> = lxml_elem
+                .attrib
+                .iter()
+                .map(|(k, v)| (k.to_ascii_lowercase(), v.clone()))
+                .collect();
+            let sky_lower: HashMap<String, String> = skyscraper_elem
+                .attrib
+                .iter()
+                .map(|(k, v)| (k.to_ascii_lowercase(), v.clone()))
+                .collect();
             assert_eq!(
-                lxml_elem.attrib, skyscraper_elem.attrib,
+                lxml_lower, sky_lower,
                 "Attribute mismatch at index {}",
                 i
             );
