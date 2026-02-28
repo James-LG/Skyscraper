@@ -65,6 +65,70 @@ fn comment_test_matches_comments() {
     assert_eq!(items.len(), 1, "should match 1 comment: {items:?}");
 }
 
+/// `comment()` string value is the comment's content (XPath 3.1 §6.7.6).
+#[test]
+fn comment_node_string_value() {
+    let text = r#"<html><body><!-- hello world --><div>a</div></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("string(//body/comment())").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(" hello world ".to_string())),
+        "comment string value should be its content"
+    );
+}
+
+/// `comment()` parent axis navigates to the containing element.
+#[test]
+fn comment_node_parent_navigation() {
+    let text = r#"<html><body><!-- hello --><div>a</div></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("name(//comment()/parent::*)").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String("body".to_string())),
+        "comment parent should be 'body'"
+    );
+}
+
+/// `comment()` ancestor axis navigates up the tree.
+#[test]
+fn comment_node_ancestor_navigation() {
+    let text = r#"<html><body><div><!-- inside div --></div></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("count(//comment()/ancestor::*)").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Integer(3)),
+        "comment should have 3 ancestors: div, body, html"
+    );
+}
+
+/// `data()` atomization of a comment node returns its content.
+#[test]
+fn comment_node_data_atomization() {
+    let text = r#"<html><body><!-- atomize me --><div>a</div></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("data(//body/comment())").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(" atomize me ".to_string())),
+        "data() on comment should return its content"
+    );
+}
+
 /// `namespace-node()` returns empty in HTML context.
 #[test]
 fn namespace_node_test_returns_empty() {

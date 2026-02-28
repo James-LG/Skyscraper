@@ -117,15 +117,7 @@ impl XpathItemTreeNode {
     }
 
     pub fn parent<'tree>(&self, tree: &'tree XpathItemTree) -> Option<&'tree XpathItemTreeNode> {
-        let id = match self {
-            XpathItemTreeNode::ElementNode(e) => Some(e.id()),
-            XpathItemTreeNode::TextNode(t) => Some(t.id()),
-            XpathItemTreeNode::AttributeNode(a) => Some(a.id()),
-            XpathItemTreeNode::PINode(p) => Some(p.id()),
-            _ => None,
-        };
-
-        id.and_then(|id| {
+        self.node_id().and_then(|id| {
             let parent_id = tree.arena.get(id).unwrap().parent()?;
             Some(tree.get(parent_id))
         })
@@ -156,7 +148,7 @@ impl XpathItemTreeNode {
             XpathItemTreeNode::DocumentNode(node) => node.text_content(tree),
             XpathItemTreeNode::ElementNode(node) => node.text_content(tree),
             XpathItemTreeNode::PINode(node) => node.data.clone(),
-            XpathItemTreeNode::CommentNode(_) => String::from(""),
+            XpathItemTreeNode::CommentNode(c) => c.content.clone(),
             XpathItemTreeNode::TextNode(node) => node.content.to_string(),
             XpathItemTreeNode::AttributeNode(_) => String::from(""),
             XpathItemTreeNode::DoctypeNode(_) => String::from(""),
