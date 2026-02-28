@@ -78,3 +78,129 @@ fn name_test_non_node_no_panic() {
         Err(_) => {} // Acceptable — the expression may error for another reason.
     }
 }
+
+// --- prefix:* wildcard tests ---
+
+/// `svg:*` matches only SVG-namespace elements, not HTML elements.
+#[test]
+fn wildcard_svg_prefix_matches_svg_elements() {
+    let text = r#"<html><body><svg><rect/><circle/></svg><div>not svg</div></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("//svg:*").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    // Should match: svg, rect, circle (all in SVG namespace)
+    assert_eq!(items.len(), 3, "should match svg, rect, circle: {items:?}");
+    for item in &items {
+        let el = item.extract_as_node().extract_as_element_node();
+        assert!(
+            ["svg", "rect", "circle"].contains(&el.name.as_str()),
+            "unexpected element: {}",
+            el.name
+        );
+    }
+}
+
+/// `svg:*` does not match HTML elements.
+#[test]
+fn wildcard_svg_prefix_excludes_html_elements() {
+    let text = r#"<html><body><div>hello</div></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("//svg:*").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 0, "should not match any HTML elements: {items:?}");
+}
+
+/// `html:*` matches HTML-namespace elements.
+#[test]
+fn wildcard_html_prefix_matches_html_elements() {
+    let text = r#"<html><body><div>a</div><span>b</span></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("//body/html:*").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 2, "should match div and span: {items:?}");
+}
+
+/// `html:*` does not match SVG-namespace elements.
+#[test]
+fn wildcard_html_prefix_excludes_svg_elements() {
+    let text = r#"<html><body><svg><rect/></svg></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    // Look only at children of svg; those are in SVG namespace.
+    let xpath = xpath::parse("//svg/html:*").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 0, "should not match SVG elements: {items:?}");
+}
+
+/// `mathml:*` matches MathML-namespace elements.
+#[test]
+fn wildcard_mathml_prefix_matches_mathml_elements() {
+    let text = r#"<html><body><math><mi>x</mi><mo>+</mo><mn>1</mn></math></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("//mathml:*").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    // Should match: math, mi, mo, mn
+    assert_eq!(items.len(), 4, "should match math, mi, mo, mn: {items:?}");
+}
+
+/// Unknown prefix raises XPST0081 error.
+#[test]
+fn wildcard_unknown_prefix_errors() {
+    let text = r#"<html><body><div>hello</div></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("//foo:*").unwrap();
+
+    let result = xpath.apply(&document);
+    assert!(result.is_err(), "unknown prefix should produce an error");
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("XPST0081"),
+        "error should reference XPST0081: {err}"
+    );
+}
+
+/// `Q{http://www.w3.org/2000/svg}*` matches SVG elements (braced URI wildcard).
+#[test]
+fn wildcard_braced_uri_svg_matches() {
+    let text = r#"<html><body><svg><rect/></svg></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("//Q{http://www.w3.org/2000/svg}*").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 2, "should match svg and rect: {items:?}");
+}
+
+/// `Q{http://www.w3.org/1999/xhtml}*` matches HTML elements (braced URI wildcard).
+#[test]
+fn wildcard_braced_uri_html_matches() {
+    let text = r#"<html><body><div>a</div></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("//body/Q{http://www.w3.org/1999/xhtml}*").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1, "should match div: {items:?}");
+}
+
+/// `Q{http://www.w3.org/2000/svg}*` does not match HTML elements.
+#[test]
+fn wildcard_braced_uri_svg_excludes_html() {
+    let text = r#"<html><body><div>hello</div></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("//Q{http://www.w3.org/2000/svg}*").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 0, "should not match HTML elements: {items:?}");
+}

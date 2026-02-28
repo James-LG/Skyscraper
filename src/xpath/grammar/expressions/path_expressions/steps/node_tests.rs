@@ -7,6 +7,7 @@ use nom::{
 };
 
 use crate::{
+    html::grammar::{HTML_NAMESPACE, MATHML_NAMESPACE, SVG_NAMESPACE},
     xpath::{
         grammar::{
             data_model::XpathItem,
@@ -86,7 +87,12 @@ fn name_test(input: &str) -> Res<&str, NameTest> {
         wildcard(input).map(|(next_input, res)| (next_input, NameTest::Wildcard(res)))
     }
 
-    context("name_test", alt((eq_name_map, wildcard_map)))(input)
+    // Try wildcard first: `NCName:*`, `*:NCName`, `Q{URI}*`, and `*` are
+    // never valid EQNames, so there is no ambiguity. If we try eq_name first,
+    // nom greedily parses `svg:*` as the unprefixed name "svg" (leaving ":*"),
+    // because `QName::PrefixedName` fails (`*` is not a valid NCName for the
+    // local part) and `QName::UnprefixedName` succeeds on just the prefix.
+    context("name_test", alt((wildcard_map, eq_name_map)))(input)
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -161,7 +167,7 @@ impl NameTest {
                     None => false,
                 }
             }
-            NameTest::Wildcard(wildcard) => wildcard.is_match(axis, node),
+            NameTest::Wildcard(wildcard) => wildcard.is_match(axis, node)?,
         };
 
         if is_match {
@@ -225,12 +231,37 @@ impl Display for Wildcard {
     }
 }
 
+/// Resolve a namespace prefix to its namespace URI using well-known bindings.
+///
+/// In an HTML-only processor there are no in-scope namespace bindings from an
+/// XML context, so we use the three namespaces defined by the WHATWG HTML spec:
+/// - `html`   → `http://www.w3.org/1999/xhtml`
+/// - `svg`    → `http://www.w3.org/2000/svg`
+/// - `mathml` → `http://www.w3.org/1998/Math/MathML`
+///
+/// Note: `math` is deliberately *not* bound here because the XPath 3.1 spec
+/// reserves it for the XPath math functions namespace
+/// (`http://www.w3.org/2005/xpath-functions/math`), which is already used by
+/// function dispatch (e.g. `math:pi()`). Use `mathml` for MathML elements.
+///
+/// Returns `Err` with `XPST0081` for unrecognized prefixes per XPath 3.1 §3.1.1.
+fn resolve_prefix(prefix: &str) -> Result<&'static str, ExpressionApplyError> {
+    match prefix {
+        "html" => Ok(HTML_NAMESPACE),
+        "svg" => Ok(SVG_NAMESPACE),
+        "mathml" => Ok(MATHML_NAMESPACE),
+        _ => Err(ExpressionApplyError::new(format!(
+            "err:XPST0081 Namespace prefix `{prefix}` is not bound to a namespace URI"
+        ))),
+    }
+}
+
 impl Wildcard {
     pub(crate) fn is_match<'tree>(
         &self,
         axis: BiDirectionalAxis,
         node: &'tree XpathItemTreeNode,
-    ) -> bool {
+    ) -> Result<bool, ExpressionApplyError> {
         // Wildcards only match context items that are the axis' principal node kind.
         // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#dt-principal-node-kind
         let is_principal_node_kind = match axis {
@@ -245,33 +276,38 @@ impl Wildcard {
         };
 
         if !is_principal_node_kind {
-            return false;
+            return Ok(false);
         }
 
         // Get node name and namespace for matching.
+        // HTML elements have namespace `None` (implicitly HTML_NAMESPACE).
         let (node_name, node_ns): (Option<&str>, Option<&str>) = match node {
             XpathItemTreeNode::ElementNode(e) => {
                 (Some(e.name.as_str()), e.namespace.as_deref())
             }
-            XpathItemTreeNode::AttributeNode(a) => (Some(a.name.as_str()), None),
+            XpathItemTreeNode::AttributeNode(a) => (Some(a.name.as_str()), a.namespace.as_deref()),
             _ => (None, None),
         };
 
         match self {
-            Wildcard::Simple => true,
+            Wildcard::Simple => Ok(true),
             Wildcard::PrefixedName(local) => {
                 // `*:local` — matches any namespace, local name must match.
-                node_name.map_or(false, |n| n == local)
+                Ok(node_name.map_or(false, |n| n == local))
             }
-            Wildcard::SuffixedName(_prefix) => {
+            Wildcard::SuffixedName(prefix) => {
                 // `prefix:*` — matches any local name in the namespace bound
-                // to prefix. In HTML, no prefix bindings exist, so match any
-                // element (the principal node kind check already passed).
-                true
+                // to the prefix. Resolve the prefix via well-known bindings;
+                // raises XPST0081 if the prefix is unknown.
+                let target_ns = resolve_prefix(prefix)?;
+                // HTML elements store namespace as None (implicitly HTML_NAMESPACE).
+                let effective_ns = node_ns.unwrap_or(HTML_NAMESPACE);
+                Ok(effective_ns == target_ns)
             }
             Wildcard::BracedUri(uri) => {
                 // `Q{uri}*` — matches any local name in the specified namespace.
-                node_ns.map_or(false, |ns| ns == uri)
+                let effective_ns = node_ns.unwrap_or(HTML_NAMESPACE);
+                Ok(effective_ns == uri.as_str())
             }
         }
     }

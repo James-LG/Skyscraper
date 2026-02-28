@@ -54,7 +54,7 @@ All 13 axes parse and evaluate:
 
 ### Fully Implemented
 
-- Name tests: QName, `*`, `*:localname`, `Q{uri}name`
+- Name tests: QName, `*`, `*:localname`, `prefix:*` (well-known prefixes: `html`, `svg`, `mathml`), `Q{uri}name`, `Q{uri}*`
 - Kind tests: `node()`, `text()`, `comment()`, `element()`, `element(name)`, `element(*)`, `attribute()`, `attribute(name)`, `attribute(*)`, `item()`, `document-node()`, `document-node(element-test)`, `processing-instruction()`, `processing-instruction(name)`
 - Schema-aware tests (correctly return empty for non-schema-aware processor): `schema-element()`, `schema-attribute()`
 - Function/map/array tests: `function(*)`, `map(*)`, `array(*)`, `map(K,V)`, `array(T)`, `function(T1,...) as R`
@@ -64,7 +64,6 @@ All 13 axes parse and evaluate:
 | Feature | Gap | Location |
 |---------|-----|----------|
 | `namespace-node()` | Parses but always returns empty for HTML | `src/xpath/grammar/types/mod.rs:184-187` |
-| `prefix:*` wildcard | Ignores the prefix and matches all elements; should only match elements in the namespace bound to the prefix (SVG/MathML namespaces are now tracked on elements) | `src/xpath/grammar/expressions/path_expressions/steps/node_tests.rs:266-270` |
 
 ---
 
