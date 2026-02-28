@@ -198,19 +198,75 @@ impl Display for ItemType {
     }
 }
 
+/// Check whether a local type name is a recognized XSD built-in atomic type.
+fn is_recognized_xsd_atomic_type(name: &str) -> bool {
+    matches!(
+        name,
+        // Implemented types
+        "integer" | "string" | "boolean" | "float" | "double"
+        // Abstract / special types
+        | "anyAtomicType" | "untypedAtomic"
+        // Union type (XPath 3.1)
+        | "numeric"
+        // Numeric types
+        | "decimal"
+        // Integer subtypes
+        | "nonPositiveInteger" | "negativeInteger" | "long" | "int"
+        | "short" | "byte" | "nonNegativeInteger" | "unsignedLong"
+        | "unsignedInt" | "unsignedShort" | "unsignedByte" | "positiveInteger"
+        // String subtypes
+        | "normalizedString" | "token" | "language" | "NMTOKEN" | "Name"
+        | "NCName" | "ID" | "IDREF" | "ENTITY"
+        // Date/time types
+        | "date" | "dateTime" | "time" | "duration"
+        | "yearMonthDuration" | "dayTimeDuration"
+        | "gYearMonth" | "gYear" | "gMonthDay" | "gDay" | "gMonth"
+        // Other types
+        | "QName" | "anyURI" | "base64Binary" | "hexBinary" | "NOTATION"
+        // XSD 1.1 / XPath 3.1 special type (no value space)
+        | "error"
+    )
+}
+
 /// Check if an atomic value matches a type name.
 ///
-/// Returns `true` if the atomic value is of the given type, or if the type name
-/// is not one of the known XPath built-in types (fall back to accepting any atomic).
-fn atomic_matches_type_name(atomic: &AnyAtomicType, type_local: Option<&str>) -> bool {
-    match type_local {
-        Some("integer") => matches!(atomic, AnyAtomicType::Integer(_)),
-        Some("string") => matches!(atomic, AnyAtomicType::String(_)),
-        Some("boolean") => matches!(atomic, AnyAtomicType::Boolean(_)),
-        Some("float") => matches!(atomic, AnyAtomicType::Float(_)),
-        Some("double") => matches!(atomic, AnyAtomicType::Double(_)),
-        // Unknown type name — fall back to accepting any atomic.
-        _ => true,
+/// Returns `Ok(true)` if the atomic value is of the given type, `Ok(false)` if
+/// it is a recognized type that doesn't match, or `Err` with `err:XPST0051`
+/// if the type name is not a recognized XSD built-in atomic type.
+fn atomic_matches_type_name(
+    atomic: &AnyAtomicType,
+    type_name: &AtomicOrUnionType,
+) -> Result<bool, ExpressionApplyError> {
+    match type_name.local_name() {
+        // Implemented types
+        Some("integer") => Ok(matches!(atomic, AnyAtomicType::Integer(_))),
+        Some("string") => Ok(matches!(atomic, AnyAtomicType::String(_))),
+        Some("boolean") => Ok(matches!(atomic, AnyAtomicType::Boolean(_))),
+        Some("float") => Ok(matches!(atomic, AnyAtomicType::Float(_))),
+        Some("double") => Ok(matches!(atomic, AnyAtomicType::Double(_))),
+
+        // xs:anyAtomicType — matches any atomic value.
+        Some("anyAtomicType") => Ok(true),
+
+        // xs:decimal — xs:integer is a subtype of xs:decimal per XSD type hierarchy.
+        Some("decimal") => Ok(matches!(atomic, AnyAtomicType::Integer(_))),
+
+        // xs:numeric — union of xs:double, xs:float, xs:decimal (and subtypes).
+        Some("numeric") => Ok(matches!(
+            atomic,
+            AnyAtomicType::Integer(_) | AnyAtomicType::Float(_) | AnyAtomicType::Double(_)
+        )),
+
+        // Recognized but unimplemented types — no values of these types exist
+        // in this implementation, so no atomic value can match them.
+        Some(name) if is_recognized_xsd_atomic_type(name) => Ok(false),
+
+        // Unknown type name — raise err:XPST0051.
+        // Per spec this is a static error, but we raise it at evaluation time
+        // since the implementation has no separate static analysis pass.
+        _ => Err(ExpressionApplyError::new(format!(
+            "err:XPST0051 Unknown atomic type '{type_name}'"
+        ))),
     }
 }
 
@@ -278,13 +334,17 @@ impl ItemType {
                 }
             },
             ItemType::AtomicOrUnionType(x) => {
-                let type_local = x.local_name();
-                Ok(item_set.iter().all(|item| match item {
-                    XpathItem::AnyAtomicType(atomic) => {
-                        atomic_matches_type_name(atomic, type_local)
+                for item in item_set {
+                    match item {
+                        XpathItem::AnyAtomicType(atomic) => {
+                            if !atomic_matches_type_name(atomic, x)? {
+                                return Ok(false);
+                            }
+                        }
+                        _ => return Ok(false),
                     }
-                    _ => false,
-                }))
+                }
+                Ok(true)
             }
         }
     }
@@ -316,12 +376,11 @@ impl ItemType {
         item_tree: &'tree XpathItemTree,
         typed: &TypedMapTest,
     ) -> Result<bool, ExpressionApplyError> {
-        let key_type_local = typed.atomic_or_union_type.local_name();
         for item in item_set.iter() {
             match item {
                 XpathItem::Function(Function::Map { entries }) => {
                     for (key, values) in entries {
-                        if !atomic_matches_type_name(key, key_type_local) {
+                        if !atomic_matches_type_name(key, &typed.atomic_or_union_type)? {
                             return Ok(false);
                         }
                         let value_set: XpathItemSet = values

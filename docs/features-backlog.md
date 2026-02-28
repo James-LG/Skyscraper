@@ -76,12 +76,15 @@ All 13 axes parse and evaluate:
 - Occurrence indicators: `?`, `*`, `+`
 - `empty-sequence()` matching
 - Cast rules between the 5 implemented atomic types
+- `xs:anyAtomicType` matching (matches any atomic value)
+- `xs:decimal` matching (accepts integers via subtype relationship)
+- `xs:numeric` matching (union of double, float, decimal/integer)
+- `err:XPST0051` for unrecognized atomic type names in `instance of` / `treat as`
+- Recognized-but-unimplemented XSD types (date, duration, QName, etc.) correctly return `false` rather than silently matching
 
 ### Partially Implemented
 
-| Feature | Gap | Location |
-|---------|-----|----------|
-| Unknown type names in `instance of` / `treat as` | `atomic_matches_type_name` silently returns `true` for unrecognized type names (e.g. `xs:anyAtomicType`, `xs:untypedAtomic`); should raise `err:XPST0051` | `src/xpath/grammar/types/sequence_type.rs:205-215` |
+(No remaining gaps — all recognized XSD type names are handled correctly in `instance of` / `treat as` matching.)
 
 ### Not Implemented
 

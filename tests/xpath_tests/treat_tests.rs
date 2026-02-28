@@ -40,3 +40,26 @@ fn treat_incorrect_type_should_fail() {
         "Error applying expression err:XPDY0050 Cannot treat XpathItemSet { index_set: {Node(ElementNode(ElementNode { name: \"html\" }))} } as document-node()"
     );
 }
+
+#[test]
+fn treat_unknown_type_raises_xpst0051() {
+    // arrange
+    let text = r###"
+        <html>
+            <body>
+            </body>
+        </html>"###;
+
+    let document = html::parse(&text).unwrap();
+    let xpath = xpath::parse("42 treat as xs:foobar").unwrap();
+
+    // act
+    let err = xpath.apply(&document).unwrap_err();
+
+    // assert
+    assert!(
+        err.to_string().contains("XPST0051"),
+        "expected XPST0051, got: {}",
+        err
+    );
+}

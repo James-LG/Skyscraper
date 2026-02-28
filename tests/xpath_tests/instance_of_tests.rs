@@ -485,3 +485,215 @@ fn instance_of_typed_function_non_function() {
         XpathItem::AnyAtomicType(AnyAtomicType::Boolean(false))
     );
 }
+
+// ============================================================
+// Unknown / unrecognized type names: err:XPST0051
+// ============================================================
+
+/// An unknown type name in `instance of` should raise err:XPST0051.
+#[test]
+fn instance_of_unknown_type_raises_xpst0051() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("42 instance of xs:foobar").unwrap();
+
+    let err = xpath.apply(&document).unwrap_err();
+    assert!(
+        err.to_string().contains("XPST0051"),
+        "expected XPST0051, got: {}",
+        err
+    );
+}
+
+/// An unknown unprefixed type name should also raise err:XPST0051.
+#[test]
+fn instance_of_unknown_unprefixed_type_raises_xpst0051() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("42 instance of foobar").unwrap();
+
+    let err = xpath.apply(&document).unwrap_err();
+    assert!(
+        err.to_string().contains("XPST0051"),
+        "expected XPST0051, got: {}",
+        err
+    );
+}
+
+// ============================================================
+// xs:anyAtomicType — matches any atomic value
+// ============================================================
+
+/// An integer is an instance of xs:anyAtomicType.
+#[test]
+fn instance_of_any_atomic_type_integer() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("42 instance of xs:anyAtomicType").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true))
+    );
+}
+
+/// A string is an instance of xs:anyAtomicType.
+#[test]
+fn instance_of_any_atomic_type_string() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse(r#""hello" instance of xs:anyAtomicType"#).unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true))
+    );
+}
+
+/// A node is NOT an instance of xs:anyAtomicType.
+#[test]
+fn instance_of_any_atomic_type_node_false() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("/html instance of xs:anyAtomicType").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(false))
+    );
+}
+
+// ============================================================
+// xs:decimal — xs:integer is a subtype
+// ============================================================
+
+/// An integer is an instance of xs:decimal (subtype relationship).
+#[test]
+fn instance_of_decimal_integer() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("42 instance of xs:decimal").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true))
+    );
+}
+
+/// A string is not an instance of xs:decimal.
+#[test]
+fn instance_of_decimal_string_false() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse(r#""hello" instance of xs:decimal"#).unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(false))
+    );
+}
+
+// ============================================================
+// xs:numeric — union of xs:double, xs:float, xs:decimal
+// ============================================================
+
+/// An integer is an instance of xs:numeric.
+#[test]
+fn instance_of_numeric_integer() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("42 instance of xs:numeric").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true))
+    );
+}
+
+/// A double is an instance of xs:numeric.
+#[test]
+fn instance_of_numeric_double() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("3.14e0 instance of xs:numeric").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true))
+    );
+}
+
+/// A string is not an instance of xs:numeric.
+#[test]
+fn instance_of_numeric_string_false() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse(r#""hello" instance of xs:numeric"#).unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(false))
+    );
+}
+
+// ============================================================
+// Recognized but unimplemented types — return false
+// ============================================================
+
+/// An integer is not an instance of xs:date (recognized but unimplemented).
+#[test]
+fn instance_of_unimplemented_type_returns_false() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("42 instance of xs:date").unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(false))
+    );
+}
+
+/// A string is not an instance of xs:untypedAtomic (recognized but unimplemented).
+#[test]
+fn instance_of_untyped_atomic_returns_false() {
+    let text = r#"<html><body></body></html>"#;
+
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse(r#""hello" instance of xs:untypedAtomic"#).unwrap();
+
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(false))
+    );
+}
