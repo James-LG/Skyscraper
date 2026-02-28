@@ -296,15 +296,18 @@ fn general_comp(input: &str) -> Res<&str, GeneralComp> {
             .map(|(next_input, _res)| (next_input, GeneralComp::GreaterThanEqualTo))
     }
 
+    // Multi-character operators must be tried before their single-character
+    // prefixes (e.g. "<=" before "<") so the shorter match doesn't greedily
+    // consume part of the longer token.
     context(
         "general_comp",
         alt((
-            equal,
             not_equal,
-            less_than,
             less_than_equal_to,
-            greater_than,
             greater_than_equal_to,
+            equal,
+            less_than,
+            greater_than,
         )),
     )(input)
 }
