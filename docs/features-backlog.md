@@ -320,6 +320,6 @@ Additional completed features: adoption agency algorithm (with scope checks), fo
 
 | Feature | Gap | Location |
 |---------|-----|----------|
-| `func_data` internal helper | When called indirectly (via `fn:distinct-values`, `fn:sum`, `fn:avg`, `fn:max`, `fn:min`, etc.), function items are silently atomized to the placeholder string `"[function item]"` instead of raising `err:FOTY0013`. The top-level `fn:data()` dispatch correctly raises the error, but the infallible helper's return type (`Vec<AnyAtomicType>`) prevents error propagation. | `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs:2435-2439` |
-| `func_string` internal helper | Same issue: function items are silently stringified to `"[function item]"` instead of raising `err:FOTY0014` when called indirectly (via `fn:concat`, `fn:string-join`, `fn:starts-with`, etc.). The top-level `fn:string()` dispatch is correct. | `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs:2466-2471` |
+| `func_data` internal helper | Complete — returns `Result`, raises `err:FOTY0013` for function items at all call sites | |
+| `func_string` internal helper | Complete — returns `Result`, raises `err:FOTY0014` for function items at all call sites | |
 | Unknown function dispatch | Complete — uses `err:XPST0017` | |

@@ -194,7 +194,7 @@ impl PrimaryExpr {
                 for entry in &mc.entries {
                     // Evaluate the key — must produce a single atomic value.
                     let key_set = entry.key.eval(context)?;
-                    let key_atoms = func_data(&key_set, context.item_tree);
+                    let key_atoms = func_data(&key_set, context.item_tree)?;
                     if key_atoms.len() != 1 {
                         return Err(ExpressionApplyError::new(format!(
                             "Map key must be a single atomic value, got {} values",
@@ -211,7 +211,7 @@ impl PrimaryExpr {
                     }
                     // Evaluate the value and atomize.
                     let value_set = entry.value.eval(context)?;
-                    let value_atoms = func_data(&value_set, context.item_tree);
+                    let value_atoms = func_data(&value_set, context.item_tree)?;
                     entries.push((key, value_atoms));
                 }
                 Ok(xpath_item_set![XpathItem::Function(Function::Map {
@@ -225,7 +225,7 @@ impl PrimaryExpr {
                         let mut members = Vec::new();
                         for entry in &sq.entries {
                             let value_set = entry.eval(context)?;
-                            let atoms = func_data(&value_set, context.item_tree);
+                            let atoms = func_data(&value_set, context.item_tree)?;
                             members.push(atoms);
                         }
                         members
@@ -235,7 +235,7 @@ impl PrimaryExpr {
                         // becomes one member (a singleton sequence).
                         if let Some(expr) = cu.enclosed_expr().expr() {
                             let value_set = expr.eval(context)?;
-                            let atoms = func_data(&value_set, context.item_tree);
+                            let atoms = func_data(&value_set, context.item_tree)?;
                             atoms.into_iter().map(|a| vec![a]).collect()
                         } else {
                             Vec::new()

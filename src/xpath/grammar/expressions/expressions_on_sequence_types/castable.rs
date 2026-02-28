@@ -81,7 +81,7 @@ impl CastableExpr {
         }
 
         // Atomize to check if we have exactly one value.
-        let atomized = func_data(&result, context.item_tree);
+        let atomized = func_data(&result, context.item_tree)?;
         if atomized.len() != 1 {
             return Ok(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::Boolean(false)

@@ -78,7 +78,7 @@ impl CastExpr {
         }
 
         // Atomize the result to get a single atomic value.
-        let atomized = func_data(&result, context.item_tree);
+        let atomized = func_data(&result, context.item_tree)?;
         if atomized.len() != 1 {
             return Err(ExpressionApplyError {
                 msg: format!(

@@ -102,8 +102,8 @@ impl ComparisonExpr {
         let second_result = comparison.1.eval(context)?;
 
         // Atomize both results.
-        let atomized1 = func_data(&result, &context.item_tree);
-        let atomized2 = func_data(&second_result, &context.item_tree);
+        let atomized1 = func_data(&result, &context.item_tree)?;
+        let atomized2 = func_data(&second_result, &context.item_tree)?;
 
         // Do some type checking first.
 

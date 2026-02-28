@@ -92,7 +92,7 @@ impl RangeExpr {
         context: &XpathExpressionContext<'tree>,
         operand_name: &str,
     ) -> Result<i64, ExpressionApplyError> {
-        let atomized = func_data(result, context.item_tree);
+        let atomized = func_data(result, context.item_tree)?;
         if atomized.len() != 1 {
             return Err(ExpressionApplyError {
                 msg: format!(

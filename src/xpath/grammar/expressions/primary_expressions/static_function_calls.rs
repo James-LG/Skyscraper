@@ -218,15 +218,7 @@ fn dispatch_by_local_name<'tree>(
             } else {
                 args[0].clone()
             };
-            // Per spec, fn:data raises err:FOTY0013 for function items.
-            for item in target.iter() {
-                if matches!(item, XpathItem::Function(_)) {
-                    return Err(ExpressionApplyError::new(
-                        "err:FOTY0013: fn:data is not defined for function items".to_string(),
-                    ));
-                }
-            }
-            let atoms = func_data(&target, context.item_tree);
+            let atoms = func_data(&target, context.item_tree)?;
             Ok(Some(
                 atoms
                     .into_iter()
@@ -245,13 +237,7 @@ fn dispatch_by_local_name<'tree>(
                     args[0].len()
                 )));
             };
-            // Per spec, fn:string raises an error for function items.
-            if matches!(target, XpathItem::Function(_)) {
-                return Err(ExpressionApplyError::new(
-                    "err:FOTY0014: fn:string is not defined for function items".to_string(),
-                ));
-            }
-            let s = func_string(target, context.item_tree);
+            let s = func_string(target, context.item_tree)?;
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::String(s)
             )]))
@@ -301,7 +287,7 @@ fn dispatch_by_local_name<'tree>(
                 }
                 &args[0][0]
             };
-            let s = func_string(target, context.item_tree);
+            let s = func_string(target, context.item_tree)?;
             let val = s.trim().parse::<f64>().unwrap_or(f64::NAN);
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::Double(ordered_float::OrderedFloat(val))
@@ -341,7 +327,7 @@ fn dispatch_by_local_name<'tree>(
                 if arg.is_empty() {
                     // empty sequence → empty string
                 } else {
-                    result.push_str(&func_string(&arg[0], context.item_tree));
+                    result.push_str(&func_string(&arg[0], context.item_tree)?);
                 }
             }
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
@@ -360,7 +346,7 @@ fn dispatch_by_local_name<'tree>(
                 if args[1].is_empty() {
                     String::new()
                 } else {
-                    func_string(&args[1][0], context.item_tree)
+                    func_string(&args[1][0], context.item_tree)?
                 }
             } else {
                 String::new()
@@ -368,7 +354,7 @@ fn dispatch_by_local_name<'tree>(
             let parts: Vec<String> = args[0]
                 .iter()
                 .map(|item| func_string(item, context.item_tree))
-                .collect();
+                .collect::<Result<Vec<_>, _>>()?;
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::String(parts.join(&separator))
             )]))
@@ -376,13 +362,13 @@ fn dispatch_by_local_name<'tree>(
         // https://www.w3.org/TR/xpath-functions-31/#func-string-length
         "string-length" => {
             let s = if args.is_empty() {
-                func_string(&context.item, context.item_tree)
+                func_string(&context.item, context.item_tree)?
             } else {
                 check_arity("fn:string-length", args, 1)?;
                 if args[0].is_empty() {
                     String::new()
                 } else {
-                    func_string(&args[0][0], context.item_tree)
+                    func_string(&args[0][0], context.item_tree)?
                 }
             };
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
@@ -392,13 +378,13 @@ fn dispatch_by_local_name<'tree>(
         // https://www.w3.org/TR/xpath-functions-31/#func-normalize-space
         "normalize-space" => {
             let s = if args.is_empty() {
-                func_string(&context.item, context.item_tree)
+                func_string(&context.item, context.item_tree)?
             } else {
                 check_arity("fn:normalize-space", args, 1)?;
                 if args[0].is_empty() {
                     String::new()
                 } else {
-                    func_string(&args[0][0], context.item_tree)
+                    func_string(&args[0][0], context.item_tree)?
                 }
             };
             let normalized = s.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -412,7 +398,7 @@ fn dispatch_by_local_name<'tree>(
             let s = if args[0].is_empty() {
                 String::new()
             } else {
-                func_string(&args[0][0], context.item_tree)
+                func_string(&args[0][0], context.item_tree)?
             };
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::String(s.to_uppercase())
@@ -424,7 +410,7 @@ fn dispatch_by_local_name<'tree>(
             let s = if args[0].is_empty() {
                 String::new()
             } else {
-                func_string(&args[0][0], context.item_tree)
+                func_string(&args[0][0], context.item_tree)?
             };
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::String(s.to_lowercase())
@@ -436,12 +422,12 @@ fn dispatch_by_local_name<'tree>(
             let haystack = if args[0].is_empty() {
                 String::new()
             } else {
-                func_string(&args[0][0], context.item_tree)
+                func_string(&args[0][0], context.item_tree)?
             };
             let needle = if args[1].is_empty() {
                 String::new()
             } else {
-                func_string(&args[1][0], context.item_tree)
+                func_string(&args[1][0], context.item_tree)?
             };
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::Boolean(haystack.starts_with(&needle))
@@ -453,12 +439,12 @@ fn dispatch_by_local_name<'tree>(
             let haystack = if args[0].is_empty() {
                 String::new()
             } else {
-                func_string(&args[0][0], context.item_tree)
+                func_string(&args[0][0], context.item_tree)?
             };
             let needle = if args[1].is_empty() {
                 String::new()
             } else {
-                func_string(&args[1][0], context.item_tree)
+                func_string(&args[1][0], context.item_tree)?
             };
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::Boolean(haystack.ends_with(&needle))
@@ -475,7 +461,7 @@ fn dispatch_by_local_name<'tree>(
             let s = if args[0].is_empty() {
                 String::new()
             } else {
-                func_string(&args[0][0], context.item_tree)
+                func_string(&args[0][0], context.item_tree)?
             };
             let chars: Vec<char> = s.chars().collect();
             // XPath uses 1-based indexing with rounding.
@@ -501,12 +487,12 @@ fn dispatch_by_local_name<'tree>(
             let s = if args[0].is_empty() {
                 String::new()
             } else {
-                func_string(&args[0][0], context.item_tree)
+                func_string(&args[0][0], context.item_tree)?
             };
             let sub = if args[1].is_empty() {
                 String::new()
             } else {
-                func_string(&args[1][0], context.item_tree)
+                func_string(&args[1][0], context.item_tree)?
             };
             let result = s.find(&sub).map(|i| &s[..i]).unwrap_or("").to_string();
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
@@ -519,12 +505,12 @@ fn dispatch_by_local_name<'tree>(
             let s = if args[0].is_empty() {
                 String::new()
             } else {
-                func_string(&args[0][0], context.item_tree)
+                func_string(&args[0][0], context.item_tree)?
             };
             let sub = if args[1].is_empty() {
                 String::new()
             } else {
-                func_string(&args[1][0], context.item_tree)
+                func_string(&args[1][0], context.item_tree)?
             };
             let result = s
                 .find(&sub)
@@ -541,17 +527,17 @@ fn dispatch_by_local_name<'tree>(
             let s = if args[0].is_empty() {
                 String::new()
             } else {
-                func_string(&args[0][0], context.item_tree)
+                func_string(&args[0][0], context.item_tree)?
             };
             let map_from: Vec<char> = if args[1].is_empty() {
                 Vec::new()
             } else {
-                func_string(&args[1][0], context.item_tree).chars().collect()
+                func_string(&args[1][0], context.item_tree)?.chars().collect()
             };
             let map_to: Vec<char> = if args[2].is_empty() {
                 Vec::new()
             } else {
-                func_string(&args[2][0], context.item_tree).chars().collect()
+                func_string(&args[2][0], context.item_tree)?.chars().collect()
             };
             let result: String = s
                 .chars()
@@ -618,7 +604,7 @@ fn dispatch_by_local_name<'tree>(
             check_arity("fn:distinct-values", args, 1)?;
             // XpathItemSet is already an IndexSet, so duplicates are removed.
             // However, we need to atomize values first for proper comparison.
-            let atoms = func_data(&args[0], context.item_tree);
+            let atoms = func_data(&args[0], context.item_tree)?;
             Ok(Some(
                 atoms
                     .into_iter()
@@ -710,15 +696,15 @@ fn dispatch_by_local_name<'tree>(
             let input = if args[0].is_empty() {
                 String::new()
             } else {
-                func_string(&args[0][0], context.item_tree)
+                func_string(&args[0][0], context.item_tree)?
             };
             let pattern = if args[1].is_empty() {
                 String::new()
             } else {
-                func_string(&args[1][0], context.item_tree)
+                func_string(&args[1][0], context.item_tree)?
             };
             let flags = if args.len() == 3 && !args[2].is_empty() {
-                func_string(&args[2][0], context.item_tree)
+                func_string(&args[2][0], context.item_tree)?
             } else {
                 String::new()
             };
@@ -738,20 +724,20 @@ fn dispatch_by_local_name<'tree>(
             let input = if args[0].is_empty() {
                 String::new()
             } else {
-                func_string(&args[0][0], context.item_tree)
+                func_string(&args[0][0], context.item_tree)?
             };
             let pattern = if args[1].is_empty() {
                 String::new()
             } else {
-                func_string(&args[1][0], context.item_tree)
+                func_string(&args[1][0], context.item_tree)?
             };
             let replacement = if args[2].is_empty() {
                 String::new()
             } else {
-                func_string(&args[2][0], context.item_tree)
+                func_string(&args[2][0], context.item_tree)?
             };
             let flags = if args.len() == 4 && !args[3].is_empty() {
-                func_string(&args[3][0], context.item_tree)
+                func_string(&args[3][0], context.item_tree)?
             } else {
                 String::new()
             };
@@ -772,7 +758,7 @@ fn dispatch_by_local_name<'tree>(
             let input = if args[0].is_empty() {
                 String::new()
             } else {
-                func_string(&args[0][0], context.item_tree)
+                func_string(&args[0][0], context.item_tree)?
             };
             if args.len() == 1 {
                 // 1-arg form: normalize whitespace and split on whitespace.
@@ -789,10 +775,10 @@ fn dispatch_by_local_name<'tree>(
             let pattern = if args[1].is_empty() {
                 String::new()
             } else {
-                func_string(&args[1][0], context.item_tree)
+                func_string(&args[1][0], context.item_tree)?
             };
             let flags = if args.len() == 3 && !args[2].is_empty() {
-                func_string(&args[2][0], context.item_tree)
+                func_string(&args[2][0], context.item_tree)?
             } else {
                 String::new()
             };
@@ -912,7 +898,7 @@ fn dispatch_by_local_name<'tree>(
             if args[0].is_empty() {
                 return Ok(Some(XpathItemSet::new()));
             }
-            let atoms = func_data(&args[0], context.item_tree);
+            let atoms = func_data(&args[0], context.item_tree)?;
             let mut total: f64 = 0.0;
             for atom in &atoms {
                 match atom {
@@ -973,7 +959,7 @@ fn dispatch_by_local_name<'tree>(
             let picture = if args[1].is_empty() {
                 String::new()
             } else {
-                func_string(&args[1][0], context.item_tree)
+                func_string(&args[1][0], context.item_tree)?
             };
             let result = match picture.as_str() {
                 "1" => n.to_string(),
@@ -1010,8 +996,8 @@ fn dispatch_by_local_name<'tree>(
             if args[0].is_empty() || args[1].is_empty() {
                 return Ok(Some(XpathItemSet::new()));
             }
-            let a = func_string(&args[0][0], context.item_tree);
-            let b = func_string(&args[1][0], context.item_tree);
+            let a = func_string(&args[0][0], context.item_tree)?;
+            let b = func_string(&args[1][0], context.item_tree)?;
             let result = match a.cmp(&b) {
                 std::cmp::Ordering::Less => -1,
                 std::cmp::Ordering::Equal => 0,
@@ -1027,8 +1013,8 @@ fn dispatch_by_local_name<'tree>(
             if args[0].is_empty() || args[1].is_empty() {
                 return Ok(Some(XpathItemSet::new()));
             }
-            let a = func_string(&args[0][0], context.item_tree);
-            let b = func_string(&args[1][0], context.item_tree);
+            let a = func_string(&args[0][0], context.item_tree)?;
+            let b = func_string(&args[1][0], context.item_tree)?;
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::Boolean(a == b)
             )]))
@@ -1041,7 +1027,7 @@ fn dispatch_by_local_name<'tree>(
                 let atoms = func_data(
                     &xpath_item_set![item.clone()],
                     context.item_tree,
-                );
+                )?;
                 for atom in atoms {
                     match atom {
                         AnyAtomicType::Integer(n) => {
@@ -1072,7 +1058,7 @@ fn dispatch_by_local_name<'tree>(
             if args[0].is_empty() {
                 return Ok(Some(XpathItemSet::new()));
             }
-            let s = func_string(&args[0][0], context.item_tree);
+            let s = func_string(&args[0][0], context.item_tree)?;
             if s.is_empty() {
                 return Ok(Some(XpathItemSet::new()));
             }
@@ -1088,7 +1074,7 @@ fn dispatch_by_local_name<'tree>(
             let s = if args[0].is_empty() {
                 String::new()
             } else {
-                func_string(&args[0][0], context.item_tree)
+                func_string(&args[0][0], context.item_tree)?
             };
             let encoded: String = s
                 .chars()
@@ -1115,7 +1101,7 @@ fn dispatch_by_local_name<'tree>(
             let s = if args[0].is_empty() {
                 String::new()
             } else {
-                func_string(&args[0][0], context.item_tree)
+                func_string(&args[0][0], context.item_tree)?
             };
             // Encode only non-ASCII and disallowed URI characters; preserve
             // characters that are valid in a URI (including %, /, ?, #, etc.).
@@ -1144,7 +1130,7 @@ fn dispatch_by_local_name<'tree>(
             let s = if args[0].is_empty() {
                 String::new()
             } else {
-                func_string(&args[0][0], context.item_tree)
+                func_string(&args[0][0], context.item_tree)?
             };
             // Escape characters outside the printable ASCII range (0x20-0x7E).
             let encoded: String = s
@@ -1245,7 +1231,7 @@ fn dispatch_by_local_name<'tree>(
             let test_lang = if args[0].is_empty() {
                 String::new()
             } else {
-                func_string(&args[0][0], context.item_tree)
+                func_string(&args[0][0], context.item_tree)?
             };
             let test_lang_lower = test_lang.to_lowercase();
             // Walk up from context node looking for xml:lang or lang attribute.
@@ -1430,7 +1416,7 @@ fn dispatch_by_local_name<'tree>(
                     args.len()
                 )));
             }
-            let mut items: Vec<XpathItem> = args[0].iter().cloned().collect();
+            let items: Vec<XpathItem> = args[0].iter().cloned().collect();
             // Spec: fn:sort($input, $collation?, $key?). Arg 2 is collation (ignored),
             // arg 3 is the key function.
             let key_func_arg = if args.len() == 3 {
@@ -1440,38 +1426,33 @@ fn dispatch_by_local_name<'tree>(
             };
             if let Some(key_arg) = key_func_arg {
                 let func = extract_function_item(key_arg, "fn:sort")?;
-                let mut keyed: Vec<(XpathItem, XpathItemSet)> = Vec::new();
+                let mut keyed: Vec<(XpathItem, String)> = Vec::new();
                 for item in &items {
                     let key = invoke_function_item(
                         func,
                         vec![xpath_item_set![item.clone()]],
                         context,
                     )?;
-                    keyed.push((item.clone(), key));
+                    let s = if key.is_empty() {
+                        String::new()
+                    } else {
+                        func_string(&key[0], context.item_tree)?
+                    };
+                    keyed.push((item.clone(), s));
                 }
-                keyed.sort_by(|(_, ka), (_, kb)| {
-                    let a_str = if ka.is_empty() {
-                        String::new()
-                    } else {
-                        func_string(&ka[0], context.item_tree)
-                    };
-                    let b_str = if kb.is_empty() {
-                        String::new()
-                    } else {
-                        func_string(&kb[0], context.item_tree)
-                    };
-                    a_str.cmp(&b_str)
-                });
-                let result: XpathItemSet = keyed.into_iter().map(|(item, _)| item).collect();
+                keyed.sort_by(|(_, a), (_, b)| a.cmp(b));
+                let result: XpathItemSet =
+                    keyed.into_iter().map(|(item, _)| item).collect();
                 Ok(Some(result))
             } else {
                 // Sort by string value.
-                items.sort_by(|a, b| {
-                    let a_str = func_string(a, context.item_tree);
-                    let b_str = func_string(b, context.item_tree);
-                    a_str.cmp(&b_str)
-                });
-                Ok(Some(items.into_iter().collect()))
+                let mut items_with_keys: Vec<(XpathItem, String)> = Vec::new();
+                for item in items {
+                    let s = func_string(&item, context.item_tree)?;
+                    items_with_keys.push((item, s));
+                }
+                items_with_keys.sort_by(|(_, a), (_, b)| a.cmp(b));
+                Ok(Some(items_with_keys.into_iter().map(|(item, _)| item).collect()))
             }
         }
         // https://www.w3.org/TR/xpath-functions-31/#func-apply
@@ -1543,7 +1524,7 @@ fn dispatch_by_local_name<'tree>(
             }
             // Arg 3 (decimal-format-name) is ignored; only default format supported.
             let value = extract_double(&args[0], context.item_tree)?;
-            let picture = func_string(&args[1][0], context.item_tree);
+            let picture = func_string(&args[1][0], context.item_tree)?;
             let result = func_format_number(value, &picture)?;
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::String(result)
@@ -1562,9 +1543,9 @@ fn dispatch_by_local_name<'tree>(
                     AnyAtomicType::String(String::new())
                 )]));
             }
-            let input = func_string(&args[0][0], context.item_tree);
+            let input = func_string(&args[0][0], context.item_tree)?;
             let form = if args.len() == 2 {
-                func_string(&args[1][0], context.item_tree)
+                func_string(&args[1][0], context.item_tree)?
                     .trim()
                     .to_uppercase()
             } else {
@@ -1672,9 +1653,9 @@ fn dispatch_by_local_name<'tree>(
             }
             // Extract error description from arg 2 if present, otherwise use arg 1 as code.
             let msg = if args.len() >= 2 && !args[1].is_empty() {
-                func_string(&args[1][0], context.item_tree)
+                func_string(&args[1][0], context.item_tree)?
             } else if !args.is_empty() && !args[0].is_empty() {
-                func_string(&args[0][0], context.item_tree)
+                func_string(&args[0][0], context.item_tree)?
             } else {
                 "err:FOER0000".to_string()
             };
@@ -1689,13 +1670,13 @@ fn dispatch_by_local_name<'tree>(
                 )));
             }
             let label = if args.len() == 2 && !args[1].is_empty() {
-                func_string(&args[1][0], context.item_tree)
+                func_string(&args[1][0], context.item_tree)?
             } else {
                 String::new()
             };
             // Log the trace to stderr, then return the input unchanged.
             for item in args[0].iter() {
-                let s = func_string(item, context.item_tree);
+                let s = func_string(item, context.item_tree)?;
                 if label.is_empty() {
                     eprintln!("[fn:trace] {}", s);
                 } else {
@@ -1718,7 +1699,7 @@ fn dispatch_by_local_name<'tree>(
             // Collect target IDs by tokenizing each string arg on whitespace.
             let mut target_ids = std::collections::HashSet::new();
             for item in args[0].iter() {
-                let s = func_string(item, context.item_tree);
+                let s = func_string(item, context.item_tree)?;
                 for token in s.split_whitespace() {
                     target_ids.insert(token.to_string());
                 }
@@ -1843,7 +1824,7 @@ fn dispatch_map_function<'tree>(
                     ));
                 }
             };
-            let new_val: Vec<AnyAtomicType> = func_data(&args[2], context.item_tree);
+            let new_val: Vec<AnyAtomicType> = func_data(&args[2], context.item_tree)?;
             let mut new_entries: Vec<(AnyAtomicType, Vec<AnyAtomicType>)> = map
                 .iter()
                 .filter(|(k, _)| *k != new_key)
@@ -1870,7 +1851,7 @@ fn dispatch_map_function<'tree>(
                     ));
                 }
             };
-            let val: Vec<AnyAtomicType> = func_data(&args[1], context.item_tree);
+            let val: Vec<AnyAtomicType> = func_data(&args[1], context.item_tree)?;
             Ok(Some(xpath_item_set![XpathItem::Function(Function::Map {
                 entries: vec![(key, val)]
             })]))
@@ -2007,7 +1988,7 @@ fn dispatch_array_function<'tree>(
                     arr.len()
                 )));
             }
-            let new_val: Vec<AnyAtomicType> = func_data(&args[2], context.item_tree);
+            let new_val: Vec<AnyAtomicType> = func_data(&args[2], context.item_tree)?;
             let mut new_members = arr.clone();
             new_members[idx - 1] = new_val;
             Ok(Some(xpath_item_set![XpathItem::Function(
@@ -2018,7 +1999,7 @@ fn dispatch_array_function<'tree>(
         "append" => {
             check_arity("array:append", args, 2)?;
             let arr = extract_array(&args[0], "array:append")?;
-            let new_val: Vec<AnyAtomicType> = func_data(&args[1], context.item_tree);
+            let new_val: Vec<AnyAtomicType> = func_data(&args[1], context.item_tree)?;
             let mut new_members = arr.clone();
             new_members.push(new_val);
             Ok(Some(xpath_item_set![XpathItem::Function(
@@ -2084,7 +2065,7 @@ fn dispatch_array_function<'tree>(
                     pos
                 )));
             }
-            let new_val: Vec<AnyAtomicType> = func_data(&args[2], context.item_tree);
+            let new_val: Vec<AnyAtomicType> = func_data(&args[2], context.item_tree)?;
             let mut new_members = arr.clone();
             new_members.insert(pos - 1, new_val);
             Ok(Some(xpath_item_set![XpathItem::Function(
@@ -2163,7 +2144,7 @@ fn dispatch_array_function<'tree>(
                     .collect();
                 let call_result =
                     invoke_function_item(func, vec![member_set], context)?;
-                let atoms = func_data(&call_result, context.item_tree);
+                let atoms = func_data(&call_result, context.item_tree)?;
                 new_members.push(atoms);
             }
             Ok(Some(xpath_item_set![XpathItem::Function(
@@ -2237,7 +2218,7 @@ fn dispatch_array_function<'tree>(
                 let set1: XpathItemSet = m1.iter().map(|a| XpathItem::AnyAtomicType(a.clone())).collect();
                 let set2: XpathItemSet = m2.iter().map(|a| XpathItem::AnyAtomicType(a.clone())).collect();
                 let call_result = invoke_function_item(func, vec![set1, set2], context)?;
-                let atoms = func_data(&call_result, context.item_tree);
+                let atoms = func_data(&call_result, context.item_tree)?;
                 new_members.push(atoms);
             }
             Ok(Some(xpath_item_set![XpathItem::Function(
@@ -2272,7 +2253,7 @@ fn dispatch_array_function<'tree>(
                     if key_result.is_empty() {
                         String::new()
                     } else {
-                        func_string(&key_result[0], context.item_tree)
+                        func_string(&key_result[0], context.item_tree)?
                     }
                 } else {
                     member
@@ -2283,7 +2264,7 @@ fn dispatch_array_function<'tree>(
                                 context.item_tree,
                             )
                         })
-                        .collect::<Vec<_>>()
+                        .collect::<Result<Vec<_>, _>>()?
                         .join("")
                 };
                 members_with_keys.push((member.clone(), key));
@@ -2384,7 +2365,7 @@ fn func_contains<'tree>(
     let haystack = if arg1_set.len() == 0 {
         String::from("")
     } else {
-        func_string(&arg1_set[0], &context.item_tree)
+        func_string(&arg1_set[0], &context.item_tree)?
     };
 
     let arg2_set = &args[1];
@@ -2400,7 +2381,7 @@ fn func_contains<'tree>(
     let needle = if arg2_set.len() == 0 {
         String::from("")
     } else {
-        func_string(&arg2_set[0], &context.item_tree)
+        func_string(&arg2_set[0], &context.item_tree)?
     };
 
     Ok(xpath_item_set![XpathItem::AnyAtomicType(
@@ -2412,63 +2393,68 @@ fn func_contains<'tree>(
 pub(crate) fn func_data<'tree>(
     set: &XpathItemSet<'tree>,
     item_tree: &'tree XpathItemTree,
-) -> Vec<AnyAtomicType> {
-    fn atomize<'tree>(item: &XpathItem, item_tree: &'tree XpathItemTree) -> AnyAtomicType {
+) -> Result<Vec<AnyAtomicType>, ExpressionApplyError> {
+    fn atomize<'tree>(
+        item: &XpathItem,
+        item_tree: &'tree XpathItemTree,
+    ) -> Result<AnyAtomicType, ExpressionApplyError> {
         match item {
             XpathItem::Node(node) => match node {
                 XpathItemTreeNode::DocumentNode(_) => {
-                    AnyAtomicType::String(node.text_content(item_tree))
+                    Ok(AnyAtomicType::String(node.text_content(item_tree)))
                 }
                 XpathItemTreeNode::ElementNode(_) => {
-                    AnyAtomicType::String(node.text_content(item_tree))
+                    Ok(AnyAtomicType::String(node.text_content(item_tree)))
                 }
-                XpathItemTreeNode::PINode(pi) => AnyAtomicType::String(pi.data.clone()),
+                XpathItemTreeNode::PINode(pi) => Ok(AnyAtomicType::String(pi.data.clone())),
                 XpathItemTreeNode::CommentNode(c) => {
-                    AnyAtomicType::String(c.content.clone())
+                    Ok(AnyAtomicType::String(c.content.clone()))
                 }
-                XpathItemTreeNode::TextNode(text) => AnyAtomicType::String(text.content.clone()),
+                XpathItemTreeNode::TextNode(text) => {
+                    Ok(AnyAtomicType::String(text.content.clone()))
+                }
                 &XpathItemTreeNode::AttributeNode(attribute) => {
-                    AnyAtomicType::String(attribute.value.clone())
+                    Ok(AnyAtomicType::String(attribute.value.clone()))
                 }
-                XpathItemTreeNode::DoctypeNode(_) => AnyAtomicType::String(String::new()),
+                XpathItemTreeNode::DoctypeNode(_) => Ok(AnyAtomicType::String(String::new())),
             },
-            XpathItem::Function(_) => {
-                // TODO: Per XPath 3.1, this should raise err:FOTY0013.
-                // Returning a placeholder because func_data's signature doesn't support errors.
-                AnyAtomicType::String(String::from("[function item]"))
-            }
-            XpathItem::AnyAtomicType(atomic) => atomic.clone(),
+            XpathItem::Function(_) => Err(ExpressionApplyError::new(
+                "err:FOTY0013: fn:data is not defined for function items".to_string(),
+            )),
+            XpathItem::AnyAtomicType(atomic) => Ok(atomic.clone()),
         }
     }
 
-    set.iter().map(|item| atomize(item, item_tree)).collect()
+    set.iter()
+        .map(|item| atomize(item, item_tree))
+        .collect::<Result<Vec<_>, _>>()
 }
 
 /// https://www.w3.org/TR/xpath-functions-31/#func-string
-pub(crate) fn func_string<'tree>(item: &XpathItem, item_tree: &'tree XpathItemTree) -> String {
+pub(crate) fn func_string<'tree>(
+    item: &XpathItem,
+    item_tree: &'tree XpathItemTree,
+) -> Result<String, ExpressionApplyError> {
     match item {
         XpathItem::Node(node) => match node {
-            XpathItemTreeNode::DocumentNode(_) => node.text_content(item_tree),
-            XpathItemTreeNode::ElementNode(_) => node.text_content(item_tree),
-            XpathItemTreeNode::PINode(pi) => pi.data.clone(),
-            XpathItemTreeNode::CommentNode(c) => c.content.clone(),
-            XpathItemTreeNode::TextNode(text) => text.content.clone(),
-            XpathItemTreeNode::AttributeNode(attribute) => attribute.value.clone(),
-            XpathItemTreeNode::DoctypeNode(_) => String::new(),
+            XpathItemTreeNode::DocumentNode(_) => Ok(node.text_content(item_tree)),
+            XpathItemTreeNode::ElementNode(_) => Ok(node.text_content(item_tree)),
+            XpathItemTreeNode::PINode(pi) => Ok(pi.data.clone()),
+            XpathItemTreeNode::CommentNode(c) => Ok(c.content.clone()),
+            XpathItemTreeNode::TextNode(text) => Ok(text.content.clone()),
+            XpathItemTreeNode::AttributeNode(attribute) => Ok(attribute.value.clone()),
+            XpathItemTreeNode::DoctypeNode(_) => Ok(String::new()),
         },
         XpathItem::AnyAtomicType(atomic) => match atomic {
-            AnyAtomicType::Boolean(b) => b.to_string(),
-            AnyAtomicType::Integer(n) => n.to_string(),
-            AnyAtomicType::Float(n) => n.to_string(),
-            AnyAtomicType::Double(n) => n.to_string(),
-            AnyAtomicType::String(s) => s.clone(),
+            AnyAtomicType::Boolean(b) => Ok(b.to_string()),
+            AnyAtomicType::Integer(n) => Ok(n.to_string()),
+            AnyAtomicType::Float(n) => Ok(n.to_string()),
+            AnyAtomicType::Double(n) => Ok(n.to_string()),
+            AnyAtomicType::String(s) => Ok(s.clone()),
         },
-        XpathItem::Function(_) => {
-            // TODO: Per XPath 3.1, fn:string is not defined for function items
-            // and should raise an error. Returning placeholder because the
-            // signature doesn't support errors.
-            String::from("[function item]")
-        }
+        XpathItem::Function(_) => Err(ExpressionApplyError::new(
+            "err:FOTY0014: fn:string is not defined for function items".to_string(),
+        )),
     }
 }
 
@@ -2500,7 +2486,7 @@ fn extract_double(arg: &XpathItemSet, item_tree: &XpathItemTree) -> Result<f64, 
         XpathItem::AnyAtomicType(AnyAtomicType::Float(f)) => Ok(f.0 as f64),
         XpathItem::AnyAtomicType(AnyAtomicType::Double(d)) => Ok(d.0),
         other => {
-            let s = func_string(other, item_tree);
+            let s = func_string(other, item_tree)?;
             s.trim().parse::<f64>().map_err(|_| {
                 ExpressionApplyError::new(format!("Cannot convert '{}' to a number", s))
             })
@@ -2565,7 +2551,7 @@ fn func_sum<'tree>(
             AnyAtomicType::Integer(0)
         )]);
     }
-    let atoms = func_data(&args[0], context.item_tree);
+    let atoms = func_data(&args[0], context.item_tree)?;
     let mut total: f64 = 0.0;
     let mut all_integers = true;
     for atom in &atoms {
@@ -2634,7 +2620,7 @@ fn func_min_max<'tree>(
     if args[0].is_empty() {
         return Ok(XpathItemSet::new());
     }
-    let atoms = func_data(&args[0], context.item_tree);
+    let atoms = func_data(&args[0], context.item_tree)?;
     let mut best: f64 = if is_min { f64::INFINITY } else { f64::NEG_INFINITY };
     let mut all_integers = true;
     for atom in &atoms {

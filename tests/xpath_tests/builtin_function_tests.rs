@@ -1536,3 +1536,80 @@ fn fn_trace_returns_input() {
         XpathItem::AnyAtomicType(AnyAtomicType::Integer(42))
     );
 }
+
+// ── FOTY0013/FOTY0014 propagation through indirect call sites ────────
+
+/// fn:concat should raise FOTY0014 when given a function item (was silently
+/// stringified to "[function item]" before).
+#[test]
+fn fn_concat_error_on_function_item() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"concat("a", true#0)"#).unwrap();
+    let result = xpath.apply(&document);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("FOTY0014"));
+}
+
+/// fn:distinct-values should raise FOTY0013 when given a function item
+/// (atomization error propagated from func_data).
+#[test]
+fn fn_distinct_values_error_on_function_item() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"distinct-values((1, true#0))"#).unwrap();
+    let result = xpath.apply(&document);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("FOTY0013"));
+}
+
+/// fn:sum should raise FOTY0013 when given a function item.
+#[test]
+fn fn_sum_error_on_function_item() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"sum((1, true#0))"#).unwrap();
+    let result = xpath.apply(&document);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("FOTY0013"));
+}
+
+/// fn:avg should raise FOTY0013 when given a function item.
+#[test]
+fn fn_avg_error_on_function_item() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"avg((1, true#0))"#).unwrap();
+    let result = xpath.apply(&document);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("FOTY0013"));
+}
+
+/// fn:string-join should raise FOTY0014 when given a function item.
+#[test]
+fn fn_string_join_error_on_function_item() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"string-join((true#0), ",")"#).unwrap();
+    let result = xpath.apply(&document);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("FOTY0014"));
+}
+
+/// String concatenation operator (||) should raise FOTY0013 when given a
+/// function item (atomization error propagated from func_data).
+#[test]
+fn string_concat_operator_error_on_function_item() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#""a" || true#0"#).unwrap();
+    let result = xpath.apply(&document);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("FOTY0013"));
+}
+
+/// cast as should raise FOTY0013 when atomizing a function item.
+/// Per XPath 3.1 section 3.14.3: "If the value of E cannot be atomized, the
+/// castable expression as a whole fails."
+#[test]
+fn cast_error_on_function_item() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"true#0 cast as xs:string"#).unwrap();
+    let result = xpath.apply(&document);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("FOTY0013"));
+}
