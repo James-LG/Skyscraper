@@ -67,6 +67,18 @@ pub enum AnyAtomicType {
 
     /// A string value.
     String(String),
+
+    /// A qualified name value.
+    ///
+    /// <https://www.w3.org/TR/xpath-datamodel-31/#qnames>
+    QName {
+        /// The namespace URI, or empty string if no namespace.
+        namespace_uri: String,
+        /// The local part of the name.
+        local_name: String,
+        /// The optional prefix used in the lexical form.
+        prefix: Option<String>,
+    },
 }
 
 impl Display for AnyAtomicType {
@@ -77,6 +89,15 @@ impl Display for AnyAtomicType {
             AnyAtomicType::Float(fl) => write!(f, "{}", fl),
             AnyAtomicType::Double(d) => write!(f, "{}", d),
             AnyAtomicType::String(s) => write!(f, "{}", s),
+            AnyAtomicType::QName {
+                prefix: Some(p),
+                local_name,
+                ..
+            } => write!(f, "{}:{}", p, local_name),
+            AnyAtomicType::QName {
+                local_name,
+                ..
+            } => write!(f, "{}", local_name),
         }
     }
 }

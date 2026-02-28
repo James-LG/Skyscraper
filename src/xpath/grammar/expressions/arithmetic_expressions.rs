@@ -48,6 +48,11 @@ fn to_f64(val: &AnyAtomicType) -> Result<f64, ExpressionApplyError> {
                 "err:XPTY0004 Arithmetic operators are not defined for boolean values",
             ),
         }),
+        AnyAtomicType::QName { .. } => Err(ExpressionApplyError {
+            msg: String::from(
+                "err:XPTY0004 Arithmetic operators are not defined for QName values",
+            ),
+        }),
     }
 }
 

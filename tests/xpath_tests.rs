@@ -28,6 +28,7 @@ mod xpath_tests {
     mod node_test_tests;
     mod partial_application_tests;
     mod postfix_expression_tests;
+    mod qname_tests;
     mod range_expression_tests;
     mod reverse_axis_tests;
     mod sequence_type_tests;

@@ -115,6 +115,7 @@ impl<'tree> XpathItemSet<'tree> {
                     AnyAtomicType::Float(n) => *n != 0.0,
                     AnyAtomicType::Double(n) => *n != 0.0,
                     AnyAtomicType::String(s) => !s.is_empty(),
+                    AnyAtomicType::QName { .. } => true,
                 },
             }
         }

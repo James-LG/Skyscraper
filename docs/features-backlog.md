@@ -71,7 +71,7 @@ All 13 axes parse and evaluate:
 
 ### Fully Implemented
 
-- Atomic types: `xs:integer` (i64), `xs:string`, `xs:boolean`, `xs:double` (f64), `xs:float` (f32)
+- Atomic types: `xs:integer` (i64), `xs:string`, `xs:boolean`, `xs:double` (f64), `xs:float` (f32), `xs:QName` (namespace-uri + local-name + optional prefix)
 - Occurrence indicators: `?`, `*`, `+`
 - `empty-sequence()` matching
 - Cast rules between the 5 implemented atomic types
@@ -92,7 +92,6 @@ All 13 axes parse and evaluate:
 | `xs:decimal` | Would need arbitrary-precision arithmetic |
 | `xs:date`, `xs:dateTime`, `xs:time` | No temporal types |
 | `xs:duration`, `xs:yearMonthDuration`, `xs:dayTimeDuration` | No duration types |
-| `xs:QName` | No QName atomic value type |
 | `xs:anyURI` | No URI atomic value type |
 | `xs:untypedAtomic` | Not distinguished from string |
 | `xs:hexBinary`, `xs:base64Binary` | No binary types |
@@ -102,7 +101,7 @@ All 13 axes parse and evaluate:
 
 ## XPath 3.1 — Built-in Functions
 
-**88** `fn:` functions plus **10** `map:`, **18** `array:`, and **14** `math:` functions (**130 total**) are implemented. All dispatch is in `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs`.
+**93** `fn:` functions plus **10** `map:`, **18** `array:`, and **14** `math:` functions (**135 total**) are implemented. All dispatch is in `src/xpath/grammar/expressions/primary_expressions/static_function_calls.rs`.
 
 ### Implemented
 
@@ -196,6 +195,11 @@ All 13 axes parse and evaluate:
 | `fn:id(string*, node?)` | Complete | Tokenizes on whitespace; finds elements by `id` attribute; document order |
 | `fn:element-with-id(string*, node?)` | Complete | Identical to `fn:id` for non-schema-aware (HTML) processor |
 | `fn:idref(string*, node?)` | Complete | Always returns empty sequence (no `is-idrefs` in HTML) |
+| `fn:QName(string?, string)` | Complete | Creates `xs:QName` from namespace URI and lexical form |
+| `fn:local-name-from-QName(QName?)` | Complete | Returns local name part of QName |
+| `fn:namespace-uri-from-QName(QName?)` | Complete | Returns namespace URI of QName |
+| `fn:prefix-from-QName(QName?)` | Complete | Returns prefix of QName, or empty sequence if none |
+| `fn:function-lookup(QName, integer)` | Complete | Returns named function item if function exists with given name and arity, otherwise empty sequence; validates against all fn:/map:/array:/math: function registries |
 
 ### Implemented — Map Functions
 
@@ -259,11 +263,8 @@ All 13 axes parse and evaluate:
 #### String (medium priority)
 `fn:analyze-string` (requires XML node construction for result element)
 
-#### Higher-order (medium priority)
-`fn:function-lookup` (requires `xs:QName` atomic type support)
-
 #### QName functions (low priority — less relevant for HTML)
-`fn:QName`, `fn:prefix-from-QName`, `fn:local-name-from-QName`, `fn:namespace-uri-from-QName`, `fn:namespace-uri-for-prefix`, `fn:in-scope-prefixes`, `fn:resolve-QName`
+`fn:namespace-uri-for-prefix`, `fn:in-scope-prefixes`, `fn:resolve-QName`
 
 #### Date/Time functions (low priority — require atomic type support first)
 All `*-from-duration`, `*-from-dateTime`, `*-from-date`, `*-from-time`, `fn:current-dateTime`, `fn:current-date`, `fn:current-time`, `fn:format-dateTime`, `fn:format-date`, `fn:format-time`, `fn:adjust-*-to-timezone`, `fn:implicit-timezone`

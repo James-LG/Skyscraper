@@ -140,6 +140,9 @@ impl CastExpr {
                 AnyAtomicType::Float(f) => Ok(AnyAtomicType::Integer(f.0 as i64)),
                 AnyAtomicType::Double(d) => Ok(AnyAtomicType::Integer(d.0 as i64)),
                 AnyAtomicType::Boolean(b) => Ok(AnyAtomicType::Integer(if *b { 1 } else { 0 })),
+                AnyAtomicType::QName { .. } => Err(ExpressionApplyError {
+                    msg: "err:XPTY0004 Cannot cast xs:QName to xs:integer".to_string(),
+                }),
             },
             "double" => match source {
                 AnyAtomicType::Double(_) => Ok(source.clone()),
@@ -151,6 +154,9 @@ impl CastExpr {
                     }
                 }),
                 AnyAtomicType::Boolean(b) => Ok(AnyAtomicType::Double(OrderedFloat(if *b { 1.0 } else { 0.0 }))),
+                AnyAtomicType::QName { .. } => Err(ExpressionApplyError {
+                    msg: "err:XPTY0004 Cannot cast xs:QName to xs:double".to_string(),
+                }),
             },
             "float" => match source {
                 AnyAtomicType::Float(_) => Ok(source.clone()),
@@ -162,6 +168,9 @@ impl CastExpr {
                     }
                 }),
                 AnyAtomicType::Boolean(b) => Ok(AnyAtomicType::Float(OrderedFloat(if *b { 1.0 } else { 0.0 }))),
+                AnyAtomicType::QName { .. } => Err(ExpressionApplyError {
+                    msg: "err:XPTY0004 Cannot cast xs:QName to xs:float".to_string(),
+                }),
             },
             "boolean" => match source {
                 AnyAtomicType::Boolean(_) => Ok(source.clone()),
@@ -175,6 +184,25 @@ impl CastExpr {
                 },
                 AnyAtomicType::Float(f) => Ok(AnyAtomicType::Boolean(f.0 != 0.0)),
                 AnyAtomicType::Double(d) => Ok(AnyAtomicType::Boolean(d.0 != 0.0)),
+                AnyAtomicType::QName { .. } => Err(ExpressionApplyError {
+                    msg: "err:XPTY0004 Cannot cast xs:QName to xs:boolean".to_string(),
+                }),
+            },
+            "QName" => match source {
+                AnyAtomicType::QName { .. } => Ok(source.clone()),
+                _ => Err(ExpressionApplyError {
+                    msg: format!(
+                        "err:XPTY0004 Cannot cast {} to xs:QName (use fn:QName() instead)",
+                        match source {
+                            AnyAtomicType::String(_) => "xs:string",
+                            AnyAtomicType::Integer(_) => "xs:integer",
+                            AnyAtomicType::Float(_) => "xs:float",
+                            AnyAtomicType::Double(_) => "xs:double",
+                            AnyAtomicType::Boolean(_) => "xs:boolean",
+                            AnyAtomicType::QName { .. } => unreachable!(),
+                        }
+                    ),
+                }),
             },
             _ => Err(ExpressionApplyError {
                 msg: format!("cast as: unsupported target type '{}'", target_type),

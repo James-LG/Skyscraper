@@ -257,6 +257,9 @@ fn atomic_matches_type_name(
             AnyAtomicType::Integer(_) | AnyAtomicType::Float(_) | AnyAtomicType::Double(_)
         )),
 
+        // xs:QName — matches QName atomic values.
+        Some("QName") => Ok(matches!(atomic, AnyAtomicType::QName { .. })),
+
         // Recognized but unimplemented types — no values of these types exist
         // in this implementation, so no atomic value can match them.
         Some(name) if is_recognized_xsd_atomic_type(name) => Ok(false),

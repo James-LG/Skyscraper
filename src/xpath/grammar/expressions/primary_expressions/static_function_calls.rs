@@ -202,6 +202,9 @@ pub(crate) fn dispatch_function<'tree>(
 
 /// Dispatch a function by its local name. Returns `Ok(Some(result))` if the
 /// function is known, `Ok(None)` if unrecognized, or `Err` on evaluation error.
+///
+/// NOTE: When adding a new function here, also add it to [`is_known_fn_function`]
+/// so that `fn:function-lookup` can find it.
 fn dispatch_by_local_name<'tree>(
     local_name: &str,
     args: &[XpathItemSet<'tree>],
@@ -1730,11 +1733,371 @@ fn dispatch_by_local_name<'tree>(
             }
             Ok(Some(XpathItemSet::new()))
         }
+        // https://www.w3.org/TR/xpath-functions-31/#func-QName
+        "QName" => {
+            check_arity("fn:QName", args, 2)?;
+            // $paramURI as xs:string? — namespace URI (empty string or empty seq = no namespace)
+            let namespace_uri = if args[0].is_empty() {
+                String::new()
+            } else {
+                func_string(&args[0][0], context.item_tree)?
+            };
+            // $paramQName as xs:string — lexical QName ("prefix:local" or "local")
+            let lexical = func_string(&args[1][0], context.item_tree)?;
+            let (prefix, local_name) = if let Some(colon_pos) = lexical.find(':') {
+                (
+                    Some(lexical[..colon_pos].to_string()),
+                    lexical[colon_pos + 1..].to_string(),
+                )
+            } else {
+                (None, lexical)
+            };
+            // TODO: validate that prefix and local_name are valid NCNames per spec
+            // (could reuse xml_names::nc_name parser).
+
+            // Per spec: if prefix is present, namespace URI must not be empty.
+            if prefix.is_some() && namespace_uri.is_empty() {
+                return Err(ExpressionApplyError::new(
+                    "err:FOCA0002 fn:QName: prefix provided but namespace URI is empty"
+                        .to_string(),
+                ));
+            }
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::QName {
+                    namespace_uri,
+                    local_name,
+                    prefix,
+                }
+            )]))
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-local-name-from-QName
+        "local-name-from-QName" => {
+            check_arity("fn:local-name-from-QName", args, 1)?;
+            if args[0].is_empty() {
+                return Ok(Some(XpathItemSet::new()));
+            }
+            match &args[0][0] {
+                XpathItem::AnyAtomicType(AnyAtomicType::QName { local_name, .. }) => {
+                    Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                        AnyAtomicType::String(local_name.clone())
+                    )]))
+                }
+                _ => Err(ExpressionApplyError::new(
+                    "err:XPTY0004 fn:local-name-from-QName: argument is not a QName".to_string(),
+                )),
+            }
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-namespace-uri-from-QName
+        "namespace-uri-from-QName" => {
+            check_arity("fn:namespace-uri-from-QName", args, 1)?;
+            if args[0].is_empty() {
+                return Ok(Some(XpathItemSet::new()));
+            }
+            match &args[0][0] {
+                XpathItem::AnyAtomicType(AnyAtomicType::QName {
+                    namespace_uri, ..
+                }) => Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                    AnyAtomicType::String(namespace_uri.clone())
+                )])),
+                _ => Err(ExpressionApplyError::new(
+                    "err:XPTY0004 fn:namespace-uri-from-QName: argument is not a QName"
+                        .to_string(),
+                )),
+            }
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-prefix-from-QName
+        "prefix-from-QName" => {
+            check_arity("fn:prefix-from-QName", args, 1)?;
+            if args[0].is_empty() {
+                return Ok(Some(XpathItemSet::new()));
+            }
+            match &args[0][0] {
+                XpathItem::AnyAtomicType(AnyAtomicType::QName { prefix, .. }) => {
+                    match prefix {
+                        Some(p) => Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                            AnyAtomicType::String(p.clone())
+                        )])),
+                        None => Ok(Some(XpathItemSet::new())),
+                    }
+                }
+                _ => Err(ExpressionApplyError::new(
+                    "err:XPTY0004 fn:prefix-from-QName: argument is not a QName".to_string(),
+                )),
+            }
+        }
+        // https://www.w3.org/TR/xpath-functions-31/#func-function-lookup
+        "function-lookup" => {
+            check_arity("fn:function-lookup", args, 2)?;
+            if args[0].is_empty() || args[1].is_empty() {
+                return Err(ExpressionApplyError::new(
+                    "err:XPTY0004 fn:function-lookup: arguments must not be empty sequences"
+                        .to_string(),
+                ));
+            }
+            // $name as xs:QName
+            let (namespace_uri, local_name) = match &args[0][0] {
+                XpathItem::AnyAtomicType(AnyAtomicType::QName {
+                    namespace_uri,
+                    local_name,
+                    ..
+                }) => (namespace_uri.as_str(), local_name.as_str()),
+                _ => {
+                    return Err(ExpressionApplyError::new(
+                        "err:XPTY0004 fn:function-lookup: first argument must be xs:QName"
+                            .to_string(),
+                    ))
+                }
+            };
+            // $arity as xs:integer
+            let arity = match &args[1][0] {
+                XpathItem::AnyAtomicType(AnyAtomicType::Integer(n)) => {
+                    if *n < 0 {
+                        return Err(ExpressionApplyError::new(
+                            "err:XPTY0004 fn:function-lookup: arity must be non-negative"
+                                .to_string(),
+                        ));
+                    }
+                    *n as u32
+                }
+                other => {
+                    let s = func_string(other, context.item_tree)?;
+                    s.parse::<u32>().map_err(|_| {
+                        ExpressionApplyError::new(format!(
+                            "fn:function-lookup: cannot convert '{}' to integer",
+                            s
+                        ))
+                    })?
+                }
+            };
+            // Resolve namespace URI to prefix and check if function exists.
+            let (prefix, is_known) = match namespace_uri {
+                XPATH_FUNCTIONS_NS => ("fn", is_known_fn_function(local_name, arity)),
+                XPATH_MAP_NS => ("map", is_known_map_function(local_name, arity)),
+                XPATH_ARRAY_NS => ("array", is_known_array_function(local_name, arity)),
+                XPATH_MATH_NS => ("math", is_known_math_function(local_name, arity)),
+                _ => return Ok(Some(XpathItemSet::new())),
+            };
+            if is_known {
+                let name = format!("{}:{}", prefix, local_name);
+                Ok(Some(xpath_item_set![XpathItem::Function(
+                    Function::Named { name, arity }
+                )]))
+            } else {
+                Ok(Some(XpathItemSet::new()))
+            }
+        }
         _ => Ok(None),
     }
 }
 
+/// Check if a function with the given local name and arity is known in the `fn:` namespace.
+fn is_known_fn_function(name: &str, arity: u32) -> bool {
+    matches!(
+        (name, arity),
+        ("root", 0)
+            | ("root", 1)
+            | ("contains", 2)
+            | ("data", 0)
+            | ("data", 1)
+            | ("string", 0)
+            | ("string", 1)
+            | ("true", 0)
+            | ("false", 0)
+            | ("not", 1)
+            | ("boolean", 1)
+            | ("number", 0)
+            | ("number", 1)
+            | ("abs", 1)
+            | ("ceiling", 1)
+            | ("floor", 1)
+            | ("round", 1)
+            | ("round", 2)
+            | ("concat", 2..)
+            | ("string-join", 1)
+            | ("string-join", 2)
+            | ("string-length", 0)
+            | ("string-length", 1)
+            | ("normalize-space", 0)
+            | ("normalize-space", 1)
+            | ("upper-case", 1)
+            | ("lower-case", 1)
+            | ("starts-with", 2)
+            | ("ends-with", 2)
+            | ("substring", 2)
+            | ("substring", 3)
+            | ("substring-before", 2)
+            | ("substring-after", 2)
+            | ("translate", 3)
+            | ("empty", 1)
+            | ("exists", 1)
+            | ("count", 1)
+            | ("head", 1)
+            | ("tail", 1)
+            | ("reverse", 1)
+            | ("distinct-values", 1)
+            | ("sum", 1)
+            | ("sum", 2)
+            | ("name", 0)
+            | ("name", 1)
+            | ("local-name", 0)
+            | ("local-name", 1)
+            | ("position", 0)
+            | ("last", 0)
+            | ("matches", 2)
+            | ("matches", 3)
+            | ("replace", 3)
+            | ("replace", 4)
+            | ("tokenize", 1)
+            | ("tokenize", 2)
+            | ("tokenize", 3)
+            | ("subsequence", 2)
+            | ("subsequence", 3)
+            | ("insert-before", 3)
+            | ("remove", 2)
+            | ("index-of", 2)
+            | ("zero-or-one", 1)
+            | ("one-or-more", 1)
+            | ("exactly-one", 1)
+            | ("avg", 1)
+            | ("max", 1)
+            | ("min", 1)
+            | ("round-half-to-even", 1)
+            | ("round-half-to-even", 2)
+            | ("format-integer", 2)
+            | ("compare", 2)
+            | ("codepoint-equal", 2)
+            | ("codepoints-to-string", 1)
+            | ("string-to-codepoints", 1)
+            | ("encode-for-uri", 1)
+            | ("iri-to-uri", 1)
+            | ("escape-html-uri", 1)
+            | ("deep-equal", 2)
+            | ("unordered", 1)
+            | ("has-children", 0)
+            | ("has-children", 1)
+            | ("path", 0)
+            | ("path", 1)
+            | ("namespace-uri", 0)
+            | ("namespace-uri", 1)
+            | ("lang", 1)
+            | ("node-name", 0)
+            | ("node-name", 1)
+            | ("nilled", 0)
+            | ("nilled", 1)
+            | ("generate-id", 0)
+            | ("generate-id", 1)
+            | ("for-each", 2)
+            | ("filter", 2)
+            | ("fold-left", 3)
+            | ("fold-right", 3)
+            | ("for-each-pair", 3)
+            | ("sort", 1)
+            | ("sort", 2)
+            | ("sort", 3)
+            | ("apply", 2)
+            | ("function-name", 1)
+            | ("function-arity", 1)
+            | ("format-number", 2)
+            | ("format-number", 3)
+            | ("normalize-unicode", 1)
+            | ("normalize-unicode", 2)
+            | ("innermost", 1)
+            | ("outermost", 1)
+            | ("base-uri", 0)
+            | ("base-uri", 1)
+            | ("document-uri", 0)
+            | ("document-uri", 1)
+            | ("error", 0)
+            | ("error", 1)
+            | ("error", 2)
+            | ("error", 3)
+            | ("trace", 1)
+            | ("trace", 2)
+            | ("id", 1)
+            | ("id", 2)
+            | ("element-with-id", 1)
+            | ("element-with-id", 2)
+            | ("idref", 1)
+            | ("idref", 2)
+            | ("QName", 2)
+            | ("local-name-from-QName", 1)
+            | ("namespace-uri-from-QName", 1)
+            | ("prefix-from-QName", 1)
+            | ("function-lookup", 2)
+    )
+}
+
+/// Check if a function with the given local name and arity is known in the `map:` namespace.
+fn is_known_map_function(name: &str, arity: u32) -> bool {
+    matches!(
+        (name, arity),
+        ("size", 1)
+            | ("keys", 1)
+            | ("contains", 2)
+            | ("get", 2)
+            | ("put", 3)
+            | ("entry", 2)
+            | ("remove", 2)
+            | ("merge", 1)
+            | ("merge", 2)
+            | ("for-each", 2)
+            | ("find", 2)
+    )
+}
+
+/// Check if a function with the given local name and arity is known in the `array:` namespace.
+fn is_known_array_function(name: &str, arity: u32) -> bool {
+    matches!(
+        (name, arity),
+        ("size", 1)
+            | ("get", 2)
+            | ("put", 3)
+            | ("append", 2)
+            | ("subarray", 2)
+            | ("subarray", 3)
+            | ("remove", 2)
+            | ("insert-before", 3)
+            | ("head", 1)
+            | ("tail", 1)
+            | ("reverse", 1)
+            | ("join", 1)
+            | ("flatten", 1)
+            | ("for-each", 2)
+            | ("filter", 2)
+            | ("fold-left", 3)
+            | ("fold-right", 3)
+            | ("for-each-pair", 3)
+            | ("sort", 1)
+            | ("sort", 2)
+            | ("sort", 3)
+    )
+}
+
+/// Check if a function with the given local name and arity is known in the `math:` namespace.
+fn is_known_math_function(name: &str, arity: u32) -> bool {
+    matches!(
+        (name, arity),
+        ("pi", 0)
+            | ("exp", 1)
+            | ("exp10", 1)
+            | ("log", 1)
+            | ("log10", 1)
+            | ("sqrt", 1)
+            | ("sin", 1)
+            | ("cos", 1)
+            | ("tan", 1)
+            | ("asin", 1)
+            | ("acos", 1)
+            | ("atan", 1)
+            | ("pow", 2)
+            | ("atan2", 2)
+    )
+}
+
 /// Dispatch `map:*` functions.
+///
+/// NOTE: When adding a new function here, also add it to [`is_known_map_function`]
+/// so that `fn:function-lookup` can find it.
 fn dispatch_map_function<'tree>(
     local_name: &str,
     args: &[XpathItemSet<'tree>],
@@ -1944,6 +2307,9 @@ fn dispatch_map_function<'tree>(
 }
 
 /// Dispatch `array:*` functions.
+///
+/// NOTE: When adding a new function here, also add it to [`is_known_array_function`]
+/// so that `fn:function-lookup` can find it.
 fn dispatch_array_function<'tree>(
     local_name: &str,
     args: &[XpathItemSet<'tree>],
@@ -2281,6 +2647,9 @@ fn dispatch_array_function<'tree>(
 }
 
 /// Dispatch `math:*` functions.
+///
+/// NOTE: When adding a new function here, also add it to [`is_known_math_function`]
+/// so that `fn:function-lookup` can find it.
 fn dispatch_math_function<'tree>(
     local_name: &str,
     args: &[XpathItemSet<'tree>],
@@ -2451,6 +2820,7 @@ pub(crate) fn func_string<'tree>(
             AnyAtomicType::Float(n) => Ok(n.to_string()),
             AnyAtomicType::Double(n) => Ok(n.to_string()),
             AnyAtomicType::String(s) => Ok(s.clone()),
+            AnyAtomicType::QName { .. } => Ok(atomic.to_string()),
         },
         XpathItem::Function(_) => Err(ExpressionApplyError::new(
             "err:FOTY0014: fn:string is not defined for function items".to_string(),
