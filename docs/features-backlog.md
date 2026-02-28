@@ -312,7 +312,7 @@ Additional completed features: adoption agency algorithm (with scope checks), fo
 |---------|-----|----------|
 | Namespace nodes | Not represented in the tree at all | N/A |
 | `DoctypeNode` in XPath tree | Complete — `DoctypeNode` now has an `id` field with `set_id()`/`id()` methods; `node()` kind test excludes it; `node_id()` and `parent()` work correctly. Kept in tree for serialization fidelity. | |
-| `From<&HtmlDocument>` conversion | Only converts `HtmlNode::Tag` and `HtmlNode::Text` — comments, PIs, and doctypes in an `HtmlDocument` are silently dropped during conversion to `XpathItemTree`. The direct `html::parse()` path does not have this limitation. | `src/xpath/grammar/mod.rs:321-406` |
+| `From<&HtmlDocument>` conversion | Complete — `HtmlNode` now has `Comment`, `ProcessingInstruction`, and `Doctype` variants; the `From<&HtmlDocument>` conversion creates corresponding `CommentNode`, `PINode`, and `DoctypeNode` in the `XpathItemTree`. | |
 
 ---
 

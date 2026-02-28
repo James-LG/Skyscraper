@@ -395,6 +395,18 @@ impl From<&HtmlDocument> for XpathItemTree {
 
                     item_id
                 }
+                HtmlNode::Comment(comment) => {
+                    CommentNode::create(comment.value.clone(), item_arena)
+                }
+                HtmlNode::ProcessingInstruction(pi) => {
+                    PINode::create(pi.target.clone(), pi.data.clone(), item_arena)
+                }
+                HtmlNode::Doctype(doctype) => DoctypeNode::create(
+                    doctype.name.clone(),
+                    doctype.public_id.clone(),
+                    doctype.system_id.clone(),
+                    item_arena,
+                ),
             };
 
             for child in current_html_node.children(&html_document) {

@@ -19,6 +19,7 @@ mod xpath_tests {
     mod forward_axis_tests;
     mod forward_step_tests;
     mod github_sample_tests;
+    mod html_document_conversion_tests;
 
     mod kind_test_tests;
     mod instance_of_tests;

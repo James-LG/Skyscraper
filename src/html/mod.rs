@@ -102,6 +102,10 @@ impl HtmlTag {
                             }
                         }
                     }
+                    // Comments, PIs, and doctypes do not contribute visible text.
+                    HtmlNode::Comment(_)
+                    | HtmlNode::ProcessingInstruction(_)
+                    | HtmlNode::Doctype(_) => {}
                 }
             }
         }
@@ -146,6 +150,58 @@ impl HtmlText {
         HtmlText {
             value: text.to_string(),
             only_whitespace: text.trim().is_empty(),
+        }
+    }
+}
+
+/// An HTML comment node (`<!-- ... -->`).
+#[derive(PartialEq, Clone, Debug)]
+pub struct HtmlComment {
+    /// The content of the comment (without the `<!--` and `-->` delimiters).
+    pub value: String,
+}
+
+impl HtmlComment {
+    /// Creates a new [HtmlComment] with the given content.
+    pub fn new(value: String) -> HtmlComment {
+        HtmlComment { value }
+    }
+}
+
+/// An HTML processing instruction (`<?target data?>`).
+#[derive(PartialEq, Clone, Debug)]
+pub struct HtmlProcessingInstruction {
+    /// The target of the processing instruction.
+    pub target: String,
+    /// The data of the processing instruction.
+    pub data: String,
+}
+
+impl HtmlProcessingInstruction {
+    /// Creates a new [HtmlProcessingInstruction] with the given target and data.
+    pub fn new(target: String, data: String) -> HtmlProcessingInstruction {
+        HtmlProcessingInstruction { target, data }
+    }
+}
+
+/// An HTML document type declaration (`<!DOCTYPE ...>`).
+#[derive(PartialEq, Clone, Debug)]
+pub struct HtmlDoctype {
+    /// The name of the document type (e.g. "html").
+    pub name: String,
+    /// The public identifier, if present.
+    pub public_id: Option<String>,
+    /// The system identifier, if present.
+    pub system_id: Option<String>,
+}
+
+impl HtmlDoctype {
+    /// Creates a new [HtmlDoctype] with the given name and optional identifiers.
+    pub fn new(name: String, public_id: Option<String>, system_id: Option<String>) -> HtmlDoctype {
+        HtmlDoctype {
+            name,
+            public_id,
+            system_id,
         }
     }
 }
@@ -215,7 +271,8 @@ pub fn trim_internal_whitespace(text: &str) -> String {
     result.trim_end().to_string()
 }
 
-/// An HTML node can be either a tag or raw text.
+/// An HTML node can be either a tag, raw text, a comment, a processing instruction, or a
+/// document type declaration.
 #[derive(Clone, Debug, EnumExtract)]
 pub enum HtmlNode {
     /// An HTML tag.
@@ -235,6 +292,12 @@ pub enum HtmlNode {
     /// Where the inner contents of `div` would be: `Text("Hello ")`, `Tag(span)`, `Text("!")`.
     ///
     Text(HtmlText),
+    /// A comment node (`<!-- ... -->`).
+    Comment(HtmlComment),
+    /// A processing instruction node (`<?target data?>`).
+    ProcessingInstruction(HtmlProcessingInstruction),
+    /// A document type declaration (`<!DOCTYPE ...>`).
+    Doctype(HtmlDoctype),
 }
 
 impl HtmlNode {
@@ -267,15 +330,19 @@ impl HtmlNode {
                 }
             }
             HtmlNode::Text(text) => Some(text.value.to_string()),
+            // Comments, PIs, and doctypes do not contribute visible text.
+            HtmlNode::Comment(_) | HtmlNode::ProcessingInstruction(_) | HtmlNode::Doctype(_) => {
+                None
+            }
         }
     }
 
     /// Gets attributes.
-    /// If Node is a `Text` return None
+    /// If Node is not a `Tag` return None
     pub fn get_attributes(&self) -> Option<&TagAttributes> {
         match self {
             HtmlNode::Tag(tag) => Some(&tag.attributes),
-            &HtmlNode::Text(_) => None,
+            _ => None,
         }
     }
 }
@@ -414,6 +481,46 @@ fn display_node(
                         writeln!(&mut str, "{}", output_text.trim())?;
                     }
                 }
+            }
+        }
+        HtmlNode::Comment(comment) => {
+            if matches!(format_type, DocumentFormatType::Indented) {
+                display_indent(indent, &mut str)?;
+            }
+            write!(&mut str, "<!--{}-->", comment.value)?;
+            if matches!(format_type, DocumentFormatType::Indented) {
+                writeln!(&mut str)?;
+            }
+        }
+        HtmlNode::ProcessingInstruction(pi) => {
+            if matches!(format_type, DocumentFormatType::Indented) {
+                display_indent(indent, &mut str)?;
+            }
+            if pi.data.is_empty() {
+                write!(&mut str, "<?{}?>", pi.target)?;
+            } else {
+                write!(&mut str, "<?{} {}?>", pi.target, pi.data)?;
+            }
+            if matches!(format_type, DocumentFormatType::Indented) {
+                writeln!(&mut str)?;
+            }
+        }
+        HtmlNode::Doctype(doctype) => {
+            if matches!(format_type, DocumentFormatType::Indented) {
+                display_indent(indent, &mut str)?;
+            }
+            write!(&mut str, "<!DOCTYPE {}", doctype.name)?;
+            if let Some(ref public_id) = doctype.public_id {
+                write!(&mut str, r#" PUBLIC "{}""#, public_id)?;
+                if let Some(ref system_id) = doctype.system_id {
+                    write!(&mut str, r#" "{}""#, system_id)?;
+                }
+            } else if let Some(ref system_id) = doctype.system_id {
+                write!(&mut str, r#" SYSTEM "{}""#, system_id)?;
+            }
+            write!(&mut str, ">")?;
+            if matches!(format_type, DocumentFormatType::Indented) {
+                writeln!(&mut str)?;
             }
         }
     }
