@@ -2,9 +2,11 @@
 
 FROM mcr.microsoft.com/devcontainers/rust:1-1-bookworm
 
-# [Optional] Uncomment this section to install additional packages.
+# Install Python and uv for lxml reference tests
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-    && apt-get -y install --no-install-recommends python3-full python3-lxml
+    && apt-get -y install --no-install-recommends python3-full
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 COPY postCreateCommand.sh /tmp/postCreateCommand.sh
 RUN chmod +x /tmp/postCreateCommand.sh
