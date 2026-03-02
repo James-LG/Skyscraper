@@ -230,6 +230,12 @@ fn dispatch_by_local_name<'tree>(
             ))
         }
         "string" => {
+            if !args.is_empty() && args[0].is_empty() {
+                // XPath 3.1 spec: if $arg is the empty sequence, return zero-length string
+                return Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                    AnyAtomicType::String(String::new())
+                )]));
+            }
             let target = if args.is_empty() {
                 &context.item
             } else if args[0].len() == 1 {
