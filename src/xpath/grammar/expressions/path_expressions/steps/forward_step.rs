@@ -3,6 +3,8 @@ use std::fmt::Display;
 use indexmap::IndexSet;
 use nom::{branch::alt, error::context};
 
+use indextree::NodeId;
+
 use crate::xpath::{
     grammar::{
         data_model::XpathItem,
@@ -116,7 +118,16 @@ fn eval_forward_axis<'tree>(
     Ok(nodes)
 }
 
-/// Direct children of the context nodes.
+/// Get the [`NodeId`] for a tree node, falling back to the tree root for `DocumentNode`
+/// (which doesn't store its own id).
+fn node_or_root_id(node: &XpathItemTreeNode, context: &XpathExpressionContext<'_>) -> NodeId {
+    match node.node_id() {
+        Some(id) => id,
+        None => context.item_tree.root_node, // DocumentNode
+    }
+}
+
+/// Direct children of the context node.
 fn eval_forward_axis_child<'tree>(
     context: &XpathExpressionContext<'tree>,
 ) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
@@ -132,7 +143,7 @@ fn eval_forward_axis_child<'tree>(
     Ok(nodes)
 }
 
-/// All descendants of the context nodes.
+/// All descendants of the context node.
 fn eval_forward_axis_descendant<'tree>(
     context: &XpathExpressionContext<'tree>,
 ) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
@@ -140,9 +151,7 @@ fn eval_forward_axis_descendant<'tree>(
 
     // Only tree nodes have children.
     if let XpathItem::Node(node) = &context.item {
-        let node_id = node
-            .node_id()
-            .unwrap_or(context.item_tree.root_node);
+        let node_id = node_or_root_id(node, context);
 
         // Use indextree's built-in descendants iterator instead of manual recursion.
         // skip(1) to exclude self — descendants() includes the node itself.
@@ -154,16 +163,14 @@ fn eval_forward_axis_descendant<'tree>(
     Ok(nodes)
 }
 
-/// All descendants of the context nodes including the context nodes.
+/// All descendants of the context node, including the context node itself.
 fn eval_forward_axis_self_or_descendant<'tree>(
     context: &XpathExpressionContext<'tree>,
 ) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
     let mut nodes = IndexSet::new();
 
     if let XpathItem::Node(node) = &context.item {
-        let node_id = node
-            .node_id()
-            .unwrap_or(context.item_tree.root_node);
+        let node_id = node_or_root_id(node, context);
 
         // Use indextree's built-in descendants iterator — includes self.
         for descendant_id in node_id.descendants(&context.item_tree.arena) {

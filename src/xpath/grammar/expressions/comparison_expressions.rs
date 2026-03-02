@@ -254,22 +254,15 @@ impl Display for ValueComp {
 
 impl ValueComp {
     pub(crate) fn is_match(&self, first: &AnyAtomicType, second: &AnyAtomicType) -> bool {
-        if let Some((a, b)) = coerce_for_comparison(first, second) {
-            self.compare(&a, &b)
-        } else {
-            self.compare(first, second)
-        }
-    }
-
-    fn compare(&self, a: &AnyAtomicType, b: &AnyAtomicType) -> bool {
-        match self {
-            ValueComp::Equal => a == b,
-            ValueComp::NotEqual => a != b,
-            ValueComp::LessThan => a < b,
-            ValueComp::LessThanEqualTo => a <= b,
-            ValueComp::GreaterThan => a > b,
-            ValueComp::GreaterThanEqualTo => a >= b,
-        }
+        let (eq, lt, gt) = match self {
+            ValueComp::Equal => (true, false, false),
+            ValueComp::NotEqual => (false, true, true),
+            ValueComp::LessThan => (false, true, false),
+            ValueComp::LessThanEqualTo => (true, true, false),
+            ValueComp::GreaterThan => (false, false, true),
+            ValueComp::GreaterThanEqualTo => (true, false, true),
+        };
+        compare_atomic(first, second, eq, lt, gt)
     }
 }
 
@@ -347,22 +340,57 @@ impl Display for GeneralComp {
 
 impl GeneralComp {
     pub(crate) fn is_match(&self, first: &AnyAtomicType, second: &AnyAtomicType) -> bool {
-        if let Some((a, b)) = coerce_for_comparison(first, second) {
-            self.compare(&a, &b)
-        } else {
-            self.compare(first, second)
-        }
+        let (eq, lt, gt) = match self {
+            GeneralComp::Equal => (true, false, false),
+            GeneralComp::NotEqual => (false, true, true),
+            GeneralComp::LessThan => (false, true, false),
+            GeneralComp::LessThanEqualTo => (true, true, false),
+            GeneralComp::GreaterThan => (false, false, true),
+            GeneralComp::GreaterThanEqualTo => (true, false, true),
+        };
+        compare_atomic(first, second, eq, lt, gt)
+    }
+}
+
+/// Compare two atomic values, applying type coercion when needed.
+///
+/// The `eq`, `lt`, `gt` flags indicate which orderings are accepted — e.g.
+/// `(true, true, false)` means "less-than-or-equal".  Coercion is applied
+/// first via [`coerce_for_comparison`]; then `partial_cmp` (or `PartialEq`
+/// for pure equality/inequality) determines the result.  Returns `false`
+/// for incompatible types that cannot be ordered.
+fn compare_atomic(
+    first: &AnyAtomicType,
+    second: &AnyAtomicType,
+    eq: bool,
+    lt: bool,
+    gt: bool,
+) -> bool {
+    let (a, b);
+    let (lhs, rhs) = if let Some(coerced) = coerce_for_comparison(first, second) {
+        a = coerced.0;
+        b = coerced.1;
+        (&a, &b)
+    } else {
+        (first, second)
+    };
+
+    // Pure equality / inequality can use PartialEq directly, which works
+    // across all variant combinations (different variants → not equal).
+    if eq && !lt && !gt {
+        return lhs == rhs;
+    }
+    if !eq && lt && gt {
+        return lhs != rhs;
     }
 
-    fn compare(&self, a: &AnyAtomicType, b: &AnyAtomicType) -> bool {
-        match self {
-            GeneralComp::Equal => a == b,
-            GeneralComp::NotEqual => a != b,
-            GeneralComp::LessThan => a < b,
-            GeneralComp::LessThanEqualTo => a <= b,
-            GeneralComp::GreaterThan => a > b,
-            GeneralComp::GreaterThanEqualTo => a >= b,
-        }
+    // Ordering comparisons use partial_cmp. Returns false for incompatible
+    // types (partial_cmp returns None).
+    match lhs.partial_cmp(rhs) {
+        Some(std::cmp::Ordering::Equal) => eq,
+        Some(std::cmp::Ordering::Less) => lt,
+        Some(std::cmp::Ordering::Greater) => gt,
+        None => false,
     }
 }
 
