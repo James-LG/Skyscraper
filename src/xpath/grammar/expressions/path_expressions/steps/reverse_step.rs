@@ -1,6 +1,5 @@
 use std::fmt::Display;
 
-use indexmap::IndexSet;
 use nom::{branch::alt, bytes::complete::tag, error::context};
 
 use crate::xpath::{
@@ -19,7 +18,6 @@ use crate::xpath::{
 
 use super::{
     axes::reverse_axis::ReverseAxis,
-    collect_self_and_descendants,
     node_tests::{BiDirectionalAxis, NodeTest},
 };
 
@@ -60,7 +58,7 @@ impl ReverseStep {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XpathExpressionContext<'tree>,
-    ) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
+    ) -> Result<Vec<&'tree XpathItemTreeNode>, ExpressionApplyError> {
         match self {
             ReverseStep::Full(axis, node_test) => eval_reverse_axis(context, *axis, node_test),
             ReverseStep::Abbreviated => {
@@ -75,147 +73,136 @@ impl ReverseStep {
     }
 }
 
+/// Evaluate a reverse axis with fused node-test filtering.
 fn eval_reverse_axis<'tree>(
     context: &XpathExpressionContext<'tree>,
     axis: ReverseAxis,
     node_test: &NodeTest,
-) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
-    let axis_nodes: IndexSet<&'tree XpathItemTreeNode> = match axis {
-        ReverseAxis::Parent => eval_reverse_axis_parent(context),
-        ReverseAxis::Ancestor => eval_reverse_axis_ancestor(context),
-        ReverseAxis::PrecedingSibling => eval_reverse_axis_preceding_sibling(context),
-        ReverseAxis::Preceding => eval_reverse_axis_preceding(context),
-        ReverseAxis::AncestorOrSelf => eval_reverse_axis_ancestor_or_self(context),
-    }?;
-
-    // Filter axis nodes using the node test directly — no context creation needed.
+) -> Result<Vec<&'tree XpathItemTreeNode>, ExpressionApplyError> {
     let bi_axis = BiDirectionalAxis::ReverseAxis(axis);
-    let mut nodes = IndexSet::new();
-    for node in axis_nodes {
-        if node_test.matches_node(bi_axis, node, context.item_tree)? {
-            nodes.insert(node);
-        }
-    }
-
-    Ok(nodes)
-}
-
-/// Direct parent of the context node.
-fn eval_reverse_axis_parent<'tree>(
-    context: &XpathExpressionContext<'tree>,
-) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
-    let mut nodes: IndexSet<&'tree XpathItemTreeNode> = IndexSet::new();
-
-    // Only tree items have parents.
-    if let XpathItem::Node(node) = &context.item {
-        if let Some(parent) = &node.parent(context.item_tree) {
-            nodes.insert(*parent);
-        }
-    }
-
-    Ok(nodes)
-}
-
-/// All ancestors of the context node (parent, grandparent, ...) up to the root, in reverse document order.
-fn eval_reverse_axis_ancestor<'tree>(
-    context: &XpathExpressionContext<'tree>,
-) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
-    let mut nodes: IndexSet<&'tree XpathItemTreeNode> = IndexSet::new();
-
-    if let XpathItem::Node(node) = &context.item {
-        if let Some(node_id) = node.node_id() {
-            let mut current = context.item_tree.arena.get(node_id).and_then(|n| n.parent());
-            while let Some(ancestor_id) = current {
-                nodes.insert(context.item_tree.get(ancestor_id));
-                current = context.item_tree.arena.get(ancestor_id).and_then(|n| n.parent());
+    match axis {
+        ReverseAxis::Parent => {
+            let mut nodes = Vec::new();
+            if let XpathItem::Node(node) = &context.item {
+                if let Some(parent) = &node.parent(context.item_tree) {
+                    if node_test.matches_node(bi_axis, *parent, context.item_tree)? {
+                        nodes.push(*parent);
+                    }
+                }
             }
+            Ok(nodes)
         }
-    }
-
-    Ok(nodes)
-}
-
-/// The context node and all its ancestors, in reverse document order.
-fn eval_reverse_axis_ancestor_or_self<'tree>(
-    context: &XpathExpressionContext<'tree>,
-) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
-    let mut nodes: IndexSet<&'tree XpathItemTreeNode> = IndexSet::new();
-
-    if let XpathItem::Node(node) = &context.item {
-        nodes.insert(*node);
-
-        if let Some(node_id) = node.node_id() {
-            let mut current = context.item_tree.arena.get(node_id).and_then(|n| n.parent());
-            while let Some(ancestor_id) = current {
-                nodes.insert(context.item_tree.get(ancestor_id));
-                current = context.item_tree.arena.get(ancestor_id).and_then(|n| n.parent());
+        ReverseAxis::Ancestor => {
+            let mut nodes = Vec::new();
+            if let XpathItem::Node(node) = &context.item {
+                if let Some(node_id) = node.node_id() {
+                    let mut current =
+                        context.item_tree.arena.get(node_id).and_then(|n| n.parent());
+                    while let Some(ancestor_id) = current {
+                        let ancestor = context.item_tree.get(ancestor_id);
+                        if node_test.matches_node(bi_axis, ancestor, context.item_tree)? {
+                            nodes.push(ancestor);
+                        }
+                        current = context
+                            .item_tree
+                            .arena
+                            .get(ancestor_id)
+                            .and_then(|n| n.parent());
+                    }
+                }
             }
+            Ok(nodes)
         }
-    } else {
-        return Err(ExpressionApplyError {
-            msg: String::from("err:XPTY0020 context item for axis step is not a node"),
-        });
-    }
-
-    Ok(nodes)
-}
-
-/// All siblings of the context node that come before it in document order.
-fn eval_reverse_axis_preceding_sibling<'tree>(
-    context: &XpathExpressionContext<'tree>,
-) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
-    let mut nodes: IndexSet<&'tree XpathItemTreeNode> = IndexSet::new();
-
-    if let XpathItem::Node(node) = &context.item {
-        if let Some(node_id) = node.node_id() {
-            let mut prev =
-                context.item_tree.arena.get(node_id).and_then(|n| n.previous_sibling());
-            while let Some(sibling_id) = prev {
-                nodes.insert(context.item_tree.get(sibling_id));
-                prev = context
-                    .item_tree
-                    .arena
-                    .get(sibling_id)
-                    .and_then(|n| n.previous_sibling());
+        ReverseAxis::AncestorOrSelf => {
+            let mut nodes = Vec::new();
+            if let XpathItem::Node(node) = &context.item {
+                if node_test.matches_node(bi_axis, *node, context.item_tree)? {
+                    nodes.push(*node);
+                }
+                if let Some(node_id) = node.node_id() {
+                    let mut current =
+                        context.item_tree.arena.get(node_id).and_then(|n| n.parent());
+                    while let Some(ancestor_id) = current {
+                        let ancestor = context.item_tree.get(ancestor_id);
+                        if node_test.matches_node(bi_axis, ancestor, context.item_tree)? {
+                            nodes.push(ancestor);
+                        }
+                        current = context
+                            .item_tree
+                            .arena
+                            .get(ancestor_id)
+                            .and_then(|n| n.parent());
+                    }
+                }
+            } else {
+                return Err(ExpressionApplyError {
+                    msg: String::from(
+                        "err:XPTY0020 context item for axis step is not a node",
+                    ),
+                });
             }
+            Ok(nodes)
         }
-    }
-
-    Ok(nodes)
-}
-
-/// All nodes that come before the context node in document order, excluding ancestors.
-fn eval_reverse_axis_preceding<'tree>(
-    context: &XpathExpressionContext<'tree>,
-) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
-    let mut nodes: IndexSet<&'tree XpathItemTreeNode> = IndexSet::new();
-
-    if let XpathItem::Node(node) = &context.item {
-        if let Some(node_id) = node.node_id() {
-            // Collect all preceding nodes: for each ancestor (including self),
-            // take all preceding siblings and their descendants.
-            let mut current = Some(node_id);
-            while let Some(cur_id) = current {
-                let mut prev = context
-                    .item_tree
-                    .arena
-                    .get(cur_id)
-                    .and_then(|n| n.previous_sibling());
-                while let Some(sibling_id) = prev {
-                    collect_self_and_descendants(context, sibling_id, &mut nodes);
-                    prev = context
+        ReverseAxis::PrecedingSibling => {
+            let mut nodes = Vec::new();
+            if let XpathItem::Node(node) = &context.item {
+                if let Some(node_id) = node.node_id() {
+                    let mut prev = context
                         .item_tree
                         .arena
-                        .get(sibling_id)
+                        .get(node_id)
                         .and_then(|n| n.previous_sibling());
+                    while let Some(sibling_id) = prev {
+                        let sibling = context.item_tree.get(sibling_id);
+                        if node_test.matches_node(bi_axis, sibling, context.item_tree)? {
+                            nodes.push(sibling);
+                        }
+                        prev = context
+                            .item_tree
+                            .arena
+                            .get(sibling_id)
+                            .and_then(|n| n.previous_sibling());
+                    }
                 }
-                // Move up to parent.
-                current = context.item_tree.arena.get(cur_id).and_then(|n| n.parent());
             }
+            Ok(nodes)
+        }
+        ReverseAxis::Preceding => {
+            let mut nodes = Vec::new();
+            if let XpathItem::Node(node) = &context.item {
+                if let Some(node_id) = node.node_id() {
+                    let mut current = Some(node_id);
+                    while let Some(cur_id) = current {
+                        let mut prev = context
+                            .item_tree
+                            .arena
+                            .get(cur_id)
+                            .and_then(|n| n.previous_sibling());
+                        while let Some(sibling_id) = prev {
+                            for desc_id in
+                                sibling_id.descendants(&context.item_tree.arena)
+                            {
+                                let desc_node = context.item_tree.get(desc_id);
+                                if node_test.matches_node(
+                                    bi_axis, desc_node, context.item_tree,
+                                )? {
+                                    nodes.push(desc_node);
+                                }
+                            }
+                            prev = context
+                                .item_tree
+                                .arena
+                                .get(sibling_id)
+                                .and_then(|n| n.previous_sibling());
+                        }
+                        current =
+                            context.item_tree.arena.get(cur_id).and_then(|n| n.parent());
+                    }
+                }
+            }
+            Ok(nodes)
         }
     }
-
-    Ok(nodes)
 }
 
 #[cfg(test)]

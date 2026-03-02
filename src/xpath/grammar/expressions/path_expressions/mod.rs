@@ -14,7 +14,13 @@ use crate::xpath::{
     ExpressionApplyError, XpathExpressionContext,
 };
 
-use self::steps::step_expr::StepExpr;
+use self::steps::{
+    axes::forward_axis::ForwardAxis,
+    axis_step::{AxisStep, AxisStepType},
+    forward_step::ForwardStep,
+    node_tests::NodeTest,
+    step_expr::StepExpr,
+};
 
 pub mod abbreviated_syntax;
 pub mod steps;
@@ -140,6 +146,38 @@ fn relative_slash_expansion(unexpanded_expr: &Option<RelativePathExpr>) -> Relat
     }
 }
 
+/// Try to extract a child-axis node test from a step expression, for `//X` fusion.
+/// Returns `Some(node_test)` if the step is a predicate-free child axis step.
+fn try_extract_child_node_test(step: &StepExpr) -> Option<&NodeTest> {
+    if let StepExpr::AxisStep(axis_step) = step {
+        if !axis_step.predicates.is_empty() {
+            return None;
+        }
+        match &axis_step.step_type {
+            AxisStepType::ForwardStep(ForwardStep::Full(ForwardAxis::Child, node_test)) => {
+                Some(node_test)
+            }
+            AxisStepType::ForwardStep(ForwardStep::Abbreviated(abbrev)) if !abbrev.has_at => {
+                Some(&abbrev.node_test)
+            }
+            _ => None,
+        }
+    } else {
+        None
+    }
+}
+
+/// Build a `descendant::node_test` step expression from a node test.
+fn make_descendant_step(node_test: &NodeTest) -> StepExpr {
+    StepExpr::AxisStep(AxisStep {
+        step_type: AxisStepType::ForwardStep(ForwardStep::Full(
+            ForwardAxis::Descendant,
+            node_test.clone(),
+        )),
+        predicates: vec![],
+    })
+}
+
 fn initial_double_slash_expansion(unexpanded_expr: &RelativePathExpr) -> RelativePathExpr {
     // A leading double slash is expanded to `(fn:root(self::node()) treat as document-node())/descendant-or-self::node()/<unexpanded_expr>`
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-path-expressions
@@ -147,12 +185,27 @@ fn initial_double_slash_expansion(unexpanded_expr: &RelativePathExpr) -> Relativ
         .expect("double slash expansion step 1 failed")
         .1;
 
+    // Optimization: //X (no predicates) is equivalent to root/descendant::X
+    // This avoids the O(N) nested loop of descendant-or-self::node()/child::X.
+    if let Some(node_test) = try_extract_child_node_test(&unexpanded_expr.expr) {
+        let descendant_step = make_descendant_step(node_test);
+        let mut items = vec![StepPair(PathSeparator::Slash, descendant_step)];
+        items.extend(unexpanded_expr.items.iter().map(|x| x.clone()));
+        return RelativePathExpr {
+            expr: first_step,
+            items,
+        };
+    }
+
     let second_step = step_expr("descendant-or-self::node()")
         .expect("double slash expansion step 2 failed")
         .1;
 
     let mut items = vec![StepPair(PathSeparator::Slash, second_step)];
-    items.push(StepPair(PathSeparator::Slash, unexpanded_expr.expr.clone()));
+    items.push(StepPair(
+        PathSeparator::Slash,
+        unexpanded_expr.expr.clone(),
+    ));
     items.extend(unexpanded_expr.items.iter().map(|x| x.clone()));
 
     RelativePathExpr {
@@ -166,6 +219,17 @@ fn relative_double_slash_expansion(unexpanded_expr: &RelativePathExpr) -> Relati
     let first_step = step_expr(".")
         .expect("relative double slash expansion step 1 failed")
         .1;
+
+    // Optimization: .//<X> (no predicates) → ./descendant::<X>
+    if let Some(node_test) = try_extract_child_node_test(&unexpanded_expr.expr) {
+        let descendant_step = make_descendant_step(node_test);
+        let mut items = vec![StepPair(PathSeparator::Slash, descendant_step)];
+        items.extend(unexpanded_expr.items.iter().map(|x| x.clone()));
+        return RelativePathExpr {
+            expr: first_step,
+            items,
+        };
+    }
 
     let mut items = vec![StepPair(
         PathSeparator::DoubleSlash,
@@ -242,6 +306,12 @@ impl RelativePathExpr {
                 return Ok(result);
             }
 
+            // Terminal step optimization: when only one step remains,
+            // return its result directly without creating per-item contexts.
+            if steps.len() == 1 {
+                return steps[0].eval(context);
+            }
+
             // Otherwise, evaluate the first step.
             let mut items = XpathItemSet::new();
             let this_result = steps[0].eval(context)?;
@@ -299,6 +369,15 @@ impl RelativePathExpr {
 ///
 /// `expr` - The step _after_ the double slash.
 fn double_slash_expansion(expr: &StepExpr) -> RelativePathExpr {
+    // Optimization: A//X (no predicates) → A/descendant::X
+    if let Some(node_test) = try_extract_child_node_test(expr) {
+        let descendant_step = make_descendant_step(node_test);
+        return RelativePathExpr {
+            expr: descendant_step,
+            items: vec![],
+        };
+    }
+
     let expanded_double_slash = step_expr("descendant-or-self::node()")
         .expect("double slash expansion step 1 failed")
         .1;
@@ -406,8 +485,9 @@ mod tests {
         let expr = initial_double_slash_expansion(&given_expr);
 
         // assert
+        // Optimized: //hi → root/descendant::hi (fused from desc-or-self::node()/child::hi)
         let expected_expr_text =
-            r#"(fn:root(self::node()) treat as document-node())/descendant-or-self::node()/hi"#;
+            r#"(fn:root(self::node()) treat as document-node())/descendant::hi"#;
 
         assert_eq!(expr.to_string(), expected_expr_text);
     }
@@ -449,7 +529,8 @@ mod tests {
         let expr = double_slash_expansion(&given_expr);
 
         // assert
-        let expected_expr_text = r#"descendant-or-self::node()/hello"#;
+        // Optimized: A//hello → A/descendant::hello (fused from desc-or-self::node()/child::hello)
+        let expected_expr_text = r#"descendant::hello"#;
 
         assert_eq!(expr.to_string(), expected_expr_text);
     }

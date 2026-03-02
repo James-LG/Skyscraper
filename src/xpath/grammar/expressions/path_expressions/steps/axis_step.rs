@@ -1,6 +1,5 @@
 use std::fmt::Display;
 
-use indexmap::IndexSet;
 use nom::{branch::alt, error::context, sequence::tuple};
 
 use crate::xpath::{
@@ -128,7 +127,7 @@ impl AxisStepType {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XpathExpressionContext<'tree>,
-    ) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
+    ) -> Result<Vec<&'tree XpathItemTreeNode>, ExpressionApplyError> {
         match self {
             AxisStepType::ReverseStep(step) => step.eval(context),
             AxisStepType::ForwardStep(step) => step.eval(context),
