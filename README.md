@@ -51,6 +51,10 @@ assert_eq!(parent_node, parent_of_child0);
 assert_eq!(parent_node, parent_of_child1);
 ```
 
+### WHATWG Compliance Note
+
+Skyscraper's HTML parser follows the [WHATWG parsing specification](https://html.spec.whatwg.org/multipage/parsing.html). One notable consequence is **implicit `<tbody>` insertion**: when `<tr>`, `<td>`, or `<th>` elements appear as direct children of `<table>`, the parser automatically wraps them in a `<tbody>` element (per [WHATWG §13.2.6.4.9](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intable)). This matches browser behavior but differs from parsers like Python's lxml, which does not insert `<tbody>`. As a result, XPath expressions like `//table/*` or `//table//*` may return different results than lxml for the same input HTML. To avoid this discrepancy, use explicit `<tbody>` tags in your HTML or account for the implicit element in your XPath expressions.
+
 ## XPath Expressions
 
 Skyscraper is capable of parsing XPath strings and applying them to HTML documents.

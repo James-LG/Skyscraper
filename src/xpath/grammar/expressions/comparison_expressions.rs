@@ -7,6 +7,8 @@ use nom::{
     error::context, sequence::tuple,
 };
 
+use ordered_float::OrderedFloat;
+
 use crate::{
     xpath::{
         grammar::{
@@ -252,13 +254,21 @@ impl Display for ValueComp {
 
 impl ValueComp {
     pub(crate) fn is_match(&self, first: &AnyAtomicType, second: &AnyAtomicType) -> bool {
+        if let Some((a, b)) = coerce_for_comparison(first, second) {
+            self.compare(&a, &b)
+        } else {
+            self.compare(first, second)
+        }
+    }
+
+    fn compare(&self, a: &AnyAtomicType, b: &AnyAtomicType) -> bool {
         match self {
-            ValueComp::Equal => first == second,
-            ValueComp::NotEqual => first != second,
-            ValueComp::LessThan => first < second,
-            ValueComp::LessThanEqualTo => first <= second,
-            ValueComp::GreaterThan => first > second,
-            ValueComp::GreaterThanEqualTo => first >= second,
+            ValueComp::Equal => a == b,
+            ValueComp::NotEqual => a != b,
+            ValueComp::LessThan => a < b,
+            ValueComp::LessThanEqualTo => a <= b,
+            ValueComp::GreaterThan => a > b,
+            ValueComp::GreaterThanEqualTo => a >= b,
         }
     }
 }
@@ -336,15 +346,79 @@ impl Display for GeneralComp {
 }
 
 impl GeneralComp {
-    pub(crate) fn is_match<'tree>(&self, first: &AnyAtomicType, second: &AnyAtomicType) -> bool {
-        match self {
-            GeneralComp::Equal => first == second,
-            GeneralComp::NotEqual => first != second,
-            GeneralComp::LessThan => first < second,
-            GeneralComp::LessThanEqualTo => first <= second,
-            GeneralComp::GreaterThan => first > second,
-            GeneralComp::GreaterThanEqualTo => first >= second,
+    pub(crate) fn is_match(&self, first: &AnyAtomicType, second: &AnyAtomicType) -> bool {
+        if let Some((a, b)) = coerce_for_comparison(first, second) {
+            self.compare(&a, &b)
+        } else {
+            self.compare(first, second)
         }
+    }
+
+    fn compare(&self, a: &AnyAtomicType, b: &AnyAtomicType) -> bool {
+        match self {
+            GeneralComp::Equal => a == b,
+            GeneralComp::NotEqual => a != b,
+            GeneralComp::LessThan => a < b,
+            GeneralComp::LessThanEqualTo => a <= b,
+            GeneralComp::GreaterThan => a > b,
+            GeneralComp::GreaterThanEqualTo => a >= b,
+        }
+    }
+}
+
+/// Coerce a pair of atomic values for comparison per XPath 3.1 §3.7.
+///
+/// - String (xs:untypedAtomic) vs numeric → cast string to xs:double, promote
+///   numeric operand to xs:double.
+/// - Mixed numeric types (e.g. Integer vs Double) → promote both to xs:double.
+/// - Otherwise, return `None` (no coercion needed, compare directly).
+fn coerce_for_comparison(
+    first: &AnyAtomicType,
+    second: &AnyAtomicType,
+) -> Option<(AnyAtomicType, AnyAtomicType)> {
+    fn is_numeric(v: &AnyAtomicType) -> bool {
+        matches!(
+            v,
+            AnyAtomicType::Integer(_) | AnyAtomicType::Float(_) | AnyAtomicType::Double(_)
+        )
+    }
+
+    fn to_double(v: &AnyAtomicType) -> AnyAtomicType {
+        match v {
+            AnyAtomicType::Integer(i) => {
+                AnyAtomicType::Double(OrderedFloat(*i as f64))
+            }
+            AnyAtomicType::Float(f) => {
+                AnyAtomicType::Double(OrderedFloat(f.0 as f64))
+            }
+            AnyAtomicType::Double(_) => v.clone(),
+            _ => unreachable!("to_double called with non-numeric value"),
+        }
+    }
+
+    fn string_to_double(s: &str) -> AnyAtomicType {
+        let d = s.trim().parse::<f64>().unwrap_or(f64::NAN);
+        AnyAtomicType::Double(OrderedFloat(d))
+    }
+
+    match (first, second) {
+        // String (untyped) vs numeric: cast string to double, promote numeric to double.
+        (AnyAtomicType::String(s), other) if is_numeric(other) => {
+            Some((string_to_double(s), to_double(other)))
+        }
+        (other, AnyAtomicType::String(s)) if is_numeric(other) => {
+            Some((to_double(other), string_to_double(s)))
+        }
+        // Mixed numeric types: promote both to double.
+        (a, b)
+            if is_numeric(a)
+                && is_numeric(b)
+                && std::mem::discriminant(a) != std::mem::discriminant(b) =>
+        {
+            Some((to_double(a), to_double(b)))
+        }
+        // Same type or non-numeric: no coercion needed.
+        _ => None,
     }
 }
 

@@ -51,7 +51,7 @@ impl<'tree> From<&'tree XpathItemTreeNode> for XpathItem<'tree> {
 /// An atomic value.
 ///
 /// <https://www.w3.org/TR/xpath-datamodel-31/#types-hierarchy>
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum AnyAtomicType {
     /// A boolean value.
     Boolean(bool),
@@ -79,6 +79,32 @@ pub enum AnyAtomicType {
         /// The optional prefix used in the lexical form.
         prefix: Option<String>,
     },
+}
+
+impl PartialOrd for AnyAtomicType {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match (self, other) {
+            (AnyAtomicType::Boolean(a), AnyAtomicType::Boolean(b)) => a.partial_cmp(b),
+            (AnyAtomicType::Integer(a), AnyAtomicType::Integer(b)) => a.partial_cmp(b),
+            (AnyAtomicType::Float(a), AnyAtomicType::Float(b)) => a.partial_cmp(b),
+            (AnyAtomicType::Double(a), AnyAtomicType::Double(b)) => a.partial_cmp(b),
+            (AnyAtomicType::String(a), AnyAtomicType::String(b)) => a.partial_cmp(b),
+            (
+                AnyAtomicType::QName {
+                    namespace_uri: ns1,
+                    local_name: ln1,
+                    prefix: p1,
+                },
+                AnyAtomicType::QName {
+                    namespace_uri: ns2,
+                    local_name: ln2,
+                    prefix: p2,
+                },
+            ) => (ns1, ln1, p1).partial_cmp(&(ns2, ln2, p2)),
+            // Incompatible types are not ordered.
+            _ => None,
+        }
+    }
 }
 
 impl Display for AnyAtomicType {

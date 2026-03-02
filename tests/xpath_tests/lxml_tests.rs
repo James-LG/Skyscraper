@@ -871,10 +871,11 @@ static CUSTOM_HTML: &str = r#"<html><body>
     <p>Hello <strong>bold</strong> world</p>
     <p class="intro">Second <em>emphasized</em> paragraph</p>
   </div>
-  <table>
+  <!-- Explicit tbody so Skyscraper (WHATWG) and lxml produce the same tree. -->
+  <table><tbody>
     <tr><td class="c1">A1</td><td class="c2">A2</td></tr>
     <tr><td class="c1">B1</td><td class="c2">B2</td></tr>
-  </table>
+  </tbody></table>
   <div class="nested">
     <div class="inner"><span data-x="1">deep</span></div>
   </div>
@@ -1223,5 +1224,522 @@ fn test_custom_nested_list_following() {
 #[test]
 fn test_custom_deep_absolute_path() {
     run_lxml_comparison_with_html("/html/body/div/div/div/span", CUSTOM_HTML_DEEP);
+}
+
+// =====================================================================
+// Additional lxml tests — simple to complex
+// =====================================================================
+
+// ===== Explicit axis syntax =====
+
+/// Select child elements using explicit child:: axis.
+#[test]
+fn test_explicit_child_axis() {
+    run_lxml_comparison_with_html("//div[@id='root']/child::ul", CUSTOM_HTML);
+}
+
+/// Select descendants using explicit descendant:: axis.
+#[test]
+fn test_explicit_descendant_axis() {
+    run_lxml_comparison_with_html("//div[@id='root']/descendant::span", CUSTOM_HTML);
+}
+
+/// Select using explicit descendant-or-self:: axis.
+#[test]
+fn test_explicit_descendant_or_self_axis() {
+    run_lxml_comparison_with_html(
+        "//div[@class='nested']/descendant-or-self::div",
+        CUSTOM_HTML,
+    );
+}
+
+// ===== More element selection patterns =====
+
+/// Select all table data cells.
+#[test]
+fn test_select_all_td() {
+    run_lxml_comparison_with_html("//td", CUSTOM_HTML);
+}
+
+/// Select all table rows.
+#[test]
+fn test_select_all_tr() {
+    run_lxml_comparison_with_html("//tr", CUSTOM_HTML);
+}
+
+/// Select all em elements.
+#[test]
+fn test_select_all_em() {
+    run_lxml_comparison_with_html("//em", CUSTOM_HTML);
+}
+
+/// Select all strong elements.
+#[test]
+fn test_select_all_strong() {
+    run_lxml_comparison_with_html("//strong", CUSTOM_HTML);
+}
+
+// ===== Positional — last() arithmetic =====
+
+/// Select the second to last li in each ul.
+#[test]
+fn test_positional_last_minus_one() {
+    run_lxml_comparison_with_html("//ul/li[last() - 1]", CUSTOM_HTML);
+}
+
+/// Select the element at position = last (i.e. only the last).
+#[test]
+fn test_positional_position_eq_last() {
+    run_lxml_comparison_with_html("//ul/li[position() = last()]", CUSTOM_HTML);
+}
+
+/// Select all li elements except the last in each ul.
+#[test]
+fn test_positional_not_last() {
+    run_lxml_comparison_with_html("//ul/li[position() != last()]", CUSTOM_HTML);
+}
+
+// ===== Arithmetic in predicates =====
+
+/// Select divs where count of children is greater than 2.
+#[test]
+fn test_count_gt_two() {
+    run_lxml_count_comparison_with_html("//div[count(*) > 2]", CUSTOM_HTML);
+}
+
+/// Select divs where count of children equals 1.
+#[test]
+fn test_count_eq_one() {
+    run_lxml_comparison_with_html("//div[count(*) = 1]", CUSTOM_HTML);
+}
+
+/// Arithmetic: count(child) + 1 > 3.
+#[test]
+fn test_arithmetic_count_plus() {
+    run_lxml_count_comparison_with_html("//div[count(*) + 1 > 3]", CUSTOM_HTML);
+}
+
+/// Arithmetic: string-length comparison with subtraction.
+#[test]
+fn test_arithmetic_string_length_sub() {
+    run_lxml_comparison_with_html("//li[string-length(@class) - 4 > 0]", CUSTOM_HTML);
+}
+
+/// Position mod 2 = 0 (even positioned elements).
+#[test]
+fn test_position_mod_even() {
+    run_lxml_comparison_with_html("//ul/li[position() mod 2 = 0]", CUSTOM_HTML);
+}
+
+// ===== String functions: concat() =====
+
+/// Select elements where concat of two attributes matches.
+#[test]
+fn test_concat_function() {
+    run_lxml_comparison_with_html(
+        "//td[concat(@class, '-extra') = 'c1-extra']",
+        CUSTOM_HTML,
+    );
+}
+
+/// concat() in a contains() predicate.
+#[test]
+fn test_concat_in_contains() {
+    run_lxml_comparison_with_html("//li[contains(concat(' ', @class, ' '), ' item ')]", CUSTOM_HTML);
+}
+
+// ===== String functions: substring-before() / substring-after() =====
+
+/// Select elements where substring-before class at space matches.
+#[test]
+fn test_substring_before() {
+    run_lxml_comparison_with_html(
+        "//li[substring-before(@class, ' ') = 'item']",
+        CUSTOM_HTML,
+    );
+}
+
+/// Select elements where substring-after class at space matches.
+#[test]
+fn test_substring_after() {
+    run_lxml_comparison_with_html(
+        "//li[substring-after(@class, 'item ') = 'first']",
+        CUSTOM_HTML,
+    );
+}
+
+// ===== Number functions: floor(), ceiling(), round() =====
+
+/// floor() function in a predicate.
+#[test]
+fn test_floor_function() {
+    run_lxml_comparison_with_html("//ul/li[floor(last() div 2) = 1]", CUSTOM_HTML);
+}
+
+/// ceiling() function in a predicate.
+#[test]
+fn test_ceiling_function() {
+    run_lxml_comparison_with_html("//ul/li[ceiling(last() div 2) >= 2]", CUSTOM_HTML);
+}
+
+/// round() function in a predicate.
+#[test]
+fn test_round_function() {
+    run_lxml_comparison_with_html("//ul/li[position() = round(1.5)]", CUSTOM_HTML);
+}
+
+// ===== Boolean functions: true(), false() =====
+
+/// true() function as a predicate (selects all).
+#[test]
+fn test_true_function() {
+    run_lxml_comparison_with_html("//li[true()]", CUSTOM_HTML);
+}
+
+/// not(false()) as a predicate (selects all).
+#[test]
+fn test_not_false_function() {
+    run_lxml_comparison_with_html("//li[not(false())]", CUSTOM_HTML);
+}
+
+// ===== Node-set functions: name(), local-name() =====
+
+/// Select elements where name() matches.
+#[test]
+fn test_name_function() {
+    run_lxml_comparison_with_html("//*[name() = 'strong']", CUSTOM_HTML);
+}
+
+/// Select elements where local-name() matches.
+#[test]
+fn test_local_name_function() {
+    run_lxml_comparison_with_html("//*[local-name() = 'em']", CUSTOM_HTML);
+}
+
+// ===== Double negation =====
+
+/// Double not() — should be equivalent to boolean.
+#[test]
+fn test_double_negation() {
+    run_lxml_comparison_with_html("//li[not(not(@class))]", CUSTOM_HTML);
+}
+
+// ===== Complex predicate combinations =====
+
+/// and/or combined: select li with specific class combos.
+#[test]
+fn test_and_or_combined() {
+    run_lxml_comparison_with_html(
+        "//li[contains(@class, 'item') and (contains(@class, 'first') or contains(@class, 'last'))]",
+        CUSTOM_HTML,
+    );
+}
+
+/// Predicate with comparison and string function.
+#[test]
+fn test_predicate_mixed_functions() {
+    run_lxml_comparison_with_html(
+        "//td[string-length(@class) = 2 and starts-with(@class, 'c')]",
+        CUSTOM_HTML,
+    );
+}
+
+/// Negation combined with positional.
+#[test]
+fn test_not_with_positional() {
+    run_lxml_comparison_with_html("//ul/li[not(position() = 1)]", CUSTOM_HTML);
+}
+
+// ===== Multiple union expressions =====
+
+/// Union of three element types.
+#[test]
+fn test_triple_union() {
+    run_lxml_count_comparison_with_html("//strong | //em | //p", CUSTOM_HTML);
+}
+
+/// Union with predicates on each operand.
+#[test]
+fn test_union_with_predicates() {
+    run_lxml_count_comparison_with_html(
+        "//li[@class='item first'] | //td[@class='c1']",
+        CUSTOM_HTML,
+    );
+}
+
+// ===== Complex multi-step navigation =====
+
+/// Navigate up and then to a specific descendant.
+#[test]
+fn test_parent_then_descendant() {
+    run_lxml_comparison_with_html("//strong/..//em", CUSTOM_HTML);
+}
+
+/// Navigate: descendant, then parent, then child of a different type.
+#[test]
+fn test_complex_navigation() {
+    run_lxml_comparison_with_html("//div[@class='content']//strong/../em", CUSTOM_HTML);
+}
+
+/// Multi-step: ancestor then descendant.
+#[test]
+fn test_ancestor_then_descendant() {
+    run_lxml_comparison_with_html(
+        "//span[@class='deep']/ancestor::div[@id='a']//span",
+        CUSTOM_HTML_DEEP,
+    );
+}
+
+/// Navigate from table cell up to row then to sibling cell.
+#[test]
+fn test_table_cell_to_sibling() {
+    run_lxml_comparison_with_html("//td[@class='c1']/../td[@class='c2']", CUSTOM_HTML);
+}
+
+// ===== Deeply nested predicates =====
+
+/// Three levels of nested predicates.
+#[test]
+fn test_triple_nested_predicate() {
+    run_lxml_comparison_with_html("//div[div[div[span]]]", CUSTOM_HTML_DEEP);
+}
+
+/// Nested predicate with attribute check at leaf.
+#[test]
+fn test_nested_predicate_attr_at_leaf() {
+    run_lxml_comparison_with_html("//div[div[span[@class='deep']]]", CUSTOM_HTML_DEEP);
+}
+
+// ===== Wildcard patterns =====
+
+/// Select all direct children of body using wildcard.
+#[test]
+fn test_wildcard_body_children() {
+    run_lxml_comparison_with_html("/html/body/*", CUSTOM_HTML);
+}
+
+/// Wildcard at intermediate step.
+#[test]
+fn test_wildcard_intermediate_step() {
+    run_lxml_comparison_with_html("//div[@id='root']/*/li", CUSTOM_HTML);
+}
+
+/// Double wildcard descent.
+#[test]
+fn test_double_wildcard() {
+    run_lxml_count_comparison_with_html("//table//*", CUSTOM_HTML);
+}
+
+// ===== Attribute value comparisons =====
+
+/// Less-than comparison on string-length.
+#[test]
+fn test_string_length_lt() {
+    run_lxml_comparison_with_html("//span[string-length(@class) < 2]", CUSTOM_HTML);
+}
+
+/// Greater-or-equal on count.
+#[test]
+fn test_count_gte() {
+    run_lxml_count_comparison_with_html("//div[count(*) >= 3]", CUSTOM_HTML);
+}
+
+/// Less-or-equal on position.
+#[test]
+fn test_position_lte() {
+    run_lxml_comparison_with_html("//div[@class='siblings']/span[position() <= 2]", CUSTOM_HTML);
+}
+
+// ===== Combining axes with predicates =====
+
+/// Following-sibling with attribute predicate.
+#[test]
+fn test_following_sibling_with_attr() {
+    run_lxml_comparison_with_html(
+        "//span[@class='a']/following-sibling::span[@class='c']",
+        CUSTOM_HTML,
+    );
+}
+
+/// Preceding-sibling with attribute predicate.
+#[test]
+fn test_preceding_sibling_with_attr() {
+    run_lxml_comparison_with_html(
+        "//span[@class='c']/preceding-sibling::span[@class='a']",
+        CUSTOM_HTML,
+    );
+}
+
+/// Ancestor with predicate.
+#[test]
+fn test_ancestor_with_predicate() {
+    run_lxml_comparison_with_html("//span[@data-x]/ancestor::div[@id]", CUSTOM_HTML);
+}
+
+// ===== Complex real-world patterns on GitHub HTML =====
+
+/// Select divs with role attribute via descendant of specific element.
+#[test]
+fn test_github_role_descendant() {
+    run_lxml_count_comparison("//main//div[@role]");
+}
+
+/// Select anchors in nav with specific attribute.
+#[test]
+fn test_github_nav_anchors_with_attr() {
+    run_lxml_comparison("//nav//a[@data-analytics-event]");
+}
+
+/// Multi-step: header -> nav -> ul -> li -> a.
+#[test]
+fn test_github_deep_nav_path() {
+    run_lxml_comparison("//header//nav//ul//li//a");
+}
+
+/// Select elements with multiple attribute predicates.
+#[test]
+fn test_github_multi_attr_predicate() {
+    run_lxml_count_comparison("//a[@href and @class and @data-analytics-event]");
+}
+
+/// Complex: anchors in nav that contain text.
+#[test]
+fn test_github_nav_anchors_with_text() {
+    run_lxml_count_comparison("//nav//a[string-length(normalize-space(.)) > 0]");
+}
+
+/// Select divs with class containing multiple substrings.
+#[test]
+fn test_github_class_multi_contains() {
+    run_lxml_comparison("//div[contains(@class, 'position') and contains(@class, 'relative')]");
+}
+
+/// Ancestor of img elements.
+#[test]
+fn test_github_img_ancestor() {
+    run_lxml_comparison("//img[@alt]/ancestor::a");
+}
+
+/// Select elements at a specific depth from body.
+#[test]
+fn test_github_depth_path() {
+    run_lxml_count_comparison("/html/body/div/div");
+}
+
+// ===== Custom HTML for numeric and edge-case patterns =====
+
+static CUSTOM_HTML_NUMERIC: &str = r#"<html><body>
+<div class="prices">
+  <span class="price" data-value="10">$10</span>
+  <span class="price" data-value="25">$25</span>
+  <span class="price" data-value="5">$5</span>
+  <span class="price" data-value="100">$100</span>
+</div>
+<div class="mixed">
+  <p class="a b c">multi-class</p>
+  <p class="x">single-class</p>
+  <p>no-class</p>
+  <p class="">empty-class</p>
+</div>
+<div class="empty-children">
+  <div></div>
+  <div><span>has child</span></div>
+  <div></div>
+</div>
+</body></html>"#;
+
+/// Select spans with numeric attribute comparison.
+#[test]
+fn test_numeric_attr_gt() {
+    run_lxml_comparison_with_html("//span[@data-value > 10]", CUSTOM_HTML_NUMERIC);
+}
+
+/// Select spans with numeric attribute less-than.
+#[test]
+fn test_numeric_attr_lt() {
+    run_lxml_comparison_with_html("//span[@data-value < 25]", CUSTOM_HTML_NUMERIC);
+}
+
+/// Select spans with numeric attribute equality.
+#[test]
+fn test_numeric_attr_eq() {
+    run_lxml_comparison_with_html("//span[@data-value = 100]", CUSTOM_HTML_NUMERIC);
+}
+
+/// Select p elements that have a class attribute (including empty).
+#[test]
+fn test_has_class_including_empty() {
+    run_lxml_comparison_with_html("//p[@class]", CUSTOM_HTML_NUMERIC);
+}
+
+/// Select p elements with non-empty class.
+#[test]
+fn test_non_empty_class() {
+    run_lxml_comparison_with_html("//p[string-length(@class) > 0]", CUSTOM_HTML_NUMERIC);
+}
+
+/// Select p elements without class attribute.
+#[test]
+fn test_no_class_attr() {
+    run_lxml_comparison_with_html("//p[not(@class)]", CUSTOM_HTML_NUMERIC);
+}
+
+/// Select empty divs (no element children).
+#[test]
+fn test_empty_divs() {
+    run_lxml_comparison_with_html(
+        "//div[@class='empty-children']/div[not(*)]",
+        CUSTOM_HTML_NUMERIC,
+    );
+}
+
+/// Select non-empty divs (with element children).
+#[test]
+fn test_non_empty_divs() {
+    run_lxml_comparison_with_html(
+        "//div[@class='empty-children']/div[*]",
+        CUSTOM_HTML_NUMERIC,
+    );
+}
+
+/// Predicate combining numeric comparison and string function.
+#[test]
+fn test_numeric_and_string_predicate() {
+    run_lxml_comparison_with_html(
+        "//span[@data-value > 5 and contains(., '$')]",
+        CUSTOM_HTML_NUMERIC,
+    );
+}
+
+/// sum() function on numeric attributes.
+#[test]
+fn test_sum_function() {
+    run_lxml_comparison_with_html(
+        "//div[sum(span/@data-value) > 50]",
+        CUSTOM_HTML_NUMERIC,
+    );
+}
+
+// ===== Multiple predicates (chained) =====
+
+/// Three chained predicates.
+#[test]
+fn test_triple_chained_predicates() {
+    run_lxml_comparison_with_html(
+        "//span[@class][contains(@class, 'price')][@data-value]",
+        CUSTOM_HTML_NUMERIC,
+    );
+}
+
+/// Chained predicates: attribute existence + positional.
+#[test]
+fn test_chained_attr_then_positional() {
+    run_lxml_comparison_with_html("//span[@class='price'][2]", CUSTOM_HTML_NUMERIC);
+}
+
+/// Chained predicates: positional + attribute.
+#[test]
+fn test_chained_positional_then_attr() {
+    run_lxml_comparison_with_html("//span[2][@class='price']", CUSTOM_HTML_NUMERIC);
 }
 

@@ -2941,6 +2941,17 @@ fn func_sum<'tree>(
                 total += d.0;
                 all_integers = false;
             }
+            AnyAtomicType::String(s) => {
+                // xs:untypedAtomic → cast to xs:double per XPath 3.1 F&O §15.4.5
+                let d: f64 = s.trim().parse().map_err(|_| {
+                    ExpressionApplyError::new(format!(
+                        "fn:sum: cannot cast {:?} to xs:double",
+                        s
+                    ))
+                })?;
+                total += d;
+                all_integers = false;
+            }
             other => {
                 return Err(ExpressionApplyError::new(format!(
                     "fn:sum: non-numeric value {:?}",
