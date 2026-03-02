@@ -274,7 +274,7 @@ impl<'a> Tokenizer<'a> {
                     let tag_name = self
                         .tag_token
                         .as_mut()
-                        .ok_or(HtmlParseError::new("no current tag found"))?
+                        .ok_or_else(|| HtmlParseError::new("no current tag found"))?
                         .tag_name_mut();
                     tag_name.push(*c);
                     loop {
@@ -1016,16 +1016,13 @@ impl<'a> Tokenizer<'a> {
                 let attr = self
                     .tag_token
                     .as_mut()
-                    .ok_or(HtmlParseError::new("no current tag found"))?
+                    .ok_or_else(|| HtmlParseError::new("no current tag found"))?
                     .attributes_mut()
                     .last_mut()
                     .ok_or_else(|| HtmlParseError::new("no attributes on current tag"))?;
                 attr.name.push(c);
                 if let Some(ref mut orig) = attr.original_name {
                     orig.push(c);
-                }
-                if let Some(ref mut attr_name) = self.attribute_name {
-                    attr_name.push(c);
                 }
                 loop {
                     let next_char = match self.input_stream.current() {
@@ -1050,9 +1047,6 @@ impl<'a> Tokenizer<'a> {
                     attr.name.push(next_char);
                     if let Some(ref mut orig) = attr.original_name {
                         orig.push(next_char);
-                    }
-                    if let Some(ref mut attr_name) = self.attribute_name {
-                        attr_name.push(next_char);
                     }
                     self.input_stream.next();
                 }
@@ -1153,7 +1147,7 @@ impl<'a> Tokenizer<'a> {
                 let attr = self
                     .tag_token
                     .as_mut()
-                    .ok_or(HtmlParseError::new("no current tag found"))?
+                    .ok_or_else(|| HtmlParseError::new("no current tag found"))?
                     .attributes_mut()
                     .last_mut()
                     .ok_or_else(|| HtmlParseError::new("no attributes on current tag"))?;
@@ -1196,7 +1190,7 @@ impl<'a> Tokenizer<'a> {
                 let attr = self
                     .tag_token
                     .as_mut()
-                    .ok_or(HtmlParseError::new("no current tag found"))?
+                    .ok_or_else(|| HtmlParseError::new("no current tag found"))?
                     .attributes_mut()
                     .last_mut()
                     .ok_or_else(|| HtmlParseError::new("no attributes on current tag"))?;
@@ -1255,7 +1249,7 @@ impl<'a> Tokenizer<'a> {
                 let attr = self
                     .tag_token
                     .as_mut()
-                    .ok_or(HtmlParseError::new("no current tag found"))?
+                    .ok_or_else(|| HtmlParseError::new("no current tag found"))?
                     .attributes_mut()
                     .last_mut()
                     .ok_or_else(|| HtmlParseError::new("no attributes on current tag"))?;
@@ -2488,7 +2482,7 @@ impl<'a> Tokenizer<'a> {
                 self.character_reference_code = self.character_reference_code.saturating_mul(10);
                 self.character_reference_code = self.character_reference_code.saturating_add(
                     c.to_digit(10)
-                        .ok_or(HtmlParseError::new("decimal character not a digit"))?,
+                        .ok_or_else(|| HtmlParseError::new("decimal character not a digit"))?,
                 );
             }
             Some(';') => {
@@ -2746,7 +2740,7 @@ impl<'a> Tokenizer<'a> {
                 self.character_reference_code = self.character_reference_code.saturating_mul(16);
                 self.character_reference_code = self.character_reference_code.saturating_add(
                     c.to_digit(16)
-                        .ok_or(HtmlParseError::new("hex character not a hex digit"))?,
+                        .ok_or_else(|| HtmlParseError::new("hex character not a hex digit"))?,
                 );
             }
             Some(';') => {

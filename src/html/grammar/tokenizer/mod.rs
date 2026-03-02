@@ -1,6 +1,6 @@
 //! <https://html.spec.whatwg.org/multipage/parsing.html#tokenization>
 
-use std::collections::{hash_map::Entry, HashMap, HashSet};
+use std::collections::{hash_map::Entry, HashMap};
 
 use indextree::NodeId;
 use nom::error;
@@ -357,7 +357,6 @@ pub struct Tokenizer<'a> {
     comment_token: Option<CommentToken>,
     doctype_token: Option<DoctypeToken>,
     tag_token: Option<TagTokenType>,
-    attribute_name: Option<String>,
     character_reference_code: u32,
     last_emitted_start_tag_name: Option<String>,
     /// Buffer for accumulating whitespace between attributes for round-trip fidelity.
@@ -376,7 +375,6 @@ impl<'a> Tokenizer<'a> {
             comment_token: None,
             tag_token: None,
             doctype_token: None,
-            attribute_name: None,
             character_reference_code: 0,
             last_emitted_start_tag_name: None,
             attribute_prefix_buffer: String::new(),
@@ -436,7 +434,7 @@ impl<'a> Tokenizer<'a> {
         let current_tag_token = self
             .tag_token
             .as_mut()
-            .ok_or(HtmlParseError::new("no current tag found"))?;
+            .ok_or_else(|| HtmlParseError::new("no current tag found"))?;
 
         // Use last_mut() instead of find() because the current attribute being
         // built is always the last one pushed by create_new_attribute(). Using
@@ -455,7 +453,6 @@ impl<'a> Tokenizer<'a> {
 
     pub fn create_new_attribute(&mut self, mut attribute: Attribute) -> Result<(), HtmlParseError> {
         attribute.prefix = std::mem::take(&mut self.attribute_prefix_buffer);
-        self.attribute_name = Some(attribute.name.clone());
         self.current_tag_token_mut()?
             .attributes_mut()
             .push(attribute);
@@ -472,12 +469,7 @@ impl<'a> Tokenizer<'a> {
             orig.push(c);
         }
 
-        if let Some(attribute_name) = self.attribute_name.as_mut() {
-            attribute_name.push(c);
-            Ok(())
-        } else {
-            Err(HtmlParseError::new("no current attribute name found"))
-        }
+        Ok(())
     }
 
     /// Push a lowercased char to the attribute name while preserving
@@ -493,12 +485,7 @@ impl<'a> Tokenizer<'a> {
         let orig = attr.original_name.get_or_insert_with(|| attr.name[..attr.name.len() - 1].to_string());
         orig.push(original);
 
-        if let Some(attribute_name) = self.attribute_name.as_mut() {
-            attribute_name.push(c);
-            Ok(())
-        } else {
-            Err(HtmlParseError::new("no current attribute name found"))
-        }
+        Ok(())
     }
 
     pub fn push_char_to_attribute_value(&mut self, c: char) -> Result<(), HtmlParseError> {
@@ -509,7 +496,7 @@ impl<'a> Tokenizer<'a> {
 
     pub fn current_return_state(&self) -> Result<TokenizerState, HtmlParseError> {
         self.return_state
-            .ok_or(HtmlParseError::new("no return state found"))
+            .ok_or_else(|| HtmlParseError::new("no return state found"))
     }
 
     pub fn reconsume(&mut self) {
@@ -532,16 +519,20 @@ impl<'a> Tokenizer<'a> {
             // later attribute must be removed (keeping the first occurrence).
             let attributes = tag_token.attributes_mut();
             if attributes.len() > 1 {
-                let mut seen = HashSet::with_capacity(attributes.len());
+                // O(n²) duplicate check without allocation — faster than HashSet
+                // for typical attribute counts (< 20) and avoids per-attribute
+                // String clones that the HashSet approach required.
                 let mut had_duplicate = false;
-                attributes.retain(|attr| {
-                    if seen.insert(attr.name.clone()) {
-                        true
-                    } else {
+                let mut i = 1;
+                while i < attributes.len() {
+                    let is_dup = (0..i).any(|j| attributes[j].name == attributes[i].name);
+                    if is_dup {
                         had_duplicate = true;
-                        false
+                        attributes.remove(i);
+                    } else {
+                        i += 1;
                     }
-                });
+                }
                 if had_duplicate {
                     self.handle_error(TokenizerError::DuplicateAttribute)?;
                 }
@@ -589,19 +580,19 @@ impl<'a> Tokenizer<'a> {
     pub fn current_tag_token_mut(&mut self) -> Result<&mut TagTokenType, HtmlParseError> {
         self.tag_token
             .as_mut()
-            .ok_or(HtmlParseError::new("no current tag found"))
+            .ok_or_else(|| HtmlParseError::new("no current tag found"))
     }
 
     pub fn current_doctype_token_mut(&mut self) -> Result<&mut DoctypeToken, HtmlParseError> {
         self.doctype_token
             .as_mut()
-            .ok_or(HtmlParseError::new("no current doctype found"))
+            .ok_or_else(|| HtmlParseError::new("no current doctype found"))
     }
 
     pub fn current_comment_token_mut(&mut self) -> Result<&mut CommentToken, HtmlParseError> {
         self.comment_token
             .as_mut()
-            .ok_or(HtmlParseError::new("no current comment found"))
+            .ok_or_else(|| HtmlParseError::new("no current comment found"))
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#charref-in-attribute>
@@ -624,7 +615,7 @@ impl<'a> Tokenizer<'a> {
             let attr = self
                 .tag_token
                 .as_mut()
-                .ok_or(HtmlParseError::new("no current tag found"))?
+                .ok_or_else(|| HtmlParseError::new("no current tag found"))?
                 .attributes_mut()
                 .last_mut()
                 .ok_or_else(|| HtmlParseError::new("no attributes on current tag"))?;
