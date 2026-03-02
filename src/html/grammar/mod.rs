@@ -492,6 +492,14 @@ pub struct HtmlParser {
     pending_table_character_tokens: Vec<HtmlToken>,
     skip_next_line_feed: bool,
     quirks_mode: QuirksMode,
+    /// Cached text node for consecutive character insertions.
+    /// When characters are being appended to a text node, this caches the NodeId
+    /// and the tree_generation at the time. Subsequent characters can skip the
+    /// full `insert_character` path if the generation hasn't changed.
+    active_text_node: Option<(NodeId, u32)>,
+    /// Monotonically increasing counter, bumped on every non-character token.
+    /// Used to invalidate the active_text_node cache.
+    tree_generation: u32,
 }
 
 impl HtmlParser {
@@ -513,6 +521,8 @@ impl HtmlParser {
             pending_table_character_tokens: Vec::new(),
             skip_next_line_feed: false,
             quirks_mode: QuirksMode::NoQuirks,
+            active_text_node: None,
+            tree_generation: 0,
         }
     }
 
@@ -1298,20 +1308,44 @@ impl HtmlParser {
             return Ok(());
         }
 
-        let entry = match self.active_formatting_elements.last().unwrap() {
-            NodeOrMarker::Node(entry) => entry.clone(),
+        // Check early-exit conditions without cloning the entry.
+        // The clone is expensive (TagToken contains String + Vec<Attribute>)
+        // and the common case is that the entry is already in open_elements.
+        let (node_id, needs_reconstruct) = match self.active_formatting_elements.last().unwrap() {
             NodeOrMarker::Marker => return Ok(()),
+            NodeOrMarker::Node(entry) => (entry.node_id, !self.open_elements.contains(&entry.node_id)),
         };
 
-        if self.open_elements.contains(&entry.node_id) {
+        if !needs_reconstruct {
             return Ok(());
         }
+
+        // Only clone when we actually need to reconstruct (rare path).
+        let entry = match self.active_formatting_elements.last().unwrap() {
+            NodeOrMarker::Node(entry) => entry.clone(),
+            _ => unreachable!(),
+        };
 
         step_4_rewind(self, &entry, self.active_formatting_elements.len() - 1)
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#insert-a-character>
     pub(crate) fn insert_character(&mut self, c: char) -> Result<(), HtmlParseError> {
+        // Fast path: if we have a cached text node and no non-character tokens
+        // have been processed since, append directly.
+        if let Some((text_id, gen)) = self.active_text_node {
+            if self.tree_generation == gen {
+                if let Some(node) = self.arena.get_mut(text_id) {
+                    if let XpathItemTreeNode::TextNode(ref mut text) = node.get_mut() {
+                        text.content.push(c);
+                        return Ok(());
+                    }
+                }
+            }
+            // Cache was stale, clear it.
+            self.active_text_node = None;
+        }
+
         let adjusted_insertion_location = self.appropriate_place_for_inserting_a_node(None)?;
 
         // Check if the parent is a Document node — DOM doesn't allow Document nodes to have Text children.
@@ -1331,6 +1365,7 @@ impl HtmlParser {
         if let Some(&mut XpathItemTreeNode::TextNode(ref mut text)) = prev_sibling {
             // If the previous sibling is a Text node, append the character to that Text node.
             text.content.push(c);
+            self.active_text_node = prev_sibling_id.map(|id| (id, self.tree_generation));
         } else {
             // Otherwise, insert a new Text node with the character as its data.
             let string = c.to_string();
@@ -1344,6 +1379,7 @@ impl HtmlParser {
                 .as_text_node_mut()
                 .unwrap()
                 .set_id(text_id);
+            self.active_text_node = Some((text_id, self.tree_generation));
 
             adjusted_insertion_location.insert(text_id, &mut self.arena);
         }
@@ -2123,6 +2159,14 @@ impl Acknowledgement {
 
 impl Parser for HtmlParser {
     fn token_emitted(&mut self, token: HtmlToken) -> Result<Acknowledgement, HtmlParseError> {
+        // Bump the tree generation counter for any non-character token.
+        // This invalidates the active_text_node cache so that structural
+        // changes (new elements, end tags, etc.) force insert_character to
+        // re-derive the correct insertion point.
+        if !matches!(token, HtmlToken::Character(_)) {
+            self.tree_generation = self.tree_generation.wrapping_add(1);
+        }
+
         // If the skip_next_line_feed flag is set and the next token is a LF character,
         // ignore it (used by <pre>, <listing>, <textarea> per WHATWG spec).
         if self.skip_next_line_feed {
