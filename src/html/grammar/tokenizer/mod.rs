@@ -618,16 +618,27 @@ impl<'a> Tokenizer<'a> {
     pub fn flush_code_points_consumed_as_character_reference(
         &mut self,
     ) -> Result<(), HtmlParseError> {
-        let code_points: Vec<char> = self.temporary_buffer.drain(..).collect();
         if self.charref_in_attribute() {
-            let attr = self.current_attribute_mut()?;
-            for c in code_points {
+            // Split borrow: tag_token and temporary_buffer are disjoint fields.
+            // Avoid intermediate Vec<char> allocation on this hot path.
+            let attr = self
+                .tag_token
+                .as_mut()
+                .ok_or(HtmlParseError::new("no current tag found"))?
+                .attributes_mut()
+                .last_mut()
+                .ok_or_else(|| HtmlParseError::new("no attributes on current tag"))?;
+            for &c in &self.temporary_buffer {
                 attr.value.push(c);
             }
-        } else if code_points.len() == 1 {
-            self.emit(HtmlToken::Character(code_points[0]))?;
+            self.temporary_buffer.clear();
         } else {
-            self.emit(HtmlToken::Characters(code_points.into_iter().collect()))?;
+            let code_points: Vec<char> = self.temporary_buffer.drain(..).collect();
+            if code_points.len() == 1 {
+                self.emit(HtmlToken::Character(code_points[0]))?;
+            } else {
+                self.emit(HtmlToken::Characters(code_points.into_iter().collect()))?;
+            }
         }
 
         Ok(())

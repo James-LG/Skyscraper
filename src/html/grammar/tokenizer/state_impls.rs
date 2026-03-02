@@ -2344,83 +2344,83 @@ impl<'a> Tokenizer<'a> {
             Ok(())
         }
 
-        let mut chars: Vec<char> = vec!['&'];
+        // Build key incrementally, checking HashMap at each step — O(k) vs O(n).
+        let mut key_buf = String::with_capacity(NAMED_CHARACTER_REFS_MAX_LENGTH + 1);
+        key_buf.push('&');
 
-        if let Some(c) = self.input_stream.current() {
-            chars.push(*c);
+        let mut best_match_len: usize = 0;
+        let mut peek_offset: usize = 0;
+
+        loop {
+            let next_char = match self.input_stream.peek_add(peek_offset) {
+                Some(&c) => c,
+                None => break,
+            };
+            key_buf.push(next_char);
+
+            if NAMED_CHARACTER_REFS.contains_key(key_buf.as_str()) {
+                best_match_len = key_buf.len();
+            }
+
+            peek_offset += 1;
+            if key_buf.len() > NAMED_CHARACTER_REFS_MAX_LENGTH {
+                break;
+            }
         }
 
-        chars.extend(
-            self.input_stream
-                .peek_multiple(NAMED_CHARACTER_REFS_MAX_LENGTH)
-                .into_iter()
-                .map(|c| *c),
-        );
+        if best_match_len > 0 {
+            key_buf.truncate(best_match_len);
 
-        let key = chars.into_iter().collect::<String>();
+            // consume the characters
+            self.input_stream.next_add(best_match_len - 1); // subtract 1 for the & character
 
-        let char_ref = NAMED_CHARACTER_REFS
-            .keys()
-            .filter(|k| key.starts_with(**k))
-            .max_by_key(|x| x.len())
-            .map(|x| x.to_string());
+            // append the char_ref characters to the temporary buffer
+            for code_point in key_buf.chars() {
+                self.temporary_buffer.push(code_point);
+            }
 
-        match char_ref {
-            Some(char_ref) => {
-                let length = char_ref.len();
-
-                // consume the characters
-                self.input_stream.next_add(length - 1); // subtract 1 for the & character
-
-                // append the char_ref characters to the temporary buffer
-                for code_point in char_ref.chars() {
-                    self.temporary_buffer.push(code_point);
-                }
-
-                // if the character reference was consumed as part of an attribute,
-                // and the last character matched is not a ";" character,
-                // and the next input character is either a "=" character or an alphanumeric ASCII character,
-                // then flush the code points consumed as a character reference,
-                // and switch to the return state
-                if self.charref_in_attribute() && char_ref.chars().last() != Some(';') {
-                    if let Some(c) = self.input_stream.current() {
-                        match c {
-                            '=' => {
-                                historical_reasons(self)?;
-                                return Ok(());
-                            }
-                            c if c.is_ascii_alphanumeric() => {
-                                historical_reasons(self)?;
-                                return Ok(());
-                            }
-                            _ => {}
+            // if the character reference was consumed as part of an attribute,
+            // and the last character matched is not a ";" character,
+            // and the next input character is either a "=" character or an alphanumeric ASCII character,
+            // then flush the code points consumed as a character reference,
+            // and switch to the return state
+            if self.charref_in_attribute() && !key_buf.ends_with(';') {
+                if let Some(c) = self.input_stream.current() {
+                    match c {
+                        '=' => {
+                            historical_reasons(self)?;
+                            return Ok(());
                         }
+                        c if c.is_ascii_alphanumeric() => {
+                            historical_reasons(self)?;
+                            return Ok(());
+                        }
+                        _ => {}
                     }
                 }
-
-                if char_ref.chars().last() != Some(';') {
-                    self.handle_error(TokenizerError::MissingSemicolonAfterCharacterReference)?;
-                }
-
-                // The matched key may or may not end with ';'. The NAMED_CHARACTER_REFS
-                // HashMap contains both forms (e.g. "&AElig" and "&AElig;"), and our
-                // longest-match algorithm correctly picks the best match. For entries
-                // without a trailing ';', the semicolon check above fires the parse error.
-                self.temporary_buffer.clear();
-                let char_ref_characters = NAMED_CHARACTER_REFS.get(&char_ref.as_ref()).unwrap();
-
-                // append the char_ref characters to the temporary buffer
-                for code_point in char_ref_characters.chars() {
-                    self.temporary_buffer.push(code_point);
-                }
-
-                self.flush_code_points_consumed_as_character_reference()?;
-                self.state = self.current_return_state()?;
             }
-            None => {
-                self.flush_code_points_consumed_as_character_reference()?;
-                self.state = TokenizerState::AmbiguousAmpersand;
+
+            if !key_buf.ends_with(';') {
+                self.handle_error(TokenizerError::MissingSemicolonAfterCharacterReference)?;
             }
+
+            // The matched key may or may not end with ';'. The NAMED_CHARACTER_REFS
+            // HashMap contains both forms (e.g. "&AElig" and "&AElig;"), and our
+            // longest-match algorithm correctly picks the best match. For entries
+            // without a trailing ';', the semicolon check above fires the parse error.
+            self.temporary_buffer.clear();
+            let char_ref_characters = NAMED_CHARACTER_REFS.get(key_buf.as_str()).unwrap();
+
+            // append the char_ref characters to the temporary buffer
+            for code_point in char_ref_characters.chars() {
+                self.temporary_buffer.push(code_point);
+            }
+
+            self.flush_code_points_consumed_as_character_reference()?;
+            self.state = self.current_return_state()?;
+        } else {
+            self.flush_code_points_consumed_as_character_reference()?;
+            self.state = TokenizerState::AmbiguousAmpersand;
         }
         Ok(())
     }
