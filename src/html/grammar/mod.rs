@@ -1311,7 +1311,7 @@ impl HtmlParser {
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#insert-a-character>
-    pub(crate) fn insert_character(&mut self, data: Vec<char>) -> Result<(), HtmlParseError> {
+    pub(crate) fn insert_character(&mut self, c: char) -> Result<(), HtmlParseError> {
         let adjusted_insertion_location = self.appropriate_place_for_inserting_a_node(None)?;
 
         // Check if the parent is a Document node — DOM doesn't allow Document nodes to have Text children.
@@ -1329,11 +1329,11 @@ impl HtmlParser {
             prev_sibling_id.map(|id| self.arena.get_mut(id).unwrap().get_mut());
 
         if let Some(&mut XpathItemTreeNode::TextNode(ref mut text)) = prev_sibling {
-            // If the previous sibling is a Text node, append the data to that Text node.
-            text.content.extend(data.iter());
+            // If the previous sibling is a Text node, append the character to that Text node.
+            text.content.push(c);
         } else {
-            // Otherwise, insert a new Text node with the data as its data.
-            let string = data.iter().collect::<String>();
+            // Otherwise, insert a new Text node with the character as its data.
+            let string = c.to_string();
             let text = XpathItemTreeNode::TextNode(TextNode::new(string));
             let text_id = self.new_node(text);
 
@@ -1422,8 +1422,8 @@ impl HtmlParser {
     /// <https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-the-specific-scope>
     pub(crate) fn has_an_element_in_the_specific_scope(
         &self,
-        tag_names: Vec<&str>,
-        element_types: Vec<&str>,
+        tag_names: &[&str],
+        element_types: &[&str],
     ) -> bool {
         for node_id in self.open_elements.iter().rev() {
             if let Some(node) = self.arena.get(*node_id) {
@@ -1444,11 +1444,11 @@ impl HtmlParser {
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-scope>
     pub(crate) fn has_an_element_in_scope(&self, tag_name: &str) -> bool {
-        self.has_an_element_in_the_specific_scope(vec![tag_name], ELEMENT_IN_SCOPE_TYPES.to_vec())
+        self.has_an_element_in_the_specific_scope(&[tag_name], &ELEMENT_IN_SCOPE_TYPES)
     }
 
-    pub(crate) fn has_an_element_in_scope_by_tag_names(&self, tag_names: Vec<&str>) -> bool {
-        self.has_an_element_in_the_specific_scope(tag_names, ELEMENT_IN_SCOPE_TYPES.to_vec())
+    pub(crate) fn has_an_element_in_scope_by_tag_names(&self, tag_names: &[&str]) -> bool {
+        self.has_an_element_in_the_specific_scope(tag_names, &ELEMENT_IN_SCOPE_TYPES)
     }
 
     /// Check whether a specific node (by [`NodeId`]) is in scope.
@@ -1477,25 +1477,26 @@ impl HtmlParser {
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-button-scope>
     pub(crate) fn has_an_element_in_button_scope(&self, tag_name: &str) -> bool {
-        let mut element_types = ELEMENT_IN_SCOPE_TYPES.to_vec();
-        element_types.push("button");
-
-        self.has_an_element_in_the_specific_scope(vec![tag_name], element_types)
+        static BUTTON_SCOPE_TYPES: [&str; 10] = [
+            "applet", "caption", "html", "table", "td", "th", "marquee", "object", "template",
+            "button",
+        ];
+        self.has_an_element_in_the_specific_scope(&[tag_name], &BUTTON_SCOPE_TYPES)
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-list-item-scope>
     pub(crate) fn has_an_element_in_list_item_scope(&self, tag_name: &str) -> bool {
-        let mut element_types = ELEMENT_IN_SCOPE_TYPES.to_vec();
-        element_types.push("ol");
-        element_types.push("ul");
-
-        self.has_an_element_in_the_specific_scope(vec![tag_name], element_types)
+        static LIST_ITEM_SCOPE_TYPES: [&str; 11] = [
+            "applet", "caption", "html", "table", "td", "th", "marquee", "object", "template",
+            "ol", "ul",
+        ];
+        self.has_an_element_in_the_specific_scope(&[tag_name], &LIST_ITEM_SCOPE_TYPES)
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-table-scope>
     pub(crate) fn has_an_element_in_table_scope(&self, tag_name: &str) -> bool {
-        let element_types = vec!["html", "table", "template"];
-        self.has_an_element_in_the_specific_scope(vec![tag_name], element_types)
+        static TABLE_SCOPE_TYPES: [&str; 3] = ["html", "table", "template"];
+        self.has_an_element_in_the_specific_scope(&[tag_name], &TABLE_SCOPE_TYPES)
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-select-scope>

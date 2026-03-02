@@ -528,18 +528,20 @@ impl<'a> Tokenizer<'a> {
             // attribute names. If a duplicate is found, it is a parse error and the
             // later attribute must be removed (keeping the first occurrence).
             let attributes = tag_token.attributes_mut();
-            let mut seen = HashSet::new();
-            let mut had_duplicate = false;
-            attributes.retain(|attr| {
-                if seen.insert(attr.name.clone()) {
-                    true
-                } else {
-                    had_duplicate = true;
-                    false
+            if attributes.len() > 1 {
+                let mut seen = HashSet::with_capacity(attributes.len());
+                let mut had_duplicate = false;
+                attributes.retain(|attr| {
+                    if seen.insert(attr.name.clone()) {
+                        true
+                    } else {
+                        had_duplicate = true;
+                        false
+                    }
+                });
+                if had_duplicate {
+                    self.handle_error(TokenizerError::DuplicateAttribute)?;
                 }
-            });
-            if had_duplicate {
-                self.handle_error(TokenizerError::DuplicateAttribute)?;
             }
 
             self.attribute_prefix_buffer.clear();

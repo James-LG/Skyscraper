@@ -64,12 +64,12 @@ impl HtmlParser {
             {
                 self.reconstruct_the_active_formatting_elements()?;
 
-                self.insert_character(vec![c])?;
+                self.insert_character(c)?;
             }
             HtmlToken::Character(c) => {
                 self.reconstruct_the_active_formatting_elements()?;
 
-                self.insert_character(vec![c])?;
+                self.insert_character(c)?;
 
                 self.frameset_ok = false;
             }
@@ -338,7 +338,7 @@ impl HtmlParser {
                         parser.pop_until_tag_name("li")?;
                     }
 
-                    if SPECIAL_ELEMENTS.contains(&element.name.as_str())
+                    if SPECIAL_ELEMENTS.binary_search(&element.name.as_str()).is_ok()
                         && !["address", "div", "p"].contains(&element.name.as_str())
                     {
                         step_6_done(parser, token)?;
@@ -436,7 +436,7 @@ impl HtmlParser {
 
                     // If node is in the special category, but is not an address, div, or p
                     // element, then jump to the step labeled done below.
-                    if SPECIAL_ELEMENTS.contains(&element.name.as_str())
+                    if SPECIAL_ELEMENTS.binary_search(&element.name.as_str()).is_ok()
                         && !["address", "div", "p"].contains(&element.name.as_str())
                     {
                         step_done(parser, token)?;
@@ -690,7 +690,7 @@ impl HtmlParser {
                 if ["h1", "h2", "h3", "h4", "h5", "h6"].contains(&token.tag_name.as_str()) =>
             {
                 if !self
-                    .has_an_element_in_scope_by_tag_names(vec!["h1", "h2", "h3", "h4", "h5", "h6"])
+                    .has_an_element_in_scope_by_tag_names(&["h1", "h2", "h3", "h4", "h5", "h6"])
                 {
                     self.handle_error(HtmlParserError::MinorError(String::from(
                         "open elements has no h1, h2, h3, h4, h5, or h6 element in scope",
@@ -1114,7 +1114,7 @@ impl HtmlParser {
             return Ok(Acknowledgement::no());
         }
         // if node is in special category, parse error and ignore token
-        else if SPECIAL_ELEMENTS.contains(&node.name.as_str()) {
+        else if SPECIAL_ELEMENTS.binary_search(&node.name.as_str()).is_ok() {
             self.handle_error(HtmlParserError::MinorError(String::from(
                 "node is in special category",
             )))?;
@@ -1267,7 +1267,7 @@ impl HtmlParser {
                 .find_map(|(i, id)| {
                     let node = self.arena.get(*id).unwrap().get();
                     if let Ok(element) = node.as_element_node() {
-                        if SPECIAL_ELEMENTS.contains(&element.name.as_str()) {
+                        if SPECIAL_ELEMENTS.binary_search(&element.name.as_str()).is_ok() {
                             return Some(i);
                         }
                     }

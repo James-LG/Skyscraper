@@ -319,7 +319,7 @@ impl HtmlParser {
                 | chars::SPACE),
             ) => {
                 // WHATWG says ignore, but we preserve for round-trip fidelity
-                self.insert_character(vec![c])?;
+                self.insert_character(c)?;
             }
             HtmlToken::Comment(comment) => {
                 self.insert_a_comment(comment, None)?;
@@ -380,7 +380,7 @@ impl HtmlParser {
                 ]
                 .contains(&c) =>
             {
-                self.insert_character(vec![c])?;
+                self.insert_character(c)?;
             }
             HtmlToken::Comment(comment) => {
                 self.insert_a_comment(comment, None)?;
@@ -617,7 +617,7 @@ impl HtmlParser {
                 ]
                 .contains(&c) =>
             {
-                self.insert_character(vec![c])?;
+                self.insert_character(c)?;
             }
             HtmlToken::Comment(comment) => {
                 // A comment token: Insert a comment.
@@ -698,7 +698,7 @@ impl HtmlParser {
     ) -> Result<Acknowledgement, HtmlParseError> {
         match token {
             HtmlToken::Character(c) => {
-                self.insert_character(vec![c])?;
+                self.insert_character(c)?;
             }
             HtmlToken::EndOfFile => {
                 // Parse error.
@@ -975,7 +975,7 @@ impl HtmlParser {
                 ]
                 .contains(&c) =>
             {
-                self.insert_character(vec![c])?;
+                self.insert_character(c)?;
             }
             // A comment token
             HtmlToken::Comment(comment) => {
@@ -1079,7 +1079,7 @@ impl HtmlParser {
                 ]
                 .contains(&c) =>
             {
-                self.insert_character(vec![c])?;
+                self.insert_character(c)?;
             }
             // A comment token
             HtmlToken::Comment(comment) => {
@@ -1441,7 +1441,7 @@ impl HtmlParser {
                     // tokens list.
                     for pending_token in pending_tokens {
                         if let HtmlToken::Character(c) = pending_token {
-                            self.insert_character(vec![c])?;
+                            self.insert_character(c)?;
                         }
                     }
                 }
@@ -1553,7 +1553,7 @@ impl HtmlParser {
                 ]
                 .contains(&c) =>
             {
-                self.insert_character(vec![c])?;
+                self.insert_character(c)?;
             }
             // A comment token
             HtmlToken::Comment(comment) => {
@@ -1939,7 +1939,7 @@ impl HtmlParser {
             }
             // Any other character token
             HtmlToken::Character(c) => {
-                self.insert_character(vec![c])?;
+                self.insert_character(c)?;
             }
             // A comment token
             HtmlToken::Comment(comment) => {

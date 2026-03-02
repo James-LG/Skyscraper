@@ -79,7 +79,7 @@ impl HtmlParser {
                 self.handle_error(HtmlParserError::MinorError(
                     "unexpected null character in foreign content".to_string(),
                 ))?;
-                self.insert_character(vec!['\u{FFFD}'])?;
+                self.insert_character('\u{FFFD}')?;
             }
 
             // A character token that is whitespace
@@ -90,12 +90,12 @@ impl HtmlParser {
                 | chars::CARRIAGE_RETURN
                 | chars::SPACE),
             ) => {
-                self.insert_character(vec![c])?;
+                self.insert_character(c)?;
             }
 
             // Any other character token
             HtmlToken::Character(c) => {
-                self.insert_character(vec![c])?;
+                self.insert_character(c)?;
                 self.frameset_ok = false;
             }
 
