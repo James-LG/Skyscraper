@@ -271,8 +271,31 @@ impl<'a> Tokenizer<'a> {
                     self.current_tag_token_mut()?.tag_name_mut().push(c);
                 }
                 _ => {
-                    let c = *c;
-                    self.current_tag_token_mut()?.tag_name_mut().push(c);
+                    let tag_name = self
+                        .tag_token
+                        .as_mut()
+                        .ok_or(HtmlParseError::new("no current tag found"))?
+                        .tag_name_mut();
+                    tag_name.push(*c);
+                    loop {
+                        let next_char = match self.input_stream.current() {
+                            Some(&c)
+                                if !c.is_ascii_uppercase()
+                                    && c != '\t'
+                                    && c != '\n'
+                                    && c != '\x0C'
+                                    && c != ' '
+                                    && c != '/'
+                                    && c != '>'
+                                    && c != '\0' =>
+                            {
+                                c
+                            }
+                            _ => break,
+                        };
+                        tag_name.push(next_char);
+                        self.input_stream.next();
+                    }
                 }
             },
             None => {
@@ -990,7 +1013,49 @@ impl<'a> Tokenizer<'a> {
             }
             Some(c) => {
                 let c = *c;
-                self.push_char_to_attribute_name(c)?;
+                let attr = self
+                    .tag_token
+                    .as_mut()
+                    .ok_or(HtmlParseError::new("no current tag found"))?
+                    .attributes_mut()
+                    .last_mut()
+                    .ok_or_else(|| HtmlParseError::new("no attributes on current tag"))?;
+                attr.name.push(c);
+                if let Some(ref mut orig) = attr.original_name {
+                    orig.push(c);
+                }
+                if let Some(ref mut attr_name) = self.attribute_name {
+                    attr_name.push(c);
+                }
+                loop {
+                    let next_char = match self.input_stream.current() {
+                        Some(&c)
+                            if !c.is_ascii_uppercase()
+                                && c != '\t'
+                                && c != '\n'
+                                && c != '\x0C'
+                                && c != ' '
+                                && c != '/'
+                                && c != '>'
+                                && c != '='
+                                && c != '\0'
+                                && c != '"'
+                                && c != '\''
+                                && c != '<' =>
+                        {
+                            c
+                        }
+                        _ => break,
+                    };
+                    attr.name.push(next_char);
+                    if let Some(ref mut orig) = attr.original_name {
+                        orig.push(next_char);
+                    }
+                    if let Some(ref mut attr_name) = self.attribute_name {
+                        attr_name.push(next_char);
+                    }
+                    self.input_stream.next();
+                }
             }
         }
 
@@ -1085,8 +1150,22 @@ impl<'a> Tokenizer<'a> {
                 self.emit(HtmlToken::EndOfFile)?;
             }
             Some(c) => {
-                let c = *c;
-                self.push_char_to_attribute_value(c)?;
+                let attr = self
+                    .tag_token
+                    .as_mut()
+                    .ok_or(HtmlParseError::new("no current tag found"))?
+                    .attributes_mut()
+                    .last_mut()
+                    .ok_or_else(|| HtmlParseError::new("no attributes on current tag"))?;
+                attr.value.push(*c);
+                loop {
+                    let next_char = match self.input_stream.current() {
+                        Some(&c) if c != '"' && c != '&' && c != '\0' => c,
+                        _ => break,
+                    };
+                    attr.value.push(next_char);
+                    self.input_stream.next();
+                }
             }
         }
 
@@ -1114,8 +1193,22 @@ impl<'a> Tokenizer<'a> {
                 self.emit(HtmlToken::EndOfFile)?;
             }
             Some(c) => {
-                let c = *c;
-                self.push_char_to_attribute_value(c)?;
+                let attr = self
+                    .tag_token
+                    .as_mut()
+                    .ok_or(HtmlParseError::new("no current tag found"))?
+                    .attributes_mut()
+                    .last_mut()
+                    .ok_or_else(|| HtmlParseError::new("no attributes on current tag"))?;
+                attr.value.push(*c);
+                loop {
+                    let next_char = match self.input_stream.current() {
+                        Some(&c) if c != '\'' && c != '&' && c != '\0' => c,
+                        _ => break,
+                    };
+                    attr.value.push(next_char);
+                    self.input_stream.next();
+                }
             }
         }
 
@@ -1159,8 +1252,37 @@ impl<'a> Tokenizer<'a> {
                 self.emit(HtmlToken::EndOfFile)?;
             }
             Some(c) => {
-                let c = *c;
-                self.push_char_to_attribute_value(c)?;
+                let attr = self
+                    .tag_token
+                    .as_mut()
+                    .ok_or(HtmlParseError::new("no current tag found"))?
+                    .attributes_mut()
+                    .last_mut()
+                    .ok_or_else(|| HtmlParseError::new("no attributes on current tag"))?;
+                attr.value.push(*c);
+                loop {
+                    let next_char = match self.input_stream.current() {
+                        Some(&c)
+                            if c != '\t'
+                                && c != '\n'
+                                && c != '\x0C'
+                                && c != ' '
+                                && c != '&'
+                                && c != '>'
+                                && c != '\0'
+                                && c != '"'
+                                && c != '\''
+                                && c != '<'
+                                && c != '='
+                                && c != '`' =>
+                        {
+                            c
+                        }
+                        _ => break,
+                    };
+                    attr.value.push(next_char);
+                    self.input_stream.next();
+                }
             }
         }
 
