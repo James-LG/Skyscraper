@@ -358,7 +358,7 @@ pub struct Tokenizer<'a> {
     doctype_token: Option<DoctypeToken>,
     tag_token: Option<TagTokenType>,
     character_reference_code: u32,
-    last_emitted_start_tag_name: Option<String>,
+    last_emitted_start_tag_name: String,
     /// Buffer for accumulating whitespace between attributes for round-trip fidelity.
     attribute_prefix_buffer: String,
 }
@@ -376,7 +376,7 @@ impl<'a> Tokenizer<'a> {
             tag_token: None,
             doctype_token: None,
             character_reference_code: 0,
-            last_emitted_start_tag_name: None,
+            last_emitted_start_tag_name: String::new(),
             attribute_prefix_buffer: String::new(),
         }
     }
@@ -391,7 +391,8 @@ impl<'a> Tokenizer<'a> {
 
     pub fn emit(&mut self, token: HtmlToken) -> Result<(), HtmlParseError> {
         if let HtmlToken::TagToken(TagTokenType::StartTag(tag)) = &token {
-            self.last_emitted_start_tag_name = Some(tag.tag_name.clone());
+            self.last_emitted_start_tag_name.clear();
+            self.last_emitted_start_tag_name.push_str(&tag.tag_name);
         }
 
         let ack = self.parser.token_emitted(token)?;
@@ -405,11 +406,8 @@ impl<'a> Tokenizer<'a> {
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#appropriate-end-tag-token>
     pub fn is_appropriate_end_tag_token(&self, end_tag: &TagToken) -> bool {
-        if let Some(last_name) = &self.last_emitted_start_tag_name {
-            *last_name == end_tag.tag_name
-        } else {
-            false
-        }
+        !self.last_emitted_start_tag_name.is_empty()
+            && self.last_emitted_start_tag_name == end_tag.tag_name
     }
 
     pub fn is_current_end_tag_token_appropriate(&self) -> bool {

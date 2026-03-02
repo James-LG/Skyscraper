@@ -2272,6 +2272,11 @@ impl Parser for HtmlParser {
         // Text, InTable, InTableText, InTemplate, InSelect) handle Characters
         // directly; all other modes are rare and per-char is both correct and
         // has negligible cost.
+        //
+        // Optimization: after per-char processing triggers mode transitions
+        // (e.g. Initial → BeforeHtml → ... → InBody), re-batch the remaining
+        // characters to avoid O(n) individual token_emitted + insert_character
+        // calls.
         if let HtmlToken::Characters(ref s) = token {
             if !matches!(
                 self.insertion_mode,
@@ -2283,8 +2288,25 @@ impl Parser for HtmlParser {
                     | InsertionMode::InSelect
             ) {
                 let chars: Vec<char> = s.chars().collect();
-                for c in chars {
+                let mut consumed = 0;
+                for &c in &chars {
                     self.token_emitted(HtmlToken::Character(c))?;
+                    consumed += 1;
+                    if matches!(
+                        self.insertion_mode,
+                        InsertionMode::InBody
+                            | InsertionMode::Text
+                            | InsertionMode::InTable
+                            | InsertionMode::InTableText
+                            | InsertionMode::InTemplate
+                            | InsertionMode::InSelect
+                    ) {
+                        break;
+                    }
+                }
+                if consumed < chars.len() {
+                    let remaining: String = chars[consumed..].iter().collect();
+                    return self.token_emitted(HtmlToken::Characters(remaining));
                 }
                 return Ok(Acknowledgement::no());
             }

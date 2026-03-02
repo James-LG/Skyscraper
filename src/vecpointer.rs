@@ -71,6 +71,18 @@ impl<'a, T> VecPointerRef<'a, T> {
         result
     }
 
+    /// Advance while `pred` returns true, returning a slice of all consumed elements.
+    ///
+    /// After this call, `current()` points to the first element that did not
+    /// satisfy the predicate (or past the end).
+    pub fn consume_while(&mut self, pred: impl Fn(&T) -> bool) -> &'a [T] {
+        let start = self.index;
+        while self.index < self.values.len() && pred(&self.values[self.index]) {
+            self.index += 1;
+        }
+        &self.values[start..self.index]
+    }
+
     fn get(&self, index: usize) -> Option<&T> {
         if index >= self.values.len() {
             return None;

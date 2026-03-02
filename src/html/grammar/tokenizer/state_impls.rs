@@ -33,20 +33,14 @@ impl<'a> Tokenizer<'a> {
                     self.emit(HtmlToken::Character(current_input_character))?;
                 }
                 _ => {
-                    let mut batch = String::new();
-                    batch.push(*c);
-                    loop {
-                        match self.input_stream.current() {
-                            Some(next) if *next != '&' && *next != '<' && *next != '\0' => {
-                                batch.push(*next);
-                                self.input_stream.next();
-                            }
-                            _ => break,
-                        }
-                    }
-                    if batch.len() == 1 {
-                        self.emit(HtmlToken::Character(batch.chars().next().unwrap()))?;
+                    let first = *c;
+                    let rest = self.input_stream.consume_while(|c| *c != '&' && *c != '<' && *c != '\0');
+                    if rest.is_empty() {
+                        self.emit(HtmlToken::Character(first))?;
                     } else {
+                        let mut batch = String::with_capacity(1 + rest.len());
+                        batch.push(first);
+                        batch.extend(rest.iter());
                         self.emit(HtmlToken::Characters(batch))?;
                     }
                 }
@@ -74,20 +68,14 @@ impl<'a> Tokenizer<'a> {
                     self.emit(HtmlToken::Character(chars::FEED_REPLACEMENT_CHARACTER))?;
                 }
                 _ => {
-                    let mut batch = String::new();
-                    batch.push(*c);
-                    loop {
-                        match self.input_stream.current() {
-                            Some(next) if *next != '&' && *next != '<' && *next != '\0' => {
-                                batch.push(*next);
-                                self.input_stream.next();
-                            }
-                            _ => break,
-                        }
-                    }
-                    if batch.len() == 1 {
-                        self.emit(HtmlToken::Character(batch.chars().next().unwrap()))?;
+                    let first = *c;
+                    let rest = self.input_stream.consume_while(|c| *c != '&' && *c != '<' && *c != '\0');
+                    if rest.is_empty() {
+                        self.emit(HtmlToken::Character(first))?;
                     } else {
+                        let mut batch = String::with_capacity(1 + rest.len());
+                        batch.push(first);
+                        batch.extend(rest.iter());
                         self.emit(HtmlToken::Characters(batch))?;
                     }
                 }
@@ -111,20 +99,14 @@ impl<'a> Tokenizer<'a> {
                     self.emit(HtmlToken::Character(chars::FEED_REPLACEMENT_CHARACTER))?;
                 }
                 _ => {
-                    let mut batch = String::new();
-                    batch.push(*c);
-                    loop {
-                        match self.input_stream.current() {
-                            Some(next) if *next != '<' && *next != '\0' => {
-                                batch.push(*next);
-                                self.input_stream.next();
-                            }
-                            _ => break,
-                        }
-                    }
-                    if batch.len() == 1 {
-                        self.emit(HtmlToken::Character(batch.chars().next().unwrap()))?;
+                    let first = *c;
+                    let rest = self.input_stream.consume_while(|c| *c != '<' && *c != '\0');
+                    if rest.is_empty() {
+                        self.emit(HtmlToken::Character(first))?;
                     } else {
+                        let mut batch = String::with_capacity(1 + rest.len());
+                        batch.push(first);
+                        batch.extend(rest.iter());
                         self.emit(HtmlToken::Characters(batch))?;
                     }
                 }
@@ -148,20 +130,14 @@ impl<'a> Tokenizer<'a> {
             }
             None => self.emit(HtmlToken::EndOfFile)?,
             Some(c) => {
-                let mut batch = String::new();
-                batch.push(*c);
-                loop {
-                    match self.input_stream.current() {
-                        Some(next) if *next != '<' && *next != '\0' => {
-                            batch.push(*next);
-                            self.input_stream.next();
-                        }
-                        _ => break,
-                    }
-                }
-                if batch.len() == 1 {
-                    self.emit(HtmlToken::Character(batch.chars().next().unwrap()))?;
+                let first = *c;
+                let rest = self.input_stream.consume_while(|c| *c != '<' && *c != '\0');
+                if rest.is_empty() {
+                    self.emit(HtmlToken::Character(first))?;
                 } else {
+                    let mut batch = String::with_capacity(1 + rest.len());
+                    batch.push(first);
+                    batch.extend(rest.iter());
                     self.emit(HtmlToken::Characters(batch))?;
                 }
             }
@@ -271,31 +247,25 @@ impl<'a> Tokenizer<'a> {
                     self.current_tag_token_mut()?.tag_name_mut().push(c);
                 }
                 _ => {
+                    let first = *c;
+                    let rest = self.input_stream.consume_while(|c| {
+                        !c.is_ascii_uppercase()
+                            && *c != '\t'
+                            && *c != '\n'
+                            && *c != '\x0C'
+                            && *c != ' '
+                            && *c != '/'
+                            && *c != '>'
+                            && *c != '\0'
+                    });
                     let tag_name = self
                         .tag_token
                         .as_mut()
                         .ok_or_else(|| HtmlParseError::new("no current tag found"))?
                         .tag_name_mut();
-                    tag_name.push(*c);
-                    loop {
-                        let next_char = match self.input_stream.current() {
-                            Some(&c)
-                                if !c.is_ascii_uppercase()
-                                    && c != '\t'
-                                    && c != '\n'
-                                    && c != '\x0C'
-                                    && c != ' '
-                                    && c != '/'
-                                    && c != '>'
-                                    && c != '\0' =>
-                            {
-                                c
-                            }
-                            _ => break,
-                        };
-                        tag_name.push(next_char);
-                        self.input_stream.next();
-                    }
+                    tag_name.reserve(1 + rest.len());
+                    tag_name.push(first);
+                    tag_name.extend(rest.iter());
                 }
             },
             None => {
@@ -1012,7 +982,21 @@ impl<'a> Tokenizer<'a> {
                 self.push_char_to_attribute_name(c)?;
             }
             Some(c) => {
-                let c = *c;
+                let first = *c;
+                let rest = self.input_stream.consume_while(|c| {
+                    !c.is_ascii_uppercase()
+                        && *c != '\t'
+                        && *c != '\n'
+                        && *c != '\x0C'
+                        && *c != ' '
+                        && *c != '/'
+                        && *c != '>'
+                        && *c != '='
+                        && *c != '\0'
+                        && *c != '"'
+                        && *c != '\''
+                        && *c != '<'
+                });
                 let attr = self
                     .tag_token
                     .as_mut()
@@ -1020,35 +1004,13 @@ impl<'a> Tokenizer<'a> {
                     .attributes_mut()
                     .last_mut()
                     .ok_or_else(|| HtmlParseError::new("no attributes on current tag"))?;
-                attr.name.push(c);
+                attr.name.reserve(1 + rest.len());
+                attr.name.push(first);
+                attr.name.extend(rest.iter());
                 if let Some(ref mut orig) = attr.original_name {
-                    orig.push(c);
-                }
-                loop {
-                    let next_char = match self.input_stream.current() {
-                        Some(&c)
-                            if !c.is_ascii_uppercase()
-                                && c != '\t'
-                                && c != '\n'
-                                && c != '\x0C'
-                                && c != ' '
-                                && c != '/'
-                                && c != '>'
-                                && c != '='
-                                && c != '\0'
-                                && c != '"'
-                                && c != '\''
-                                && c != '<' =>
-                        {
-                            c
-                        }
-                        _ => break,
-                    };
-                    attr.name.push(next_char);
-                    if let Some(ref mut orig) = attr.original_name {
-                        orig.push(next_char);
-                    }
-                    self.input_stream.next();
+                    orig.reserve(1 + rest.len());
+                    orig.push(first);
+                    orig.extend(rest.iter());
                 }
             }
         }
@@ -1144,6 +1106,8 @@ impl<'a> Tokenizer<'a> {
                 self.emit(HtmlToken::EndOfFile)?;
             }
             Some(c) => {
+                let first = *c;
+                let rest = self.input_stream.consume_while(|c| *c != '"' && *c != '&' && *c != '\0');
                 let attr = self
                     .tag_token
                     .as_mut()
@@ -1151,15 +1115,9 @@ impl<'a> Tokenizer<'a> {
                     .attributes_mut()
                     .last_mut()
                     .ok_or_else(|| HtmlParseError::new("no attributes on current tag"))?;
-                attr.value.push(*c);
-                loop {
-                    let next_char = match self.input_stream.current() {
-                        Some(&c) if c != '"' && c != '&' && c != '\0' => c,
-                        _ => break,
-                    };
-                    attr.value.push(next_char);
-                    self.input_stream.next();
-                }
+                attr.value.reserve(1 + rest.len());
+                attr.value.push(first);
+                attr.value.extend(rest.iter());
             }
         }
 
@@ -1187,6 +1145,8 @@ impl<'a> Tokenizer<'a> {
                 self.emit(HtmlToken::EndOfFile)?;
             }
             Some(c) => {
+                let first = *c;
+                let rest = self.input_stream.consume_while(|c| *c != '\'' && *c != '&' && *c != '\0');
                 let attr = self
                     .tag_token
                     .as_mut()
@@ -1194,15 +1154,9 @@ impl<'a> Tokenizer<'a> {
                     .attributes_mut()
                     .last_mut()
                     .ok_or_else(|| HtmlParseError::new("no attributes on current tag"))?;
-                attr.value.push(*c);
-                loop {
-                    let next_char = match self.input_stream.current() {
-                        Some(&c) if c != '\'' && c != '&' && c != '\0' => c,
-                        _ => break,
-                    };
-                    attr.value.push(next_char);
-                    self.input_stream.next();
-                }
+                attr.value.reserve(1 + rest.len());
+                attr.value.push(first);
+                attr.value.extend(rest.iter());
             }
         }
 
@@ -2339,10 +2293,12 @@ impl<'a> Tokenizer<'a> {
         }
 
         // Build key incrementally, checking HashMap at each step — O(k) vs O(n).
+        // Cache the matched value to avoid a redundant lookup after the loop.
         let mut key_buf = String::with_capacity(NAMED_CHARACTER_REFS_MAX_LENGTH + 1);
         key_buf.push('&');
 
         let mut best_match_len: usize = 0;
+        let mut best_match_value: Option<&str> = None;
         let mut peek_offset: usize = 0;
 
         loop {
@@ -2352,8 +2308,14 @@ impl<'a> Tokenizer<'a> {
             };
             key_buf.push(next_char);
 
-            if NAMED_CHARACTER_REFS.contains_key(key_buf.as_str()) {
+            if let Some(&value) = NAMED_CHARACTER_REFS.get(key_buf.as_str()) {
                 best_match_len = key_buf.len();
+                best_match_value = Some(value);
+                // A ';'-terminated match is always the longest possible — no valid
+                // named character reference extends beyond a trailing semicolon.
+                if next_char == ';' {
+                    break;
+                }
             }
 
             peek_offset += 1;
@@ -2364,37 +2326,39 @@ impl<'a> Tokenizer<'a> {
 
         if best_match_len > 0 {
             key_buf.truncate(best_match_len);
+            let ends_with_semi = key_buf.as_bytes().last() == Some(&b';');
 
             // consume the characters
             self.input_stream.next_add(best_match_len - 1); // subtract 1 for the & character
 
-            // append the char_ref characters to the temporary buffer
-            for code_point in key_buf.chars() {
-                self.temporary_buffer.push(code_point);
-            }
+            // For non-semicolon matches, push key chars to temporary_buffer
+            // for the historical_reasons flush path.
+            if !ends_with_semi {
+                for code_point in key_buf.chars() {
+                    self.temporary_buffer.push(code_point);
+                }
 
-            // if the character reference was consumed as part of an attribute,
-            // and the last character matched is not a ";" character,
-            // and the next input character is either a "=" character or an alphanumeric ASCII character,
-            // then flush the code points consumed as a character reference,
-            // and switch to the return state
-            if self.charref_in_attribute() && !key_buf.ends_with(';') {
-                if let Some(c) = self.input_stream.current() {
-                    match c {
-                        '=' => {
-                            historical_reasons(self)?;
-                            return Ok(());
+                // if the character reference was consumed as part of an attribute,
+                // and the last character matched is not a ";" character,
+                // and the next input character is either a "=" character or an alphanumeric ASCII character,
+                // then flush the code points consumed as a character reference,
+                // and switch to the return state
+                if self.charref_in_attribute() {
+                    if let Some(c) = self.input_stream.current() {
+                        match c {
+                            '=' => {
+                                historical_reasons(self)?;
+                                return Ok(());
+                            }
+                            c if c.is_ascii_alphanumeric() => {
+                                historical_reasons(self)?;
+                                return Ok(());
+                            }
+                            _ => {}
                         }
-                        c if c.is_ascii_alphanumeric() => {
-                            historical_reasons(self)?;
-                            return Ok(());
-                        }
-                        _ => {}
                     }
                 }
-            }
 
-            if !key_buf.ends_with(';') {
                 self.handle_error(TokenizerError::MissingSemicolonAfterCharacterReference)?;
             }
 
@@ -2403,7 +2367,7 @@ impl<'a> Tokenizer<'a> {
             // longest-match algorithm correctly picks the best match. For entries
             // without a trailing ';', the semicolon check above fires the parse error.
             self.temporary_buffer.clear();
-            let char_ref_characters = NAMED_CHARACTER_REFS.get(key_buf.as_str()).unwrap();
+            let char_ref_characters = best_match_value.unwrap();
 
             // append the char_ref characters to the temporary buffer
             for code_point in char_ref_characters.chars() {
@@ -2539,20 +2503,14 @@ impl<'a> Tokenizer<'a> {
                 self.emit(HtmlToken::Character(chars::FEED_REPLACEMENT_CHARACTER))?;
             }
             Some(c) => {
-                let mut batch = String::new();
-                batch.push(*c);
-                loop {
-                    match self.input_stream.current() {
-                        Some(next) if *next != '\0' => {
-                            batch.push(*next);
-                            self.input_stream.next();
-                        }
-                        _ => break,
-                    }
-                }
-                if batch.len() == 1 {
-                    self.emit(HtmlToken::Character(batch.chars().next().unwrap()))?;
+                let first = *c;
+                let rest = self.input_stream.consume_while(|c| *c != '\0');
+                if rest.is_empty() {
+                    self.emit(HtmlToken::Character(first))?;
                 } else {
+                    let mut batch = String::with_capacity(1 + rest.len());
+                    batch.push(first);
+                    batch.extend(rest.iter());
                     self.emit(HtmlToken::Characters(batch))?;
                 }
             }
