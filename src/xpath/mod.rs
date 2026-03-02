@@ -169,6 +169,7 @@
 //! ```
 
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use thiserror::Error;
 
@@ -236,7 +237,9 @@ pub(crate) struct XpathExpressionContext<'tree> {
     is_initial_step: bool,
 
     /// Variable bindings in scope (e.g. from `for` or `let` expressions).
-    variables: HashMap<String, XpathItemSet<'tree>>,
+    /// Wrapped in `Rc` so that cloning contexts that share the same bindings
+    /// is O(1) instead of O(n).
+    variables: Rc<HashMap<String, XpathItemSet<'tree>>>,
 }
 
 impl<'tree> XpathExpressionContext<'tree> {
@@ -251,7 +254,7 @@ impl<'tree> XpathExpressionContext<'tree> {
             position: 1,
             size: 1,
             is_initial_step,
-            variables: HashMap::new(),
+            variables: Rc::new(HashMap::new()),
         }
     }
 
@@ -269,7 +272,7 @@ impl<'tree> XpathExpressionContext<'tree> {
             position,
             size: items.len(),
             is_initial_step,
-            variables: self.variables.clone(),
+            variables: Rc::clone(&self.variables),
         }
     }
 
@@ -286,7 +289,7 @@ impl<'tree> XpathExpressionContext<'tree> {
             position: 1,
             size: 1,
             is_initial_step,
-            variables: self.variables.clone(),
+            variables: Rc::clone(&self.variables),
         }
     }
 
@@ -297,7 +300,7 @@ impl<'tree> XpathExpressionContext<'tree> {
         name: String,
         value: XpathItemSet<'tree>,
     ) -> Self {
-        let mut variables = self.variables.clone();
+        let mut variables = (*self.variables).clone();
         variables.insert(name, value);
         Self {
             item_tree: self.item_tree,
@@ -305,7 +308,7 @@ impl<'tree> XpathExpressionContext<'tree> {
             position: self.position,
             size: self.size,
             is_initial_step: self.is_initial_step,
-            variables,
+            variables: Rc::new(variables),
         }
     }
 
@@ -319,7 +322,7 @@ impl<'tree> XpathExpressionContext<'tree> {
         &self,
         bindings: impl IntoIterator<Item = (String, XpathItemSet<'tree>)>,
     ) -> Self {
-        let mut variables = self.variables.clone();
+        let mut variables = (*self.variables).clone();
         for (name, value) in bindings {
             variables.insert(name, value);
         }
@@ -329,7 +332,7 @@ impl<'tree> XpathExpressionContext<'tree> {
             position: self.position,
             size: self.size,
             is_initial_step: self.is_initial_step,
-            variables,
+            variables: Rc::new(variables),
         }
     }
 }

@@ -15,7 +15,7 @@ use crate::{
             terminal_symbols::braced_uri_literal,
             types::{eq_name, kind_test, EQName, KindTest},
             xml_names::{nc_name, QName},
-            XpathItemTreeNode,
+            XpathItemTree, XpathItemTreeNode,
         },
         ExpressionApplyError, XpathExpressionContext,
     },
@@ -74,6 +74,21 @@ impl NodeTest {
             NodeTest::NameTest(test) => test.eval(axis, context),
         }
     }
+
+    /// Test whether a node matches this node test directly, without creating
+    /// an `XpathExpressionContext`. This avoids per-node allocation overhead
+    /// in axis evaluation loops.
+    pub(crate) fn matches_node<'tree>(
+        &self,
+        axis: BiDirectionalAxis,
+        node: &'tree XpathItemTreeNode,
+        item_tree: &'tree XpathItemTree,
+    ) -> Result<bool, ExpressionApplyError> {
+        match self {
+            NodeTest::KindTest(test) => test.matches_node(node, item_tree),
+            NodeTest::NameTest(test) => test.matches_node(axis, node),
+        }
+    }
 }
 
 fn name_test(input: &str) -> Res<&str, NameTest> {
@@ -110,12 +125,65 @@ impl Display for NameTest {
     }
 }
 
+#[derive(Clone, Copy)]
 pub(crate) enum BiDirectionalAxis {
     ForwardAxis(ForwardAxis),
     ReverseAxis(ReverseAxis),
 }
 
 impl NameTest {
+    /// Test whether a node matches this name test directly, without requiring
+    /// a full `XpathExpressionContext`.
+    pub(crate) fn matches_node<'tree>(
+        &self,
+        axis: BiDirectionalAxis,
+        node: &'tree XpathItemTreeNode,
+    ) -> Result<bool, ExpressionApplyError> {
+        let is_match = match self {
+            NameTest::Name(expected_name) => {
+                let is_principal_node_kind = match axis {
+                    BiDirectionalAxis::ForwardAxis(ForwardAxis::Attribute) => {
+                        matches!(node, XpathItemTreeNode::AttributeNode(_))
+                    }
+                    _ => {
+                        matches!(node, XpathItemTreeNode::ElementNode(_))
+                    }
+                };
+
+                if !is_principal_node_kind {
+                    false
+                } else {
+                    let (node_name, node_ns): (Option<&str>, Option<&str>) = match node {
+                        XpathItemTreeNode::ElementNode(e) => {
+                            (Some(&e.name), e.namespace.as_deref())
+                        }
+                        XpathItemTreeNode::AttributeNode(a) => (Some(&a.name), None),
+                        _ => (None, None),
+                    };
+
+                    match node_name {
+                        Some(node_name) => match expected_name {
+                            EQName::QName(qname) => match qname {
+                                QName::PrefixedName(p) => p.local_part == node_name,
+                                QName::UnprefixedName(unprefixed_name) => {
+                                    unprefixed_name == node_name
+                                }
+                            },
+                            EQName::UriQualifiedName(uqn) => {
+                                uqn.name == node_name
+                                    && node_ns.map_or(false, |ns| ns == uqn.uri)
+                            }
+                        },
+                        None => false,
+                    }
+                }
+            }
+            NameTest::Wildcard(wildcard) => wildcard.is_match(axis, node)?,
+        };
+
+        Ok(is_match)
+    }
+
     pub(crate) fn eval<'tree>(
         &self,
         axis: BiDirectionalAxis,

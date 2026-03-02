@@ -219,6 +219,92 @@ impl KindTest {
     }
 }
 
+impl KindTest {
+    /// Test whether a single node matches this kind test, without requiring
+    /// a full `XpathItemSet` or `XpathExpressionContext`.
+    pub(crate) fn matches_node<'tree>(
+        &self,
+        node: &'tree XpathItemTreeNode,
+        item_tree: &'tree XpathItemTree,
+    ) -> Result<bool, ExpressionApplyError> {
+        match self {
+            KindTest::AnyKindTest => Ok(!matches!(
+                node,
+                XpathItemTreeNode::AttributeNode(_) | XpathItemTreeNode::DoctypeNode(_)
+            )),
+            KindTest::TextTest => Ok(node.is_text_node()),
+            KindTest::CommentTest => Ok(matches!(node, XpathItemTreeNode::CommentNode(_))),
+            KindTest::NamespaceNodeTest => Ok(false),
+            KindTest::DocumentTest(x) => {
+                if !matches!(node, XpathItemTreeNode::DocumentNode(_)) {
+                    return Ok(false);
+                }
+                match &x.value {
+                    None => Ok(true),
+                    Some(doc_test_value) => {
+                        let children = node.children(item_tree);
+                        let element_children: Vec<_> = children
+                            .into_iter()
+                            .filter(|c| matches!(c, XpathItemTreeNode::ElementNode(_)))
+                            .collect();
+                        if element_children.len() != 1 {
+                            return Ok(false);
+                        }
+                        let child_set: XpathItemSet<'tree> = element_children
+                            .into_iter()
+                            .map(XpathItem::Node)
+                            .collect();
+                        match doc_test_value {
+                            DocumentTestValue::ElementTest(et) => {
+                                Ok(!et.filter(&child_set)?.is_empty())
+                            }
+                            DocumentTestValue::SchemaElementTest(_) => Ok(false),
+                        }
+                    }
+                }
+            }
+            KindTest::ElementTest(x) => {
+                if let XpathItemTreeNode::ElementNode(element) = node {
+                    let matches = match &x.item {
+                        None => true,
+                        Some(item) => {
+                            match &item.element_name_or_wildcard {
+                                crate::xpath::grammar::types::element_test::ElementNameOrWildcard::Wildcard => true,
+                                crate::xpath::grammar::types::element_test::ElementNameOrWildcard::ElementName(name) => {
+                                    match &name.0 {
+                                        EQName::QName(qname) => match qname {
+                                            crate::xpath::grammar::xml_names::QName::PrefixedName(p) => p.local_part == element.name,
+                                            crate::xpath::grammar::xml_names::QName::UnprefixedName(name) => name == &element.name,
+                                        },
+                                        EQName::UriQualifiedName(uqn) => uqn.name == element.name,
+                                    }
+                                }
+                            }
+                        }
+                    };
+                    Ok(matches)
+                } else {
+                    Ok(false)
+                }
+            }
+            KindTest::AttributeTest(x) => x.is_match(node),
+            KindTest::SchemaElementTest(_) => Ok(false),
+            KindTest::SchemaAttributeTest(_) => Ok(false),
+            KindTest::PITest(x) => {
+                if let XpathItemTreeNode::PINode(pi) = node {
+                    match &x.val {
+                        None => Ok(true),
+                        Some(PITestValue::NCName(name)) => Ok(pi.target == *name),
+                        Some(PITestValue::StringLiteral(name)) => Ok(pi.target == *name),
+                    }
+                } else {
+                    Ok(false)
+                }
+            }
+        }
+    }
+}
+
 impl Display for KindTest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

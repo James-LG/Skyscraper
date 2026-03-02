@@ -16,7 +16,6 @@ use crate::xpath::{
         whitespace_recipes::ws,
         XpathItemTreeNode,
     },
-    xpath_item_set::XpathItemSet,
     ExpressionApplyError, XpathExpressionContext,
 };
 
@@ -101,17 +100,12 @@ fn eval_forward_axis<'tree>(
         }
     }?;
 
-    let items: XpathItemSet<'tree> = axis_nodes.into_iter().map(XpathItem::Node).collect();
+    // Filter axis nodes using the node test directly — no context creation needed.
+    let bi_axis = BiDirectionalAxis::ForwardAxis(axis);
     let mut nodes = IndexSet::new();
-
-    for (i, _item) in items.iter().enumerate() {
-        let node_test_context =
-            context.new_with_variables(&items, i + 1, context.is_initial_step);
-
-        if let Some(result) =
-            node_test.eval(BiDirectionalAxis::ForwardAxis(axis), &node_test_context)?
-        {
-            nodes.insert(result);
+    for node in axis_nodes {
+        if node_test.matches_node(bi_axis, node, context.item_tree)? {
+            nodes.insert(node);
         }
     }
 
