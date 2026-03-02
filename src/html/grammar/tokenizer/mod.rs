@@ -19,6 +19,9 @@ pub enum HtmlToken {
     TagToken(TagTokenType),
     Comment(CommentToken),
     Character(char),
+    /// A batch of consecutive characters emitted together to reduce
+    /// per-character dispatch overhead in the tree builder.
+    Characters(String),
     EndOfFile,
 }
 
@@ -616,12 +619,15 @@ impl<'a> Tokenizer<'a> {
         &mut self,
     ) -> Result<(), HtmlParseError> {
         let code_points: Vec<char> = self.temporary_buffer.drain(..).collect();
-        for c in code_points.into_iter() {
-            if self.charref_in_attribute() {
-                self.current_attribute_mut()?.value.push(c);
-            } else {
-                self.emit(HtmlToken::Character(c))?;
+        if self.charref_in_attribute() {
+            let attr = self.current_attribute_mut()?;
+            for c in code_points {
+                attr.value.push(c);
             }
+        } else if code_points.len() == 1 {
+            self.emit(HtmlToken::Character(code_points[0]))?;
+        } else {
+            self.emit(HtmlToken::Characters(code_points.into_iter().collect()))?;
         }
 
         Ok(())

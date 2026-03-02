@@ -33,8 +33,22 @@ impl<'a> Tokenizer<'a> {
                     self.emit(HtmlToken::Character(current_input_character))?;
                 }
                 _ => {
-                    let current_input_character = *c;
-                    self.emit(HtmlToken::Character(current_input_character))?;
+                    let mut batch = String::new();
+                    batch.push(*c);
+                    loop {
+                        match self.input_stream.current() {
+                            Some(next) if *next != '&' && *next != '<' && *next != '\0' => {
+                                batch.push(*next);
+                                self.input_stream.next();
+                            }
+                            _ => break,
+                        }
+                    }
+                    if batch.len() == 1 {
+                        self.emit(HtmlToken::Character(batch.chars().next().unwrap()))?;
+                    } else {
+                        self.emit(HtmlToken::Characters(batch))?;
+                    }
                 }
             },
             None => self.emit(HtmlToken::EndOfFile)?,
@@ -60,8 +74,22 @@ impl<'a> Tokenizer<'a> {
                     self.emit(HtmlToken::Character(chars::FEED_REPLACEMENT_CHARACTER))?;
                 }
                 _ => {
-                    let current_input_character = *c;
-                    self.emit(HtmlToken::Character(current_input_character))?;
+                    let mut batch = String::new();
+                    batch.push(*c);
+                    loop {
+                        match self.input_stream.current() {
+                            Some(next) if *next != '&' && *next != '<' && *next != '\0' => {
+                                batch.push(*next);
+                                self.input_stream.next();
+                            }
+                            _ => break,
+                        }
+                    }
+                    if batch.len() == 1 {
+                        self.emit(HtmlToken::Character(batch.chars().next().unwrap()))?;
+                    } else {
+                        self.emit(HtmlToken::Characters(batch))?;
+                    }
                 }
             },
             None => self.emit(HtmlToken::EndOfFile)?,
@@ -83,8 +111,22 @@ impl<'a> Tokenizer<'a> {
                     self.emit(HtmlToken::Character(chars::FEED_REPLACEMENT_CHARACTER))?;
                 }
                 _ => {
-                    let current_input_character = *c;
-                    self.emit(HtmlToken::Character(current_input_character))?;
+                    let mut batch = String::new();
+                    batch.push(*c);
+                    loop {
+                        match self.input_stream.current() {
+                            Some(next) if *next != '<' && *next != '\0' => {
+                                batch.push(*next);
+                                self.input_stream.next();
+                            }
+                            _ => break,
+                        }
+                    }
+                    if batch.len() == 1 {
+                        self.emit(HtmlToken::Character(batch.chars().next().unwrap()))?;
+                    } else {
+                        self.emit(HtmlToken::Characters(batch))?;
+                    }
                 }
             },
             None => self.emit(HtmlToken::EndOfFile)?,
@@ -106,8 +148,22 @@ impl<'a> Tokenizer<'a> {
             }
             None => self.emit(HtmlToken::EndOfFile)?,
             Some(c) => {
-                let current_input_character = *c;
-                self.emit(HtmlToken::Character(current_input_character))?;
+                let mut batch = String::new();
+                batch.push(*c);
+                loop {
+                    match self.input_stream.current() {
+                        Some(next) if *next != '<' && *next != '\0' => {
+                            batch.push(*next);
+                            self.input_stream.next();
+                        }
+                        _ => break,
+                    }
+                }
+                if batch.len() == 1 {
+                    self.emit(HtmlToken::Character(batch.chars().next().unwrap()))?;
+                } else {
+                    self.emit(HtmlToken::Characters(batch))?;
+                }
             }
         };
 
@@ -2367,8 +2423,22 @@ impl<'a> Tokenizer<'a> {
                 self.emit(HtmlToken::Character(chars::FEED_REPLACEMENT_CHARACTER))?;
             }
             Some(c) => {
-                let current_input_character = *c;
-                self.emit(HtmlToken::Character(current_input_character))?;
+                let mut batch = String::new();
+                batch.push(*c);
+                loop {
+                    match self.input_stream.current() {
+                        Some(next) if *next != '\0' => {
+                            batch.push(*next);
+                            self.input_stream.next();
+                        }
+                        _ => break,
+                    }
+                }
+                if batch.len() == 1 {
+                    self.emit(HtmlToken::Character(batch.chars().next().unwrap()))?;
+                } else {
+                    self.emit(HtmlToken::Characters(batch))?;
+                }
             }
             None => self.emit(HtmlToken::EndOfFile)?,
         };

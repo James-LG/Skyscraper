@@ -700,6 +700,9 @@ impl HtmlParser {
             HtmlToken::Character(c) => {
                 self.insert_character(c)?;
             }
+            HtmlToken::Characters(ref s) => {
+                self.insert_characters(s)?;
+            }
             HtmlToken::EndOfFile => {
                 // Parse error.
                 self.handle_error(HtmlParserError::MinorError(String::from(
@@ -751,7 +754,10 @@ impl HtmlParser {
         token: HtmlToken,
     ) -> Result<Acknowledgement, HtmlParseError> {
         match token {
-            HtmlToken::Character(_) | HtmlToken::Comment(_) | HtmlToken::DocType(_) => {
+            HtmlToken::Character(_)
+            | HtmlToken::Characters(_)
+            | HtmlToken::Comment(_)
+            | HtmlToken::DocType(_) => {
                 self.using_the_rules_for(token, InsertionMode::InBody)?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token))
@@ -1219,6 +1225,13 @@ impl HtmlParser {
                     self.foster_parenting = false;
                 }
             }
+            // Batched characters in table: fall back to per-character processing
+            // because the mode may switch between InTable and InTableText per char.
+            HtmlToken::Characters(s) => {
+                for c in s.chars() {
+                    self.token_emitted(HtmlToken::Character(c))?;
+                }
+            }
             // A comment token
             HtmlToken::Comment(comment) => {
                 self.insert_a_comment(comment, None)?;
@@ -1403,6 +1416,19 @@ impl HtmlParser {
             HtmlToken::Character(c) => {
                 self.pending_table_character_tokens
                     .push(HtmlToken::Character(c));
+            }
+            // Batched characters: push each individually into pending tokens.
+            HtmlToken::Characters(s) => {
+                for c in s.chars() {
+                    if c == '\0' {
+                        self.handle_error(HtmlParserError::MinorError(String::from(
+                            "null character in table text",
+                        )))?;
+                    } else {
+                        self.pending_table_character_tokens
+                            .push(HtmlToken::Character(c));
+                    }
+                }
             }
             // Anything else
             _ => {
@@ -1940,6 +1966,23 @@ impl HtmlParser {
             // Any other character token
             HtmlToken::Character(c) => {
                 self.insert_character(c)?;
+            }
+            // Batched characters in select
+            HtmlToken::Characters(ref s) => {
+                let filtered: String;
+                let text = if s.contains('\0') {
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "unexpected null character in select",
+                    )))?;
+                    filtered = s.replace('\0', "");
+                    if filtered.is_empty() {
+                        return Ok(Acknowledgement::no());
+                    }
+                    &filtered
+                } else {
+                    s
+                };
+                self.insert_characters(text)?;
             }
             // A comment token
             HtmlToken::Comment(comment) => {

@@ -909,7 +909,7 @@ impl HtmlParser {
                     return false;
                 }
                 // MathML text integration point + character token: use HTML rules.
-                HtmlToken::Character(_) => return false,
+                HtmlToken::Character(_) | HtmlToken::Characters(_) => return false,
                 _ => {}
             }
         }
@@ -932,7 +932,9 @@ impl HtmlParser {
         // token is a start tag or character token:
         if self.is_html_integration_point(acn_id) {
             match token {
-                HtmlToken::TagToken(TagTokenType::StartTag(_)) | HtmlToken::Character(_) => {
+                HtmlToken::TagToken(TagTokenType::StartTag(_))
+                | HtmlToken::Character(_)
+                | HtmlToken::Characters(_) => {
                     return false;
                 }
                 _ => {}
@@ -1370,6 +1372,62 @@ impl HtmlParser {
             // Otherwise, insert a new Text node with the character as its data.
             let string = c.to_string();
             let text = XpathItemTreeNode::TextNode(TextNode::new(string));
+            let text_id = self.new_node(text);
+
+            self.arena
+                .get_mut(text_id)
+                .unwrap()
+                .get_mut()
+                .as_text_node_mut()
+                .unwrap()
+                .set_id(text_id);
+            self.active_text_node = Some((text_id, self.tree_generation));
+
+            adjusted_insertion_location.insert(text_id, &mut self.arena);
+        }
+
+        Ok(())
+    }
+
+    /// Bulk insert a string of characters at the appropriate place.
+    ///
+    /// This is the batched equivalent of calling [`insert_character`] for each
+    /// character individually, but avoids repeated insertion-point lookups.
+    pub(crate) fn insert_characters(&mut self, s: &str) -> Result<(), HtmlParseError> {
+        // Fast path: active_text_node cache
+        if let Some((text_id, gen)) = self.active_text_node {
+            if self.tree_generation == gen {
+                if let Some(node) = self.arena.get_mut(text_id) {
+                    if let XpathItemTreeNode::TextNode(ref mut text) = node.get_mut() {
+                        text.content.push_str(s);
+                        return Ok(());
+                    }
+                }
+            }
+            self.active_text_node = None;
+        }
+
+        let adjusted_insertion_location = self.appropriate_place_for_inserting_a_node(None)?;
+
+        // Check if the parent is a Document node — DOM doesn't allow Document nodes to have Text children.
+        if let Some(parent_id) = adjusted_insertion_location.parent(&self.arena) {
+            let node = self.arena.get(parent_id).unwrap().get();
+            if let XpathItemTreeNode::DocumentNode(_) = node {
+                return Ok(());
+            }
+        }
+
+        // Get the previous sibling at the insertion point to check for text node merging.
+        let prev_sibling_id = adjusted_insertion_location.previous_sibling(&self.arena);
+
+        let prev_sibling: Option<&mut XpathItemTreeNode> =
+            prev_sibling_id.map(|id| self.arena.get_mut(id).unwrap().get_mut());
+
+        if let Some(&mut XpathItemTreeNode::TextNode(ref mut text)) = prev_sibling {
+            text.content.push_str(s);
+            self.active_text_node = prev_sibling_id.map(|id| (id, self.tree_generation));
+        } else {
+            let text = XpathItemTreeNode::TextNode(TextNode::new(String::from(s)));
             let text_id = self.new_node(text);
 
             self.arena
@@ -2163,7 +2221,7 @@ impl Parser for HtmlParser {
         // This invalidates the active_text_node cache so that structural
         // changes (new elements, end tags, etc.) force insert_character to
         // re-derive the correct insertion point.
-        if !matches!(token, HtmlToken::Character(_)) {
+        if !matches!(token, HtmlToken::Character(_) | HtmlToken::Characters(_)) {
             self.tree_generation = self.tree_generation.wrapping_add(1);
         }
 
@@ -2173,6 +2231,24 @@ impl Parser for HtmlParser {
             self.skip_next_line_feed = false;
             if matches!(token, HtmlToken::Character(chars::LINE_FEED)) {
                 return Ok(Acknowledgement::no());
+            }
+            // For a batched Characters token, strip a leading LF if present.
+            if let HtmlToken::Characters(ref s) = token {
+                if s.starts_with(chars::LINE_FEED) {
+                    let rest = &s[1..];
+                    if rest.is_empty() {
+                        return Ok(Acknowledgement::no());
+                    }
+                    // Re-emit the remainder as a new token.
+                    let remaining = rest.to_string();
+                    if remaining.len() == 1 {
+                        return self.token_emitted(HtmlToken::Character(
+                            remaining.chars().next().unwrap(),
+                        ));
+                    } else {
+                        return self.token_emitted(HtmlToken::Characters(remaining));
+                    }
+                }
             }
         }
 
@@ -2189,6 +2265,29 @@ impl Parser for HtmlParser {
         //   - it's not an EOF token
         if self.should_process_as_foreign_content(&token) {
             return self.in_foreign_content(token);
+        }
+
+        // For insertion modes that don't have native batch-Characters handling,
+        // decompose into per-character processing. The hot-path modes (InBody,
+        // Text, InTable, InTableText, InTemplate, InSelect) handle Characters
+        // directly; all other modes are rare and per-char is both correct and
+        // has negligible cost.
+        if let HtmlToken::Characters(ref s) = token {
+            if !matches!(
+                self.insertion_mode,
+                InsertionMode::InBody
+                    | InsertionMode::Text
+                    | InsertionMode::InTable
+                    | InsertionMode::InTableText
+                    | InsertionMode::InTemplate
+                    | InsertionMode::InSelect
+            ) {
+                let chars: Vec<char> = s.chars().collect();
+                for c in chars {
+                    self.token_emitted(HtmlToken::Character(c))?;
+                }
+                return Ok(Acknowledgement::no());
+            }
         }
 
         self.handle_token(token, self.insertion_mode)

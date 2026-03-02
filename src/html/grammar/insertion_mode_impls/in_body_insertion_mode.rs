@@ -73,6 +73,30 @@ impl HtmlParser {
 
                 self.frameset_ok = false;
             }
+            HtmlToken::Characters(ref s) => {
+                // Filter NULLs (extremely rare in practice).
+                let filtered: String;
+                let text = if s.contains('\0') {
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "null character in body",
+                    )))?;
+                    filtered = s.replace('\0', "");
+                    if filtered.is_empty() {
+                        return Ok(Acknowledgement::no());
+                    }
+                    &filtered
+                } else {
+                    s
+                };
+
+                self.reconstruct_the_active_formatting_elements()?;
+                self.insert_characters(text)?;
+
+                // Set frameset_ok = false if batch contains any non-whitespace.
+                if text.bytes().any(|b| !matches!(b, b'\t' | b'\n' | b'\x0C' | b'\r' | b' ')) {
+                    self.frameset_ok = false;
+                }
+            }
             HtmlToken::Comment(comment) => {
                 self.insert_a_comment(comment, None)?;
             }
