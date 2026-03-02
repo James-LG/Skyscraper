@@ -140,17 +140,14 @@ fn eval_forward_axis_descendant<'tree>(
 
     // Only tree nodes have children.
     if let XpathItem::Node(node) = &context.item {
-        for child in node.children(context.item_tree) {
-            // Add the child.
-            nodes.insert(child);
+        let node_id = node
+            .node_id()
+            .unwrap_or(context.item_tree.root_node);
 
-            // Add the child's descendants.
-            let child_eval_context = context.new_single_with_variables(
-                child.into(),
-                context.is_initial_step,
-            );
-            let child_descendants = eval_forward_axis_descendant(&child_eval_context)?;
-            nodes.extend(child_descendants);
+        // Use indextree's built-in descendants iterator instead of manual recursion.
+        // skip(1) to exclude self — descendants() includes the node itself.
+        for descendant_id in node_id.descendants(&context.item_tree.arena).skip(1) {
+            nodes.insert(context.item_tree.get(descendant_id));
         }
     }
 
@@ -164,14 +161,19 @@ fn eval_forward_axis_self_or_descendant<'tree>(
     let mut nodes = IndexSet::new();
 
     if let XpathItem::Node(node) = &context.item {
-        nodes.insert(*node);
+        let node_id = node
+            .node_id()
+            .unwrap_or(context.item_tree.root_node);
+
+        // Use indextree's built-in descendants iterator — includes self.
+        for descendant_id in node_id.descendants(&context.item_tree.arena) {
+            nodes.insert(context.item_tree.get(descendant_id));
+        }
     } else {
         return Err(ExpressionApplyError {
             msg: String::from("err:XPTY0020 context item for axis step is not a node"),
         });
     }
-
-    nodes.extend(eval_forward_axis_descendant(context)?);
 
     Ok(nodes)
 }

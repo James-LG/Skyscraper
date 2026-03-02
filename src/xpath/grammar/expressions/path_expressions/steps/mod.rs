@@ -26,10 +26,9 @@ pub(super) fn collect_self_and_descendants<'tree>(
     node_id: indextree::NodeId,
     nodes: &mut IndexSet<&'tree XpathItemTreeNode>,
 ) {
-    let node = context.item_tree.get(node_id);
-    nodes.insert(node);
-    for child_id in node_id.children(&context.item_tree.arena) {
-        collect_self_and_descendants(context, child_id, nodes);
+    // Use indextree's built-in descendants iterator instead of manual recursion.
+    for descendant_id in node_id.descendants(&context.item_tree.arena) {
+        nodes.insert(context.item_tree.get(descendant_id));
     }
 }
 
