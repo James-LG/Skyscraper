@@ -24,6 +24,7 @@ use crate::{
 use super::DocumentNode;
 
 mod chars;
+/// Builder API for programmatically constructing [`XpathItemTree`] documents.
 pub mod document_builder;
 mod insertion_mode_impls;
 mod tokenizer;
@@ -119,13 +120,16 @@ pub(crate) enum HtmlParseErrorType {
     UnknownNamedCharacterReference,
 }
 
+/// An error that occurred during HTML parsing.
 #[derive(Debug, Error)]
 #[error("parse error: {message}")]
 pub struct HtmlParseError {
+    /// A human-readable description of the error.
     pub message: String,
 }
 
 impl HtmlParseError {
+    /// Create a new parse error with the given message.
     pub fn new(message: &str) -> Self {
         HtmlParseError {
             message: message.to_string(),
@@ -133,6 +137,18 @@ impl HtmlParseError {
     }
 }
 
+/// Parse an HTML string into an [`XpathItemTree`].
+///
+/// This is the main entry point for parsing HTML documents. The returned tree
+/// can be queried using XPath expressions via [`crate::xpath::parse`].
+///
+/// # Example
+///
+/// ```rust
+/// use skyscraper::html;
+///
+/// let tree = html::parse("<html><body><p>Hello</p></body></html>").unwrap();
+/// ```
 pub fn parse(text: &str) -> Result<XpathItemTree, HtmlParseError> {
     let mut parser = HtmlParser::new();
     parser.parse(text)
@@ -475,6 +491,11 @@ pub(crate) struct NodeEntry {
     pub(crate) token: TagToken,
 }
 
+/// A stateful HTML parser implementing the WHATWG parsing algorithm.
+///
+/// For most use cases, prefer the [`parse`] free function which creates a parser
+/// internally. Use `HtmlParser` directly only if you need to configure the
+/// error handler or reuse the parser across multiple inputs.
 pub struct HtmlParser {
     error_handler: Box<dyn ParseErrorHandler>,
     insertion_mode: InsertionMode,
@@ -503,6 +524,7 @@ pub struct HtmlParser {
 }
 
 impl HtmlParser {
+    /// Create a new parser with default settings.
     pub fn new() -> Self {
         HtmlParser {
             error_handler: Box::new(DefaultParseErrorHandler),
@@ -526,6 +548,7 @@ impl HtmlParser {
         }
     }
 
+    /// Parse an HTML string into an [`XpathItemTree`].
     pub fn parse(&mut self, text: &str) -> Result<XpathItemTree, HtmlParseError> {
         // set document node as the root node
         let document_node_id = self
@@ -2186,10 +2209,13 @@ impl HtmlParser {
     }
 }
 
+/// Errors produced by the HTML parser during tree construction.
 #[derive(Debug, Error)]
 pub enum HtmlParserError {
+    /// A non-fatal parse error (e.g. a mismatched end tag that can be recovered from).
     #[error("minor error: {0}")]
     MinorError(String),
+    /// A fatal parse error that prevents the document from being constructed.
     #[error("fatal error: {0}")]
     FatalError(String),
 }
@@ -2332,10 +2358,18 @@ impl Parser for HtmlParser {
     }
 }
 
+/// Handler for parse errors emitted during HTML tokenization and tree construction.
+///
+/// Implement this trait to customize how parse errors are handled (e.g. to
+/// collect warnings instead of failing immediately).
 pub trait ParseErrorHandler {
+    /// Called when a parse error is encountered.
+    ///
+    /// Return `Ok(())` to continue parsing, or `Err(...)` to abort.
     fn error_emitted(&self, error: HtmlParseErrorType) -> Result<(), HtmlParseError>;
 }
 
+/// The default error handler, which converts every parse error into an [`HtmlParseError`].
 pub struct DefaultParseErrorHandler;
 
 impl ParseErrorHandler for DefaultParseErrorHandler {

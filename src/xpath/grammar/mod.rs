@@ -56,15 +56,9 @@ pub enum XpathItemTreeNode {
 }
 
 impl XpathItemTreeNode {
-    /// Get all children of the document.
+    /// Get all children of this node.
     ///
-    /// # Arguments
-    ///
-    /// * `tree` - The tree containing the document.
-    ///
-    /// # Returns
-    ///
-    /// A vector of all children of the document.
+    /// Leaf nodes (text, attribute, comment, PI, doctype) return an empty vector.
     pub fn children<'tree>(&self, tree: &'tree XpathItemTree) -> Vec<&'tree XpathItemTreeNode> {
         match self {
             XpathItemTreeNode::DocumentNode(node) => node.children(tree),
@@ -77,15 +71,7 @@ impl XpathItemTreeNode {
         }
     }
 
-    /// Get all descendants of the element.
-    ///
-    /// # Arguments
-    ///
-    /// * `tree` - The tree containing the element.
-    ///
-    /// # Returns
-    ///
-    /// An iterator over all descendants of the element.
+    /// Get an iterator over all descendants of this node.
     pub fn descendants<'tree>(
         &'tree self,
         tree: &'tree XpathItemTree,
@@ -95,16 +81,9 @@ impl XpathItemTreeNode {
             .map(|node_id| tree.get(node_id))
     }
 
-    /// Get the parent of the element.
-    ///
-    /// # Arguments
-    ///
-    /// * `tree` - The tree containing the element.
-    ///
-    /// # Returns
-    ///
-    /// The parent of the element if it exists, or `None` if it does not.
     /// Get the [`NodeId`] of this node, if it has one.
+    ///
+    /// Document nodes do not have a `NodeId` and return `None`.
     pub(crate) fn node_id(&self) -> Option<NodeId> {
         match self {
             XpathItemTreeNode::ElementNode(e) => Some(e.id()),
@@ -117,6 +96,7 @@ impl XpathItemTreeNode {
         }
     }
 
+    /// Get the parent of this node, or `None` for the document root.
     pub fn parent<'tree>(&self, tree: &'tree XpathItemTree) -> Option<&'tree XpathItemTreeNode> {
         self.node_id().and_then(|id| {
             let parent_id = tree.arena.get(id).unwrap().parent()?;
@@ -179,6 +159,7 @@ impl XpathItemTreeNode {
         }
     }
 
+    /// Render this node as an HTML string with the given formatting and indentation level.
     pub fn display(
         &self,
         tree: &XpathItemTree,
@@ -197,9 +178,12 @@ impl XpathItemTreeNode {
     }
 }
 
+/// Controls how an [`XpathItemTreeNode`] is rendered to an HTML string.
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum DisplayFormatting {
+    /// Pretty-print with indentation; whitespace-only text nodes are trimmed.
     Pretty,
+    /// Render only the opening tag of an element, without its children.
     NoChildren,
     /// Raw mode: preserve original whitespace, include all node types,
     /// omit closing tags for void elements.
@@ -249,8 +233,8 @@ impl<'a> Iterator for TextIter<'a> {
 ///
 /// This tree can be searched using an [`Xpath`] expression.
 ///
-/// This tree is created from an [`HtmlDocument`],
-/// and bridges the gap between the [html](crate::html) and [xpath](crate::xpath) modules.
+/// Created by [`html::parse`](crate::html::parse) (preferred) or by converting
+/// from an [`HtmlDocument`].
 ///
 /// # Example
 ///

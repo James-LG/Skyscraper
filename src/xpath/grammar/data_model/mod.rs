@@ -306,6 +306,7 @@ impl XpathDocumentNode {
             .collect()
     }
 
+    /// Render the document's children as an HTML string with the given formatting.
     pub fn display<'tree>(
         &self,
         tree: &'tree XpathItemTree,
@@ -551,6 +552,7 @@ impl ElementNode {
         XpathItem::Node(tree.get(self.id()))
     }
 
+    /// Render this element as an HTML string with the given formatting and indentation level.
     pub fn display<'tree>(
         &self,
         tree: &'tree XpathItemTree,
@@ -1043,6 +1045,7 @@ impl TextNode {
         tree.get(self.id()).parent(tree)
     }
 
+    /// Render this text node as a string with the given formatting and indentation level.
     pub fn display(
         &self,
         _tree: &XpathItemTree,
