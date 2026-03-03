@@ -174,6 +174,18 @@ impl Display for Predicate {
 }
 
 impl Predicate {
+    /// Check if this predicate is a constant integer position (e.g., `[1]`, `[2]`).
+    ///
+    /// Returns `Some(n)` if the predicate is a simple integer literal, `None` otherwise.
+    /// This enables a fast path that skips the full AST evaluation for each item.
+    pub(crate) fn try_constant_position(&self) -> Option<i64> {
+        // Use Display to get the string representation of the expression.
+        // For a simple integer literal like `1`, this produces exactly "1".
+        // For anything else (position(), last(), @attr, etc.), parse will fail.
+        // Cost: one allocation + format, but called once per predicate, not per item.
+        self.0.to_string().parse::<i64>().ok()
+    }
+
     pub(crate) fn is_match<'tree>(
         &self,
         context: &XpathExpressionContext<'tree>,

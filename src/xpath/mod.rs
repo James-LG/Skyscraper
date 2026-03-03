@@ -277,6 +277,29 @@ impl<'tree> XpathExpressionContext<'tree> {
     }
 
     /// Create a new context that inherits variable bindings from this context,
+    /// with a directly specified item, position, and size.
+    ///
+    /// This avoids the need to create an intermediate `XpathItemSet` when the
+    /// item and positional information are already known (e.g., during grouped
+    /// descendant predicate evaluation).
+    pub fn new_with_item_and_size(
+        &self,
+        item: XpathItem<'tree>,
+        position: usize,
+        size: usize,
+        is_initial_step: bool,
+    ) -> Self {
+        Self {
+            item_tree: self.item_tree,
+            item,
+            position,
+            size,
+            is_initial_step,
+            variables: Rc::clone(&self.variables),
+        }
+    }
+
+    /// Create a new context that inherits variable bindings from this context,
     /// with a single item as the context item.
     pub fn new_single_with_variables(
         &self,

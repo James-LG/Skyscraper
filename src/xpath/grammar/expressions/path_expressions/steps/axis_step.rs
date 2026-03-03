@@ -70,41 +70,53 @@ impl AxisStep {
         context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         let nodes = self.step_type.eval(context)?;
-        let mut items: XpathItemSet<'tree> = nodes.into_iter().map(XpathItem::Node).collect();
 
         // If there are no predicates, return expression result.
         if self.predicates.is_empty() {
-            return Ok(items);
+            return Ok(nodes.into_iter().map(XpathItem::Node).collect());
         }
 
         // For reverse axes, context positions are assigned in reverse document
         // order (XPath 3.1 §3.3.2.2), so position 1 is the node closest to
         // the context node.
         let is_reverse = matches!(self.step_type, AxisStepType::ReverseStep(_));
-        if is_reverse {
-            items.sort_by_document_order();
-            items.reverse();
-        }
+        let nodes = if is_reverse {
+            let mut sorted = nodes;
+            sorted.sort_by(|a, b| {
+                let a_id = a.node_id();
+                let b_id = b.node_id();
+                match (a_id, b_id) {
+                    (Some(a), Some(b)) => b.cmp(&a), // reverse document order
+                    (Some(_), None) => std::cmp::Ordering::Greater,
+                    (None, Some(_)) => std::cmp::Ordering::Less,
+                    (None, None) => std::cmp::Ordering::Equal,
+                }
+            });
+            sorted
+        } else {
+            nodes
+        };
 
-        // Filter using predicates.
+        // Filter using predicates. Work with Vec directly to avoid hashing
+        // all nodes into an intermediate XpathItemSet.
+        let size = nodes.len();
         let mut filtered_items = XpathItemSet::new();
-        for (i, item) in items.iter().enumerate() {
-            // All predicates must match for a node to be selected.
-            let mut is_match = true;
-
-            let predicate_context = context.new_with_variables(
-                &items,
+        for (i, &node) in nodes.iter().enumerate() {
+            let predicate_context = context.new_with_item_and_size(
+                XpathItem::Node(node),
                 i + 1,
+                size,
                 context.is_initial_step,
             );
+            let mut is_match = true;
             for predicate in self.predicates.iter() {
                 if !predicate.is_match(&predicate_context)? {
                     is_match = false;
+                    break;
                 }
             }
-
             if is_match {
-                filtered_items.insert(item.clone());
+                filtered_items.insert(XpathItem::Node(node));
             }
         }
 
