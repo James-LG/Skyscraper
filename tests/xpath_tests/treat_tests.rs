@@ -37,7 +37,7 @@ fn treat_incorrect_type_should_fail() {
     // assert
     assert_eq!(
         err.to_string(),
-        "Error applying expression err:XPDY0050 Cannot treat XpathItemSet { index_set: {Node(ElementNode(ElementNode { name: \"html\" }))} } as document-node()"
+        "Error applying expression err:XPDY0050 Cannot treat XpathItemSet { items: [Node(ElementNode(ElementNode { name: \"html\" }))] } as document-node()"
     );
 }
 

@@ -162,6 +162,7 @@ impl<'a> Tokenizer<'a> {
                     self.comment_token = Some(CommentToken {
                         data: String::new(),
                     });
+                    self.reconsume_in_state(TokenizerState::BogusComment)?;
                 }
                 _ if c.is_ascii_alphabetic() => {
                     self.tag_token = Some(TagTokenType::StartTag(TagToken::new(String::new())));
@@ -171,7 +172,7 @@ impl<'a> Tokenizer<'a> {
                     self.handle_error(TokenizerError::InvalidFirstCharacterOfTagName)?;
 
                     self.emit(HtmlToken::Character('<'))?;
-                    self.emit(HtmlToken::EndOfFile)?;
+                    self.reconsume_in_state(TokenizerState::Data)?;
                 }
             },
             None => {
@@ -2748,7 +2749,7 @@ fn is_control(code_point: u32) -> bool {
 
 /// <https://infra.spec.whatwg.org/#c0-control>
 fn is_c0_control(code_point: u32) -> bool {
-    code_point >= 0x0000 && code_point <= 0x001F
+    code_point <= 0x001F
 }
 
 /// <https://infra.spec.whatwg.org/#ascii-whitespace>

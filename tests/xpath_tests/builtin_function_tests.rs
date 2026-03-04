@@ -815,6 +815,53 @@ fn fn_deep_equal_different_length() {
     assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Boolean(false)));
 }
 
+/// Regression: fn:deep-equal must compare nodes structurally, not by identity.
+/// Two different `<li>` elements with the same name and text content should be
+/// deep-equal even though they are distinct nodes in the tree.
+#[test]
+fn fn_deep_equal_nodes_structural_comparison() {
+    // Two separate <li> elements with the same content "x".
+    let document = html::parse("<html><body><ul><li>x</li><li>x</li></ul></body></html>").unwrap();
+    // Compare first li with second li — structurally identical.
+    let xpath = xpath::parse("deep-equal(//li[1], //li[2])").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true)),
+        "Structurally identical nodes should be deep-equal"
+    );
+}
+
+/// Regression: fn:deep-equal should return false for structurally different nodes.
+#[test]
+fn fn_deep_equal_nodes_different_content() {
+    let document =
+        html::parse("<html><body><ul><li>alpha</li><li>beta</li></ul></body></html>").unwrap();
+    let xpath = xpath::parse("deep-equal(//li[1], //li[2])").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(false)),
+        "Nodes with different text content should not be deep-equal"
+    );
+}
+
+/// Regression: fn:deep-equal on elements with different attributes should be false.
+#[test]
+fn fn_deep_equal_nodes_different_attributes() {
+    let document = html::parse(
+        r#"<html><body><div class="a">t</div><div class="b">t</div></body></html>"#,
+    )
+    .unwrap();
+    let xpath = xpath::parse("deep-equal(//div[1], //div[2])").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(false)),
+        "Nodes with different attributes should not be deep-equal"
+    );
+}
+
 #[test]
 fn fn_unordered() {
     let document = html::parse("<html><body></body></html>").unwrap();
@@ -944,6 +991,26 @@ fn fn_filter() {
     assert_eq!(items.len(), 2);
     assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(4)));
     assert_eq!(items[1], XpathItem::AnyAtomicType(AnyAtomicType::Integer(5)));
+}
+
+/// Regression: fn:filter must use effective boolean value (EBV) to evaluate
+/// the predicate function result, not pattern-match on Boolean(true).
+/// A function returning a non-zero integer should be treated as truthy.
+#[test]
+fn fn_filter_uses_effective_boolean_value() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    // The function returns the item itself (an integer), not a boolean.
+    // EBV of non-zero integer is true; EBV of 0 would be false.
+    let xpath = xpath::parse("filter((0, 1, 2, 0, 3), function($x) { $x })").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items.len(),
+        3,
+        "fn:filter with EBV should keep non-zero values: {items:?}"
+    );
+    assert_eq!(items[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(1)));
+    assert_eq!(items[1], XpathItem::AnyAtomicType(AnyAtomicType::Integer(2)));
+    assert_eq!(items[2], XpathItem::AnyAtomicType(AnyAtomicType::Integer(3)));
 }
 
 #[test]

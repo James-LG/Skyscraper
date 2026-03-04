@@ -1988,3 +1988,54 @@ fn named_char_ref_with_semicolon_always_resolves() {
         "Named char ref with semicolon should always resolve: {output_attr:?}"
     );
 }
+
+// ============================================================================
+// Regression tests for code review fixes
+// ============================================================================
+
+/// Regression: tag_open_state receiving an unexpected character (not alpha, not
+/// '!', '/', or '?') should reconsume in Data state rather than emitting EOF.
+/// WHATWG 13.2.5.6: "Anything else → This is an invalid-first-character-of-tag-name
+/// parse error. Emit a U+003C LESS-THAN SIGN character token. Reconsume in the
+/// data state."
+#[test]
+fn tag_open_state_unexpected_char_does_not_emit_eof() {
+    // "<3 hearts" — the '<' opens tag_open_state, '3' is unexpected, so the
+    // '<' should be emitted as text and '3 hearts' reconsumed in data state.
+    let text = "<html><body><3 hearts</body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    // The '<' is serialized as &lt; in the output, plus the rest of the text.
+    assert!(
+        output.contains("3 hearts"),
+        "Unexpected char after '<' should reconsume in data state, preserving text: {output:?}"
+    );
+    // The document should parse to completion (body tag should close).
+    assert!(
+        output.contains("</body>"),
+        "Document should parse to completion: {output:?}"
+    );
+}
+
+/// Regression: a '?' in tag_open_state should create a comment token and
+/// reconsume in BogusComment state, not silently drop the content.
+/// WHATWG 13.2.5.6: "U+003F QUESTION MARK (?) → This is an
+/// unexpected-question-mark-instead-of-tag-name parse error. Create a comment
+/// token whose data is the empty string. Reconsume in the bogus comment state."
+#[test]
+fn tag_open_state_question_mark_creates_bogus_comment() {
+    let text = "<html><body><?xml version='1.0'?></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    // The <?...?> should be treated as a bogus comment, not crash or emit EOF.
+    // The body should still be parseable.
+    assert!(
+        output.contains("<body>"),
+        "Document should still have a body after bogus comment: {output:?}"
+    );
+    // The <?...> content should NOT appear as visible text.
+    assert!(
+        !output.contains("<?xml"),
+        "Bogus comment content should not appear as text: {output:?}"
+    );
+}

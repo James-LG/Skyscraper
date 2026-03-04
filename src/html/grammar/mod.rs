@@ -1902,15 +1902,12 @@ impl HtmlParser {
     pub(crate) fn clear_the_list_of_active_formatting_elements_up_to_the_last_marker(
         &mut self,
     ) -> Result<(), HtmlParseError> {
-        let last_marker_index = self
-            .active_formatting_elements
-            .iter()
-            .rev()
-            .position(|e| matches!(e, NodeOrMarker::Marker))
-            .unwrap_or(self.active_formatting_elements.len());
-
-        self.active_formatting_elements =
-            self.active_formatting_elements[..last_marker_index].to_vec();
+        // WHATWG: Pop entries from the end until a marker is popped (or the list is empty).
+        while let Some(entry) = self.active_formatting_elements.pop() {
+            if matches!(entry, NodeOrMarker::Marker) {
+                break;
+            }
+        }
 
         Ok(())
     }

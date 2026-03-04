@@ -80,14 +80,15 @@ impl UnionExpr {
             return Ok(result);
         }
 
-        // Union combines all items from both operands (duplicates removed by IndexSet).
+        // Union combines all items from both operands with duplicates removed.
         for pair in &self.items {
             let rhs = pair.1.eval(context)?;
             result.extend(rhs);
         }
 
-        // The result must be in document order.
+        // The result must be in document order with duplicates removed.
         result.sort_by_document_order();
+        result.dedup();
         Ok(result)
     }
 }
@@ -200,8 +201,9 @@ impl IntersectExceptExpr {
             }
         }
 
-        // The result must be in document order.
+        // The result must be in document order with duplicates removed.
         result.sort_by_document_order();
+        result.dedup();
         Ok(result)
     }
 }

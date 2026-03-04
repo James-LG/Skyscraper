@@ -123,6 +123,7 @@ impl AxisStep {
         // Restore document order for the final result.
         if is_reverse {
             filtered_items.sort_by_document_order();
+            filtered_items.dedup();
         }
 
         Ok(filtered_items)

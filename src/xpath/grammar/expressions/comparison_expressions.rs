@@ -107,27 +107,46 @@ impl ComparisonExpr {
         let atomized1 = func_data(&result, &context.item_tree)?;
         let atomized2 = func_data(&second_result, &context.item_tree)?;
 
-        // Do some type checking first.
-
-        // If the either atomized set is an empty sequence,
-        // the result of the value comparison is an empty sequence.
-        if atomized1.is_empty() || atomized2.is_empty() {
-            return Ok(XpathItemSet::new());
-        }
-
-        // If the either atomized set is a sequence of length greater than one,
-        // a type error is raised.
-        if atomized1.len() > 1 || atomized2.len() > 1 {
-            return Err(ExpressionApplyError {
-                msg: String::from("err:XPTY0004 The first operand of a value comparison is a sequence of length greater than one")
-            });
-        }
-
         let bool_value = match comparison.0 {
-            ComparisonType::ValueComp(comp) => comp.is_match(&atomized1[0], &atomized2[0]),
-            ComparisonType::GeneralComp(comp) => comp.is_match(&atomized1[0], &atomized2[0]),
+            ComparisonType::GeneralComp(comp) => {
+                // XPath 3.1 §3.7.2: General comparisons are existentially quantified.
+                // The result is true if any pair (a, b) from atomized1 x atomized2
+                // satisfies the corresponding value comparison.
+                if atomized1.is_empty() || atomized2.is_empty() {
+                    false
+                } else {
+                    let mut found = false;
+                    for a in atomized1.iter() {
+                        for b in atomized2.iter() {
+                            if comp.is_match(a, b) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if found {
+                            break;
+                        }
+                    }
+                    found
+                }
+            }
+            ComparisonType::ValueComp(comp) => {
+                // XPath 3.1 §3.7.1: Value comparisons require singleton operands.
+                if atomized1.is_empty() || atomized2.is_empty() {
+                    return Ok(XpathItemSet::new());
+                }
+                if atomized1.len() > 1 || atomized2.len() > 1 {
+                    return Err(ExpressionApplyError {
+                        msg: String::from("err:XPTY0004 The first operand of a value comparison is a sequence of length greater than one")
+                    });
+                }
+                comp.is_match(&atomized1[0], &atomized2[0])
+            }
             ComparisonType::NodeComp(comp) => {
-                // Node comparisons require both operands to be nodes.
+                // Node comparisons require both operands to be single nodes.
+                if result.is_empty() || second_result.is_empty() {
+                    return Ok(XpathItemSet::new());
+                }
                 let node1 = match &result[0] {
                     XpathItem::Node(n) => n,
                     _ => {

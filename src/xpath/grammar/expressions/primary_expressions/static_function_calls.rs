@@ -611,15 +611,15 @@ fn dispatch_by_local_name<'tree>(
         // https://www.w3.org/TR/xpath-functions-31/#func-distinct-values
         "distinct-values" => {
             check_arity("fn:distinct-values", args, 1)?;
-            // XpathItemSet is already an IndexSet, so duplicates are removed.
-            // However, we need to atomize values first for proper comparison.
             let atoms = func_data(&args[0], context.item_tree)?;
-            Ok(Some(
-                atoms
-                    .into_iter()
-                    .map(|a| XpathItem::AnyAtomicType(a))
-                    .collect(),
-            ))
+            let mut result = XpathItemSet::new();
+            for a in atoms {
+                let item = XpathItem::AnyAtomicType(a);
+                if !result.contains(&item) {
+                    result.insert(item);
+                }
+            }
+            Ok(Some(result))
         }
         // https://www.w3.org/TR/xpath-functions-31/#func-sum
         "sum" => func_sum(args, context).map(Some),
@@ -1169,7 +1169,7 @@ fn dispatch_by_local_name<'tree>(
                 && args[0]
                     .iter()
                     .zip(args[1].iter())
-                    .all(|(a, b)| a == b);
+                    .all(|(a, b)| deep_equal_items(a, b, context.item_tree));
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::Boolean(equal)
             )]))
@@ -1362,11 +1362,8 @@ fn dispatch_by_local_name<'tree>(
                     vec![xpath_item_set![item.clone()]],
                     context,
                 )?;
-                if !call_result.is_empty() {
-                    if let XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true)) = &call_result[0]
-                    {
-                        result.insert(item.clone());
-                    }
+                if call_result.boolean() {
+                    result.insert(item.clone());
                 }
             }
             Ok(Some(result))
@@ -2536,11 +2533,8 @@ fn dispatch_array_function<'tree>(
                     .collect();
                 let call_result =
                     invoke_function_item(func, vec![member_set], context)?;
-                if !call_result.is_empty() {
-                    if let XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true)) = &call_result[0]
-                    {
-                        new_members.push(member.clone());
-                    }
+                if call_result.boolean() {
+                    new_members.push(member.clone());
                 }
             }
             Ok(Some(xpath_item_set![XpathItem::Function(
@@ -3508,6 +3502,89 @@ fn func_normalize_unicode(input: &str, form: &str) -> Result<String, ExpressionA
             form
         ))),
     }
+}
+
+/// Structurally compare two XPath items for deep equality per the XPath 3.1 spec.
+/// <https://www.w3.org/TR/xpath-functions-31/#func-deep-equal>
+fn deep_equal_items(a: &XpathItem, b: &XpathItem, tree: &XpathItemTree) -> bool {
+    match (a, b) {
+        // Atomic values: use normal equality.
+        (XpathItem::AnyAtomicType(a), XpathItem::AnyAtomicType(b)) => a == b,
+        // Functions: not comparable by deep-equal per spec.
+        (XpathItem::Function(_), XpathItem::Function(_)) => false,
+        // Nodes: structural comparison.
+        (XpathItem::Node(a), XpathItem::Node(b)) => deep_equal_nodes(a, b, tree),
+        // Different kinds of items are never deep-equal.
+        _ => false,
+    }
+}
+
+/// Structurally compare two XPath nodes for deep equality.
+fn deep_equal_nodes(a: &XpathItemTreeNode, b: &XpathItemTreeNode, tree: &XpathItemTree) -> bool {
+    use XpathItemTreeNode::*;
+    match (a, b) {
+        (DocumentNode(_), DocumentNode(_)) => {
+            // Deep-equal on document nodes: compare child elements and text nodes.
+            let a_children = content_children(a, tree);
+            let b_children = content_children(b, tree);
+            a_children.len() == b_children.len()
+                && a_children
+                    .iter()
+                    .zip(b_children.iter())
+                    .all(|(ac, bc)| deep_equal_nodes(ac, bc, tree))
+        }
+        (ElementNode(ae), ElementNode(be)) => {
+            // Same name and namespace.
+            if ae.name != be.name || ae.namespace != be.namespace {
+                return false;
+            }
+            // Same attributes (order-insensitive).
+            let a_attrs = ae.attributes(tree);
+            let b_attrs = be.attributes(tree);
+            if a_attrs.len() != b_attrs.len() {
+                return false;
+            }
+            // For every attribute in a, there must be a matching attribute in b.
+            for a_attr in &a_attrs {
+                if !b_attrs
+                    .iter()
+                    .any(|b_attr| a_attr.name == b_attr.name && a_attr.value == b_attr.value)
+                {
+                    return false;
+                }
+            }
+            // Compare child content (elements and text, not attributes).
+            let a_children = content_children(a, tree);
+            let b_children = content_children(b, tree);
+            a_children.len() == b_children.len()
+                && a_children
+                    .iter()
+                    .zip(b_children.iter())
+                    .all(|(ac, bc)| deep_equal_nodes(ac, bc, tree))
+        }
+        (TextNode(at), TextNode(bt)) => at.content == bt.content,
+        (CommentNode(ac), CommentNode(bc)) => ac.content == bc.content,
+        (PINode(ap), PINode(bp)) => ap.target == bp.target && ap.data == bp.data,
+        (AttributeNode(aa), AttributeNode(ba)) => aa.name == ba.name && aa.value == ba.value,
+        // Different node kinds are never deep-equal.
+        _ => false,
+    }
+}
+
+/// Get the content children (elements and text nodes) of a node, excluding attributes.
+fn content_children<'tree>(
+    node: &'tree XpathItemTreeNode,
+    tree: &'tree XpathItemTree,
+) -> Vec<&'tree XpathItemTreeNode> {
+    node.children(tree)
+        .into_iter()
+        .filter(|child| {
+            matches!(
+                child,
+                XpathItemTreeNode::ElementNode(_) | XpathItemTreeNode::TextNode(_)
+            )
+        })
+        .collect()
 }
 
 #[cfg(test)]

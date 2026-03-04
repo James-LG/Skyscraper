@@ -321,6 +321,7 @@ fn eval_grouped_descendant_predicate<'tree>(
     }
 
     result.sort_by_document_order();
+    result.dedup();
     Ok(result)
 }
 
@@ -536,6 +537,7 @@ impl RelativePathExpr {
         // Path expressions must return results in document order.
         // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-path-expressions
         items.sort_by_document_order();
+        items.dedup();
 
         Ok(items)
     }

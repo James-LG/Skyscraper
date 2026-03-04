@@ -820,3 +820,86 @@ fn svg_regular_attributes_stay_lowercase() {
         "fill should remain lowercase: {output:?}"
     );
 }
+
+// ============================================================================
+// Regression tests for code review fixes
+// ============================================================================
+
+/// Regression: a second `<body>` start tag in the InBody insertion mode should
+/// NOT switch to AfterBody. Per WHATWG 13.2.6.4.7, it should merge any new
+/// attributes from the second body tag onto the existing body element and
+/// set frameset_ok to false.
+#[test]
+fn second_body_tag_merges_attributes_not_after_body() {
+    let text = r#"<html><body class="a"><body id="extra"><p>content</p></body></html>"#;
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+
+    // The <p> must appear in output — if we switched to AfterBody mode, it would
+    // be dropped or misplaced.
+    assert!(
+        output.contains("<p>content</p>"),
+        "Content after second <body> tag should be preserved in body: {output:?}"
+    );
+
+    // The original class attribute should be preserved.
+    assert!(
+        output.contains(r#"class="a""#),
+        "Original body attributes should be preserved: {output:?}"
+    );
+
+    // The new id attribute from the second body tag should be merged.
+    assert!(
+        output.contains(r#"id="extra""#),
+        "New attributes from second body tag should be merged: {output:?}"
+    );
+}
+
+/// Regression: clearing the list of active formatting elements up to the last
+/// marker must actually remove the marker entry itself, not leave it behind.
+/// If the marker is retained, subsequent formatting element operations may
+/// malfunction (e.g. the adoption agency algorithm may find stale markers).
+#[test]
+fn active_formatting_elements_marker_is_cleared() {
+    // This HTML uses a table (which pushes a marker), with bold formatting
+    // inside. After the table cell ends, the marker must be fully cleared.
+    let text = r#"<html><body><table><tr><td><b>bold</b></td><td>normal</td></tr></table><p>after</p></body></html>"#;
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+
+    // "after" should NOT be wrapped in <b> tags — if the marker wasn't removed,
+    // the formatting element list could leak the <b> past the table boundary.
+    assert!(
+        !output.contains("<b>after</b>"),
+        "Formatting should not leak past table boundary: {output:?}"
+    );
+    assert!(
+        output.contains("<p>after</p>"),
+        "Paragraph after table should be normal: {output:?}"
+    );
+}
+
+/// Regression: deeply nested elements should not cause stack overflow due to
+/// recursive walks in the parser. The recursive functions for `any_other_end_tag`,
+/// `li`, and `dd`/`dt` start tag processing have been converted to iterative loops.
+#[test]
+fn deeply_nested_elements_do_not_stack_overflow() {
+    // Create a deeply nested structure that would overflow with recursion.
+    let mut html = String::from("<html><body>");
+    for _ in 0..500 {
+        html.push_str("<div>");
+    }
+    html.push_str("content");
+    for _ in 0..500 {
+        html.push_str("</div>");
+    }
+    html.push_str("</body></html>");
+
+    let document = html::parse(&html).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("content"),
+        "Deeply nested content should be preserved: {}",
+        &output[..output.len().min(200)]
+    );
+}

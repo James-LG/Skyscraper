@@ -655,7 +655,7 @@ impl ElementNode {
 /// An attribute node.
 ///
 /// <https://www.w3.org/TR/xpath-datamodel-31/#AttributeNode>
-#[derive(Eq, Clone, Hash)]
+#[derive(Eq, Clone)]
 pub struct AttributeNode {
     /// The ID of the attribute.
     ///
@@ -762,8 +762,15 @@ impl PartialEq for AttributeNode {
     }
 }
 
+impl std::hash::Hash for AttributeNode {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.value.hash(state);
+    }
+}
+
 /// <https://www.w3.org/TR/xpath-datamodel-31/#ProcessingInstructionNode>
-#[derive(PartialOrd, Eq, Ord, Debug, Hash, Clone)]
+#[derive(PartialOrd, Eq, Ord, Debug, Clone)]
 pub struct PINode {
     /// The target of the processing instruction (an NCName).
     pub target: String,
@@ -820,6 +827,13 @@ impl PartialEq for PINode {
     }
 }
 
+impl std::hash::Hash for PINode {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.target.hash(state);
+        self.data.hash(state);
+    }
+}
+
 impl Display for PINode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.data.is_empty() {
@@ -831,7 +845,7 @@ impl Display for PINode {
 }
 
 /// <https://www.w3.org/TR/xpath-datamodel-31/#CommentNode>
-#[derive(PartialOrd, Eq, Ord, Debug, Hash, Clone)]
+#[derive(PartialOrd, Eq, Ord, Debug, Clone)]
 pub struct CommentNode {
     /// The value of the comment.
     pub content: String,
@@ -896,12 +910,18 @@ impl PartialEq for CommentNode {
     }
 }
 
+impl std::hash::Hash for CommentNode {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.content.hash(state);
+    }
+}
+
 /// A document type node representing `<!DOCTYPE ...>`.
 ///
 /// Note: DOCTYPE is not a valid XPath 3.1 node type. It is kept in the tree
 /// for serialization fidelity but is excluded from `node()` kind tests and
 /// axis traversal results.
-#[derive(PartialOrd, Eq, Ord, Debug, Hash, Clone)]
+#[derive(PartialOrd, Eq, Ord, Debug, Clone)]
 pub struct DoctypeNode {
     /// The name of the document type (e.g. "html").
     pub name: String,
@@ -966,6 +986,14 @@ impl PartialEq for DoctypeNode {
     }
 }
 
+impl std::hash::Hash for DoctypeNode {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.public_id.hash(state);
+        self.system_id.hash(state);
+    }
+}
+
 impl Display for DoctypeNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match (&self.public_id, &self.system_id) {
@@ -990,7 +1018,7 @@ impl Display for DoctypeNode {
 }
 
 /// <https://www.w3.org/TR/xpath-datamodel-31/#TextNode>
-#[derive(Eq, Hash, Clone)]
+#[derive(Eq, Clone)]
 pub struct TextNode {
     /// The ID of the text node.
     ///
@@ -1069,6 +1097,12 @@ impl TextNode {
 impl PartialEq for TextNode {
     fn eq(&self, other: &Self) -> bool {
         self.content == other.content
+    }
+}
+
+impl std::hash::Hash for TextNode {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.content.hash(state);
     }
 }
 

@@ -79,6 +79,16 @@ All `*-from-duration`, `*-from-dateTime`, `*-from-date`, `*-from-time`, `fn:curr
 
 ---
 
+## XPath 3.1 — Expressions
+
+### Known Limitations
+
+| Feature | Gap | Location |
+|---------|-----|----------|
+| Inline function closure capture | Inline functions (`function($x) { $x + $y }`) do not capture variables from the definition scope. The body is stored as source text and re-parsed at call time using the caller's variable context, not the definition-time context. Fixing this requires adding a `'tree` lifetime parameter to the `Function` enum to store captured `XpathItemSet` bindings, which cascades to ~94 occurrences across 8 files. | `src/xpath/grammar/data_model/mod.rs:147-148`, `src/xpath/grammar/expressions/postfix_expressions.rs:280-305`, `src/xpath/grammar/expressions/primary_expressions/mod.rs:171-189` |
+
+---
+
 ## Data Model Gaps
 
 | Feature | Gap | Location |

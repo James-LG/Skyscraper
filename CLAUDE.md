@@ -87,6 +87,10 @@ Current contents:
 - `xpath-datamodel-31-spec.html` — [XPath Data Model 3.1](https://www.w3.org/TR/2017/REC-xpath-datamodel-31-20170321/) (W3C Recommendation)
 - `xpath-functions-31-spec.html` — [XPath Functions and Operators 3.1](https://www.w3.org/TR/2017/REC-xpath-functions-31-20170321/) (W3C Recommendation)
 
+## Features Backlog
+
+[`docs/features-backlog.md`](docs/features-backlog.md) tracks spec gaps, known limitations, and design decisions for both the HTML parser and XPath evaluator. Check it before implementing new features to avoid duplicating known issues.
+
 ## CI
 
 GitHub Actions (`.github/workflows/rust.yml`): runs `cargo test` in a devcontainer on ubuntu-latest, plus stack overflow tests on windows-latest with Rust nightly.

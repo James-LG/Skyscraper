@@ -172,15 +172,65 @@ impl HtmlParser {
                 )?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "body" => {
-                if !self.has_an_element_in_scope("body") {
-                    self.handle_error(HtmlParserError::MinorError(String::from(
-                        "open elements has no body element in scope",
-                    )))?;
-                } else {
-                    ensure_open_elements_has_valid_element(&self)?;
+                // Parse error.
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "body start tag in body",
+                )))?;
+
+                // If the stack of open elements has only one element, or if the second element
+                // is not a body element, ignore the token. (fragment case)
+                if self.open_elements.len() <= 1 {
+                    return Ok(Acknowledgement::no());
                 }
 
-                self.insertion_mode = InsertionMode::AfterBody;
+                let second_element_id = self.open_elements[1];
+                let is_body = self
+                    .arena
+                    .get(second_element_id)
+                    .and_then(|node| node.get().as_element_node().ok())
+                    .map_or(false, |el| el.name == "body");
+
+                if !is_body {
+                    return Ok(Acknowledgement::no());
+                }
+
+                // If there is a template element on the stack, ignore the token.
+                if self.open_elements.iter().any(|id| {
+                    self.arena
+                        .get(*id)
+                        .and_then(|node| node.get().as_element_node().ok())
+                        .map_or(false, |el| el.name == "template")
+                }) {
+                    return Ok(Acknowledgement::no());
+                }
+
+                // Set the frameset-ok flag to "not ok".
+                self.frameset_ok = false;
+
+                // For each attribute on the token, check if the attribute is already present
+                // on the body element. If it is not, add the attribute and its value to the
+                // body element.
+                // Collect existing attribute names first to avoid borrow conflict.
+                let existing_attrs: Vec<String> = self
+                    .arena
+                    .get(second_element_id)
+                    .and_then(|node| node.get().as_element_node().ok())
+                    .map(|el| {
+                        el.attributes_arena(&self.arena)
+                            .iter()
+                            .map(|a| a.name.clone())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                for token_attr in &token.attributes {
+                    if !existing_attrs.contains(&token_attr.name) {
+                        let attr = self.arena.new_node(XpathItemTreeNode::AttributeNode(
+                            AttributeNode::new(token_attr.name.clone(), token_attr.value.clone()),
+                        ));
+                        second_element_id.append(attr, &mut self.arena);
+                    }
+                }
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "frameset" => {
                 // Parse error.
@@ -345,184 +395,109 @@ impl HtmlParser {
                 }
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "li" => {
-                fn step_3_loop(
-                    parser: &mut HtmlParser,
-                    element: &ElementNode,
-                    token: TagToken,
-                ) -> Result<(), HtmlParseError> {
-                    if element.name == "li" {
-                        parser.generate_implied_end_tags(Some("li"))?;
+                self.frameset_ok = false;
 
-                        if parser.current_node_as_element_result()?.name != "li" {
-                            parser.handle_error(HtmlParserError::MinorError(String::from(
+                // Walk the open elements stack from the current node toward the root.
+                for i in (0..self.open_elements.len()).rev() {
+                    let node_id = self.open_elements[i];
+                    let element = self
+                        .arena
+                        .get(node_id)
+                        .expect("node not found")
+                        .get()
+                        .as_element_node()
+                        .map_err(|_| {
+                            HtmlParserError::MinorError(String::from(
+                                "element is not an element node",
+                            ))
+                        });
+                    let element = match element {
+                        Ok(el) => el.clone(),
+                        Err(_) => break,
+                    };
+
+                    if element.name == "li" {
+                        self.generate_implied_end_tags(Some("li"))?;
+                        if self.current_node_as_element_result()?.name != "li" {
+                            self.handle_error(HtmlParserError::MinorError(String::from(
                                 "current node is not li",
                             )))?;
                         }
-
-                        parser.pop_until_tag_name("li")?;
+                        self.pop_until_tag_name("li")?;
+                        break;
                     }
 
                     if SPECIAL_ELEMENTS.binary_search(&element.name.as_str()).is_ok()
                         && !["address", "div", "p"].contains(&element.name.as_str())
                     {
-                        step_6_done(parser, token)?;
-                    } else {
-                        let current_element_index = parser
-                            .open_elements
-                            .iter()
-                            .position(|node_id| node_id == &element.id())
-                            .expect("current element is not in open elements");
-
-                        let previous_element_id = parser
-                            .open_elements
-                            .get(current_element_index - 1)
-                            .expect("previous element is not in open elements");
-
-                        let previous_element = parser
-                            .arena
-                            .get(*previous_element_id)
-                            .unwrap()
-                            .get()
-                            .as_element_node()
-                            .map_err(|_| {
-                                HtmlParserError::MinorError(String::from(
-                                    "previous element is not an element node",
-                                ))
-                            });
-
-                        match previous_element {
-                            Err(_) => {
-                                parser.handle_error(HtmlParserError::MinorError(String::from(
-                                    "previous element is not an element node",
-                                )))?;
-                            }
-                            Ok(previous_element) => {
-                                let previous_element = previous_element.clone();
-                                return step_3_loop(parser, &previous_element, token);
-                            }
-                        }
+                        break;
                     }
-
-                    Ok(())
                 }
 
-                fn step_6_done(
-                    parser: &mut HtmlParser,
-                    token: TagToken,
-                ) -> Result<(), HtmlParseError> {
-                    if parser.has_an_element_in_button_scope("p") {
-                        parser.close_a_p_element()?;
-                    }
-
-                    parser.insert_an_html_element(token)?;
-
-                    Ok(())
+                if self.has_an_element_in_button_scope("p") {
+                    self.close_a_p_element()?;
                 }
 
-                self.frameset_ok = false;
-
-                let node = self.current_node_as_element_result()?.clone();
-                step_3_loop(self, &node, token)?;
+                self.insert_an_html_element(token)?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if ["dd", "dt"].contains(&token.tag_name.as_str()) =>
             {
-                fn step_3_loop(
-                    parser: &mut HtmlParser,
-                    element: &ElementNode,
-                    token: TagToken,
-                ) -> Result<(), HtmlParseError> {
-                    // If node is a dd element, then run these substeps:
-                    if element.name == "dd" {
-                        parser.generate_implied_end_tags(Some("dd"))?;
+                self.frameset_ok = false;
 
-                        if parser.current_node_as_element_result()?.name != "dd" {
-                            parser.handle_error(HtmlParserError::MinorError(String::from(
+                // Walk the open elements stack from the current node toward the root.
+                for i in (0..self.open_elements.len()).rev() {
+                    let node_id = self.open_elements[i];
+                    let element = self
+                        .arena
+                        .get(node_id)
+                        .expect("node not found")
+                        .get()
+                        .as_element_node()
+                        .map_err(|_| {
+                            HtmlParserError::MinorError(String::from(
+                                "element is not an element node",
+                            ))
+                        });
+                    let element = match element {
+                        Ok(el) => el.clone(),
+                        Err(_) => break,
+                    };
+
+                    if element.name == "dd" {
+                        self.generate_implied_end_tags(Some("dd"))?;
+                        if self.current_node_as_element_result()?.name != "dd" {
+                            self.handle_error(HtmlParserError::MinorError(String::from(
                                 "current node is not dd",
                             )))?;
                         }
-
-                        parser.pop_until_tag_name("dd")?;
+                        self.pop_until_tag_name("dd")?;
+                        break;
                     }
 
-                    // If node is a dt element, then run these substeps:
                     if element.name == "dt" {
-                        parser.generate_implied_end_tags(Some("dt"))?;
-
-                        if parser.current_node_as_element_result()?.name != "dt" {
-                            parser.handle_error(HtmlParserError::MinorError(String::from(
+                        self.generate_implied_end_tags(Some("dt"))?;
+                        if self.current_node_as_element_result()?.name != "dt" {
+                            self.handle_error(HtmlParserError::MinorError(String::from(
                                 "current node is not dt",
                             )))?;
                         }
-
-                        parser.pop_until_tag_name("dt")?;
+                        self.pop_until_tag_name("dt")?;
+                        break;
                     }
 
-                    // If node is in the special category, but is not an address, div, or p
-                    // element, then jump to the step labeled done below.
                     if SPECIAL_ELEMENTS.binary_search(&element.name.as_str()).is_ok()
                         && !["address", "div", "p"].contains(&element.name.as_str())
                     {
-                        step_done(parser, token)?;
-                    } else {
-                        // Otherwise, set node to the previous entry in the stack of open
-                        // elements and return to the step labeled loop.
-                        let current_element_index = parser
-                            .open_elements
-                            .iter()
-                            .position(|node_id| node_id == &element.id())
-                            .expect("current element is not in open elements");
-
-                        let previous_element_id = parser
-                            .open_elements
-                            .get(current_element_index - 1)
-                            .expect("previous element is not in open elements");
-
-                        let previous_element = parser
-                            .arena
-                            .get(*previous_element_id)
-                            .unwrap()
-                            .get()
-                            .as_element_node()
-                            .map_err(|_| {
-                                HtmlParserError::MinorError(String::from(
-                                    "previous element is not an element node",
-                                ))
-                            });
-
-                        match previous_element {
-                            Err(_) => {
-                                parser.handle_error(HtmlParserError::MinorError(String::from(
-                                    "previous element is not an element node",
-                                )))?;
-                            }
-                            Ok(previous_element) => {
-                                let previous_element = previous_element.clone();
-                                return step_3_loop(parser, &previous_element, token);
-                            }
-                        }
+                        break;
                     }
-
-                    Ok(())
                 }
 
-                fn step_done(
-                    parser: &mut HtmlParser,
-                    token: TagToken,
-                ) -> Result<(), HtmlParseError> {
-                    if parser.has_an_element_in_button_scope("p") {
-                        parser.close_a_p_element()?;
-                    }
-
-                    parser.insert_an_html_element(token)?;
-
-                    Ok(())
+                if self.has_an_element_in_button_scope("p") {
+                    self.close_a_p_element()?;
                 }
 
-                self.frameset_ok = false;
-
-                let node = self.current_node_as_element_result()?.clone();
-                step_3_loop(self, &node, token)?;
+                self.insert_an_html_element(token)?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "plaintext" => {
                 if self.has_an_element_in_button_scope("p") {
@@ -1103,69 +1078,49 @@ impl HtmlParser {
         Ok(Acknowledgement::no())
     }
 
+    /// WHATWG 13.2.6.4.7 "Any other end tags"
     fn any_other_end_tag(&mut self, token: &TagToken) -> Result<(), HtmlParseError> {
-        let node = self.current_node_as_element_result()?.clone();
+        // Walk the open elements stack from the current node toward the root.
+        for i in (0..self.open_elements.len()).rev() {
+            let node_id = self.open_elements[i];
+            let node = self
+                .arena
+                .get(node_id)
+                .expect("node not found")
+                .get()
+                .as_element_node()
+                .expect("node is not an element node")
+                .clone();
 
-        self.in_body_other_end_tag_loop(0, &node, token)?;
+            if node.name == token.tag_name {
+                self.generate_implied_end_tags(Some(&token.tag_name))?;
+
+                if node != self.current_node_as_element_result()?.clone() {
+                    self.handle_error(HtmlParserError::MinorError(String::from(
+                        "node is not the same as the current node",
+                    )))?;
+                }
+
+                // Pop all nodes from the current node up to and including node.
+                while let Some(popped) = self.open_elements.pop() {
+                    if popped == node_id {
+                        break;
+                    }
+                }
+
+                return Ok(());
+            }
+
+            // If node is in the special category, parse error; ignore the token.
+            if SPECIAL_ELEMENTS.binary_search(&node.name.as_str()).is_ok() {
+                self.handle_error(HtmlParserError::MinorError(String::from(
+                    "node is in special category",
+                )))?;
+                return Ok(());
+            }
+        }
 
         Ok(())
-    }
-
-    fn in_body_other_end_tag_loop(
-        &mut self,
-        node_index: usize,
-        node: &ElementNode,
-        token: &TagToken,
-    ) -> Result<Acknowledgement, HtmlParseError> {
-        if node.name == token.tag_name {
-            self.generate_implied_end_tags(Some(&token.tag_name))?;
-
-            if node != self.current_node_as_element().unwrap() {
-                self.handle_error(HtmlParserError::MinorError(String::from(
-                    "node is not the same as the current node",
-                )))?;
-            }
-
-            // pop all nodes from the current node up to node
-            while node != self.current_node_as_element_result()? {
-                self.open_elements.pop();
-            }
-
-            // should now be the same as node, pop it as well
-            self.open_elements.pop();
-
-            // stop these steps
-            return Ok(Acknowledgement::no());
-        }
-        // if node is in special category, parse error and ignore token
-        else if SPECIAL_ELEMENTS.binary_search(&node.name.as_str()).is_ok() {
-            self.handle_error(HtmlParserError::MinorError(String::from(
-                "node is in special category",
-            )))?;
-            return Ok(Acknowledgement::no());
-        }
-
-        // set node to the previous entry
-        let node = self
-            .open_elements
-            .iter()
-            .rev()
-            .skip(node_index)
-            .next()
-            .map(|node_id| {
-                self.arena
-                    .get(*node_id)
-                    .expect("node not found")
-                    .get()
-                    .as_element_node()
-                    .expect("node is not an element node")
-                    .clone()
-            })
-            .expect("node not found");
-
-        self.in_body_other_end_tag_loop(node_index + 1, &node, token)?;
-
-        Ok(Acknowledgement::no())
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#adoption-agency-algorithm>

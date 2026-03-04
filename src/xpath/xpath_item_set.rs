@@ -1,103 +1,99 @@
-//! An ordered set of [`XpathItem`]s.
+//! An ordered sequence of [`XpathItem`]s.
+//!
+//! Unlike a set, XPath sequences may contain duplicate values.
 
 use std::ops::Index;
 
-use indexmap::{self, IndexSet};
-
 use super::grammar::data_model::{AnyAtomicType, XpathItem};
 
-/// An ordered set of [`XpathItem`]s.
+/// An ordered sequence of [`XpathItem`]s.
+///
+/// XPath sequences are ordered and may contain duplicates.
 #[derive(Debug, Clone)]
 pub struct XpathItemSet<'tree> {
-    index_set: IndexSet<XpathItem<'tree>>,
+    items: Vec<XpathItem<'tree>>,
 }
 
 impl PartialEq for XpathItemSet<'_> {
     fn eq(&self, other: &Self) -> bool {
-        self.index_set == other.index_set
+        self.items == other.items
     }
 }
-
-// impl PartialOrd for XpathItemSet<'_> {
-//     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-//         self.index_set.iter().partial_cmp(&other.index_set)
-//     }
-// }
 
 impl<'a, 'tree> IntoIterator for &'a XpathItemSet<'tree> {
     type Item = &'a XpathItem<'tree>;
 
-    type IntoIter = indexmap::set::Iter<'a, XpathItem<'tree>>;
+    type IntoIter = std::slice::Iter<'a, XpathItem<'tree>>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.index_set.iter()
+        self.items.iter()
     }
 }
 
 impl<'tree> IntoIterator for XpathItemSet<'tree> {
     type Item = XpathItem<'tree>;
 
-    type IntoIter = indexmap::set::IntoIter<XpathItem<'tree>>;
+    type IntoIter = std::vec::IntoIter<XpathItem<'tree>>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.index_set.into_iter()
+        self.items.into_iter()
     }
 }
 
 impl<'tree> FromIterator<XpathItem<'tree>> for XpathItemSet<'tree> {
     fn from_iter<T: IntoIterator<Item = XpathItem<'tree>>>(iter: T) -> Self {
-        let index_set = IndexSet::from_iter(iter);
-        XpathItemSet { index_set }
+        XpathItemSet {
+            items: Vec::from_iter(iter),
+        }
     }
 }
 
 impl<'tree> Extend<XpathItem<'tree>> for XpathItemSet<'tree> {
     fn extend<T: IntoIterator<Item = XpathItem<'tree>>>(&mut self, iter: T) {
-        self.index_set.extend(iter)
+        self.items.extend(iter)
     }
 }
 
 impl<'tree> XpathItemSet<'tree> {
     /// Create a new empty [`XpathItemSet`].
     pub fn new() -> Self {
-        XpathItemSet {
-            index_set: IndexSet::new(),
-        }
+        XpathItemSet { items: Vec::new() }
     }
 
     /// Whether the set is empty.
     pub fn is_empty(&self) -> bool {
-        self.index_set.is_empty()
+        self.items.is_empty()
     }
 
     /// The number of items in the set.
     pub fn len(&self) -> usize {
-        self.index_set.len()
+        self.items.len()
     }
 
-    /// Inserts a new item into the set.
+    /// Inserts a new item into the sequence.
     ///
-    /// Returns true if the item was inserted, false if it was already present.
+    /// Returns true (always inserted, duplicates are allowed).
     pub fn insertb(&mut self, item: XpathItem<'tree>) -> bool {
-        self.index_set.insert(item)
+        self.items.push(item);
+        true
     }
 
-    /// Inserts a new item into the set.
+    /// Inserts a new item into the sequence.
     ///
     /// Drops the bool returned by [`XpathItemSet::insertb`] so that it can be used in match arms
     /// without causing incompatible types with [`XpathItemSet::extend`].
     pub fn insert(&mut self, item: XpathItem<'tree>) {
-        self.insertb(item);
+        self.items.push(item);
     }
 
-    /// Return an iterator over the items in the set.
-    pub fn iter(&self) -> indexmap::set::Iter<'_, XpathItem<'tree>> {
-        self.index_set.iter()
+    /// Return an iterator over the items in the sequence.
+    pub fn iter(&self) -> std::slice::Iter<'_, XpathItem<'tree>> {
+        self.items.iter()
     }
 
-    /// Returns `true` if the set contains the given item.
+    /// Returns `true` if the sequence contains the given item.
     pub fn contains(&self, item: &XpathItem<'tree>) -> bool {
-        self.index_set.contains(item)
+        self.items.contains(item)
     }
 
     /// Return the effective boolean value of the result.
@@ -105,8 +101,8 @@ impl<'tree> XpathItemSet<'tree> {
     /// <https://www.w3.org/TR/2017/REC-xpath-31-20170321/#dt-ebv>
     pub fn boolean(&self) -> bool {
         // If this is a singleton value, check for the effective boolean value of that value.
-        if self.index_set.len() == 1 {
-            match &self.index_set[0] {
+        if self.items.len() == 1 {
+            match &self.items[0] {
                 XpathItem::Node(_) => true,
                 XpathItem::Function(_) => true,
                 XpathItem::AnyAtomicType(atomic_type) => match atomic_type {
@@ -121,22 +117,22 @@ impl<'tree> XpathItemSet<'tree> {
         }
         // Otherwise, the effective boolean value is true if the sequence contains any items.
         else {
-            !self.index_set.is_empty()
+            !self.items.is_empty()
         }
     }
 
-    /// Reverse the order of items in the set.
+    /// Reverse the order of items in the sequence.
     pub(crate) fn reverse(&mut self) {
-        self.index_set.reverse();
+        self.items.reverse();
     }
 
     /// Sort items by document order (arena NodeId).
     ///
     /// Items that are nodes are sorted by their NodeId, which corresponds to
     /// document order in the arena. Non-node items retain their relative order
-    /// at the end of the set.
+    /// at the end of the sequence.
     pub(crate) fn sort_by_document_order(&mut self) {
-        self.index_set.sort_by(|a, b| {
+        self.items.sort_by(|a, b| {
             let a_id = match a {
                 XpathItem::Node(node) => node.node_id(),
                 _ => None,
@@ -153,11 +149,25 @@ impl<'tree> XpathItemSet<'tree> {
             }
         });
     }
+
+    /// Remove duplicate items, keeping the first occurrence of each.
+    /// Used for path expression results where document-order unique nodes are required.
+    pub(crate) fn dedup(&mut self) {
+        let mut seen = Vec::new();
+        self.items.retain(|item| {
+            if seen.contains(item) {
+                false
+            } else {
+                seen.push(item.clone());
+                true
+            }
+        });
+    }
 }
 
-impl<'tree> From<IndexSet<XpathItem<'tree>>> for XpathItemSet<'tree> {
-    fn from(value: IndexSet<XpathItem<'tree>>) -> Self {
-        XpathItemSet { index_set: value }
+impl<'tree> From<Vec<XpathItem<'tree>>> for XpathItemSet<'tree> {
+    fn from(value: Vec<XpathItem<'tree>>) -> Self {
+        XpathItemSet { items: value }
     }
 }
 
@@ -165,7 +175,7 @@ impl<'tree> Index<usize> for XpathItemSet<'tree> {
     type Output = XpathItem<'tree>;
 
     fn index(&self, index: usize) -> &Self::Output {
-        self.index_set.index(index)
+        &self.items[index]
     }
 }
 
@@ -175,9 +185,8 @@ macro_rules! xpath_item_set {
     ($($value:expr,)+) => { $crate::xpath::xpath_item_set::xpath_item_set!($($value),+) };
     ($($value:expr),*) => {
         {
-            let set = indexmap::indexset![$($value,)*];
-
-            crate::xpath::XpathItemSet::from(set)
+            let items: Vec<$crate::xpath::grammar::data_model::XpathItem> = vec![$($value,)*];
+            crate::xpath::XpathItemSet::from(items)
         }
     };
 }
@@ -220,5 +229,15 @@ mod tests {
         expected.insert(node3);
 
         assert_eq!(item_set, expected);
+    }
+
+    #[test]
+    fn duplicates_are_preserved() {
+        let val = XpathItem::AnyAtomicType(AnyAtomicType::Integer(1));
+        let mut set = XpathItemSet::new();
+        set.insert(val.clone());
+        set.insert(val.clone());
+        set.insert(val.clone());
+        assert_eq!(set.len(), 3);
     }
 }

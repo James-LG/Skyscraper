@@ -61,12 +61,11 @@ fn for_expr_multiple_bindings() {
 
     let items = xpath.apply(&document).unwrap();
     // 4 combinations: (1,3), (1,4), (2,3), (2,4) → results 4, 5, 5, 6
-    // Note: XpathItemSet is an IndexSet, so duplicates are removed.
-    // 4, 5, 6 = 3 unique values
+    // XPath sequences preserve duplicates.
     assert_eq!(
         items.len(),
-        3,
-        "for $x in (1,2), $y in (3,4) return $x+$y should return 3 unique items: {items:?}"
+        4,
+        "for $x in (1,2), $y in (3,4) return $x+$y should return 4 items (with duplicates): {items:?}"
     );
 }
 

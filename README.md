@@ -127,3 +127,5 @@ Below is a non-exhaustive list of all the features that are currently supported.
 This should cover most XPath use-cases.
 If your use case requires an unimplemented feature,
 please open an issue on [GitHub](https://github.com/James-LG/Skyscraper/issues).
+
+See [`docs/features-backlog.md`](docs/features-backlog.md) for a detailed list of spec gaps, known limitations, and design decisions.

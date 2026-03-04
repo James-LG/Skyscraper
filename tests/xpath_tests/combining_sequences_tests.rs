@@ -121,3 +121,31 @@ fn intersect_disjoint_returns_empty() {
     let items = xpath.apply(&document).unwrap();
     assert_eq!(items.len(), 0, "should return empty: {items:?}");
 }
+
+/// Regression: XPath sequences (not node-sets) must preserve duplicate values.
+/// A parenthesized sequence like `(1, 2, 2, 3)` should have length 4, not 3.
+#[test]
+fn sequence_preserves_duplicates() {
+    let text = "<html><body></body></html>";
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("count((1, 2, 2, 3))").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        skyscraper::xpath::grammar::data_model::XpathItem::AnyAtomicType(
+            skyscraper::xpath::grammar::data_model::AnyAtomicType::Integer(4)
+        ),
+        "Sequences must preserve duplicate values"
+    );
+}
+
+/// Regression: union of node-sets must still deduplicate (node-set semantics).
+#[test]
+fn union_still_deduplicates_nodes() {
+    let text = r#"<html><body><div>x</div></body></html>"#;
+    let document = html::parse(text).unwrap();
+    // //div | //div should return 1, not 2
+    let xpath = xpath::parse("//div | //div").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(items.len(), 1, "Union of same nodes should deduplicate: {items:?}");
+}
