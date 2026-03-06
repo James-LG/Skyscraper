@@ -718,3 +718,43 @@ fn search_element_contains_children() {
         other => panic!("Expected integer count, got: {:?}", other),
     }
 }
+
+// ======================== Fix 1: close_a_p_element pop always executes ========================
+
+#[test]
+fn close_p_element_pops_stack_with_inline_elements() {
+    // When <b> is inside <p>, closing the <p> should pop until <p> is removed.
+    // Before the fix, the error return would skip pop_until_tag_name("p").
+    let text = "<html><body><p><b>bold text</b></p><p>next</p></body></html>";
+    let document = html::parse(text).unwrap();
+
+    // The <b> should be inside the first <p>
+    let xp = xpath::parse("//p[1]/b").unwrap();
+    let result = xp.apply(&document).unwrap();
+    assert_eq!(result.len(), 1, "The <b> should be a child of the first <p>");
+
+    // The second <p> should be a sibling of the first, not nested inside it
+    let xp2 = xpath::parse("count(//body/p)").unwrap();
+    let result2 = xp2.apply(&document).unwrap();
+    match &result2[0] {
+        skyscraper::xpath::grammar::data_model::XpathItem::AnyAtomicType(
+            skyscraper::xpath::grammar::data_model::AnyAtomicType::Integer(n),
+        ) => assert_eq!(*n, 2, "There should be 2 <p> elements as direct children of <body>"),
+        other => panic!("Expected integer count, got: {:?}", other),
+    }
+}
+
+#[test]
+fn close_p_element_with_nested_inline() {
+    // More complex case: nested inline elements inside <p>
+    let text = "<html><body><p><em><strong>text</strong></em></p></body></html>";
+    let document = html::parse(text).unwrap();
+
+    let xp = xpath::parse("//p/em/strong").unwrap();
+    let result = xp.apply(&document).unwrap();
+    assert_eq!(
+        result.len(),
+        1,
+        "<strong> should be nested inside <em> inside <p>"
+    );
+}

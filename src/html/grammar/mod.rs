@@ -1712,9 +1712,9 @@ impl HtmlParser {
         if let Some(node) = self.current_node() {
             if let XpathItemTreeNode::ElementNode(element) = node {
                 if element.name != "p" {
-                    return self.handle_error(HtmlParserError::MinorError(
+                    self.handle_error(HtmlParserError::MinorError(
                         "closing a p element that is not the current node".to_string(),
-                    ));
+                    ))?;
                 }
             }
         }

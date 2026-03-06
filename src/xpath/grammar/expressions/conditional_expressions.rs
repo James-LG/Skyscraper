@@ -58,7 +58,7 @@ impl IfExpr {
         // Evaluate the condition and get its effective boolean value.
         let condition_result = self.condition.eval(context)?;
 
-        if condition_result.boolean() {
+        if condition_result.boolean()? {
             self.then.eval(context)
         } else {
             self.else_expr.eval(context)

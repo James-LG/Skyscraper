@@ -1,4 +1,5 @@
 use skyscraper::xpath::grammar::data_model::{AnyAtomicType, XpathItem};
+use skyscraper::xpath::grammar::XpathItemTreeNode;
 use skyscraper::{html, xpath};
 
 // ============================================================================
@@ -863,5 +864,197 @@ fn fn_substring_neg_inf_pos_inf() {
         result[0],
         XpathItem::AnyAtomicType(AnyAtomicType::String("motor car".to_string())),
         "fn:substring with start=-INF and length=INF should return the full string"
+    );
+}
+
+// ======================== Fix 2: fn:subsequence NaN/Infinity ========================
+
+#[test]
+fn fn_subsequence_nan_start_returns_empty() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("subsequence((1,2,3), number('NaN'))").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(result.len(), 0, "fn:subsequence with NaN start should return empty");
+}
+
+#[test]
+fn fn_subsequence_pos_inf_start_returns_empty() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("subsequence((1,2,3), 1 div 0e0)").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(result.len(), 0, "fn:subsequence with +INF start should return empty");
+}
+
+#[test]
+fn fn_subsequence_neg_inf_start_2arg_returns_full() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("subsequence((1,2,3), -1 div 0e0)").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(result.len(), 3, "fn:subsequence with -INF start (2-arg) should return full sequence");
+}
+
+#[test]
+fn fn_subsequence_nan_length_returns_empty() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("subsequence((1,2,3), 1, number('NaN'))").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(result.len(), 0, "fn:subsequence with NaN length should return empty");
+}
+
+#[test]
+fn fn_subsequence_neg_inf_pos_inf_combo() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("subsequence((1,2,3), -1 div 0e0, 1 div 0e0)").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    // -INF + INF = NaN for the end position, so this should return empty.
+    assert_eq!(result.len(), 0, "fn:subsequence with -INF start and +INF length: -INF+INF=NaN end");
+}
+
+// ======================== Fix 3: fn:substring 2-arg -Infinity ========================
+
+#[test]
+fn fn_substring_neg_inf_2arg_returns_full() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"substring("hello", -1 div 0e0)"#).unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(
+        result[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String("hello".to_string())),
+        "fn:substring with -INF start (2-arg) should return the full string"
+    );
+}
+
+// ======================== Fix 4: boolean() EBV errors ========================
+
+#[test]
+fn boolean_function_item_errors() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("boolean(true#0)").unwrap();
+    let result = xpath.apply(&document);
+    assert!(result.is_err(), "boolean(function-item) should error with FORG0006");
+}
+
+#[test]
+fn boolean_multi_item_non_node_errors() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("boolean((1, 2))").unwrap();
+    let result = xpath.apply(&document);
+    assert!(result.is_err(), "boolean((1, 2)) should error with FORG0006");
+}
+
+// ======================== Fix 5: deep-equal cross-type ========================
+
+#[test]
+fn deep_equal_cross_type_numeric() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("deep-equal(1, 1.0e0)").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(
+        result[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true)),
+        "deep-equal(1, 1.0e0) should be true (cross-type numeric)"
+    );
+}
+
+// ======================== Fix 6: fn:sum overflow ========================
+
+#[test]
+fn fn_sum_integer_result_type() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("sum((1, 2, 3))").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(
+        result[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Integer(6)),
+        "sum((1,2,3)) should return Integer(6)"
+    );
+}
+
+// ======================== Fix 7: fn:sort numeric ========================
+
+#[test]
+fn fn_sort_numeric_order() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("sort((2, 10, 1))").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(result[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(1)));
+    assert_eq!(result[1], XpathItem::AnyAtomicType(AnyAtomicType::Integer(2)));
+    assert_eq!(result[2], XpathItem::AnyAtomicType(AnyAtomicType::Integer(10)));
+}
+
+#[test]
+fn fn_sort_string_still_works() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"sort(("banana", "apple", "cherry"))"#).unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(
+        result[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String("apple".to_string()))
+    );
+    assert_eq!(
+        result[1],
+        XpathItem::AnyAtomicType(AnyAtomicType::String("banana".to_string()))
+    );
+    assert_eq!(
+        result[2],
+        XpathItem::AnyAtomicType(AnyAtomicType::String("cherry".to_string()))
+    );
+}
+
+// ======================== Fix 8: document node in union sort ========================
+
+#[test]
+fn union_with_document_node_sorts_doc_first() {
+    let document = html::parse("<html><body><div>text</div></body></html>").unwrap();
+    let xpath = xpath::parse("//div | /").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert!(result.len() >= 2, "union should have at least 2 items");
+    match &result[0] {
+        XpathItem::Node(XpathItemTreeNode::DocumentNode(_)) => {}
+        other => panic!("First item in union should be document node, got: {:?}", other),
+    }
+}
+
+// ======================== Fix 11: fn:function-name returns QName ========================
+
+#[test]
+fn fn_function_name_returns_qname() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("function-name(true#0)").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    match &result[0] {
+        XpathItem::AnyAtomicType(AnyAtomicType::QName {
+            local_name, prefix, ..
+        }) => {
+            assert_eq!(local_name, "true");
+            assert_eq!(prefix.as_deref(), Some("fn"));
+        }
+        other => panic!("Expected QName, got: {:?}", other),
+    }
+}
+
+// ======================== Fix 12: Regex XPath dialect ========================
+
+#[test]
+fn regex_xpath_initial_name_char() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"matches("hello", "^\i")"#).unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(
+        result[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true)),
+        r#"matches("hello", "^\i") should be true (h is a letter)"#
+    );
+}
+
+#[test]
+fn regex_xpath_name_char_full() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"matches("a1", "^\c+$")"#).unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(
+        result[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true)),
+        r#"matches("a1", "^\c+$") should be true (a and 1 are name chars)"#
     );
 }

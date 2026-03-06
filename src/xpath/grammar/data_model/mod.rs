@@ -278,16 +278,11 @@ impl XpathDocumentNode {
     ///
     /// A string of all text contained in this document.
     pub fn text<'tree>(&self, tree: &'tree XpathItemTree) -> Option<String> {
-        let strings: Vec<String> = tree
-            .root_node
+        tree.root_node
             .children(&tree.arena)
             .into_iter()
             .map(|x| tree.get(x))
-            .map(|x| x.text(tree))
-            .filter_map(|x| x.map(|x| x.to_string()))
-            .collect();
-
-        strings.into_iter().next()
+            .find_map(|x| x.text(tree))
     }
 
     /// Get all children of the document.
@@ -492,10 +487,7 @@ impl ElementNode {
     ///
     /// Includes whitespace text nodes.
     /// Text nodes are split by opening and closing tags contained in the current element.
-    pub fn itertext<'this, 'tree>(&'this self, tree: &'tree XpathItemTree) -> TextIter<'this>
-    where
-        'tree: 'this,
-    {
+    pub fn itertext(&self, tree: &XpathItemTree) -> TextIter {
         TextIter::new(tree, tree.get(self.id()))
     }
 

@@ -109,10 +109,7 @@ impl XpathItemTreeNode {
     ///
     /// Includes whitespace text nodes.
     /// Text nodes are split by opening and closing tags contained in the current node.
-    pub fn itertext<'this, 'tree>(&'this self, tree: &'tree XpathItemTree) -> TextIter<'this>
-    where
-        'tree: 'this,
-    {
+    pub fn itertext(&self, tree: &XpathItemTree) -> TextIter {
         TextIter::new(tree, self)
     }
 
@@ -197,36 +194,45 @@ pub(crate) static VOID_ELEMENTS: [&str; 15] = [
     "param", "source", "track", "wbr",
 ];
 
-/// An iterator over all text contained in a element and its descendants.
-pub struct TextIter<'a> {
-    iter_chain: Box<dyn Iterator<Item = String> + 'a>,
+/// An iterator over all text contained in an element and its descendants.
+pub struct TextIter {
+    texts: Vec<String>,
+    pos: usize,
 }
 
-impl<'a> TextIter<'a> {
-    pub(crate) fn new(tree: &'a XpathItemTree, node: &'a XpathItemTreeNode) -> TextIter<'a> {
-        let mut iter_chain: Box<dyn Iterator<Item = String>> = Box::new(iter::empty());
+impl TextIter {
+    pub(crate) fn new(tree: &XpathItemTree, node: &XpathItemTreeNode) -> TextIter {
+        let mut texts = Vec::new();
+        Self::collect_texts(tree, node, &mut texts);
+        TextIter { texts, pos: 0 }
+    }
 
+    fn collect_texts(tree: &XpathItemTree, node: &XpathItemTreeNode, out: &mut Vec<String>) {
         for child in node.children(tree) {
             match child {
                 XpathItemTreeNode::TextNode(text) => {
-                    iter_chain = Box::new(iter_chain.chain(iter::once(text.content.clone())));
+                    out.push(text.content.clone());
                 }
-                XpathItemTreeNode::ElementNode(_child_element) => {
-                    iter_chain = Box::new(iter_chain.chain(TextIter::new(tree, child)));
+                XpathItemTreeNode::ElementNode(_) => {
+                    Self::collect_texts(tree, child, out);
                 }
                 _ => {}
             }
         }
-
-        TextIter { iter_chain }
     }
 }
 
-impl<'a> Iterator for TextIter<'a> {
+impl Iterator for TextIter {
     type Item = String;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter_chain.next()
+        if self.pos < self.texts.len() {
+            let s = self.texts[self.pos].clone();
+            self.pos += 1;
+            Some(s)
+        } else {
+            None
+        }
     }
 }
 

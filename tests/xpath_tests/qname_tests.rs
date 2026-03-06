@@ -376,8 +376,9 @@ fn function_lookup_feature_detection() {
     let text = r#"<html><body></body></html>"#;
     let document = html::parse(text).unwrap();
     // Use function-lookup for feature detection: check if a function exists
+    // Use exists() since EBV is not defined for function items per spec.
     let xpath = xpath::parse(
-        r#"if (function-lookup(QName("http://www.w3.org/2005/xpath-functions", "contains"), 2)) then "yes" else "no""#,
+        r#"if (exists(function-lookup(QName("http://www.w3.org/2005/xpath-functions", "contains"), 2))) then "yes" else "no""#,
     )
     .unwrap();
 

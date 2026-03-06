@@ -269,7 +269,7 @@ fn dispatch_by_local_name<'tree>(
         // https://www.w3.org/TR/xpath-functions-31/#func-not
         "not" => {
             check_arity("fn:not", args, 1)?;
-            let ebv = args[0].boolean();
+            let ebv = args[0].boolean()?;
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::Boolean(!ebv)
             )]))
@@ -277,7 +277,7 @@ fn dispatch_by_local_name<'tree>(
         // https://www.w3.org/TR/xpath-functions-31/#func-boolean
         "boolean" => {
             check_arity("fn:boolean", args, 1)?;
-            let ebv = args[0].boolean();
+            let ebv = args[0].boolean()?;
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::Boolean(ebv)
             )]))
@@ -376,11 +376,7 @@ fn dispatch_by_local_name<'tree>(
                 )));
             }
             let separator = if args.len() == 2 {
-                if args[1].is_empty() {
-                    String::new()
-                } else {
-                    func_string(&args[1][0], context.item_tree)?
-                }
+                extract_string_arg(&args[1], context.item_tree)?
             } else {
                 String::new()
             };
@@ -398,11 +394,7 @@ fn dispatch_by_local_name<'tree>(
                 func_string(&context.item, context.item_tree)?
             } else {
                 check_arity("fn:string-length", args, 1)?;
-                if args[0].is_empty() {
-                    String::new()
-                } else {
-                    func_string(&args[0][0], context.item_tree)?
-                }
+                extract_string_arg(&args[0], context.item_tree)?
             };
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::Integer(s.chars().count() as i64)
@@ -414,11 +406,7 @@ fn dispatch_by_local_name<'tree>(
                 func_string(&context.item, context.item_tree)?
             } else {
                 check_arity("fn:normalize-space", args, 1)?;
-                if args[0].is_empty() {
-                    String::new()
-                } else {
-                    func_string(&args[0][0], context.item_tree)?
-                }
+                extract_string_arg(&args[0], context.item_tree)?
             };
             let normalized = s.split_whitespace().collect::<Vec<_>>().join(" ");
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
@@ -428,11 +416,7 @@ fn dispatch_by_local_name<'tree>(
         // https://www.w3.org/TR/xpath-functions-31/#func-upper-case
         "upper-case" => {
             check_arity("fn:upper-case", args, 1)?;
-            let s = if args[0].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[0][0], context.item_tree)?
-            };
+            let s = extract_string_arg(&args[0], context.item_tree)?;
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::String(s.to_uppercase())
             )]))
@@ -440,11 +424,7 @@ fn dispatch_by_local_name<'tree>(
         // https://www.w3.org/TR/xpath-functions-31/#func-lower-case
         "lower-case" => {
             check_arity("fn:lower-case", args, 1)?;
-            let s = if args[0].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[0][0], context.item_tree)?
-            };
+            let s = extract_string_arg(&args[0], context.item_tree)?;
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::String(s.to_lowercase())
             )]))
@@ -452,16 +432,8 @@ fn dispatch_by_local_name<'tree>(
         // https://www.w3.org/TR/xpath-functions-31/#func-starts-with
         "starts-with" => {
             check_arity("fn:starts-with", args, 2)?;
-            let haystack = if args[0].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[0][0], context.item_tree)?
-            };
-            let needle = if args[1].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[1][0], context.item_tree)?
-            };
+            let haystack = extract_string_arg(&args[0], context.item_tree)?;
+            let needle = extract_string_arg(&args[1], context.item_tree)?;
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::Boolean(haystack.starts_with(&needle))
             )]))
@@ -469,16 +441,8 @@ fn dispatch_by_local_name<'tree>(
         // https://www.w3.org/TR/xpath-functions-31/#func-ends-with
         "ends-with" => {
             check_arity("fn:ends-with", args, 2)?;
-            let haystack = if args[0].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[0][0], context.item_tree)?
-            };
-            let needle = if args[1].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[1][0], context.item_tree)?
-            };
+            let haystack = extract_string_arg(&args[0], context.item_tree)?;
+            let needle = extract_string_arg(&args[1], context.item_tree)?;
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::Boolean(haystack.ends_with(&needle))
             )]))
@@ -491,11 +455,7 @@ fn dispatch_by_local_name<'tree>(
                     args.len()
                 )));
             }
-            let s = if args[0].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[0][0], context.item_tree)?
-            };
+            let s = extract_string_arg(&args[0], context.item_tree)?;
             let chars: Vec<char> = s.chars().collect();
             // XPath uses 1-based indexing with rounding.
             let start_double = extract_double(&args[1], context.item_tree)?;
@@ -534,8 +494,9 @@ fn dispatch_by_local_name<'tree>(
                 }
             } else {
                 if start_double == f64::NEG_INFINITY {
+                    // 2-arg form with -INF start: all chars are included.
                     return Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
-                        AnyAtomicType::String(String::new())
+                        AnyAtomicType::String(chars.iter().collect())
                     )]));
                 }
                 let start = (start_double.round() as i64 - 1).max(0) as usize;
@@ -549,16 +510,8 @@ fn dispatch_by_local_name<'tree>(
         // https://www.w3.org/TR/xpath-functions-31/#func-substring-before
         "substring-before" => {
             check_arity("fn:substring-before", args, 2)?;
-            let s = if args[0].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[0][0], context.item_tree)?
-            };
-            let sub = if args[1].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[1][0], context.item_tree)?
-            };
+            let s = extract_string_arg(&args[0], context.item_tree)?;
+            let sub = extract_string_arg(&args[1], context.item_tree)?;
             let result = s.find(&sub).map(|i| &s[..i]).unwrap_or("").to_string();
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::String(result)
@@ -567,16 +520,8 @@ fn dispatch_by_local_name<'tree>(
         // https://www.w3.org/TR/xpath-functions-31/#func-substring-after
         "substring-after" => {
             check_arity("fn:substring-after", args, 2)?;
-            let s = if args[0].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[0][0], context.item_tree)?
-            };
-            let sub = if args[1].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[1][0], context.item_tree)?
-            };
+            let s = extract_string_arg(&args[0], context.item_tree)?;
+            let sub = extract_string_arg(&args[1], context.item_tree)?;
             let result = s
                 .find(&sub)
                 .map(|i| &s[i + sub.len()..])
@@ -589,21 +534,9 @@ fn dispatch_by_local_name<'tree>(
         // https://www.w3.org/TR/xpath-functions-31/#func-translate
         "translate" => {
             check_arity("fn:translate", args, 3)?;
-            let s = if args[0].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[0][0], context.item_tree)?
-            };
-            let map_from: Vec<char> = if args[1].is_empty() {
-                Vec::new()
-            } else {
-                func_string(&args[1][0], context.item_tree)?.chars().collect()
-            };
-            let map_to: Vec<char> = if args[2].is_empty() {
-                Vec::new()
-            } else {
-                func_string(&args[2][0], context.item_tree)?.chars().collect()
-            };
+            let s = extract_string_arg(&args[0], context.item_tree)?;
+            let map_from: Vec<char> = extract_string_arg(&args[1], context.item_tree)?.chars().collect();
+            let map_to: Vec<char> = extract_string_arg(&args[2], context.item_tree)?.chars().collect();
             let result: String = s
                 .chars()
                 .filter_map(|c| {
@@ -759,18 +692,10 @@ fn dispatch_by_local_name<'tree>(
                     args.len()
                 )));
             }
-            let input = if args[0].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[0][0], context.item_tree)?
-            };
-            let pattern = if args[1].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[1][0], context.item_tree)?
-            };
-            let flags = if args.len() == 3 && !args[2].is_empty() {
-                func_string(&args[2][0], context.item_tree)?
+            let input = extract_string_arg(&args[0], context.item_tree)?;
+            let pattern = extract_string_arg(&args[1], context.item_tree)?;
+            let flags = if args.len() == 3 {
+                extract_string_arg(&args[2], context.item_tree)?
             } else {
                 String::new()
             };
@@ -787,23 +712,11 @@ fn dispatch_by_local_name<'tree>(
                     args.len()
                 )));
             }
-            let input = if args[0].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[0][0], context.item_tree)?
-            };
-            let pattern = if args[1].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[1][0], context.item_tree)?
-            };
-            let replacement = if args[2].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[2][0], context.item_tree)?
-            };
-            let flags = if args.len() == 4 && !args[3].is_empty() {
-                func_string(&args[3][0], context.item_tree)?
+            let input = extract_string_arg(&args[0], context.item_tree)?;
+            let pattern = extract_string_arg(&args[1], context.item_tree)?;
+            let replacement = extract_string_arg(&args[2], context.item_tree)?;
+            let flags = if args.len() == 4 {
+                extract_string_arg(&args[3], context.item_tree)?
             } else {
                 String::new()
             };
@@ -824,11 +737,7 @@ fn dispatch_by_local_name<'tree>(
                     args.len()
                 )));
             }
-            let input = if args[0].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[0][0], context.item_tree)?
-            };
+            let input = extract_string_arg(&args[0], context.item_tree)?;
             if args.len() == 1 {
                 // 1-arg form: normalize whitespace and split on whitespace.
                 let normalized = input.trim();
@@ -841,13 +750,9 @@ fn dispatch_by_local_name<'tree>(
                     .collect();
                 return Ok(Some(tokens));
             }
-            let pattern = if args[1].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[1][0], context.item_tree)?
-            };
-            let flags = if args.len() == 3 && !args[2].is_empty() {
-                func_string(&args[2][0], context.item_tree)?
+            let pattern = extract_string_arg(&args[1], context.item_tree)?;
+            let flags = if args.len() == 3 {
+                extract_string_arg(&args[2], context.item_tree)?
             } else {
                 String::new()
             };
@@ -868,15 +773,54 @@ fn dispatch_by_local_name<'tree>(
                 )));
             }
             let start_double = extract_double(&args[1], context.item_tree)?;
-            let start = (start_double.round() as i64 - 1).max(0) as usize;
+            // NaN start → empty sequence.
+            if start_double.is_nan() {
+                return Ok(Some(XpathItemSet::new()));
+            }
+            // +Infinity start → empty sequence (nothing starts at infinity).
+            if start_double.is_infinite() && start_double > 0.0 {
+                return Ok(Some(XpathItemSet::new()));
+            }
             let seq_len = args[0].len();
-            let start = start.min(seq_len);
             if args.len() == 3 {
                 let len_double = extract_double(&args[2], context.item_tree)?;
-                let end = ((start_double.round() + len_double.round()) as i64 - 1).max(0) as usize;
+                // NaN length → empty sequence.
+                if len_double.is_nan() {
+                    return Ok(Some(XpathItemSet::new()));
+                }
+                // Compute start_rounded and end_f as f64 to avoid overflow on cast.
+                let start_rounded = start_double.round();
+                let end_f = start_rounded + len_double.round();
+                // NaN end (e.g. -INF + INF) → empty sequence.
+                if end_f.is_nan() {
+                    return Ok(Some(XpathItemSet::new()));
+                }
+                let start = if start_rounded.is_infinite() && start_rounded < 0.0 {
+                    0
+                } else {
+                    (start_rounded as i64 - 1).max(0) as usize
+                };
+                let start = start.min(seq_len);
+                let end = if end_f.is_infinite() && end_f > 0.0 {
+                    seq_len
+                } else if end_f < 1.0 {
+                    0
+                } else {
+                    ((end_f as i64) - 1).max(0) as usize
+                };
                 let end = end.min(seq_len);
-                Ok(Some(args[0].iter().skip(start).take(end - start).cloned().collect()))
+                if start >= end {
+                    Ok(Some(XpathItemSet::new()))
+                } else {
+                    Ok(Some(args[0].iter().skip(start).take(end - start).cloned().collect()))
+                }
             } else {
+                // -Infinity start (2-arg) → return full sequence.
+                if start_double.is_infinite() && start_double < 0.0 {
+                    return Ok(Some(args[0].clone()));
+                }
+                let start = (start_double.round() as i64 - 1).max(0) as usize;
+                let start = start.min(seq_len);
                 Ok(Some(args[0].iter().skip(start).cloned().collect()))
             }
         }
@@ -1027,11 +971,7 @@ fn dispatch_by_local_name<'tree>(
         "format-integer" => {
             check_arity("fn:format-integer", args, 2)?;
             let n = extract_double(&args[0], context.item_tree)? as i64;
-            let picture = if args[1].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[1][0], context.item_tree)?
-            };
+            let picture = extract_string_arg(&args[1], context.item_tree)?;
             let result = match picture.as_str() {
                 "1" => n.to_string(),
                 "01" => format!("{:02}", n),
@@ -1148,11 +1088,7 @@ fn dispatch_by_local_name<'tree>(
         // https://www.w3.org/TR/xpath-functions-31/#func-encode-for-uri
         "encode-for-uri" => {
             check_arity("fn:encode-for-uri", args, 1)?;
-            let s = if args[0].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[0][0], context.item_tree)?
-            };
+            let s = extract_string_arg(&args[0], context.item_tree)?;
             let encoded: String = s
                 .chars()
                 .map(|c| {
@@ -1175,11 +1111,7 @@ fn dispatch_by_local_name<'tree>(
         // https://www.w3.org/TR/xpath-functions-31/#func-iri-to-uri
         "iri-to-uri" => {
             check_arity("fn:iri-to-uri", args, 1)?;
-            let s = if args[0].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[0][0], context.item_tree)?
-            };
+            let s = extract_string_arg(&args[0], context.item_tree)?;
             // Encode only non-ASCII and disallowed URI characters; preserve
             // characters that are valid in a URI (including %, /, ?, #, etc.).
             let encoded: String = s
@@ -1204,11 +1136,7 @@ fn dispatch_by_local_name<'tree>(
         // https://www.w3.org/TR/xpath-functions-31/#func-escape-html-uri
         "escape-html-uri" => {
             check_arity("fn:escape-html-uri", args, 1)?;
-            let s = if args[0].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[0][0], context.item_tree)?
-            };
+            let s = extract_string_arg(&args[0], context.item_tree)?;
             // Escape characters outside the printable ASCII range (0x20-0x7E).
             let encoded: String = s
                 .chars()
@@ -1305,11 +1233,7 @@ fn dispatch_by_local_name<'tree>(
         // https://www.w3.org/TR/xpath-functions-31/#func-lang
         "lang" => {
             check_arity("fn:lang", args, 1)?;
-            let test_lang = if args[0].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[0][0], context.item_tree)?
-            };
+            let test_lang = extract_string_arg(&args[0], context.item_tree)?;
             let test_lang_lower = test_lang.to_lowercase();
             // Walk up from context node looking for xml:lang or lang attribute.
             let mut result = false;
@@ -1440,7 +1364,7 @@ fn dispatch_by_local_name<'tree>(
                     vec![xpath_item_set![item.clone()]],
                     context,
                 )?;
-                if call_result.boolean() {
+                if call_result.boolean()? {
                     result.insert(item.clone());
                 }
             }
@@ -1510,32 +1434,31 @@ fn dispatch_by_local_name<'tree>(
             };
             if let Some(key_arg) = key_func_arg {
                 let func = extract_function_item(key_arg, "fn:sort")?;
-                let mut keyed: Vec<(XpathItem, String)> = Vec::new();
+                let mut keyed: Vec<(XpathItem, Vec<AnyAtomicType>)> = Vec::new();
                 for item in &items {
                     let key = invoke_function_item(
                         func,
                         vec![xpath_item_set![item.clone()]],
                         context,
                     )?;
-                    let s = if key.is_empty() {
-                        String::new()
-                    } else {
-                        func_string(&key[0], context.item_tree)?
-                    };
-                    keyed.push((item.clone(), s));
+                    let atoms = func_data(&key, context.item_tree)?;
+                    keyed.push((item.clone(), atoms));
                 }
-                keyed.sort_by(|(_, a), (_, b)| a.cmp(b));
+                keyed.sort_by(|(_, a), (_, b)| sort_cmp_atomized(a, b));
                 let result: XpathItemSet =
                     keyed.into_iter().map(|(item, _)| item).collect();
                 Ok(Some(result))
             } else {
-                // Sort by string value.
-                let mut items_with_keys: Vec<(XpathItem, String)> = Vec::new();
+                // Sort by atomized value.
+                let mut items_with_keys: Vec<(XpathItem, Vec<AnyAtomicType>)> = Vec::new();
                 for item in items {
-                    let s = func_string(&item, context.item_tree)?;
-                    items_with_keys.push((item, s));
+                    let atoms = func_data(
+                        &xpath_item_set![item.clone()],
+                        context.item_tree,
+                    )?;
+                    items_with_keys.push((item, atoms));
                 }
-                items_with_keys.sort_by(|(_, a), (_, b)| a.cmp(b));
+                items_with_keys.sort_by(|(_, a), (_, b)| sort_cmp_atomized(a, b));
                 Ok(Some(items_with_keys.into_iter().map(|(item, _)| item).collect()))
             }
         }
@@ -1577,8 +1500,29 @@ fn dispatch_by_local_name<'tree>(
             }
             match &args[0][0] {
                 XpathItem::Function(Function::Named { name, .. }) => {
+                    // Parse "prefix:local" to extract prefix and local name.
+                    let (prefix, local_name) = if let Some(colon_pos) = name.find(':') {
+                        (
+                            Some(name[..colon_pos].to_string()),
+                            name[colon_pos + 1..].to_string(),
+                        )
+                    } else {
+                        (Some("fn".to_string()), name.clone())
+                    };
+                    // Map known prefixes to namespace URIs.
+                    let namespace_uri = match prefix.as_deref() {
+                        Some("fn") => "http://www.w3.org/2005/xpath-functions".to_string(),
+                        Some("math") => "http://www.w3.org/2005/xpath-functions/math".to_string(),
+                        Some("map") => "http://www.w3.org/2005/xpath-functions/map".to_string(),
+                        Some("array") => "http://www.w3.org/2005/xpath-functions/array".to_string(),
+                        _ => String::new(),
+                    };
                     Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
-                        AnyAtomicType::String(name.clone())
+                        AnyAtomicType::QName {
+                            namespace_uri,
+                            local_name,
+                            prefix,
+                        }
                     )]))
                 }
                 XpathItem::Function(_) => Ok(Some(XpathItemSet::new())),
@@ -1652,11 +1596,8 @@ fn dispatch_by_local_name<'tree>(
             }
             let input = func_string(&args[0][0], context.item_tree)?;
             let form = if args.len() == 2 {
-                if args[1].is_empty() {
-                    "NFC".to_string()
-                } else {
-                    func_string(&args[1][0], context.item_tree)?
-                }
+                let raw = extract_string_arg(&args[1], context.item_tree)?;
+                if raw.is_empty() { "NFC".to_string() } else { raw }
                     .trim()
                     .to_uppercase()
             } else {
@@ -1780,8 +1721,8 @@ fn dispatch_by_local_name<'tree>(
                     args.len()
                 )));
             }
-            let label = if args.len() == 2 && !args[1].is_empty() {
-                func_string(&args[1][0], context.item_tree)?
+            let label = if args.len() == 2 {
+                extract_string_arg(&args[1], context.item_tree)?
             } else {
                 String::new()
             };
@@ -1845,11 +1786,7 @@ fn dispatch_by_local_name<'tree>(
         "QName" => {
             check_arity("fn:QName", args, 2)?;
             // $paramURI as xs:string? — namespace URI (empty string or empty seq = no namespace)
-            let namespace_uri = if args[0].is_empty() {
-                String::new()
-            } else {
-                func_string(&args[0][0], context.item_tree)?
-            };
+            let namespace_uri = extract_string_arg(&args[0], context.item_tree)?;
             // $paramQName as xs:string — lexical QName ("prefix:local" or "local")
             if args[1].is_empty() {
                 return Err(ExpressionApplyError::new(
@@ -2643,7 +2580,7 @@ fn dispatch_array_function<'tree>(
                     .collect();
                 let call_result =
                     invoke_function_item(func, vec![member_set], context)?;
-                if call_result.boolean() {
+                if call_result.boolean()? {
                     new_members.push(member.clone());
                 }
             }
@@ -2726,11 +2663,7 @@ fn dispatch_array_function<'tree>(
                         .map(|a| XpathItem::AnyAtomicType(a.clone()))
                         .collect();
                     let key_result = invoke_function_item(func, vec![member_set], context)?;
-                    if key_result.is_empty() {
-                        String::new()
-                    } else {
-                        func_string(&key_result[0], context.item_tree)?
-                    }
+                    extract_string_arg(&key_result, context.item_tree)?
                 } else {
                     member
                         .iter()
@@ -2841,11 +2774,7 @@ fn func_contains<'tree>(
         });
     }
 
-    let haystack = if arg1_set.len() == 0 {
-        String::from("")
-    } else {
-        func_string(&arg1_set[0], &context.item_tree)?
-    };
+    let haystack = extract_string_arg(arg1_set, context.item_tree)?;
 
     let arg2_set = &args[1];
     if arg2_set.len() > 1 {
@@ -2857,11 +2786,7 @@ fn func_contains<'tree>(
         });
     }
 
-    let needle = if arg2_set.len() == 0 {
-        String::from("")
-    } else {
-        func_string(&arg2_set[0], &context.item_tree)?
-    };
+    let needle = extract_string_arg(arg2_set, context.item_tree)?;
 
     Ok(xpath_item_set![XpathItem::AnyAtomicType(
         AnyAtomicType::Boolean(haystack.contains(&needle))
@@ -2935,6 +2860,18 @@ pub(crate) fn func_string<'tree>(
         XpathItem::Function(_) => Err(ExpressionApplyError::new(
             "err:FOTY0014: fn:string is not defined for function items".to_string(),
         )),
+    }
+}
+
+/// Extract a string value from an argument set, returning empty string if the set is empty.
+fn extract_string_arg(
+    arg: &XpathItemSet,
+    tree: &XpathItemTree,
+) -> Result<String, ExpressionApplyError> {
+    if arg.is_empty() {
+        Ok(String::new())
+    } else {
+        func_string(&arg[0], tree)
     }
 }
 
@@ -3053,7 +2990,10 @@ fn func_sum<'tree>(
         match atom {
             AnyAtomicType::Integer(n) => {
                 if all_integers {
-                    total_i64 = total_i64.wrapping_add(*n);
+                    match total_i64.checked_add(*n) {
+                        Some(v) => total_i64 = v,
+                        None => all_integers = false,
+                    }
                 }
                 total_f64 += *n as f64;
             }
@@ -3154,10 +3094,34 @@ fn atoms_equal(a: &AnyAtomicType, b: &AnyAtomicType) -> bool {
     }
 }
 
+/// Compare two atomized key sequences for sorting.
+///
+/// Uses `AnyAtomicType::partial_cmp` for same-type or numeric comparison,
+/// falling back to string comparison for incomparable types.
+fn sort_cmp_atomized(a: &[AnyAtomicType], b: &[AnyAtomicType]) -> std::cmp::Ordering {
+    for (ai, bi) in a.iter().zip(b.iter()) {
+        if let Some(ord) = ai.partial_cmp(bi) {
+            if ord != std::cmp::Ordering::Equal {
+                return ord;
+            }
+        } else {
+            // Incomparable types: fall back to string representation.
+            let sa = ai.to_string();
+            let sb = bi.to_string();
+            let ord = sa.cmp(&sb);
+            if ord != std::cmp::Ordering::Equal {
+                return ord;
+            }
+        }
+    }
+    a.len().cmp(&b.len())
+}
+
 /// Build a `regex::Regex` from an XPath pattern string and flags.
 ///
 /// Supported flags: `i` (case-insensitive), `s` (dot-all), `m` (multi-line), `x` (extended).
 fn build_regex(pattern: &str, flags: &str) -> Result<regex::Regex, ExpressionApplyError> {
+    let translated = translate_xpath_regex(pattern);
     let mut regex_pattern = String::new();
     if !flags.is_empty() {
         regex_pattern.push_str("(?");
@@ -3174,10 +3138,51 @@ fn build_regex(pattern: &str, flags: &str) -> Result<regex::Regex, ExpressionApp
         }
         regex_pattern.push(')');
     }
-    regex_pattern.push_str(pattern);
+    regex_pattern.push_str(&translated);
     regex::Regex::new(&regex_pattern).map_err(|e| {
         ExpressionApplyError::new(format!("invalid regex pattern '{}': {}", pattern, e))
     })
+}
+
+/// Translate XPath-specific regex character class escapes to Rust regex equivalents.
+///
+/// XPath defines `\i`, `\I`, `\c`, `\C` which are not standard in Rust's regex crate.
+/// Character class subtraction (`[X-[Y]]`) is a known limitation and not translated.
+fn translate_xpath_regex(pattern: &str) -> String {
+    let mut result = String::with_capacity(pattern.len());
+    let mut chars = pattern.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\\' {
+            if let Some(&next) = chars.peek() {
+                match next {
+                    'i' => {
+                        chars.next();
+                        result.push_str("[\\p{L}_]");
+                    }
+                    'I' => {
+                        chars.next();
+                        result.push_str("[^\\p{L}_]");
+                    }
+                    'c' => {
+                        chars.next();
+                        result.push_str("[\\p{L}\\p{N}.\\-_:]");
+                    }
+                    'C' => {
+                        chars.next();
+                        result.push_str("[^\\p{L}\\p{N}.\\-_:]");
+                    }
+                    _ => {
+                        result.push('\\');
+                    }
+                }
+            } else {
+                result.push('\\');
+            }
+        } else {
+            result.push(ch);
+        }
+    }
+    result
 }
 
 /// Shared implementation for fn:min and fn:max.
@@ -3742,8 +3747,8 @@ fn func_normalize_unicode(input: &str, form: &str) -> Result<String, ExpressionA
 /// <https://www.w3.org/TR/xpath-functions-31/#func-deep-equal>
 fn deep_equal_items(a: &XpathItem, b: &XpathItem, tree: &XpathItemTree) -> bool {
     match (a, b) {
-        // Atomic values: use normal equality.
-        (XpathItem::AnyAtomicType(a), XpathItem::AnyAtomicType(b)) => a == b,
+        // Atomic values: use cross-type numeric equality.
+        (XpathItem::AnyAtomicType(a), XpathItem::AnyAtomicType(b)) => atoms_equal(a, b),
         // Functions: not comparable by deep-equal per spec.
         (XpathItem::Function(_), XpathItem::Function(_)) => false,
         // Nodes: structural comparison.

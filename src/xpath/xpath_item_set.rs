@@ -6,6 +6,7 @@ use std::collections::HashSet;
 use std::ops::Index;
 
 use super::grammar::data_model::{AnyAtomicType, XpathItem};
+use super::ExpressionApplyError;
 
 /// An ordered sequence of [`XpathItem`]s.
 ///
@@ -100,25 +101,37 @@ impl<'tree> XpathItemSet<'tree> {
     /// Return the effective boolean value of the result.
     ///
     /// <https://www.w3.org/TR/2017/REC-xpath-31-20170321/#dt-ebv>
-    pub fn boolean(&self) -> bool {
-        // If this is a singleton value, check for the effective boolean value of that value.
+    pub fn boolean(&self) -> Result<bool, ExpressionApplyError> {
         if self.items.len() == 1 {
             match &self.items[0] {
-                XpathItem::Node(_) => true,
-                XpathItem::Function(_) => true,
+                XpathItem::Node(_) => Ok(true),
+                XpathItem::Function(_) => Err(ExpressionApplyError::new(
+                    "err:FORG0006: effective boolean value is not defined for function items"
+                        .to_string(),
+                )),
                 XpathItem::AnyAtomicType(atomic_type) => match atomic_type {
-                    AnyAtomicType::Boolean(b) => *b,
-                    AnyAtomicType::Integer(n) => *n != 0,
-                    AnyAtomicType::Float(n) => !n.is_nan() && *n != 0.0,
-                    AnyAtomicType::Double(n) => !n.is_nan() && *n != 0.0,
-                    AnyAtomicType::String(s) => !s.is_empty(),
-                    AnyAtomicType::QName { .. } => true,
+                    AnyAtomicType::Boolean(b) => Ok(*b),
+                    AnyAtomicType::Integer(n) => Ok(*n != 0),
+                    AnyAtomicType::Float(n) => Ok(!n.is_nan() && *n != 0.0),
+                    AnyAtomicType::Double(n) => Ok(!n.is_nan() && *n != 0.0),
+                    AnyAtomicType::String(s) => Ok(!s.is_empty()),
+                    AnyAtomicType::QName { .. } => Err(ExpressionApplyError::new(
+                        "err:FORG0006: effective boolean value is not defined for QName"
+                            .to_string(),
+                    )),
                 },
             }
-        }
-        // Otherwise, the effective boolean value is true if the sequence contains any items.
-        else {
-            !self.items.is_empty()
+        } else if self.items.is_empty() {
+            Ok(false)
+        } else {
+            // Multi-item sequence: EBV is true only if first item is a node.
+            match &self.items[0] {
+                XpathItem::Node(_) => Ok(true),
+                _ => Err(ExpressionApplyError::new(
+                    "err:FORG0006: effective boolean value is not defined for a sequence starting with a non-node item"
+                        .to_string(),
+                )),
+            }
         }
     }
 
@@ -129,24 +142,33 @@ impl<'tree> XpathItemSet<'tree> {
 
     /// Sort items by document order (arena NodeId).
     ///
-    /// Items that are nodes are sorted by their NodeId, which corresponds to
-    /// document order in the arena. Non-node items retain their relative order
-    /// at the end of the sequence.
+    /// DocumentNode (which has no NodeId) sorts first since it represents the
+    /// document root. Other nodes sort by NodeId (document order). Non-node
+    /// items retain their relative order at the end of the sequence.
     pub(crate) fn sort_by_document_order(&mut self) {
+        use super::grammar::XpathItemTreeNode;
+
+        // Sort key: (priority, Option<NodeId>)
+        // 0 = DocumentNode (sorts first), 1 = other nodes, 2 = non-nodes
+        let sort_key = |item: &XpathItem| -> (u8, Option<indextree::NodeId>) {
+            match item {
+                XpathItem::Node(node) => match node {
+                    XpathItemTreeNode::DocumentNode(_) => (0, None),
+                    _ => (1, node.node_id()),
+                },
+                _ => (2, None),
+            }
+        };
+
         self.items.sort_by(|a, b| {
-            let a_id = match a {
-                XpathItem::Node(node) => node.node_id(),
-                _ => None,
-            };
-            let b_id = match b {
-                XpathItem::Node(node) => node.node_id(),
-                _ => None,
-            };
-            match (a_id, b_id) {
-                (Some(a), Some(b)) => a.cmp(&b),
-                (Some(_), None) => std::cmp::Ordering::Less,
-                (None, Some(_)) => std::cmp::Ordering::Greater,
-                (None, None) => std::cmp::Ordering::Equal,
+            let (a_pri, a_id) = sort_key(a);
+            let (b_pri, b_id) = sort_key(b);
+            match a_pri.cmp(&b_pri) {
+                std::cmp::Ordering::Equal => match (a_id, b_id) {
+                    (Some(a), Some(b)) => a.cmp(&b),
+                    _ => std::cmp::Ordering::Equal,
+                },
+                other => other,
             }
         });
     }

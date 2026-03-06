@@ -211,7 +211,7 @@ impl Predicate {
             }
         }
 
-        Ok(res.boolean())
+        res.boolean()
     }
 }
 

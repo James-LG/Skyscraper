@@ -128,7 +128,7 @@ impl QuantifiedExpr {
             None => {
                 // No more bindings — evaluate the satisfies expression and get its EBV.
                 let result = satisfies_expr.eval(context)?;
-                return Ok(result.boolean());
+                return result.boolean();
             }
         };
 

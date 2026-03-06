@@ -1083,7 +1083,11 @@ fn fn_function_name() {
     let items = xpath.apply(&document).unwrap();
     assert_eq!(
         items[0],
-        XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("fn:abs")))
+        XpathItem::AnyAtomicType(AnyAtomicType::QName {
+            namespace_uri: "http://www.w3.org/2005/xpath-functions".to_string(),
+            local_name: "abs".to_string(),
+            prefix: Some("fn".to_string()),
+        })
     );
 }
 

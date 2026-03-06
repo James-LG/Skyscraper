@@ -62,7 +62,7 @@ impl OrExpr {
 
         // Otherwise, evaluate the or operator.
         // The result is true if the EBV of any operand is true.
-        if result.boolean() {
+        if result.boolean()? {
             return Ok(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::Boolean(true),
             )]);
@@ -70,7 +70,7 @@ impl OrExpr {
 
         for item in &self.items {
             let item_result = item.eval(context)?;
-            if item_result.boolean() {
+            if item_result.boolean()? {
                 return Ok(xpath_item_set![XpathItem::AnyAtomicType(
                     AnyAtomicType::Boolean(true),
                 )]);
@@ -128,7 +128,7 @@ impl AndExpr {
 
         // Otherwise, evaluate the and operator.
         // The result is true only if the EBV of every operand is true.
-        if !result.boolean() {
+        if !result.boolean()? {
             return Ok(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::Boolean(false),
             )]);
@@ -136,7 +136,7 @@ impl AndExpr {
 
         for item in &self.items {
             let item_result = item.eval(context)?;
-            if !item_result.boolean() {
+            if !item_result.boolean()? {
                 return Ok(xpath_item_set![XpathItem::AnyAtomicType(
                     AnyAtomicType::Boolean(false),
                 )]);
