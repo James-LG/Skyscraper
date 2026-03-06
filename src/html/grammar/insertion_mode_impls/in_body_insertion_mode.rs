@@ -565,7 +565,7 @@ impl HtmlParser {
                 } else {
                     self.generate_implied_end_tags(None)?;
 
-                    if self.current_node_as_element().unwrap().name != token.tag_name {
+                    if self.current_node_as_element_result()?.name != token.tag_name {
                         self.handle_error(HtmlParserError::MinorError(String::from(
                             "current node is not the same as the token tag name",
                         )))?;
@@ -653,7 +653,7 @@ impl HtmlParser {
                 } else {
                     self.generate_implied_end_tags(Some("li"))?;
 
-                    if self.current_node_as_element().unwrap().name != "li" {
+                    if self.current_node_as_element_result()?.name != "li" {
                         self.handle_error(HtmlParserError::MinorError(String::from(
                             "current node is not li",
                         )))?;
@@ -674,7 +674,7 @@ impl HtmlParser {
                 } else {
                     self.generate_implied_end_tags(Some(&token.tag_name))?;
 
-                    if self.current_node_as_element().unwrap().name != token.tag_name {
+                    if self.current_node_as_element_result()?.name != token.tag_name {
                         self.handle_error(HtmlParserError::MinorError(format!(
                             "current node is not {}",
                             token.tag_name
@@ -797,7 +797,7 @@ impl HtmlParser {
                 } else {
                     self.generate_implied_end_tags(None)?;
 
-                    if self.current_node_as_element().unwrap().name != token.tag_name {
+                    if self.current_node_as_element_result()?.name != token.tag_name {
                         self.handle_error(HtmlParserError::MinorError(format!(
                             "current node is not {}",
                             token.tag_name
@@ -1002,7 +1002,7 @@ impl HtmlParser {
                     self.generate_implied_end_tags(None)?;
 
                     // If the current node is not now a ruby element, this is a parse error.
-                    if self.current_node_as_element().unwrap().name != "ruby" {
+                    if self.current_node_as_element_result()?.name != "ruby" {
                         self.handle_error(HtmlParserError::MinorError(String::from(
                             "current node is not a ruby element",
                         )))?;
@@ -1021,7 +1021,7 @@ impl HtmlParser {
 
                     // If the current node is not now a rtc element or a ruby element,
                     // this is a parse error.
-                    let current_name = &self.current_node_as_element().unwrap().name;
+                    let current_name = &self.current_node_as_element_result()?.name;
                     if current_name != "rtc" && current_name != "ruby" {
                         self.handle_error(HtmlParserError::MinorError(String::from(
                             "current node is not a rtc or ruby element",

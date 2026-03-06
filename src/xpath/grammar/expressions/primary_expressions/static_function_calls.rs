@@ -475,14 +475,36 @@ fn dispatch_by_local_name<'tree>(
             let chars: Vec<char> = s.chars().collect();
             // XPath uses 1-based indexing with rounding.
             let start_double = extract_double(&args[1], context.item_tree)?;
-            let start = (start_double.round() as i64 - 1).max(0) as usize;
+            if start_double.is_nan() {
+                return Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                    AnyAtomicType::String(String::new())
+                )]));
+            }
             let result = if args.len() == 3 {
                 let len_double = extract_double(&args[2], context.item_tree)?;
+                if len_double.is_nan() {
+                    return Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                        AnyAtomicType::String(String::new())
+                    )]));
+                }
+                if start_double.is_infinite() && start_double < 0.0 {
+                    // negative infinity start: start + len overflows, return empty
+                    return Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                        AnyAtomicType::String(String::new())
+                    )]));
+                }
                 let end = ((start_double.round() + len_double.round()) as i64 - 1).max(0) as usize;
+                let start = (start_double.round() as i64 - 1).max(0) as usize;
                 let end = end.min(chars.len());
                 let start = start.min(chars.len());
                 chars[start..end].iter().collect()
             } else {
+                if start_double == f64::NEG_INFINITY {
+                    return Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                        AnyAtomicType::String(String::new())
+                    )]));
+                }
+                let start = (start_double.round() as i64 - 1).max(0) as usize;
                 let start = start.min(chars.len());
                 chars[start..].iter().collect()
             };

@@ -406,7 +406,7 @@ impl<'a> Tokenizer<'a> {
                 self.tag_token = Some(TagTokenType::EndTag(TagToken::new(String::new())));
                 self.reconsume_in_state(TokenizerState::ScriptDataEndTagName)?;
             }
-            n => {
+            _ => {
                 self.emit(HtmlToken::Character('<'))?;
                 self.emit(HtmlToken::Character('/'))?;
                 self.reconsume_in_state(TokenizerState::ScriptData)?;

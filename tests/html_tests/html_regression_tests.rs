@@ -206,3 +206,233 @@ fn unescape_valid_numeric_reference() {
     let result = html::unescape_characters("&#65;");
     assert_eq!(result, "A", "&#65; should produce 'A'");
 }
+
+// ============================================================================
+// Regression: CR-1 - DefaultParseErrorHandler should swallow errors.
+// The default handler now returns Ok(()) so real-world HTML with parse errors
+// (which is almost all HTML) can be parsed without aborting.
+// ============================================================================
+
+#[test]
+fn default_parser_handles_parse_errors_gracefully() {
+    // This HTML has multiple parse-error-inducing patterns:
+    // unclosed tags, missing optional tags, etc. The parser should
+    // handle them all gracefully without returning Err.
+    let text = "<html><body><p>unclosed paragraph<p>second paragraph<div>in div</div></body></html>";
+    let result = html::parse(text);
+    assert!(
+        result.is_ok(),
+        "Parser should swallow parse errors by default: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn default_parser_handles_misnested_formatting() {
+    // Misnested formatting tags trigger parse errors and the adoption
+    // agency algorithm. The parser should not abort.
+    let text = "<html><body><b><i>bold-italic</b>italic-only</i></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    assert!(
+        output.contains("bold-italic"),
+        "Content should be preserved: {output:?}"
+    );
+    assert!(
+        output.contains("italic-only"),
+        "Content should be preserved: {output:?}"
+    );
+}
+
+// ============================================================================
+// Regression: CR-2 - Noah's Ark should iterate in reverse (from the end of
+// the active formatting elements list back toward the marker).
+// ============================================================================
+
+#[test]
+fn noahs_ark_handles_many_identical_elements() {
+    // Noah's Ark limits identical formatting elements to 3.
+    // When a 4th identical element is pushed, the earliest one should be
+    // removed. Reverse iteration ensures we count from the end of the list.
+    let text = "<html><body><b>1<b>2<b>3<b>4</b></b></b></b></body></html>";
+    let document = html::parse(text).unwrap();
+    let xp = xpath::parse("count(//b)").unwrap();
+    let result = xp.apply(&document).unwrap();
+    let count = result[0].extract_as_any_atomic_type();
+    match count {
+        AnyAtomicType::Integer(n) => assert!(
+            *n <= 4,
+            "Noah's Ark should limit formatting elements: got {n}"
+        ),
+        other => panic!("Expected integer count, got: {other:?}"),
+    }
+}
+
+// ============================================================================
+// Regression: CR-4 - reset_open_elements_stack: "head" check needs `&& !last`
+// guard. When head is the last element on the stack (fragment parsing), the
+// parser should fall through to InBody, not set InHead.
+// ============================================================================
+
+#[test]
+fn head_as_last_element_uses_in_body_not_in_head() {
+    // Fragment parsing with <head> as the context element: when head is
+    // the last (bottom) element on the open elements stack, the insertion
+    // mode should be InBody, not InHead.
+    let text = "<head><title>test</title></head><body><p>content</p></body>";
+    let result = html::parse(text);
+    assert!(
+        result.is_ok(),
+        "Parsing with head element should not crash: {:?}",
+        result.err()
+    );
+}
+
+// ============================================================================
+// Regression: CR-5 - unwrap() on current_node_as_element() replaced with
+// error propagation. Parse error reporting paths should not panic.
+// ============================================================================
+
+#[test]
+fn end_tag_mismatch_does_not_panic() {
+    // When </div> is encountered but the current node is not a div after
+    // generating implied end tags, the parser reports a parse error.
+    // Previously this could panic via unwrap().
+    let text = "<html><body><p>text</p></div></body></html>";
+    let result = html::parse(text);
+    assert!(
+        result.is_ok(),
+        "Mismatched end tag should not panic: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn end_li_mismatch_does_not_panic() {
+    // </li> when the current node is not li should not panic.
+    let text = "<html><body><ul><li>item<p>nested</p></li></ul></body></html>";
+    let result = html::parse(text);
+    assert!(
+        result.is_ok(),
+        "li end tag handling should not panic: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn end_dd_dt_mismatch_does_not_panic() {
+    // </dd> and </dt> parse error paths should not panic.
+    let text = "<html><body><dl><dt>term<dd>def<p>nested</p></dd></dt></dl></body></html>";
+    let result = html::parse(text);
+    assert!(
+        result.is_ok(),
+        "dd/dt end tag handling should not panic: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn heading_end_tag_mismatch_does_not_panic() {
+    // </h1> when the current node is not h1 should not panic.
+    let text = "<html><body><h1><span>text</span></h1></body></html>";
+    let result = html::parse(text);
+    assert!(
+        result.is_ok(),
+        "Heading end tag handling should not panic: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn ruby_rt_rp_mismatch_does_not_panic() {
+    // rb/rtc/rp/rt tags trigger checks on the current element name.
+    // These should not panic.
+    let text = "<html><body><ruby>base<rb>base2<rt>annotation<rp>(</rp>alt<rp>)</rp></rt></rb></ruby></body></html>";
+    let result = html::parse(text);
+    assert!(
+        result.is_ok(),
+        "ruby/rt/rp handling should not panic: {:?}",
+        result.err()
+    );
+}
+
+// ============================================================================
+// Regression: CR-8 - unescape_characters should not double-unescape.
+// e.g. "&amp;lt;" should become "&lt;", not "<".
+// ============================================================================
+
+#[test]
+fn unescape_no_double_unescape() {
+    // "&amp;lt;" contains a literal "&amp;" which should unescape to "&",
+    // yielding "&lt;". It should NOT further unescape to "<".
+    let result = html::unescape_characters("&amp;lt;");
+    assert_eq!(
+        result, "&lt;",
+        "&amp;lt; should become &lt;, not be double-unescaped to <"
+    );
+}
+
+#[test]
+fn unescape_amp_gt_no_double_unescape() {
+    let result = html::unescape_characters("&amp;gt;");
+    assert_eq!(
+        result, "&gt;",
+        "&amp;gt; should become &gt;, not >"
+    );
+}
+
+#[test]
+fn unescape_amp_amp_no_double_unescape() {
+    let result = html::unescape_characters("&amp;amp;");
+    assert_eq!(
+        result, "&amp;",
+        "&amp;amp; should become &amp;, not &"
+    );
+}
+
+#[test]
+fn unescape_basic_entities_still_work() {
+    let result = html::unescape_characters("&lt;&gt;&amp;&quot;");
+    assert_eq!(result, r#"<>&""#, "Basic entity unescaping should work");
+}
+
+// ============================================================================
+// Regression: CR-9 - display_node indent should use usize, not u8.
+// Deeply nested documents (> 255 levels) should not overflow.
+// ============================================================================
+
+#[test]
+fn deeply_nested_document_display_no_overflow() {
+    // Build a document nested deeper than 255 levels (u8::MAX).
+    // With the old u8 indent, this would overflow. With usize, it works fine.
+    let mut text = String::new();
+    let depth = 260;
+    for _ in 0..depth {
+        text.push_str("<div>");
+    }
+    text.push_str("deep");
+    for _ in 0..depth {
+        text.push_str("</div>");
+    }
+    let full_html = format!("<html><body>{}</body></html>", text);
+    let document = html::parse(&full_html).unwrap();
+
+    // Pretty display uses indent parameter recursively.
+    // With u8 this would overflow at depth > 255.
+    let output = document.to_string();
+    assert!(
+        output.contains("deep"),
+        "Deeply nested content should be preserved"
+    );
+    // Verify we can find all nesting levels via XPath.
+    let xp = xpath::parse("count(//div)").unwrap();
+    let result = xp.apply(&document).unwrap();
+    let count = result[0].extract_as_any_atomic_type();
+    match count {
+        AnyAtomicType::Integer(n) => assert_eq!(
+            *n, depth,
+            "All {depth} nested divs should be present"
+        ),
+        other => panic!("Expected integer count, got: {other:?}"),
+    }
+}

@@ -537,7 +537,6 @@ impl<'a> Tokenizer<'a> {
 
             self.attribute_prefix_buffer.clear();
             self.emit(HtmlToken::TagToken(tag_token))?;
-            self.tag_token = None;
         }
 
         Ok(())
@@ -546,7 +545,6 @@ impl<'a> Tokenizer<'a> {
     pub fn emit_current_comment_token(&mut self) -> Result<(), HtmlParseError> {
         if let Some(comment_token) = self.comment_token.take() {
             self.emit(HtmlToken::Comment(comment_token))?;
-            self.comment_token = None;
         }
 
         Ok(())
@@ -555,7 +553,6 @@ impl<'a> Tokenizer<'a> {
     pub fn emit_current_doctype_token(&mut self) -> Result<(), HtmlParseError> {
         if let Some(doctype_token) = self.doctype_token.take() {
             self.emit(HtmlToken::DocType(doctype_token))?;
-            self.doctype_token = None;
         }
 
         Ok(())

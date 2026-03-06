@@ -152,10 +152,15 @@ impl<'tree> XpathItemSet<'tree> {
     }
 
     /// Remove duplicate items, keeping the first occurrence of each.
-    /// Used for path expression results where document-order unique nodes are required.
+    /// Uses node identity (NodeId) for Node items to correctly distinguish
+    /// structurally equal nodes at different positions in the tree.
     pub(crate) fn dedup(&mut self) {
-        let mut seen = HashSet::new();
-        self.items.retain(|item| seen.insert(item.clone()));
+        let mut seen_node_ids: HashSet<Option<indextree::NodeId>> = HashSet::new();
+        let mut seen_non_nodes = HashSet::new();
+        self.items.retain(|item| match item {
+            XpathItem::Node(node) => seen_node_ids.insert(node.node_id()),
+            other => seen_non_nodes.insert(other.clone()),
+        });
     }
 }
 

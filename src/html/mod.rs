@@ -214,20 +214,27 @@ impl HtmlDoctype {
 /// - `&quot;` becomes `"`
 /// - `&#39;` becomes `'`
 pub fn unescape_characters(text: &str) -> String {
-    let re = Regex::new(r"&#(\d+);").unwrap();
-    let text = re.replace_all(text, |caps: &Captures| {
-        if let Some(num) = caps.get(1) {
-            if let Ok(num) = num.as_str().parse::<u32>() {
-                return char::from_u32(num).unwrap_or('\u{FFFD}').to_string();
-            }
-        }
-        return String::new();
-    });
+    static NUMERIC_CHAR_REF_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"&#(\d+);").unwrap());
 
-    text.replace("&amp;", "&")
+    // Replace named entities first, then numeric references.
+    // &amp; must be replaced last to avoid double-unescaping
+    // (e.g. "&amp;lt;" → "&lt;" → "<" if &amp; were replaced first).
+    let text = text
         .replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&quot;", r#"""#)
+        .replace("&amp;", "&");
+
+    NUMERIC_CHAR_REF_RE
+        .replace_all(&text, |caps: &Captures| {
+            if let Some(num) = caps.get(1) {
+                if let Ok(num) = num.as_str().parse::<u32>() {
+                    return char::from_u32(num).unwrap_or('\u{FFFD}').to_string();
+                }
+            }
+            String::new()
+        })
+        .into_owned()
 }
 
 /// Escapes commonly escaped characters in HTML text.
@@ -406,12 +413,12 @@ pub enum DocumentFormatType {
 }
 
 fn display_node(
-    indent: u8,
+    indent: usize,
     doc: &HtmlDocument,
     doc_node: &DocumentNode,
     format_type: DocumentFormatType,
 ) -> Result<String, fmt::Error> {
-    fn display_indent(indent: u8, str: &mut String) -> fmt::Result {
+    fn display_indent(indent: usize, str: &mut String) -> fmt::Result {
         for _ in 0..indent {
             write!(str, "    ")?;
         }

@@ -7,6 +7,8 @@ use nom::{
     multi::many0, sequence::tuple,
 };
 
+use once_cell::sync::Lazy;
+
 use crate::xpath::grammar::data_model::XpathItem;
 use crate::xpath::grammar::types::KindTest;
 use crate::xpath::grammar::whitespace_recipes::ws;
@@ -27,6 +29,27 @@ use self::steps::{
 
 pub mod abbreviated_syntax;
 pub mod steps;
+
+/// Lazily-parsed `(fn:root(self::node()) treat as document-node())` step expression.
+static ROOT_STEP: Lazy<StepExpr> = Lazy::new(|| {
+    step_expr("(fn:root(self::node()) treat as document-node())")
+        .expect("ROOT_STEP parse failed")
+        .1
+});
+
+/// Lazily-parsed `descendant-or-self::node()` step expression.
+static DESC_OR_SELF_STEP: Lazy<StepExpr> = Lazy::new(|| {
+    step_expr("descendant-or-self::node()")
+        .expect("DESC_OR_SELF_STEP parse failed")
+        .1
+});
+
+/// Lazily-parsed `.` (context item) step expression.
+static DOT_STEP: Lazy<StepExpr> = Lazy::new(|| {
+    step_expr(".")
+        .expect("DOT_STEP parse failed")
+        .1
+});
 
 pub fn path_expr(input: &str) -> Res<&str, PathExpr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-PathExpr
@@ -109,9 +132,7 @@ impl PathExpr {
 fn initial_slash_expansion(unexpanded_expr: &Option<RelativePathExpr>) -> RelativePathExpr {
     // A leading slash is expanded to `(fn:root(self::node()) treat as document-node())/<unexpanded_expr>`
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-path-expressions
-    let first_step = step_expr("(fn:root(self::node()) treat as document-node())")
-        .expect("initial slash expansion step 1 failed")
-        .1;
+    let first_step = ROOT_STEP.clone();
 
     let items = match unexpanded_expr {
         Some(x) => {
@@ -130,9 +151,7 @@ fn initial_slash_expansion(unexpanded_expr: &Option<RelativePathExpr>) -> Relati
 
 fn relative_slash_expansion(unexpanded_expr: &Option<RelativePathExpr>) -> RelativePathExpr {
     // A leading slash in a relative expression is expanded to `./<unexpanded_expr>`
-    let first_step = step_expr(".")
-        .expect("relative slash expansion step 1 failed")
-        .1;
+    let first_step = DOT_STEP.clone();
 
     let items = match unexpanded_expr {
         Some(x) => {
@@ -328,9 +347,7 @@ fn eval_grouped_descendant_predicate<'tree>(
 fn initial_double_slash_expansion(unexpanded_expr: &RelativePathExpr) -> RelativePathExpr {
     // A leading double slash is expanded to `(fn:root(self::node()) treat as document-node())/descendant-or-self::node()/<unexpanded_expr>`
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-path-expressions
-    let first_step = step_expr("(fn:root(self::node()) treat as document-node())")
-        .expect("double slash expansion step 1 failed")
-        .1;
+    let first_step = ROOT_STEP.clone();
 
     // Optimization: //X (no predicates) is equivalent to root/descendant::X
     // This avoids the O(N) nested loop of descendant-or-self::node()/child::X.
@@ -344,9 +361,7 @@ fn initial_double_slash_expansion(unexpanded_expr: &RelativePathExpr) -> Relativ
         };
     }
 
-    let second_step = step_expr("descendant-or-self::node()")
-        .expect("double slash expansion step 2 failed")
-        .1;
+    let second_step = DESC_OR_SELF_STEP.clone();
 
     let mut items = vec![StepPair(PathSeparator::Slash, second_step)];
     items.push(StepPair(
@@ -363,9 +378,7 @@ fn initial_double_slash_expansion(unexpanded_expr: &RelativePathExpr) -> Relativ
 
 fn relative_double_slash_expansion(unexpanded_expr: &RelativePathExpr) -> RelativePathExpr {
     // A leading double slash in a relative expression is expanded to `.//<unexpanded_expr>`
-    let first_step = step_expr(".")
-        .expect("relative double slash expansion step 1 failed")
-        .1;
+    let first_step = DOT_STEP.clone();
 
     // Optimization: .//<X> (no predicates) → ./descendant::<X>
     if let Some(node_test) = try_extract_child_node_test(&unexpanded_expr.expr) {
@@ -558,9 +571,7 @@ fn double_slash_expansion(expr: &StepExpr) -> RelativePathExpr {
         };
     }
 
-    let expanded_double_slash = step_expr("descendant-or-self::node()")
-        .expect("double slash expansion step 1 failed")
-        .1;
+    let expanded_double_slash = DESC_OR_SELF_STEP.clone();
 
     let items = vec![StepPair(PathSeparator::Slash, expr.clone())];
 

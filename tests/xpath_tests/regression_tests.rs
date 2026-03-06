@@ -1,4 +1,4 @@
-use skyscraper::xpath::grammar::data_model::AnyAtomicType;
+use skyscraper::xpath::grammar::data_model::{AnyAtomicType, XpathItem};
 use skyscraper::{html, xpath};
 
 // ============================================================================
@@ -223,4 +223,153 @@ fn xpath_dedup_preserves_distinct_nodes() {
         "Union of distinct nodes should preserve all: got {} items",
         result.len()
     );
+}
+
+// ============================================================================
+// Regression: CR-3 - dedup should use node identity (NodeId), not structural
+// equality. Two text nodes with the same content at different positions are
+// distinct nodes and should not be collapsed.
+// ============================================================================
+
+#[test]
+fn xpath_dedup_preserves_same_content_different_nodes() {
+    // Two <span> elements both containing "x" are distinct nodes.
+    // dedup should NOT collapse them since they have different NodeIds.
+    let text = r#"<html><body>
+        <div><span>x</span></div>
+        <div><span>x</span></div>
+    </body></html>"#;
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("//span").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(
+        result.len(),
+        2,
+        "Two distinct span nodes with same content should both be preserved: got {} items",
+        result.len()
+    );
+}
+
+#[test]
+fn xpath_dedup_identity_based_for_text_nodes() {
+    // Multiple text nodes with identical content "hello" at different
+    // positions should all be preserved after dedup.
+    let text = "<html><body><p>hello</p><p>hello</p><p>hello</p></body></html>";
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("//p/text()").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(
+        result.len(),
+        3,
+        "Three distinct text nodes with same content should all be preserved: got {} items",
+        result.len()
+    );
+}
+
+// ============================================================================
+// Regression: CR-6 - Lazy-init step_expr expansions. Path expression
+// expansions using `/` and `//` should still produce correct results.
+// ============================================================================
+
+#[test]
+fn leading_slash_expansion_with_lazy_statics() {
+    let text = "<html><body><div><p>found</p></div></body></html>";
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("/html/body/div/p").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(result.len(), 1, "Leading slash path should find 1 element");
+}
+
+#[test]
+fn leading_double_slash_expansion_with_lazy_statics() {
+    let text = "<html><body><div><p>a</p><p>b</p></div></body></html>";
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("//p").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(
+        result.len(),
+        2,
+        "Leading double-slash path should find 2 elements"
+    );
+}
+
+#[test]
+fn mid_path_double_slash_with_lazy_statics() {
+    let text = r#"<html><body>
+        <div><span><a>deep</a></span></div>
+        <div><a>shallow</a></div>
+    </body></html>"#;
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("/html//a").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(
+        result.len(),
+        2,
+        "Mid-path double-slash should find all descendant <a> elements"
+    );
+}
+
+#[test]
+fn bare_slash_returns_document_node() {
+    let text = "<html><body></body></html>";
+    let document = html::parse(text).unwrap();
+    let xpath = xpath::parse("/").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(
+        result.len(),
+        1,
+        "Bare '/' should return the document node"
+    );
+}
+
+// ============================================================================
+// Regression: CR-7 - fn:substring NaN/infinity handling.
+// Per XPath spec, NaN arguments should produce empty string.
+// ============================================================================
+
+#[test]
+fn fn_substring_nan_start_returns_empty() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    // number("x") produces NaN; substring with NaN start should return "".
+    let xpath = xpath::parse(r#"substring("hello", number("x"))"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::new())),
+        "substring with NaN start should return empty string"
+    );
+}
+
+#[test]
+fn fn_substring_nan_length_returns_empty() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    // NaN length should return empty string.
+    let xpath = xpath::parse(r#"substring("hello", 1, number("x"))"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::new())),
+        "substring with NaN length should return empty string"
+    );
+}
+
+#[test]
+fn fn_substring_normal_cases_still_work() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let cases = vec![
+        (r#"substring("hello", 2, 3)"#, "ell"),
+        (r#"substring("hello", 2)"#, "ello"),
+        (r#"substring("12345", 0, 3)"#, "12"),
+        (r#"substring("12345", -1, 5)"#, "123"),
+        (r#"substring("hello", 1, 5)"#, "hello"),
+    ];
+    for (expr, expected) in cases {
+        let xpath = xpath::parse(expr).unwrap();
+        let items = xpath.apply(&document).unwrap();
+        assert_eq!(
+            items[0],
+            XpathItem::AnyAtomicType(AnyAtomicType::String(String::from(expected))),
+            "Expression '{expr}' should return \"{expected}\""
+        );
+    }
 }

@@ -1797,7 +1797,7 @@ impl HtmlParser {
             .as_element_node()
             .map_err(|_| HtmlParseError::new("node is not an element node"))?;
 
-        let elements_since_marker = self.active_formatting_elements.iter().map_while(
+        let elements_since_marker = self.active_formatting_elements.iter().rev().map_while(
             |node_or_marker| match node_or_marker {
                 NodeOrMarker::Node(entry) => {
                     let node = self.arena.get(entry.node_id).unwrap().get();
@@ -2031,7 +2031,7 @@ impl HtmlParser {
                 return Ok(());
             }
 
-            if node.name == "head" {
+            if node.name == "head" && !last {
                 parser.insertion_mode = InsertionMode::InHead;
                 return Ok(());
             }
@@ -2359,14 +2359,12 @@ pub trait ParseErrorHandler {
     fn error_emitted(&self, error: HtmlParseErrorType) -> Result<(), HtmlParseError>;
 }
 
-/// The default error handler, which converts every parse error into an [`HtmlParseError`].
+/// The default error handler, which swallows all parse errors and continues parsing.
 pub struct DefaultParseErrorHandler;
 
 impl ParseErrorHandler for DefaultParseErrorHandler {
-    fn error_emitted(&self, error: HtmlParseErrorType) -> Result<(), HtmlParseError> {
-        Err(HtmlParseError {
-            message: format!("{:?}", error),
-        })
+    fn error_emitted(&self, _error: HtmlParseErrorType) -> Result<(), HtmlParseError> {
+        Ok(())
     }
 }
 
