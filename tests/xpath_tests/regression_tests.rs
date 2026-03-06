@@ -584,3 +584,132 @@ fn fn_codepoints_to_string_valid_still_works() {
         "codepoints-to-string(65, 66, 67) should return 'ABC'"
     );
 }
+
+// ============================================================================
+// Regression: fn:substring must not panic when start > end (negative length
+// or positive-infinity start). Previously chars[start..end] panicked.
+// ============================================================================
+
+#[test]
+fn substring_negative_length_returns_empty() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("substring('hello', 10, -5)").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(
+        result[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::new())),
+        "substring with start beyond string and negative length should return empty"
+    );
+}
+
+#[test]
+fn substring_large_start_negative_length() {
+    // Another case where start > end after clamping.
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("substring('hello', 100, -50)").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(
+        result[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::new())),
+        "substring with large start and negative length should return empty"
+    );
+}
+
+// ============================================================================
+// Regression: fn:apply must not panic on empty sequence second argument.
+// ============================================================================
+
+#[test]
+fn fn_apply_empty_second_arg_errors() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    // The second argument to fn:apply should be an array; an empty sequence should error.
+    let xpath = xpath::parse("apply(boolean#1, ())").unwrap();
+    let result = xpath.apply(&document);
+    assert!(
+        result.is_err(),
+        "fn:apply with empty second argument should return an error, not panic"
+    );
+}
+
+// ============================================================================
+// Regression: fn:QName must not panic on empty second argument.
+// ============================================================================
+
+#[test]
+fn fn_qname_empty_second_arg_errors() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("QName('http://example.com', ())").unwrap();
+    let result = xpath.apply(&document);
+    assert!(
+        result.is_err(),
+        "fn:QName with empty lexical QName should return an error, not panic"
+    );
+}
+
+// ============================================================================
+// Regression: fn:sum should preserve integer precision for large values.
+// Previously all integers went through f64, losing precision above 2^53.
+// ============================================================================
+
+#[test]
+fn fn_sum_preserves_integer_type() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("sum((1, 2, 3))").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(
+        result[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Integer(6)),
+        "sum of integers should return an integer, not a double"
+    );
+}
+
+// ============================================================================
+// Regression: fn:min/fn:max with mixed numeric and string types should error,
+// not silently discard one type.
+// ============================================================================
+
+#[test]
+fn fn_min_mixed_types_errors() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("min((1, 'hello'))").unwrap();
+    let result = xpath.apply(&document);
+    assert!(
+        result.is_err(),
+        "fn:min with mixed numeric and string values should error (FORG0006)"
+    );
+}
+
+#[test]
+fn fn_max_mixed_types_errors() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("max((1, 'hello'))").unwrap();
+    let result = xpath.apply(&document);
+    assert!(
+        result.is_err(),
+        "fn:max with mixed numeric and string values should error (FORG0006)"
+    );
+}
+
+#[test]
+fn fn_min_all_strings_works() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("min(('banana', 'apple', 'cherry'))").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(
+        result[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String("apple".to_string())),
+        "fn:min on all-string sequence should return the lexicographic minimum"
+    );
+}
+
+#[test]
+fn fn_max_all_integers_preserves_type() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("max((3, 7, 2))").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(
+        result[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Integer(7)),
+        "fn:max on all-integer sequence should return an integer"
+    );
+}

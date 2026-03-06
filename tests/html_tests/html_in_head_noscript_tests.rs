@@ -231,6 +231,7 @@ fn noscript_in_head_eof() {
     let expected = DocumentBuilder::new()
         .add_element("html", |html| {
             html.add_element("head", |head| head.add_element("noscript", |ns| ns))
+                .add_element("body", |body| body)
         })
         .build()
         .unwrap();

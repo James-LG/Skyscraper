@@ -214,7 +214,8 @@ impl HtmlDoctype {
 /// - `&quot;` becomes `"`
 /// - `&#39;` becomes `'`
 pub fn unescape_characters(text: &str) -> String {
-    static NUMERIC_CHAR_REF_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"&#(\d+);").unwrap());
+    static NUMERIC_CHAR_REF_RE: Lazy<Regex> =
+        Lazy::new(|| Regex::new(r"&#(?:x([0-9a-fA-F]+)|(\d+));").unwrap());
 
     // Replace named entities first, then numeric references.
     // &amp; must be replaced last to avoid double-unescaping
@@ -227,8 +228,13 @@ pub fn unescape_characters(text: &str) -> String {
 
     NUMERIC_CHAR_REF_RE
         .replace_all(&text, |caps: &Captures| {
-            if let Some(num) = caps.get(1) {
-                if let Ok(num) = num.as_str().parse::<u32>() {
+            // Group 1: hex digits (&#xHH;), Group 2: decimal digits (&#DD;)
+            if let Some(hex) = caps.get(1) {
+                if let Ok(num) = u32::from_str_radix(hex.as_str(), 16) {
+                    return char::from_u32(num).unwrap_or('\u{FFFD}').to_string();
+                }
+            } else if let Some(dec) = caps.get(2) {
+                if let Ok(num) = dec.as_str().parse::<u32>() {
                     return char::from_u32(num).unwrap_or('\u{FFFD}').to_string();
                 }
             }

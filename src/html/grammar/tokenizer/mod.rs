@@ -357,6 +357,8 @@ pub struct Tokenizer<'a> {
     last_emitted_start_tag_name: String,
     /// Buffer for accumulating whitespace between attributes for round-trip fidelity.
     attribute_prefix_buffer: String,
+    /// Set to true once an EndOfFile token has been emitted.
+    eof_emitted: bool,
 }
 
 impl<'a> Tokenizer<'a> {
@@ -374,6 +376,7 @@ impl<'a> Tokenizer<'a> {
             character_reference_code: 0,
             last_emitted_start_tag_name: String::new(),
             attribute_prefix_buffer: String::new(),
+            eof_emitted: false,
         }
     }
 
@@ -386,6 +389,9 @@ impl<'a> Tokenizer<'a> {
     }
 
     pub fn emit(&mut self, token: HtmlToken) -> Result<(), HtmlParseError> {
+        if matches!(&token, HtmlToken::EndOfFile) {
+            self.eof_emitted = true;
+        }
         if let HtmlToken::TagToken(TagTokenType::StartTag(tag)) = &token {
             self.last_emitted_start_tag_name.clear();
             self.last_emitted_start_tag_name.push_str(&tag.tag_name);
@@ -760,6 +766,6 @@ impl<'a> Tokenizer<'a> {
     }
 
     pub fn is_terminated(&self) -> bool {
-        !self.input_stream.has_next()
+        self.eof_emitted
     }
 }

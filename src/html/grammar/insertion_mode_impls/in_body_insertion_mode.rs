@@ -30,15 +30,15 @@ impl HtmlParser {
                 "td", "tfoot", "th", "thead", "tr", "body", "html",
             ];
 
-            if !parser
+            if parser
                 .open_elements
                 .iter()
                 .map(|node_id| parser.arena.get(*node_id).unwrap().get())
                 .filter_map(|node| node.as_element_node().ok())
-                .any(|node| valid_elements.contains(&node.name.as_str()))
+                .any(|node| !valid_elements.contains(&node.name.as_str()))
             {
                 return parser.handle_error(HtmlParserError::MinorError(String::from(
-                    "open elements has no valid element",
+                    "open elements contains element not in valid set",
                 )));
             }
 

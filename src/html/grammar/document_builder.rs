@@ -225,7 +225,7 @@ impl<'arena> ElementBuilder<'arena> {
     }
 
     /// Add a single attribute from name and value strings.
-    pub fn add_attribute_str(mut self, name: &str, value: &str) -> Self {
+    pub fn add_attribute_str(self, name: &str, value: &str) -> Self {
         self.add_attribute(AttributeNode::new(name.to_string(), value.to_string()))
     }
 

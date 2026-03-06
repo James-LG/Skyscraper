@@ -1,9 +1,7 @@
-use std::vec;
-
 use crate::{
-    html::grammar::{tokenizer::TokenizerState, NodeOrMarker, SPECIAL_ELEMENTS},
+    html::grammar::{tokenizer::TokenizerState, NodeOrMarker},
     xpath::grammar::{
-        data_model::{AttributeNode, DoctypeNode, ElementNode, TextNode},
+        data_model::DoctypeNode,
         XpathItemTreeNode,
     },
 };
@@ -17,8 +15,6 @@ use super::{
 
 pub(crate) mod in_body_insertion_mode;
 pub(crate) mod in_foreign_content;
-
-pub use in_body_insertion_mode::*;
 
 /// Determine the quirks mode from a DOCTYPE token per WHATWG 13.2.6.4.1.
 fn determine_quirks_mode(
@@ -431,7 +427,7 @@ impl HtmlParser {
                 self.insertion_mode = InsertionMode::InHeadNoscript;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "script" => {
-                let node = self.insert_an_html_element(token)?;
+                let _node = self.insert_an_html_element(token)?;
 
                 // TODO: lots of script and template stuff
 
@@ -724,7 +720,7 @@ impl HtmlParser {
                 self.token_emitted(HtmlToken::EndOfFile)?;
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "script" => {
-                let script = self.current_node_as_element_result()?;
+                let _script = self.current_node_as_element_result()?;
 
                 self.open_elements.pop().expect("open elements is empty");
 

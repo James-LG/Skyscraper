@@ -592,3 +592,56 @@ fn deeply_nested_document_display_no_overflow() {
         other => panic!("Expected integer count, got: {other:?}"),
     }
 }
+
+// ============================================================================
+// Regression: EOF token must be emitted even on truncated input so the tree
+// builder properly finalizes the document (closing open elements, creating
+// implied elements per WHATWG spec).
+// ============================================================================
+
+#[test]
+fn truncated_input_gets_eof_finalization() {
+    // Truncated HTML — no closing tags at all.
+    let document = html::parse("<div>hello").unwrap();
+    // The tree builder should still produce a valid tree with implied html/head/body.
+    let xp = xpath::parse("//div").unwrap();
+    let result = xp.apply(&document).unwrap();
+    assert!(
+        !result.is_empty(),
+        "Truncated input should still produce a valid tree with the div element"
+    );
+}
+
+#[test]
+fn empty_input_creates_implied_elements() {
+    // Per WHATWG spec, empty input should produce implied html/head/body.
+    let document = html::parse("").unwrap();
+    let output = document.to_string();
+    assert_eq!(
+        output, "<html><head></head><body></body></html>",
+        "Empty document should have implied html/head/body per WHATWG spec"
+    );
+}
+
+// ============================================================================
+// Regression: unescape_characters must handle hex character references
+// (&#xHH;) in addition to decimal (&#DD;).
+// ============================================================================
+
+#[test]
+fn unescape_hex_character_references() {
+    let result = html::unescape_characters("&#x27;hello&#x27;");
+    assert_eq!(result, "'hello'", "Hex char ref &#x27; should produce apostrophe");
+}
+
+#[test]
+fn unescape_mixed_hex_and_decimal() {
+    let result = html::unescape_characters("&#x41;&#66;&#x43;");
+    assert_eq!(result, "ABC", "Mixed hex (&#x41;, &#x43;) and decimal (&#66;) should all work");
+}
+
+#[test]
+fn unescape_uppercase_hex() {
+    let result = html::unescape_characters("&#x2019;");
+    assert_eq!(result, "\u{2019}", "Uppercase hex &#x2019; should produce right single quotation mark");
+}

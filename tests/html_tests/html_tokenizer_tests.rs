@@ -1204,13 +1204,12 @@ fn nested_elements() {
 
 #[test]
 fn empty_document() {
-    // Empty input should parse without errors
+    // Empty input should parse without errors.
+    // Per WHATWG spec, EOF triggers implied html/head/body elements.
     let text = "";
     let document = html::parse(text).unwrap();
     let output = document.to_string();
-    // The output should be empty (no implicit elements generated for empty input)
-    assert!(output.is_empty() || output.trim().is_empty(),
-        "empty document should produce empty or whitespace-only output. Got: {:?}", output);
+    assert_eq!(output, "<html><head></head><body></body></html>");
 }
 
 #[test]

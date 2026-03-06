@@ -9,15 +9,13 @@ use crate::{
     xpath::{
         grammar::{
             data_model::{
-                AttributeNode, CommentNode, ElementNode, TextNode, XpathDocumentNode, XpathItem,
+                AttributeNode, CommentNode, ElementNode, TextNode, XpathDocumentNode,
             },
             XpathItemTreeNode,
         },
-        Xpath, XpathItemTree,
+        XpathItemTree,
     },
 };
-
-use super::DocumentNode;
 
 mod chars;
 /// Builder API for programmatically constructing [`XpathItemTree`] documents.
@@ -560,7 +558,7 @@ impl HtmlParser {
         let chars: Vec<char> = text.chars().collect();
         let input_stream = VecPointerRef::new(&chars);
         let mut tokenizer = tokenizer::Tokenizer::new(input_stream, self);
-        let mut tokenizer_error_handler = tokenizer::DefaultTokenizerErrorHandler;
+        let tokenizer_error_handler = tokenizer::DefaultTokenizerErrorHandler;
 
         tokenizer.set_error_handler(&tokenizer_error_handler);
 
@@ -1599,8 +1597,10 @@ impl HtmlParser {
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-button-scope>
     pub(crate) fn has_an_element_in_button_scope(&self, tag_name: &str) -> bool {
-        static BUTTON_SCOPE_TYPES: [&str; 10] = [
+        static BUTTON_SCOPE_TYPES: [&str; 19] = [
             "applet", "caption", "html", "table", "td", "th", "marquee", "object", "template",
+            "mi", "mo", "mn", "ms", "mtext", "annotation-xml",
+            "foreignObject", "desc", "title",
             "button",
         ];
         self.has_an_element_in_the_specific_scope(&[tag_name], &BUTTON_SCOPE_TYPES)
@@ -1608,8 +1608,10 @@ impl HtmlParser {
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-list-item-scope>
     pub(crate) fn has_an_element_in_list_item_scope(&self, tag_name: &str) -> bool {
-        static LIST_ITEM_SCOPE_TYPES: [&str; 11] = [
+        static LIST_ITEM_SCOPE_TYPES: [&str; 20] = [
             "applet", "caption", "html", "table", "td", "th", "marquee", "object", "template",
+            "mi", "mo", "mn", "ms", "mtext", "annotation-xml",
+            "foreignObject", "desc", "title",
             "ol", "ul",
         ];
         self.has_an_element_in_the_specific_scope(&[tag_name], &LIST_ITEM_SCOPE_TYPES)
@@ -1849,7 +1851,8 @@ impl HtmlParser {
 
         if matching_elements.len() >= 3 {
             // remove the earliest matching element from the list
-            let earliest_element = matching_elements[0];
+            // matching_elements were collected from a .rev() iterator, so the last entry is the earliest
+            let earliest_element = matching_elements.last().unwrap();
             let earliest_element_id = earliest_element.id();
             self.active_formatting_elements.retain(|node_or_marker| {
                 if let NodeOrMarker::Node(entry) = node_or_marker {

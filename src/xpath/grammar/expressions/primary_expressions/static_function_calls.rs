@@ -513,7 +513,11 @@ fn dispatch_by_local_name<'tree>(
                 let start = (start_double.round() as i64 - 1).max(0) as usize;
                 let end = end.min(chars.len());
                 let start = start.min(chars.len());
-                chars[start..end].iter().collect()
+                if start >= end {
+                    String::new()
+                } else {
+                    chars[start..end].iter().collect()
+                }
             } else {
                 if start_double == f64::NEG_INFINITY {
                     return Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
@@ -1518,6 +1522,11 @@ fn dispatch_by_local_name<'tree>(
         "apply" => {
             check_arity("fn:apply", args, 2)?;
             let func = extract_function_item(&args[0], "fn:apply")?;
+            if args[1].is_empty() {
+                return Err(ExpressionApplyError::new(
+                    "fn:apply: second argument must be an array, got empty sequence".to_string(),
+                ));
+            }
             // Second argument must be an array — extract its members as individual arguments.
             let call_args: Vec<XpathItemSet> = match &args[1][0] {
                 XpathItem::Function(Function::Array { members }) => {
@@ -1622,7 +1631,11 @@ fn dispatch_by_local_name<'tree>(
             }
             let input = func_string(&args[0][0], context.item_tree)?;
             let form = if args.len() == 2 {
-                func_string(&args[1][0], context.item_tree)?
+                if args[1].is_empty() {
+                    "NFC".to_string()
+                } else {
+                    func_string(&args[1][0], context.item_tree)?
+                }
                     .trim()
                     .to_uppercase()
             } else {
@@ -1817,6 +1830,11 @@ fn dispatch_by_local_name<'tree>(
                 func_string(&args[0][0], context.item_tree)?
             };
             // $paramQName as xs:string — lexical QName ("prefix:local" or "local")
+            if args[1].is_empty() {
+                return Err(ExpressionApplyError::new(
+                    "fn:QName: second argument (lexical QName) must not be empty".to_string(),
+                ));
+            }
             let lexical = func_string(&args[1][0], context.item_tree)?;
             let (prefix, local_name) = if let Some(colon_pos) = lexical.find(':') {
                 (
@@ -2993,17 +3011,23 @@ fn func_sum<'tree>(
         )]);
     }
     let atoms = func_data(&args[0], context.item_tree)?;
-    let mut total: f64 = 0.0;
+    let mut total_f64: f64 = 0.0;
+    let mut total_i64: i64 = 0;
     let mut all_integers = true;
     for atom in &atoms {
         match atom {
-            AnyAtomicType::Integer(n) => total += *n as f64,
+            AnyAtomicType::Integer(n) => {
+                if all_integers {
+                    total_i64 = total_i64.wrapping_add(*n);
+                }
+                total_f64 += *n as f64;
+            }
             AnyAtomicType::Float(f) => {
-                total += f.0 as f64;
+                total_f64 += f.0 as f64;
                 all_integers = false;
             }
             AnyAtomicType::Double(d) => {
-                total += d.0;
+                total_f64 += d.0;
                 all_integers = false;
             }
             AnyAtomicType::String(s) => {
@@ -3014,7 +3038,7 @@ fn func_sum<'tree>(
                         s
                     ))
                 })?;
-                total += d;
+                total_f64 += d;
                 all_integers = false;
             }
             other => {
@@ -3027,11 +3051,11 @@ fn func_sum<'tree>(
     }
     if all_integers {
         Ok(xpath_item_set![XpathItem::AnyAtomicType(
-            AnyAtomicType::Integer(total as i64)
+            AnyAtomicType::Integer(total_i64)
         )])
     } else {
         Ok(xpath_item_set![XpathItem::AnyAtomicType(
-            AnyAtomicType::Double(ordered_float::OrderedFloat(total))
+            AnyAtomicType::Double(ordered_float::OrderedFloat(total_f64))
         )])
     }
 }
@@ -3072,12 +3096,63 @@ fn func_min_max<'tree>(
     if args[0].is_empty() {
         return Ok(XpathItemSet::new());
     }
+    let func_name = if is_min { "min" } else { "max" };
     let atoms = func_data(&args[0], context.item_tree)?;
-    let mut best: f64 = if is_min { f64::INFINITY } else { f64::NEG_INFINITY };
+
+    // Determine comparison mode: all-numeric, all-string, or mixed (error).
+    let has_numeric = atoms.iter().any(|a| {
+        matches!(
+            a,
+            AnyAtomicType::Integer(_) | AnyAtomicType::Float(_) | AnyAtomicType::Double(_)
+        )
+    });
+    let has_string = atoms.iter().any(|a| matches!(a, AnyAtomicType::String(_)));
+    if has_numeric && has_string {
+        return Err(ExpressionApplyError::new(format!(
+            "err:FORG0006 fn:{func_name}: mixed numeric and string types are not comparable"
+        )));
+    }
+
+    if has_string {
+        // All-string comparison.
+        let mut best_str: Option<&str> = None;
+        for atom in &atoms {
+            if let AnyAtomicType::String(s) = atom {
+                best_str = Some(match best_str {
+                    None => s.as_str(),
+                    Some(b) => {
+                        if (is_min && s.as_str() < b) || (!is_min && s.as_str() > b) {
+                            s.as_str()
+                        } else {
+                            b
+                        }
+                    }
+                });
+            }
+        }
+        return Ok(xpath_item_set![XpathItem::AnyAtomicType(
+            AnyAtomicType::String(best_str.unwrap().to_string())
+        )]);
+    }
+
+    // Numeric comparison with integer-precision preservation.
+    let mut best_f64: f64 = if is_min { f64::INFINITY } else { f64::NEG_INFINITY };
+    let mut best_i64: i64 = if is_min { i64::MAX } else { i64::MIN };
     let mut all_integers = true;
     for atom in &atoms {
         let val = match atom {
-            AnyAtomicType::Integer(n) => *n as f64,
+            AnyAtomicType::Integer(n) => {
+                if all_integers {
+                    if is_min {
+                        if *n < best_i64 {
+                            best_i64 = *n;
+                        }
+                    } else if *n > best_i64 {
+                        best_i64 = *n;
+                    }
+                }
+                *n as f64
+            }
             AnyAtomicType::Float(f) => {
                 all_integers = false;
                 f.0 as f64
@@ -3086,46 +3161,28 @@ fn func_min_max<'tree>(
                 all_integers = false;
                 d.0
             }
-            AnyAtomicType::String(s) => {
-                // String comparison: return the lexicographically min/max string.
-                // Switch to string comparison mode.
-                let mut best_str = s.as_str();
-                for other in &atoms {
-                    if let AnyAtomicType::String(os) = other {
-                        if (is_min && os.as_str() < best_str)
-                            || (!is_min && os.as_str() > best_str)
-                        {
-                            best_str = os.as_str();
-                        }
-                    }
-                }
-                return Ok(xpath_item_set![XpathItem::AnyAtomicType(
-                    AnyAtomicType::String(best_str.to_string())
-                )]);
-            }
             other => {
                 return Err(ExpressionApplyError::new(format!(
-                    "fn:{}: non-comparable value {:?}",
-                    if is_min { "min" } else { "max" },
+                    "fn:{func_name}: non-comparable value {:?}",
                     other
                 )));
             }
         };
         if is_min {
-            if val < best {
-                best = val;
+            if val < best_f64 {
+                best_f64 = val;
             }
-        } else if val > best {
-            best = val;
+        } else if val > best_f64 {
+            best_f64 = val;
         }
     }
     if all_integers {
         Ok(xpath_item_set![XpathItem::AnyAtomicType(
-            AnyAtomicType::Integer(best as i64)
+            AnyAtomicType::Integer(best_i64)
         )])
     } else {
         Ok(xpath_item_set![XpathItem::AnyAtomicType(
-            AnyAtomicType::Double(ordered_float::OrderedFloat(best))
+            AnyAtomicType::Double(ordered_float::OrderedFloat(best_f64))
         )])
     }
 }
