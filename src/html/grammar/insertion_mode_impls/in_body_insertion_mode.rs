@@ -1356,7 +1356,7 @@ impl HtmlParser {
                 };
 
                 let new_element_id = self.create_an_element_for_the_token(old_token.clone(), super::HTML_NAMESPACE)?;
-                let new_node_id = self.insert_create_an_element_for_the_token_result(new_element_id)?;
+                let new_node_id = self.create_element_node_from_token_result(new_element_id);
 
                 // Replace in active formatting elements
                 self.active_formatting_elements[node_active_index] =
@@ -1387,7 +1387,9 @@ impl HtmlParser {
             // Step 4.15: Insert whatever last node ended up being in the appropriate
             // place for inserting a node, but using common ancestor as the override target.
             last_node_id.detach(&mut self.arena);
-            common_ancestor_id.append(last_node_id, &mut self.arena);
+            let insertion_location =
+                self.appropriate_place_for_inserting_a_node(Some(common_ancestor_id))?;
+            insertion_location.insert(last_node_id, &mut self.arena);
 
             // Step 4.16: Create an element for the token for which the formatting element
             // was created, in the HTML namespace, with the furthest block as the intended parent
@@ -1395,7 +1397,7 @@ impl HtmlParser {
                 formatting_element_entry.token.clone(),
                 super::HTML_NAMESPACE,
             )?;
-            let new_formatting_id = self.insert_create_an_element_for_the_token_result(new_element_id)?;
+            let new_formatting_id = self.create_element_node_from_token_result(new_element_id);
 
             // Step 4.17: Take all of the child nodes of the furthest block and append
             // them to the new element

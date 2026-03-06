@@ -319,8 +319,24 @@ fn dispatch_by_local_name<'tree>(
         }
         // https://www.w3.org/TR/xpath-functions-31/#func-round
         "round" => {
-            check_arity("fn:round", args, 1)?;
-            func_numeric_unary(&args[0], |i| i, |f| f.round(), |d| d.round()).map(Some)
+            if args.len() == 2 {
+                // fn:round($arg, $precision)
+                let precision = extract_double(&args[1], context.item_tree)? as i32;
+                let factor = 10f64.powi(precision);
+                func_numeric_unary(
+                    &args[0],
+                    |n| {
+                        let v = (n as f64 * factor).round() / factor;
+                        v as i64
+                    },
+                    |f| (f as f64 * factor as f64).round() as f32 / factor as f32,
+                    |d| (d * factor as f64).round() / factor as f64,
+                )
+                .map(Some)
+            } else {
+                check_arity("fn:round", args, 1)?;
+                func_numeric_unary(&args[0], |i| i, |f| f.round(), |d| d.round()).map(Some)
+            }
         }
         // String functions
         // https://www.w3.org/TR/xpath-functions-31/#func-concat
@@ -816,7 +832,6 @@ fn dispatch_by_local_name<'tree>(
             let re = build_regex(&pattern, &flags)?;
             let tokens: XpathItemSet = re
                 .split(&input)
-                .filter(|s| !s.is_empty())
                 .map(|s| XpathItem::AnyAtomicType(AnyAtomicType::String(s.to_string())))
                 .collect();
             Ok(Some(tokens))
@@ -1062,6 +1077,12 @@ fn dispatch_by_local_name<'tree>(
                 for atom in atoms {
                     match atom {
                         AnyAtomicType::Integer(n) => {
+                            if n < 0 {
+                                return Err(ExpressionApplyError::new(format!(
+                                    "fn:codepoints-to-string: invalid codepoint {}",
+                                    n
+                                )));
+                            }
                             let ch = char::from_u32(n as u32).ok_or_else(|| {
                                 ExpressionApplyError::new(format!(
                                     "fn:codepoints-to-string: invalid codepoint {}",
@@ -1302,16 +1323,26 @@ fn dispatch_by_local_name<'tree>(
             };
             match target {
                 XpathItem::Node(node) => {
-                    let name = match node {
-                        XpathItemTreeNode::ElementNode(e) => Some(e.name.clone()),
-                        XpathItemTreeNode::AttributeNode(a) => Some(a.name.clone()),
-                        XpathItemTreeNode::PINode(pi) => Some(pi.target.clone()),
+                    let qname = match node {
+                        XpathItemTreeNode::ElementNode(e) => Some(AnyAtomicType::QName {
+                            namespace_uri: e.namespace.clone().unwrap_or_default(),
+                            local_name: e.name.clone(),
+                            prefix: None,
+                        }),
+                        XpathItemTreeNode::AttributeNode(a) => Some(AnyAtomicType::QName {
+                            namespace_uri: String::new(),
+                            local_name: a.name.clone(),
+                            prefix: None,
+                        }),
+                        XpathItemTreeNode::PINode(pi) => Some(AnyAtomicType::QName {
+                            namespace_uri: String::new(),
+                            local_name: pi.target.clone(),
+                            prefix: None,
+                        }),
                         _ => None,
                     };
-                    match name {
-                        Some(n) => Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
-                            AnyAtomicType::String(n)
-                        )])),
+                    match qname {
+                        Some(q) => Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(q)])),
                         None => Ok(Some(XpathItemSet::new())),
                     }
                 }
@@ -1487,12 +1518,25 @@ fn dispatch_by_local_name<'tree>(
         "apply" => {
             check_arity("fn:apply", args, 2)?;
             let func = extract_function_item(&args[0], "fn:apply")?;
-            // Second argument must be an array — but since we don't have typed arrays,
-            // treat the second argument as a sequence of arguments.
-            let call_args: Vec<XpathItemSet> = args[1]
-                .iter()
-                .map(|item| xpath_item_set![item.clone()])
-                .collect();
+            // Second argument must be an array — extract its members as individual arguments.
+            let call_args: Vec<XpathItemSet> = match &args[1][0] {
+                XpathItem::Function(Function::Array { members }) => {
+                    members
+                        .iter()
+                        .map(|member| {
+                            member
+                                .iter()
+                                .map(|v| XpathItem::AnyAtomicType(v.clone()))
+                                .collect()
+                        })
+                        .collect()
+                }
+                _ => {
+                    return Err(ExpressionApplyError::new(
+                        "fn:apply: second argument must be an array".to_string(),
+                    ));
+                }
+            };
             invoke_function_item(func, call_args, context).map(Some)
         }
         // https://www.w3.org/TR/xpath-functions-31/#func-function-name
@@ -1552,6 +1596,11 @@ fn dispatch_by_local_name<'tree>(
             }
             // Arg 3 (decimal-format-name) is ignored; only default format supported.
             let value = extract_double(&args[0], context.item_tree)?;
+            if args[1].is_empty() {
+                return Err(ExpressionApplyError::new(
+                    "fn:format-number: picture argument must not be an empty sequence".to_string(),
+                ));
+            }
             let picture = func_string(&args[1][0], context.item_tree)?;
             let result = func_format_number(value, &picture)?;
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(

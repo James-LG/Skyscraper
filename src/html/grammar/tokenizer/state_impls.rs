@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 
-use nom::AsChar;
 use once_cell::sync::Lazy;
 
 use crate::{
-    html::grammar::{chars, tokenizer, HtmlParseError, HTML_NAMESPACE},
-    xpath::grammar::{data_model::AttributeNode, XpathItemTreeNode},
+    html::grammar::{chars, HtmlParseError, HTML_NAMESPACE},
+    xpath::grammar::XpathItemTreeNode,
 };
 
 use super::{
@@ -764,6 +763,7 @@ impl<'a> Tokenizer<'a> {
             }
             Some('<') => {
                 self.state = TokenizerState::ScriptDataDoubleEscapedLessThanSign;
+                self.emit(HtmlToken::Character('<'))?;
             }
             Some(&chars::NULL) => {
                 self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
@@ -793,6 +793,7 @@ impl<'a> Tokenizer<'a> {
             }
             Some('<') => {
                 self.state = TokenizerState::ScriptDataDoubleEscapedLessThanSign;
+                self.emit(HtmlToken::Character('<'))?;
             }
             Some(&chars::NULL) => {
                 self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
@@ -824,6 +825,7 @@ impl<'a> Tokenizer<'a> {
             }
             Some('<') => {
                 self.state = TokenizerState::ScriptDataDoubleEscapedLessThanSign;
+                self.emit(HtmlToken::Character('<'))?;
             }
             Some('>') => {
                 self.state = TokenizerState::ScriptData;

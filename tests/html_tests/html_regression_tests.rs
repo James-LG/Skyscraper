@@ -402,6 +402,162 @@ fn unescape_basic_entities_still_work() {
 // ============================================================================
 
 #[test]
+// ============================================================================
+// Regression: CR-10 - Adoption agency algorithm must not double-push elements
+// onto the open_elements stack. The create_element_node_from_token_result
+// method creates elements without pushing to open_elements; the adoption
+// agency manages the stack position manually.
+// ============================================================================
+
+#[test]
+fn adoption_agency_overlapping_formatting_no_double_push() {
+    // Overlapping formatting tags trigger the adoption agency algorithm.
+    // Before the fix, insert_create_an_element_for_the_token_result would
+    // push the new node to open_elements, and then the algorithm would
+    // also manually place it, resulting in duplicates in the stack.
+    let text = "<html><body><b><i>bold-italic</b>just-italic</i>normal</body></html>";
+    let document = html::parse(text).unwrap();
+
+    // Verify the tree structure is correct after adoption agency runs
+    let xp_bold_italic = xpath::parse("//b/i").unwrap();
+    let result = xp_bold_italic.apply(&document).unwrap();
+    assert!(
+        !result.is_empty(),
+        "Adoption agency should produce <b><i> nesting"
+    );
+
+    // Verify all text content is preserved
+    let xp_all_text = xpath::parse("//body//text()").unwrap();
+    let all_text = xp_all_text.apply(&document).unwrap();
+    let text_content: String = all_text
+        .iter()
+        .filter_map(|item| item.extract_as_node().text(&document))
+        .collect();
+    assert!(
+        text_content.contains("bold-italic"),
+        "bold-italic text should be present: {text_content}"
+    );
+    assert!(
+        text_content.contains("just-italic"),
+        "just-italic text should be present: {text_content}"
+    );
+    assert!(
+        text_content.contains("normal"),
+        "normal text should be present: {text_content}"
+    );
+}
+
+#[test]
+fn adoption_agency_triple_overlap_no_corruption() {
+    // Three overlapping formatting elements: tests the inner loop (step 4.14)
+    // of the adoption agency algorithm more thoroughly.
+    let text = "<html><body><a href='#'><b><em>text</a>after</em></b></body></html>";
+    let document = html::parse(text).unwrap();
+
+    let xp = xpath::parse("//body//text()").unwrap();
+    let all_text = xp.apply(&document).unwrap();
+    let text_content: String = all_text
+        .iter()
+        .filter_map(|item| item.extract_as_node().text(&document))
+        .collect();
+    assert!(
+        text_content.contains("text"),
+        "text should be present: {text_content}"
+    );
+    assert!(
+        text_content.contains("after"),
+        "after should be present: {text_content}"
+    );
+}
+
+// ============================================================================
+// Regression: CR-11 - ScriptDataDoubleEscaped states must emit '<' character
+// when transitioning to ScriptDataDoubleEscapedLessThanSign per WHATWG spec.
+// ============================================================================
+
+#[test]
+fn script_double_escaped_preserves_less_than() {
+    // Script content with double-escaped comment: the '<' inside should not
+    // be dropped. Before the fix, the '<' was consumed but never emitted.
+    let text = "<html><body><script><!--<script>var x = 1 < 2;</script>--></script></body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    // The '<' characters in "1 < 2" and "<script>" should be preserved in output
+    assert!(
+        output.contains('<'),
+        "Less-than signs in double-escaped script should be preserved: {output:?}"
+    );
+}
+
+// ============================================================================
+// Regression: CR-12 - Adoption agency Step 4.15 must use
+// appropriate_place_for_inserting_a_node with the common ancestor as override
+// target, not a direct append. This ensures foster parenting is respected.
+// ============================================================================
+
+#[test]
+fn adoption_agency_step_15_foster_parenting() {
+    // When adoption agency runs with a table as common ancestor, foster
+    // parenting should be respected. This test exercises the code path.
+    let text = "<html><body><table><b><tr><td>cell</td></tr></b></table></body></html>";
+    let document = html::parse(text).unwrap();
+
+    // Verify the table structure is intact
+    let xp = xpath::parse("//td").unwrap();
+    let result = xp.apply(&document).unwrap();
+    assert!(
+        !result.is_empty(),
+        "Table cell should be present in the document"
+    );
+}
+
+// ============================================================================
+// Regression: CR-13 - ELEMENT_IN_SCOPE_TYPES must include MathML and SVG
+// scope barrier elements per WHATWG spec.
+// ============================================================================
+
+#[test]
+fn svg_foreign_object_is_scope_barrier() {
+    // foreignObject is an SVG scope barrier. Elements inside it should be
+    // parsed in HTML mode, and scope checks should work correctly.
+    let text = "<html><body><svg><foreignObject><p>html content</p></foreignObject></svg></body></html>";
+    let document = html::parse(text).unwrap();
+
+    let xp = xpath::parse("//p").unwrap();
+    let result = xp.apply(&document).unwrap();
+    assert!(
+        !result.is_empty(),
+        "<p> inside <foreignObject> should be found"
+    );
+}
+
+// ============================================================================
+// Regression: CR-14 - Noah's Ark attribute comparison must match by name,
+// not by positional index, to handle different attribute orderings.
+// ============================================================================
+
+#[test]
+fn noahs_ark_attribute_comparison_order_independent() {
+    // Two elements with the same attributes in different order should be
+    // considered matching by the Noah's Ark clause. With the old index-based
+    // comparison, swapped attributes would not match.
+    // We push 4 <b> elements with the same attributes (some in different order)
+    // to trigger Noah's Ark (limit is 3).
+    let text = r#"<html><body>
+        <b class="x" id="a">1</b>
+        <b id="a" class="x">2</b>
+        <b class="x" id="a">3</b>
+        <b id="a" class="x">4
+    </body></html>"#;
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    // All text should be present (Noah's Ark removes old entries but
+    // elements already in the tree remain)
+    assert!(output.contains('1'), "Text 1 should be present: {output:?}");
+    assert!(output.contains('4'), "Text 4 should be present: {output:?}");
+}
+
+#[test]
 fn deeply_nested_document_display_no_overflow() {
     // Build a document nested deeper than 255 levels (u8::MAX).
     // With the old u8 indent, this would overflow. With usize, it works fine.

@@ -941,7 +941,11 @@ fn fn_node_name_element() {
     let items = xpath.apply(&document).unwrap();
     assert_eq!(
         items[0],
-        XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("body")))
+        XpathItem::AnyAtomicType(AnyAtomicType::QName {
+            namespace_uri: String::new(),
+            local_name: String::from("body"),
+            prefix: None,
+        })
     );
 }
 
@@ -1103,7 +1107,7 @@ fn fn_function_arity_inline() {
 #[test]
 fn fn_apply() {
     let document = html::parse("<html><body></body></html>").unwrap();
-    let xpath = xpath::parse("apply(fn:concat#2, (\"hello \", \"world\"))").unwrap();
+    let xpath = xpath::parse(r#"apply(fn:concat#2, ["hello ", "world"])"#).unwrap();
     let items = xpath.apply(&document).unwrap();
     assert_eq!(
         items[0],

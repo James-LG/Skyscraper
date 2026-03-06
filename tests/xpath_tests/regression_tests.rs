@@ -373,3 +373,214 @@ fn fn_substring_normal_cases_still_work() {
         );
     }
 }
+
+// ============================================================================
+// Regression: CR-10 - fn:apply must unpack array members as individual
+// arguments, not treat the sequence items as arguments.
+// ============================================================================
+
+#[test]
+fn fn_apply_unpacks_array_members() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"apply(fn:concat#2, ["hello ", "world"])"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("hello world"))),
+        "fn:apply should unpack array members as function arguments"
+    );
+}
+
+#[test]
+fn fn_apply_non_array_errors() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"apply(fn:concat#2, ("a", "b"))"#).unwrap();
+    let result = xpath.apply(&document);
+    assert!(
+        result.is_err(),
+        "fn:apply with non-array second argument should error"
+    );
+}
+
+// ============================================================================
+// Regression: CR-11 - fn:format-number must not panic when the picture
+// argument is an empty sequence.
+// ============================================================================
+
+#[test]
+fn fn_format_number_empty_picture_errors() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    // Use a subexpression that produces an empty sequence for the picture arg
+    let xpath = xpath::parse(r#"format-number(123, //nonexistent)"#).unwrap();
+    let result = xpath.apply(&document);
+    assert!(
+        result.is_err(),
+        "fn:format-number with empty picture should error, not panic"
+    );
+}
+
+// ============================================================================
+// Regression: CR-12 - idiv with NaN or Infinity operands must raise FOAR0002,
+// not silently produce wrong integer results.
+// ============================================================================
+
+#[test]
+fn idiv_nan_raises_error() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("number('NaN') idiv 1").unwrap();
+    let result = xpath.apply(&document);
+    assert!(
+        result.is_err(),
+        "NaN idiv 1 should raise FOAR0002 error"
+    );
+}
+
+#[test]
+fn idiv_infinity_raises_error() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("1.0e308 * 10 idiv 1").unwrap();
+    let result = xpath.apply(&document);
+    assert!(
+        result.is_err(),
+        "Infinity idiv 1 should raise FOAR0002 error"
+    );
+}
+
+#[test]
+fn idiv_normal_still_works() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("10 idiv 3").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Integer(3)),
+        "10 idiv 3 should return 3"
+    );
+}
+
+// ============================================================================
+// Regression: CR-13 - fn:node-name must return xs:QName, not xs:string.
+// ============================================================================
+
+#[test]
+fn fn_node_name_returns_qname() {
+    let document = html::parse("<html><body><div>test</div></body></html>").unwrap();
+    let xpath = xpath::parse("node-name(//div)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    match &items[0] {
+        XpathItem::AnyAtomicType(AnyAtomicType::QName { local_name, .. }) => {
+            assert_eq!(local_name, "div", "local name should be 'div'");
+        }
+        other => panic!(
+            "fn:node-name should return QName, got: {:?}",
+            other
+        ),
+    }
+}
+
+#[test]
+fn fn_node_name_attribute_returns_qname() {
+    let document =
+        html::parse(r#"<html><body><div class="test">x</div></body></html>"#).unwrap();
+    let xpath = xpath::parse("node-name(//div/@class)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    match &items[0] {
+        XpathItem::AnyAtomicType(AnyAtomicType::QName { local_name, .. }) => {
+            assert_eq!(local_name, "class", "local name should be 'class'");
+        }
+        other => panic!(
+            "fn:node-name on attribute should return QName, got: {:?}",
+            other
+        ),
+    }
+}
+
+// ============================================================================
+// Regression: CR-14 - fn:round must support the 2-argument form
+// fn:round($arg, $precision).
+// ============================================================================
+
+#[test]
+fn fn_round_two_args() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("round(3.456e0, 2)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Double(ordered_float::OrderedFloat(3.46))),
+        "round(3.456, 2) should return 3.46"
+    );
+}
+
+#[test]
+fn fn_round_two_args_negative_precision() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("round(1234e0, -2)").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Double(ordered_float::OrderedFloat(1200.0))),
+        "round(1234, -2) should return 1200"
+    );
+}
+
+// ============================================================================
+// Regression: CR-15 - fn:tokenize 2-arg form must NOT filter empty strings.
+// ============================================================================
+
+#[test]
+fn fn_tokenize_2arg_preserves_empty_strings() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"tokenize(",a,,b,", ",")"#).unwrap();
+    let items = xpath.apply(&document).unwrap();
+    // Expected: ("", "a", "", "b", "")
+    assert_eq!(
+        items.len(),
+        5,
+        "tokenize(',a,,b,', ',') should return 5 items including empty strings, got {}",
+        items.len()
+    );
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::new())),
+        "First item should be empty string"
+    );
+    assert_eq!(
+        items[2],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::new())),
+        "Third item should be empty string"
+    );
+    assert_eq!(
+        items[4],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::new())),
+        "Fifth item should be empty string"
+    );
+}
+
+// ============================================================================
+// Regression: CR-16 - fn:codepoints-to-string must reject negative integers
+// instead of wrapping them via i64 -> u32 cast.
+// ============================================================================
+
+#[test]
+fn fn_codepoints_to_string_negative_errors() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("codepoints-to-string((-1))").unwrap();
+    let result = xpath.apply(&document);
+    assert!(
+        result.is_err(),
+        "codepoints-to-string(-1) should error, not wrap to valid char"
+    );
+}
+
+#[test]
+fn fn_codepoints_to_string_valid_still_works() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("codepoints-to-string((65, 66, 67))").unwrap();
+    let items = xpath.apply(&document).unwrap();
+    assert_eq!(
+        items[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String(String::from("ABC"))),
+        "codepoints-to-string(65, 66, 67) should return 'ABC'"
+    );
+}

@@ -1,13 +1,10 @@
 //! <https://html.spec.whatwg.org/multipage/parsing.html#tokenization>
 
-use std::collections::{hash_map::Entry, HashMap};
-
-use indextree::NodeId;
 use thiserror::Error;
 
 use crate::{vecpointer::VecPointerRef, xpath::grammar::XpathItemTreeNode};
 
-use super::{Acknowledgement, HtmlParseError, HtmlParseErrorType, ParseErrorHandler};
+use super::{Acknowledgement, HtmlParseError};
 
 mod named_character_references;
 mod state_impls;
@@ -351,8 +348,8 @@ pub struct Tokenizer<'a> {
     return_state: Option<TokenizerState>,
     temporary_buffer: Vec<char>,
     input_stream: VecPointerRef<'a, char>,
-    parser: Box<&'a mut dyn Parser>,
-    error_handler: Option<Box<&'a dyn TokenizerErrorHandler>>,
+    parser: &'a mut dyn Parser,
+    error_handler: Option<&'a dyn TokenizerErrorHandler>,
     comment_token: Option<CommentToken>,
     doctype_token: Option<DoctypeToken>,
     tag_token: Option<TagTokenType>,
@@ -363,7 +360,7 @@ pub struct Tokenizer<'a> {
 }
 
 impl<'a> Tokenizer<'a> {
-    pub fn new(input_stream: VecPointerRef<'a, char>, parser: Box<&'a mut dyn Parser>) -> Self {
+    pub fn new(input_stream: VecPointerRef<'a, char>, parser: &'a mut dyn Parser) -> Self {
         Tokenizer {
             state: TokenizerState::Data,
             return_state: None,
@@ -380,7 +377,7 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    pub fn set_error_handler(&mut self, error_handler: Box<&'a dyn TokenizerErrorHandler>) {
+    pub fn set_error_handler(&mut self, error_handler: &'a dyn TokenizerErrorHandler) {
         self.error_handler = Some(error_handler);
     }
 

@@ -181,8 +181,12 @@ pub(crate) const SVG_NAMESPACE: &str = "http://www.w3.org/2000/svg";
 /// <https://infra.spec.whatwg.org/#mathml-namespace>
 pub(crate) const MATHML_NAMESPACE: &str = "http://www.w3.org/1998/Math/MathML";
 
-pub(crate) static ELEMENT_IN_SCOPE_TYPES: [&str; 9] = [
+pub(crate) static ELEMENT_IN_SCOPE_TYPES: [&str; 18] = [
     "applet", "caption", "html", "table", "td", "th", "marquee", "object", "template",
+    // MathML scope barriers
+    "mi", "mo", "mn", "ms", "mtext", "annotation-xml",
+    // SVG scope barriers
+    "foreignObject", "desc", "title",
 ];
 pub(crate) static GENERATE_IMPLIED_END_TAG_TYPES: [&str; 10] = [
     "dd", "dt", "li", "optgroup", "option", "p", "rb", "rp", "rt", "rtc",
@@ -555,10 +559,10 @@ impl HtmlParser {
 
         let chars: Vec<char> = text.chars().collect();
         let input_stream = VecPointerRef::new(&chars);
-        let mut tokenizer = tokenizer::Tokenizer::new(input_stream, Box::new(self));
+        let mut tokenizer = tokenizer::Tokenizer::new(input_stream, self);
         let mut tokenizer_error_handler = tokenizer::DefaultTokenizerErrorHandler;
 
-        tokenizer.set_error_handler(Box::new(&tokenizer_error_handler));
+        tokenizer.set_error_handler(&tokenizer_error_handler);
 
         while !tokenizer.is_terminated() {
             tokenizer.step()?;
@@ -623,9 +627,9 @@ impl HtmlParser {
         // 7. Create tokenizer, set initial state, and run.
         let chars: Vec<char> = text.chars().collect();
         let input_stream = VecPointerRef::new(&chars);
-        let mut tokenizer = tokenizer::Tokenizer::new(input_stream, Box::new(self));
+        let mut tokenizer = tokenizer::Tokenizer::new(input_stream, self);
         let tokenizer_error_handler = tokenizer::DefaultTokenizerErrorHandler;
-        tokenizer.set_error_handler(Box::new(&tokenizer_error_handler));
+        tokenizer.set_error_handler(&tokenizer_error_handler);
         tokenizer.set_state(initial_state);
 
         while !tokenizer.is_terminated() {
@@ -1007,23 +1011,31 @@ impl HtmlParser {
         Ok(element_id)
     }
 
-    pub(crate) fn insert_create_an_element_for_the_token_result(
+    /// Creates an element node and its attributes in the arena without modifying
+    /// the stack of open elements. Used by the adoption agency algorithm which
+    /// manages the stack position manually.
+    pub(crate) fn create_element_node_from_token_result(
         &mut self,
         result: CreateAnElementForTheTokenResult,
-    ) -> Result<NodeId, HtmlParseError> {
-        // add the element to the arena
+    ) -> NodeId {
         #[cfg(feature = "debug_prints")]
         println!("inserting element: {:?}", result.element);
         let element_id = self.new_node(XpathItemTreeNode::ElementNode(result.element));
 
-        // add the attributes to the element
         for attribute in result.attributes {
             let item_id = self.new_node(XpathItemTreeNode::AttributeNode(attribute));
             element_id.append(item_id, &mut self.arena);
         }
 
-        self.open_elements.push(element_id);
+        element_id
+    }
 
+    pub(crate) fn insert_create_an_element_for_the_token_result(
+        &mut self,
+        result: CreateAnElementForTheTokenResult,
+    ) -> Result<NodeId, HtmlParseError> {
+        let element_id = self.create_element_node_from_token_result(result);
+        self.open_elements.push(element_id);
         Ok(element_id)
     }
 
@@ -1822,10 +1834,11 @@ impl HtmlParser {
                     return false;
                 }
 
-                for (i, attribute) in e_attributes.iter().enumerate() {
-                    if attribute.name != element_attributes[i].name
-                        || attribute.value != element_attributes[i].value
-                    {
+                for attribute in e_attributes.iter() {
+                    let has_match = element_attributes.iter().any(|ea| {
+                        ea.name == attribute.name && ea.value == attribute.value
+                    });
+                    if !has_match {
                         return false;
                     }
                 }
