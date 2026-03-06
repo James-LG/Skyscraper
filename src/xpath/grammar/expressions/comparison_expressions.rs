@@ -147,6 +147,11 @@ impl ComparisonExpr {
                 if result.is_empty() || second_result.is_empty() {
                     return Ok(XpathItemSet::new());
                 }
+                if result.len() > 1 || second_result.len() > 1 {
+                    return Err(ExpressionApplyError {
+                        msg: String::from("err:XPTY0004 Node comparison requires singleton node operands"),
+                    });
+                }
                 let node1 = match &result[0] {
                     XpathItem::Node(n) => n,
                     _ => {

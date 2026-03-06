@@ -2368,7 +2368,7 @@ impl Parser for HtmlParser {
 ///
 /// Implement this trait to customize how parse errors are handled (e.g. to
 /// collect warnings instead of failing immediately).
-pub trait ParseErrorHandler {
+pub(crate) trait ParseErrorHandler {
     /// Called when a parse error is encountered.
     ///
     /// Return `Ok(())` to continue parsing, or `Err(...)` to abort.
@@ -2376,7 +2376,7 @@ pub trait ParseErrorHandler {
 }
 
 /// The default error handler, which swallows all parse errors and continues parsing.
-pub struct DefaultParseErrorHandler;
+pub(crate) struct DefaultParseErrorHandler;
 
 impl ParseErrorHandler for DefaultParseErrorHandler {
     fn error_emitted(&self, _error: HtmlParseErrorType) -> Result<(), HtmlParseError> {

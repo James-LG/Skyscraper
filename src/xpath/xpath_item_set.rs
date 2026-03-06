@@ -185,7 +185,7 @@ macro_rules! xpath_item_set {
     ($($value:expr),*) => {
         {
             let items: Vec<$crate::xpath::grammar::data_model::XpathItem> = vec![$($value,)*];
-            crate::xpath::XpathItemSet::from(items)
+            $crate::xpath::XpathItemSet::from(items)
         }
     };
 }

@@ -76,7 +76,8 @@ impl XpathItemTreeNode {
         &'tree self,
         tree: &'tree XpathItemTree,
     ) -> impl Iterator<Item = &'tree XpathItemTreeNode> + 'tree {
-        tree.root_node
+        let start_id = self.node_id().unwrap_or(tree.root_node);
+        start_id
             .descendants(&tree.arena)
             .map(|node_id| tree.get(node_id))
     }

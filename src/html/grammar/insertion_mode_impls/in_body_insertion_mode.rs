@@ -551,6 +551,7 @@ impl HtmlParser {
                     "nav",
                     "ol",
                     "pre",
+                    "search",
                     "section",
                     "summary",
                     "ul",
@@ -1416,11 +1417,11 @@ impl HtmlParser {
             // formatting elements, and insert the new element into the list of
             // active formatting elements at the position of the aforementioned bookmark.
             self.active_formatting_elements.remove(formatting_element_index);
-            let insert_pos = if bookmark > self.active_formatting_elements.len() {
-                self.active_formatting_elements.len()
-            } else {
-                bookmark
-            };
+            // After removal, indices above formatting_element_index shift down by one.
+            if bookmark > formatting_element_index {
+                bookmark -= 1;
+            }
+            let insert_pos = bookmark.min(self.active_formatting_elements.len());
             self.active_formatting_elements.insert(
                 insert_pos,
                 NodeOrMarker::Node(NodeEntry {

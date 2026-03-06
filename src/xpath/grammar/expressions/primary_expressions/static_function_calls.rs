@@ -296,8 +296,16 @@ fn dispatch_by_local_name<'tree>(
                 }
                 &args[0][0]
             };
-            let s = func_string(target, context.item_tree)?;
-            let val = s.trim().parse::<f64>().unwrap_or(f64::NAN);
+            // Handle boolean-to-number directly per XPath spec (true→1.0, false→0.0).
+            let val = match target {
+                XpathItem::AnyAtomicType(AnyAtomicType::Boolean(b)) => {
+                    if *b { 1.0 } else { 0.0 }
+                }
+                _ => {
+                    let s = func_string(target, context.item_tree)?;
+                    s.trim().parse::<f64>().unwrap_or(f64::NAN)
+                }
+            };
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::Double(ordered_float::OrderedFloat(val))
             )]))
@@ -504,7 +512,13 @@ fn dispatch_by_local_name<'tree>(
                     )]));
                 }
                 if start_double.is_infinite() && start_double < 0.0 {
-                    // negative infinity start: start + len overflows, return empty
+                    if len_double.is_infinite() && len_double > 0.0 {
+                        // Per XPath spec: substring("...", -INF, INF) returns the full string.
+                        return Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                            AnyAtomicType::String(chars.iter().collect())
+                        )]));
+                    }
+                    // negative infinity start with finite length: result is empty.
                     return Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                         AnyAtomicType::String(String::new())
                     )]));
@@ -654,11 +668,12 @@ fn dispatch_by_local_name<'tree>(
         "distinct-values" => {
             check_arity("fn:distinct-values", args, 1)?;
             let atoms = func_data(&args[0], context.item_tree)?;
+            let mut seen: Vec<AnyAtomicType> = Vec::new();
             let mut result = XpathItemSet::new();
             for a in atoms {
-                let item = XpathItem::AnyAtomicType(a);
-                if !result.contains(&item) {
-                    result.insert(item);
+                if !seen.iter().any(|existing| atoms_equal(existing, &a)) {
+                    seen.push(a.clone());
+                    result.insert(XpathItem::AnyAtomicType(a));
                 }
             }
             Ok(Some(result))
@@ -793,7 +808,10 @@ fn dispatch_by_local_name<'tree>(
                 String::new()
             };
             let re = build_regex(&pattern, &flags)?;
-            let result = re.replace_all(&input, replacement.as_str()).to_string();
+            // Convert XPath replacement syntax (\1, \2, ...) to regex crate syntax ($1, $2, ...)
+            // and escape literal $ signs that have no special meaning in XPath.
+            let converted_replacement = xpath_replacement_to_regex(&replacement);
+            let result = re.replace_all(&input, converted_replacement.as_str()).to_string();
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::String(result)
             )]))
@@ -901,11 +919,14 @@ fn dispatch_by_local_name<'tree>(
                     "fn:index-of: search value must be a single item".to_string(),
                 ));
             }
-            let search = &args[1][0];
-            let positions: XpathItemSet = args[0]
+            // Atomize both the sequence and the search value before comparing.
+            let seq_atoms = func_data(&args[0], context.item_tree)?;
+            let search_atoms = func_data(&args[1], context.item_tree)?;
+            let search_atom = &search_atoms[0];
+            let positions: XpathItemSet = seq_atoms
                 .iter()
                 .enumerate()
-                .filter(|(_, item)| *item == search)
+                .filter(|(_, atom)| atoms_equal(atom, search_atom))
                 .map(|(i, _)| XpathItem::AnyAtomicType(AnyAtomicType::Integer(i as i64 + 1)))
                 .collect();
             Ok(Some(positions))
@@ -2420,7 +2441,7 @@ fn dispatch_array_function<'tree>(
         "get" => {
             check_arity("array:get", args, 2)?;
             let arr = extract_array(&args[0], "array:get")?;
-            let idx = extract_double(&args[1], context.item_tree)? as usize;
+            let idx = extract_index(&args[1], context.item_tree, "array:get")?;
             if idx < 1 || idx > arr.len() {
                 return Err(ExpressionApplyError::new(format!(
                     "array:get: index {} out of bounds (array size {})",
@@ -2438,7 +2459,7 @@ fn dispatch_array_function<'tree>(
         "put" => {
             check_arity("array:put", args, 3)?;
             let arr = extract_array(&args[0], "array:put")?;
-            let idx = extract_double(&args[1], context.item_tree)? as usize;
+            let idx = extract_index(&args[1], context.item_tree, "array:put")?;
             if idx < 1 || idx > arr.len() {
                 return Err(ExpressionApplyError::new(format!(
                     "array:put: index {} out of bounds (array size {})",
@@ -2473,7 +2494,7 @@ fn dispatch_array_function<'tree>(
                 )));
             }
             let arr = extract_array(&args[0], "array:subarray")?;
-            let start = extract_double(&args[1], context.item_tree)? as usize;
+            let start = extract_index(&args[1], context.item_tree, "array:subarray")?;
             if start < 1 || start > arr.len() + 1 {
                 return Err(ExpressionApplyError::new(format!(
                     "array:subarray: start {} out of bounds",
@@ -2481,7 +2502,7 @@ fn dispatch_array_function<'tree>(
                 )));
             }
             let length = if args.len() == 3 {
-                extract_double(&args[2], context.item_tree)? as usize
+                extract_index(&args[2], context.item_tree, "array:subarray")?
             } else {
                 arr.len() - start + 1
             };
@@ -2516,7 +2537,7 @@ fn dispatch_array_function<'tree>(
         "insert-before" => {
             check_arity("array:insert-before", args, 3)?;
             let arr = extract_array(&args[0], "array:insert-before")?;
-            let pos = extract_double(&args[1], context.item_tree)? as usize;
+            let pos = extract_index(&args[1], context.item_tree, "array:insert-before")?;
             if pos < 1 || pos > arr.len() + 1 {
                 return Err(ExpressionApplyError::new(format!(
                     "array:insert-before: position {} out of bounds",
@@ -2935,6 +2956,20 @@ fn check_arity(
     }
 }
 
+/// Extract a single numeric value as a positive integer index from an argument.
+///
+/// Validates that the value is finite, not NaN, and positive before casting.
+fn extract_index(arg: &XpathItemSet, item_tree: &XpathItemTree, func_name: &str) -> Result<usize, ExpressionApplyError> {
+    let val = extract_double(arg, item_tree)?;
+    if val.is_nan() || val.is_infinite() || val < 0.0 || val != val.trunc() {
+        return Err(ExpressionApplyError::new(format!(
+            "{}: invalid index value {}",
+            func_name, val
+        )));
+    }
+    Ok(val as usize)
+}
+
 /// Extract a single numeric value as f64 from an argument.
 fn extract_double(arg: &XpathItemSet, item_tree: &XpathItemTree) -> Result<f64, ExpressionApplyError> {
     if arg.is_empty() {
@@ -3060,6 +3095,65 @@ fn func_sum<'tree>(
     }
 }
 
+/// Convert an XPath replacement string to the syntax expected by the `regex` crate.
+///
+/// XPath uses `\1`, `\2`, etc. for backreferences and `\\` for a literal backslash.
+/// The `regex` crate uses `$1`, `$2`, etc. and `$$` for a literal `$`.
+fn xpath_replacement_to_regex(replacement: &str) -> String {
+    let mut result = String::with_capacity(replacement.len());
+    let chars: Vec<char> = replacement.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '$' {
+            // Escape literal $ as $$ for the regex crate.
+            result.push_str("$$");
+            i += 1;
+        } else if chars[i] == '\\' && i + 1 < chars.len() {
+            let next = chars[i + 1];
+            if next.is_ascii_digit() {
+                // Convert \N backreference to ${N} for the regex crate.
+                // Using ${N} avoids ambiguity when followed by more characters.
+                result.push_str("${");
+                result.push(next);
+                result.push('}');
+                i += 2;
+            } else if next == '\\' {
+                // Literal backslash.
+                result.push('\\');
+                i += 2;
+            } else {
+                // Other escaped characters: pass through as-is.
+                result.push(chars[i]);
+                result.push(next);
+                i += 2;
+            }
+        } else {
+            result.push(chars[i]);
+            i += 1;
+        }
+    }
+    result
+}
+
+/// Compare two atomic values with cross-type numeric equality.
+///
+/// Per the XPath spec, numeric values of different types (Integer, Float, Double)
+/// should be considered equal if their numeric values are equal
+/// (e.g., `Integer(1)` equals `Double(1.0)`).
+fn atoms_equal(a: &AnyAtomicType, b: &AnyAtomicType) -> bool {
+    match (a, b) {
+        // Cross-type numeric comparison: promote both to f64.
+        (AnyAtomicType::Integer(i), AnyAtomicType::Double(d))
+        | (AnyAtomicType::Double(d), AnyAtomicType::Integer(i)) => (*i as f64) == d.0,
+        (AnyAtomicType::Integer(i), AnyAtomicType::Float(f))
+        | (AnyAtomicType::Float(f), AnyAtomicType::Integer(i)) => (*i as f64) == (f.0 as f64),
+        (AnyAtomicType::Float(f), AnyAtomicType::Double(d))
+        | (AnyAtomicType::Double(d), AnyAtomicType::Float(f)) => (f.0 as f64) == d.0,
+        // Same-type: use derived PartialEq.
+        _ => a == b,
+    }
+}
+
 /// Build a `regex::Regex` from an XPath pattern string and flags.
 ///
 /// Supported flags: `i` (case-insensitive), `s` (dot-all), `m` (multi-line), `x` (extended).
@@ -3132,6 +3226,18 @@ fn func_min_max<'tree>(
         }
         return Ok(xpath_item_set![XpathItem::AnyAtomicType(
             AnyAtomicType::String(best_str.unwrap().to_string())
+        )]);
+    }
+
+    // Per XPath 3.1 spec: if any value is NaN, return NaN.
+    let has_nan = atoms.iter().any(|a| match a {
+        AnyAtomicType::Float(f) => f.0.is_nan(),
+        AnyAtomicType::Double(d) => d.0.is_nan(),
+        _ => false,
+    });
+    if has_nan {
+        return Ok(xpath_item_set![XpathItem::AnyAtomicType(
+            AnyAtomicType::Double(ordered_float::OrderedFloat(f64::NAN))
         )]);
     }
 

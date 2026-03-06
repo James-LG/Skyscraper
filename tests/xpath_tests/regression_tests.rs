@@ -713,3 +713,155 @@ fn fn_max_all_integers_preserves_type() {
         "fn:max on all-integer sequence should return an integer"
     );
 }
+
+// ============================================================================
+// Regression: CR-2 - fn:replace must convert XPath backreference syntax (\1)
+// to regex crate syntax ($1).
+// ============================================================================
+
+#[test]
+fn fn_replace_backreference_syntax() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"replace("abcd", "(ab)", "\1X")"#).unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(
+        result[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String("abXcd".to_string())),
+        "fn:replace should convert XPath \\1 backreferences to work correctly"
+    );
+}
+
+#[test]
+fn fn_replace_literal_dollar_sign() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse(r#"replace("abc", "b", "$")"#).unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(
+        result[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String("a$c".to_string())),
+        "Literal $ in replacement string should not be interpreted as backreference"
+    );
+}
+
+// ============================================================================
+// Regression: CR-4 - fn:min/fn:max must return NaN when any value is NaN.
+// ============================================================================
+
+#[test]
+fn fn_min_with_nan_returns_nan() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("min((1.0, number('NaN'), 3.0))").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    match &result[0] {
+        XpathItem::AnyAtomicType(AnyAtomicType::Double(d)) => {
+            assert!(d.0.is_nan(), "fn:min with NaN in sequence should return NaN");
+        }
+        other => panic!("Expected Double(NaN), got: {:?}", other),
+    }
+}
+
+#[test]
+fn fn_max_with_nan_returns_nan() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("max((1.0, number('NaN'), 3.0))").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    match &result[0] {
+        XpathItem::AnyAtomicType(AnyAtomicType::Double(d)) => {
+            assert!(d.0.is_nan(), "fn:max with NaN in sequence should return NaN");
+        }
+        other => panic!("Expected Double(NaN), got: {:?}", other),
+    }
+}
+
+// ============================================================================
+// Regression: CR-6 - fn:index-of must atomize values before comparison.
+// ============================================================================
+
+#[test]
+fn fn_index_of_atomized_comparison() {
+    let document = html::parse("<html><body><div>hello</div></body></html>").unwrap();
+    // index-of with integer values (basic case)
+    let xpath = xpath::parse("index-of((10, 20, 30, 20), 20)").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(result.len(), 2, "fn:index-of should find two matches");
+    assert_eq!(result[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(2)));
+    assert_eq!(result[1], XpathItem::AnyAtomicType(AnyAtomicType::Integer(4)));
+}
+
+// ============================================================================
+// Regression: CR-7 - Node comparison (is/<</>>) must reject multi-item operands.
+// ============================================================================
+
+#[test]
+fn node_comparison_rejects_multi_item_operands() {
+    let document =
+        html::parse("<html><body><div>a</div><div>b</div></body></html>").unwrap();
+    let xpath = xpath::parse("//div is //div").unwrap();
+    let result = xpath.apply(&document);
+    assert!(
+        result.is_err(),
+        "Node comparison with multi-item operands should raise XPTY0004"
+    );
+}
+
+// ============================================================================
+// Regression: CR-9 - fn:distinct-values must treat Integer(1) and Double(1.0)
+// as equal for deduplication.
+// ============================================================================
+
+#[test]
+fn fn_distinct_values_cross_type_numeric() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("count(distinct-values((1, 1.0, 2)))").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(
+        result[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Integer(2)),
+        "fn:distinct-values should consider integer 1 and double 1.0 as equal"
+    );
+}
+
+// ============================================================================
+// Regression: CR-12 - fn:number(true()) should return 1.0, not NaN.
+// ============================================================================
+
+#[test]
+fn fn_number_true_returns_one() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("number(true())").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(
+        result[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Double(ordered_float::OrderedFloat(1.0))),
+        "fn:number(true()) should return 1.0 per XPath spec"
+    );
+}
+
+#[test]
+fn fn_number_false_returns_zero() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("number(false())").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(
+        result[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Double(ordered_float::OrderedFloat(0.0))),
+        "fn:number(false()) should return 0.0 per XPath spec"
+    );
+}
+
+// ============================================================================
+// Regression: CR-14 - fn:substring(-INF, INF) should return the full string.
+// ============================================================================
+
+#[test]
+fn fn_substring_neg_inf_pos_inf() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath =
+        xpath::parse(r#"substring("motor car", -1 div 0e0, 1 div 0e0)"#).unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(
+        result[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::String("motor car".to_string())),
+        "fn:substring with start=-INF and length=INF should return the full string"
+    );
+}

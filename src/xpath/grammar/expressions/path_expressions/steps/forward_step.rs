@@ -98,6 +98,12 @@ fn eval_forward_axis<'tree>(
                         nodes.push(child);
                     }
                 }
+            } else {
+                return Err(ExpressionApplyError {
+                    msg: String::from(
+                        "err:XPTY0020 context item for axis step is not a node",
+                    ),
+                });
             }
             Ok(nodes)
         }
@@ -111,6 +117,12 @@ fn eval_forward_axis<'tree>(
                         nodes.push(desc_node);
                     }
                 }
+            } else {
+                return Err(ExpressionApplyError {
+                    msg: String::from(
+                        "err:XPTY0020 context item for axis step is not a node",
+                    ),
+                });
             }
             Ok(nodes)
         }
@@ -158,6 +170,12 @@ fn eval_forward_axis<'tree>(
                         }
                     }
                 }
+            } else if !matches!(context.item, XpathItem::Node(_)) {
+                return Err(ExpressionApplyError {
+                    msg: String::from(
+                        "err:XPTY0020 context item for axis step is not a node",
+                    ),
+                });
             }
             Ok(nodes)
         }
@@ -179,6 +197,12 @@ fn eval_forward_axis<'tree>(
                             .and_then(|n| n.next_sibling());
                     }
                 }
+            } else {
+                return Err(ExpressionApplyError {
+                    msg: String::from(
+                        "err:XPTY0020 context item for axis step is not a node",
+                    ),
+                });
             }
             Ok(nodes)
         }
@@ -211,6 +235,12 @@ fn eval_forward_axis<'tree>(
                             context.item_tree.arena.get(cur_id).and_then(|n| n.parent());
                     }
                 }
+            } else {
+                return Err(ExpressionApplyError {
+                    msg: String::from(
+                        "err:XPTY0020 context item for axis step is not a node",
+                    ),
+                });
             }
             Ok(nodes)
         }

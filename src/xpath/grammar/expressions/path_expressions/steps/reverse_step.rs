@@ -89,6 +89,12 @@ fn eval_reverse_axis<'tree>(
                         nodes.push(*parent);
                     }
                 }
+            } else {
+                return Err(ExpressionApplyError {
+                    msg: String::from(
+                        "err:XPTY0020 context item for axis step is not a node",
+                    ),
+                });
             }
             Ok(nodes)
         }
@@ -110,6 +116,12 @@ fn eval_reverse_axis<'tree>(
                             .and_then(|n| n.parent());
                     }
                 }
+            } else {
+                return Err(ExpressionApplyError {
+                    msg: String::from(
+                        "err:XPTY0020 context item for axis step is not a node",
+                    ),
+                });
             }
             Ok(nodes)
         }
@@ -164,6 +176,12 @@ fn eval_reverse_axis<'tree>(
                             .and_then(|n| n.previous_sibling());
                     }
                 }
+            } else {
+                return Err(ExpressionApplyError {
+                    msg: String::from(
+                        "err:XPTY0020 context item for axis step is not a node",
+                    ),
+                });
             }
             Ok(nodes)
         }
@@ -199,6 +217,12 @@ fn eval_reverse_axis<'tree>(
                             context.item_tree.arena.get(cur_id).and_then(|n| n.parent());
                     }
                 }
+            } else {
+                return Err(ExpressionApplyError {
+                    msg: String::from(
+                        "err:XPTY0020 context item for axis step is not a node",
+                    ),
+                });
             }
             Ok(nodes)
         }

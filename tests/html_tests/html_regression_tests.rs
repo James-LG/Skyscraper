@@ -645,3 +645,76 @@ fn unescape_uppercase_hex() {
     let result = html::unescape_characters("&#x2019;");
     assert_eq!(result, "\u{2019}", "Uppercase hex &#x2019; should produce right single quotation mark");
 }
+
+// ============================================================================
+// Regression: CR-3 - Adoption agency algorithm must adjust bookmark after
+// removing the formatting element from active formatting elements.
+// ============================================================================
+
+#[test]
+fn adoption_agency_nested_formatting_elements() {
+    // This exercises the adoption agency algorithm with multiple nested formatting
+    // elements where the bookmark adjustment matters.
+    let text = "<html><body><b>1<i>2<b>3</b>4</i>5</b></body></html>";
+    let document = html::parse(text).unwrap();
+    // The parser should not crash or produce a malformed tree.
+    let xp = xpath::parse("//b").unwrap();
+    let result = xp.apply(&document).unwrap();
+    assert!(
+        !result.is_empty(),
+        "Nested formatting elements should be parsed without errors"
+    );
+}
+
+#[test]
+fn adoption_agency_deeply_nested_same_tag() {
+    // Multiple levels of the same formatting tag trigger repeated adoption agency runs.
+    let text = "<html><body><b><b><b>text</b></b></b></body></html>";
+    let document = html::parse(text).unwrap();
+    let xp = xpath::parse("string(//body)").unwrap();
+    let result = xp.apply(&document).unwrap();
+    assert_eq!(
+        result[0],
+        skyscraper::xpath::grammar::data_model::XpathItem::AnyAtomicType(
+            skyscraper::xpath::grammar::data_model::AnyAtomicType::String("text".to_string())
+        ),
+        "Deeply nested same formatting tags should preserve text content"
+    );
+}
+
+// ============================================================================
+// Regression: CR-10 - </search> end tag must be handled alongside other
+// block-level end tags in the in_body insertion mode.
+// ============================================================================
+
+#[test]
+fn search_end_tag_handled_correctly() {
+    let text = "<html><body><search><p>content</p></search></body></html>";
+    let document = html::parse(text).unwrap();
+    let xp = xpath::parse("count(//search)").unwrap();
+    let result = xp.apply(&document).unwrap();
+    match &result[0] {
+        skyscraper::xpath::grammar::data_model::XpathItem::AnyAtomicType(
+            skyscraper::xpath::grammar::data_model::AnyAtomicType::Integer(n),
+        ) => assert_eq!(*n, 1, "There should be exactly one <search> element"),
+        other => panic!("Expected integer count, got: {:?}", other),
+    }
+}
+
+#[test]
+fn search_element_contains_children() {
+    let text = "<html><body><search><div>inner</div></search><p>after</p></body></html>";
+    let document = html::parse(text).unwrap();
+    // The <div> should be inside <search>, not a sibling.
+    let xp = xpath::parse("count(//search/div)").unwrap();
+    let result = xp.apply(&document).unwrap();
+    match &result[0] {
+        skyscraper::xpath::grammar::data_model::XpathItem::AnyAtomicType(
+            skyscraper::xpath::grammar::data_model::AnyAtomicType::Integer(n),
+        ) => assert_eq!(
+            *n, 1,
+            "The <div> should be a child of <search>, not a sibling"
+        ),
+        other => panic!("Expected integer count, got: {:?}", other),
+    }
+}
