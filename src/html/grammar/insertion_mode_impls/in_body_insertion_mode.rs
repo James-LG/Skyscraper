@@ -288,24 +288,23 @@ impl HtmlParser {
                     self.handle_error(HtmlParserError::MinorError(String::from(
                         "open elements has body element in scope",
                     )))?;
+                    // Per WHATWG: ignore the token when body is not in scope.
                 } else {
                     ensure_open_elements_has_valid_element(&self)?;
+                    self.insertion_mode = InsertionMode::AfterBody;
                 }
-
-                self.insertion_mode = InsertionMode::AfterBody;
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "html" => {
                 if !self.has_an_element_in_scope("body") {
                     self.handle_error(HtmlParserError::MinorError(String::from(
                         "open elements has body element in scope",
                     )))?;
+                    // Per WHATWG: ignore the token when body is not in scope.
                 } else {
                     ensure_open_elements_has_valid_element(&self)?;
+                    self.insertion_mode = InsertionMode::AfterBody;
+                    self.token_emitted(HtmlToken::TagToken(TagTokenType::EndTag(token)))?;
                 }
-
-                self.insertion_mode = InsertionMode::AfterBody;
-
-                self.token_emitted(HtmlToken::TagToken(TagTokenType::EndTag(token)))?;
             }
             HtmlToken::TagToken(TagTokenType::StartTag(token))
                 if [
@@ -866,10 +865,18 @@ impl HtmlParser {
                 self.reconstruct_the_active_formatting_elements()?;
 
                 let self_closing = token.self_closing;
+                // Per WHATWG: only set frameset_ok to "not ok" if the input does NOT
+                // have a type attribute whose value is ASCII case-insensitive "hidden".
+                let is_hidden = token
+                    .attributes
+                    .iter()
+                    .any(|a| a.name == "type" && a.value.eq_ignore_ascii_case("hidden"));
                 self.insert_an_html_element(token)?;
                 self.open_elements.pop();
 
-                self.frameset_ok = false;
+                if !is_hidden {
+                    self.frameset_ok = false;
+                }
                 if self_closing {
                     return Ok(Acknowledgement::yes());
                 }
@@ -1174,19 +1181,17 @@ impl HtmlParser {
                 .iter()
                 .enumerate()
                 .rev()
+                .take_while(|(_, e)| !matches!(e, NodeOrMarker::Marker))
                 .find_map(|(i, e)| {
-                    match e {
-                        NodeOrMarker::Marker => None, // stop at marker
-                        NodeOrMarker::Node(entry) => {
-                            let node = self.arena.get(entry.node_id).unwrap().get();
-                            if let Ok(element) = node.as_element_node() {
-                                if element.name == *subject {
-                                    return Some(i);
-                                }
+                    if let NodeOrMarker::Node(entry) = e {
+                        let node = self.arena.get(entry.node_id).unwrap().get();
+                        if let Ok(element) = node.as_element_node() {
+                            if element.name == *subject {
+                                return Some(i);
                             }
-                            None
                         }
                     }
+                    None
                 });
 
             // Step 4.4: If there is no such element, then return and instead act

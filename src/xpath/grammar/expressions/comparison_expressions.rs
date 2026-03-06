@@ -394,6 +394,29 @@ fn compare_atomic(
         (first, second)
     };
 
+    // Per IEEE 754 / XPath spec: any comparison involving NaN returns false,
+    // except `ne` (not-equal) which returns true. OrderedFloat violates this
+    // by making NaN == NaN, so we must guard explicitly.
+    let either_nan = matches!(
+        lhs,
+        AnyAtomicType::Float(f) if f.is_nan()
+    ) || matches!(
+        lhs,
+        AnyAtomicType::Double(d) if d.is_nan()
+    ) || matches!(
+        rhs,
+        AnyAtomicType::Float(f) if f.is_nan()
+    ) || matches!(
+        rhs,
+        AnyAtomicType::Double(d) if d.is_nan()
+    );
+
+    if either_nan {
+        // `ne` is encoded as (!eq, lt, gt); for NaN ne anything, result is true.
+        // All other comparisons involving NaN return false.
+        return !eq && lt && gt;
+    }
+
     // Pure equality / inequality can use PartialEq directly, which works
     // across all variant combinations (different variants → not equal).
     if eq && !lt && !gt {

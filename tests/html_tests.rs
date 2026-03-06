@@ -20,4 +20,5 @@ mod html_tests {
     mod html_quirks_mode_tests;
     mod html_text_mode_tests;
     mod html_tokenizer_tests;
+    mod html_regression_tests;
 }

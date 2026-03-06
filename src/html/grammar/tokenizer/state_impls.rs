@@ -1,4 +1,4 @@
-use std::{any, collections::HashMap};
+use std::collections::HashMap;
 
 use nom::AsChar;
 use once_cell::sync::Lazy;
@@ -613,7 +613,6 @@ impl<'a> Tokenizer<'a> {
             Some('/') => {
                 self.temporary_buffer.clear();
                 self.state = TokenizerState::ScriptDataEscapedEndTagOpen;
-                self.emit(HtmlToken::Character('/'))?;
             }
             Some(c) if c.is_ascii_alphabetic() => {
                 self.temporary_buffer.clear();
@@ -1372,6 +1371,7 @@ impl<'a> Tokenizer<'a> {
 
             self.comment_token = Some(CommentToken::new(String::from("[CDATA[")));
             self.state = TokenizerState::BogusComment;
+            return Ok(());
         }
 
         // anything else is a parse error
@@ -1620,7 +1620,7 @@ impl<'a> Tokenizer<'a> {
                 self.state = TokenizerState::BeforeDOCTYPEName;
             }
             Some('>') => {
-                self.reconsume_in_state(TokenizerState::DOCTYPEName)?;
+                self.reconsume_in_state(TokenizerState::BeforeDOCTYPEName)?;
             }
             None => {
                 self.handle_error(TokenizerError::EofInDoctype)?;
@@ -2220,7 +2220,7 @@ impl<'a> Tokenizer<'a> {
             _ => {
                 self.handle_error(TokenizerError::UnexpectedCharacterAfterDoctypeSystemIdentifier)?;
 
-                self.current_doctype_token_mut()?.force_quirks = true;
+                // Per WHATWG 13.2.5.67: this does NOT set force-quirks flag.
                 self.reconsume_in_state(TokenizerState::BogusDOCTYPE)?;
             }
         }

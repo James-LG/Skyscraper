@@ -2,6 +2,7 @@
 //!
 //! Unlike a set, XPath sequences may contain duplicate values.
 
+use std::collections::HashSet;
 use std::ops::Index;
 
 use super::grammar::data_model::{AnyAtomicType, XpathItem};
@@ -108,8 +109,8 @@ impl<'tree> XpathItemSet<'tree> {
                 XpathItem::AnyAtomicType(atomic_type) => match atomic_type {
                     AnyAtomicType::Boolean(b) => *b,
                     AnyAtomicType::Integer(n) => *n != 0,
-                    AnyAtomicType::Float(n) => *n != 0.0,
-                    AnyAtomicType::Double(n) => *n != 0.0,
+                    AnyAtomicType::Float(n) => !n.is_nan() && *n != 0.0,
+                    AnyAtomicType::Double(n) => !n.is_nan() && *n != 0.0,
                     AnyAtomicType::String(s) => !s.is_empty(),
                     AnyAtomicType::QName { .. } => true,
                 },
@@ -153,15 +154,8 @@ impl<'tree> XpathItemSet<'tree> {
     /// Remove duplicate items, keeping the first occurrence of each.
     /// Used for path expression results where document-order unique nodes are required.
     pub(crate) fn dedup(&mut self) {
-        let mut seen = Vec::new();
-        self.items.retain(|item| {
-            if seen.contains(item) {
-                false
-            } else {
-                seen.push(item.clone());
-                true
-            }
-        });
+        let mut seen = HashSet::new();
+        self.items.retain(|item| seen.insert(item.clone()));
     }
 }
 

@@ -218,7 +218,7 @@ pub fn unescape_characters(text: &str) -> String {
     let text = re.replace_all(text, |caps: &Captures| {
         if let Some(num) = caps.get(1) {
             if let Ok(num) = num.as_str().parse::<u32>() {
-                return char::from_u32(num).unwrap().to_string();
+                return char::from_u32(num).unwrap_or('\u{FFFD}').to_string();
             }
         }
         return String::new();

@@ -39,4 +39,5 @@ mod xpath_tests {
     mod type_matching_tests;
     mod uri_qualified_function_tests;
     mod lookup_tests;
+    mod regression_tests;
 }

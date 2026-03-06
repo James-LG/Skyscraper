@@ -1,10 +1,6 @@
 //! <https://html.spec.whatwg.org/multipage/parsing.html>
 
-use std::f32::consts::E;
-
 use indextree::{Arena, NodeId};
-use log::warn;
-use nom::error;
 use thiserror::Error;
 use tokenizer::{CommentToken, HtmlToken, Parser, TagToken, TagTokenType, TokenizerState};
 
@@ -557,8 +553,6 @@ impl HtmlParser {
 
         self.root_node = Some(document_node_id);
 
-        let mut open_elements: Vec<XpathItemTreeNode> = Vec::new();
-
         let chars: Vec<char> = text.chars().collect();
         let input_stream = VecPointerRef::new(&chars);
         let mut tokenizer = tokenizer::Tokenizer::new(input_stream, Box::new(self));
@@ -724,8 +718,7 @@ impl HtmlParser {
 
     pub(crate) fn handle_error(&self, error: HtmlParserError) -> Result<(), HtmlParseError> {
         match error {
-            HtmlParserError::MinorError(err) => {
-                dbg!(err);
+            HtmlParserError::MinorError(_err) => {
                 Ok(())
             }
             HtmlParserError::FatalError(err) => Err(HtmlParseError::new(&err)),

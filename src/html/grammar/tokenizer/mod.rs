@@ -3,7 +3,6 @@
 use std::collections::{hash_map::Entry, HashMap};
 
 use indextree::NodeId;
-use nom::error;
 use thiserror::Error;
 
 use crate::{vecpointer::VecPointerRef, xpath::grammar::XpathItemTreeNode};
@@ -337,7 +336,7 @@ impl TokenizerErrorHandler for DefaultTokenizerErrorHandler {
         error: TokenizerError,
         tokenizer: &mut Tokenizer,
     ) -> Result<(), HtmlParseError> {
-        dbg!(error);
+        let _ = error;
         Ok(())
     }
 }

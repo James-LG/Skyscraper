@@ -825,7 +825,7 @@ impl HtmlParser {
                 )))?;
             }
             HtmlToken::EndOfFile => {
-                if self.open_elements_has_element("template") {
+                if !self.open_elements_has_element("template") {
                     self.stop_parsing()?;
                     return Ok(Acknowledgement::no());
                 }
