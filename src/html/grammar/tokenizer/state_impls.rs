@@ -1360,7 +1360,7 @@ impl<'a> Tokenizer<'a> {
             // switch to CDATA section state.
             if let Some(node) = self.parser.adjusted_current_node() {
                 if let XpathItemTreeNode::ElementNode(element) = node {
-                    if element.namespace.as_ref().map(String::as_str) != Some(HTML_NAMESPACE) {
+                    if element.namespace.as_deref().unwrap_or(HTML_NAMESPACE) != HTML_NAMESPACE {
                         self.state = TokenizerState::CDATASection;
                         return Ok(());
                     }

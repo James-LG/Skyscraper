@@ -25,10 +25,11 @@ impl HtmlParser {
         fn ensure_open_elements_has_valid_element(
             parser: &HtmlParser,
         ) -> Result<(), HtmlParseError> {
-            let valid_elements = vec![
+            const VALID_ELEMENTS: &[&str] = &[
                 "dd", "dt", "li", "optgroup", "option", "p", "rb", "rp", "rt", "rtc", "tbody",
                 "td", "tfoot", "th", "thead", "tr", "body", "html",
             ];
+            let valid_elements = VALID_ELEMENTS;
 
             if parser
                 .open_elements
@@ -1094,10 +1095,10 @@ impl HtmlParser {
             let node = self
                 .arena
                 .get(node_id)
-                .expect("node not found")
+                .ok_or(HtmlParseError::new("node not found in arena"))?
                 .get()
                 .as_element_node()
-                .expect("node is not an element node")
+                .map_err(|_| HtmlParseError::new("node is not an element node"))?
                 .clone();
 
             if node.name == token.tag_name {

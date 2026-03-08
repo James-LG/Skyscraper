@@ -93,14 +93,14 @@ impl PartialOrd for AnyAtomicType {
                 AnyAtomicType::QName {
                     namespace_uri: ns1,
                     local_name: ln1,
-                    prefix: p1,
+                    ..
                 },
                 AnyAtomicType::QName {
                     namespace_uri: ns2,
                     local_name: ln2,
-                    prefix: p2,
+                    ..
                 },
-            ) => (ns1, ln1, p1).partial_cmp(&(ns2, ln2, p2)),
+            ) => (ns1, ln1).partial_cmp(&(ns2, ln2)),
             // Incompatible types are not ordered.
             _ => None,
         }

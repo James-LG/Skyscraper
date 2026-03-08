@@ -61,9 +61,10 @@ impl SimpleMapExpr {
         // using that item as the context item.
         for map_expr in &self.items {
             let mut next_result = XpathItemSet::new();
-            for item in &result {
+            let size = result.len();
+            for (i, item) in result.iter().enumerate() {
                 let inner_context =
-                    context.new_single_with_variables(item.clone(), false);
+                    context.new_with_item_and_size(item.clone(), i + 1, size, false);
                 let inner_result = map_expr.eval(&inner_context)?;
                 next_result.extend(inner_result);
             }

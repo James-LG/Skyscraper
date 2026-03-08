@@ -170,6 +170,11 @@ impl HtmlParser {
                 // WHATWG says ignore, but we preserve for round-trip fidelity
                 self.insert_character_at_document_level(c)?;
             }
+            HtmlToken::Characters(s) => {
+                for c in s.chars() {
+                    self.token_emitted(HtmlToken::Character(c))?;
+                }
+            }
             HtmlToken::Comment(comment) => {
                 // Insert a comment as the last child of the Document object.
                 let parent = self
@@ -226,7 +231,7 @@ impl HtmlParser {
             let node_id = parser.new_node(XpathItemTreeNode::ElementNode(result));
             parser
                 .root_node
-                .expect("root node is None")
+                .ok_or(HtmlParseError::new("root node is None"))?
                 .append(node_id, &mut parser.arena);
 
             parser.open_elements.push(node_id);
@@ -258,6 +263,11 @@ impl HtmlParser {
                 // WHATWG says ignore, but we preserve for round-trip fidelity
                 self.insert_character_at_document_level(c)?;
             }
+            HtmlToken::Characters(s) => {
+                for c in s.chars() {
+                    self.token_emitted(HtmlToken::Character(c))?;
+                }
+            }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
                 let result = self.create_an_element_for_the_token(token, HTML_NAMESPACE)?;
 
@@ -266,7 +276,7 @@ impl HtmlParser {
 
                 // append it to the document
                 self.root_node
-                    .expect("root node is None")
+                    .ok_or(HtmlParseError::new("root node is None"))?
                     .append(node_id, &mut self.arena);
 
                 self.insertion_mode = InsertionMode::BeforeHead;
@@ -317,6 +327,11 @@ impl HtmlParser {
                 // WHATWG says ignore, but we preserve for round-trip fidelity
                 self.insert_character(c)?;
             }
+            HtmlToken::Characters(s) => {
+                for c in s.chars() {
+                    self.token_emitted(HtmlToken::Character(c))?;
+                }
+            }
             HtmlToken::Comment(comment) => {
                 self.insert_a_comment(comment, None)?;
             }
@@ -357,7 +372,10 @@ impl HtmlParser {
         token: HtmlToken,
     ) -> Result<Acknowledgement, HtmlParseError> {
         fn anything_else(parser: &mut HtmlParser, token: HtmlToken) -> Result<(), HtmlParseError> {
-            parser.open_elements.pop().expect("open elements is empty");
+            parser
+                .open_elements
+                .pop()
+                .ok_or(HtmlParseError::new("open elements is empty"))?;
 
             parser.insertion_mode = InsertionMode::AfterHead;
 
@@ -378,6 +396,11 @@ impl HtmlParser {
             {
                 self.insert_character(c)?;
             }
+            HtmlToken::Characters(s) => {
+                for c in s.chars() {
+                    self.token_emitted(HtmlToken::Character(c))?;
+                }
+            }
             HtmlToken::Comment(comment) => {
                 self.insert_a_comment(comment, None)?;
             }
@@ -396,7 +419,9 @@ impl HtmlParser {
             {
                 self.insert_an_html_element(token)?;
 
-                self.open_elements.pop().expect("open elements is empty");
+                self.open_elements
+                    .pop()
+                    .ok_or(HtmlParseError::new("open elements is empty"))?;
 
                 // acknowledge the self closing tag
                 return Ok(Acknowledgement::yes());
@@ -404,7 +429,9 @@ impl HtmlParser {
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "meta" => {
                 self.insert_an_html_element(token)?;
 
-                self.open_elements.pop().expect("open elements is empty");
+                self.open_elements
+                    .pop()
+                    .ok_or(HtmlParseError::new("open elements is empty"))?;
 
                 // TODO: some encoding stuff
 
@@ -441,7 +468,9 @@ impl HtmlParser {
                 });
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "head" => {
-                self.open_elements.pop().expect("open elements is empty");
+                self.open_elements
+                    .pop()
+                    .ok_or(HtmlParseError::new("open elements is empty"))?;
 
                 self.insertion_mode = InsertionMode::AfterHead;
             }
@@ -507,7 +536,10 @@ impl HtmlParser {
             // Parse error.
             // Pop the current node (which will be a noscript element) from the stack of open
             // elements; the new current node will be a head element.
-            parser.open_elements.pop().expect("open elements is empty");
+            parser
+                .open_elements
+                .pop()
+                .ok_or(HtmlParseError::new("open elements is empty"))?;
             // Switch the insertion mode to "in head".
             parser.insertion_mode = InsertionMode::InHead;
             // Reprocess the token.
@@ -538,6 +570,11 @@ impl HtmlParser {
             {
                 return self.in_head_insertion_mode(HtmlToken::Character(c));
             }
+            HtmlToken::Characters(s) => {
+                for c in s.chars() {
+                    self.token_emitted(HtmlToken::Character(c))?;
+                }
+            }
             // A start tag whose tag name is "html":
             // Process the token using the rules for the "in body" insertion mode.
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
@@ -549,7 +586,9 @@ impl HtmlParser {
             // the new current node will be a head element.
             // Switch the insertion mode to "in head".
             HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "noscript" => {
-                self.open_elements.pop().expect("open elements is empty");
+                self.open_elements
+                    .pop()
+                    .ok_or(HtmlParseError::new("open elements is empty"))?;
                 self.insertion_mode = InsertionMode::InHead;
             }
             // A start tag whose tag name is one of: "basefont", "bgsound", "link", "meta",
@@ -614,6 +653,11 @@ impl HtmlParser {
                 .contains(&c) =>
             {
                 self.insert_character(c)?;
+            }
+            HtmlToken::Characters(s) => {
+                for c in s.chars() {
+                    self.token_emitted(HtmlToken::Character(c))?;
+                }
             }
             HtmlToken::Comment(comment) => {
                 // A comment token: Insert a comment.
@@ -709,12 +753,14 @@ impl HtmlParser {
                 // "already started" flag. (Scripting is not supported.)
 
                 // Pop the current node off the stack of open elements.
-                self.open_elements.pop().expect("open elements is empty");
+                self.open_elements
+                    .pop()
+                    .ok_or(HtmlParseError::new("open elements is empty"))?;
 
                 // Switch the insertion mode to the original insertion mode.
                 self.insertion_mode = self
                     .original_insertion_mode
-                    .expect("original insertion mode is None");
+                    .ok_or(HtmlParseError::new("original insertion mode is None"))?;
 
                 // Reprocess the token.
                 self.token_emitted(HtmlToken::EndOfFile)?;
@@ -722,19 +768,25 @@ impl HtmlParser {
             HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "script" => {
                 let _script = self.current_node_as_element_result()?;
 
-                self.open_elements.pop().expect("open elements is empty");
+                self.open_elements
+                    .pop()
+                    .ok_or(HtmlParseError::new("open elements is empty"))?;
 
                 self.insertion_mode = self
                     .original_insertion_mode
-                    .expect("original insertion mode is None");
+                    .ok_or(HtmlParseError::new("original insertion mode is None"))?;
 
                 // lots of unsupported scripting logic would go here
                 // it is intentionally not included
             }
             HtmlToken::TagToken(TagTokenType::EndTag(_token)) => {
-                self.open_elements.pop().expect("open elements is empty");
+                self.open_elements
+                    .pop()
+                    .ok_or(HtmlParseError::new("open elements is empty"))?;
 
-                self.insertion_mode = self.original_insertion_mode.unwrap();
+                self.insertion_mode = self
+                    .original_insertion_mode
+                    .ok_or(HtmlParseError::new("original insertion mode is None"))?;
             }
             _ => {
                 // ignore
@@ -862,6 +914,11 @@ impl HtmlParser {
                 )?;
                 self.insert_character_at_node(html_node, c)?;
             }
+            HtmlToken::Characters(s) => {
+                for c in s.chars() {
+                    self.token_emitted(HtmlToken::Character(c))?;
+                }
+            }
             HtmlToken::Comment(comment) => {
                 // Insert a comment as the last child of the first element in
                 // the stack of open elements (the html element).
@@ -938,6 +995,11 @@ impl HtmlParser {
                 // level for round-trip fidelity (whitespace after </html>).
                 self.insert_character_at_document_level(c)?;
             }
+            HtmlToken::Characters(s) => {
+                for c in s.chars() {
+                    self.token_emitted(HtmlToken::Character(c))?;
+                }
+            }
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
                 self.using_the_rules_for(
                     HtmlToken::TagToken(TagTokenType::StartTag(token)),
@@ -978,6 +1040,11 @@ impl HtmlParser {
                 .contains(&c) =>
             {
                 self.insert_character(c)?;
+            }
+            HtmlToken::Characters(s) => {
+                for c in s.chars() {
+                    self.token_emitted(HtmlToken::Character(c))?;
+                }
             }
             // A comment token
             HtmlToken::Comment(comment) => {
@@ -1083,6 +1150,11 @@ impl HtmlParser {
             {
                 self.insert_character(c)?;
             }
+            HtmlToken::Characters(s) => {
+                for c in s.chars() {
+                    self.token_emitted(HtmlToken::Character(c))?;
+                }
+            }
             // A comment token
             HtmlToken::Comment(comment) => {
                 self.insert_a_comment(comment, None)?;
@@ -1155,6 +1227,11 @@ impl HtmlParser {
                 .contains(&c) =>
             {
                 self.using_the_rules_for(HtmlToken::Character(c), InsertionMode::InBody)?;
+            }
+            HtmlToken::Characters(s) => {
+                for c in s.chars() {
+                    self.token_emitted(HtmlToken::Character(c))?;
+                }
             }
             // A start tag whose tag name is "html"
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "html" => {
@@ -1471,7 +1548,7 @@ impl HtmlParser {
                 // Switch the insertion mode to the original insertion mode and reprocess the token.
                 self.insertion_mode = self
                     .original_insertion_mode
-                    .expect("original insertion mode is None");
+                    .ok_or(HtmlParseError::new("original insertion mode is None"))?;
                 self.token_emitted(token)?;
             }
         }
@@ -1576,6 +1653,11 @@ impl HtmlParser {
                 .contains(&c) =>
             {
                 self.insert_character(c)?;
+            }
+            HtmlToken::Characters(s) => {
+                for c in s.chars() {
+                    self.token_emitted(HtmlToken::Character(c))?;
+                }
             }
             // A comment token
             HtmlToken::Comment(comment) => {

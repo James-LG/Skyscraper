@@ -1271,7 +1271,7 @@ impl HtmlParser {
                     let new_entry = parser
                         .active_formatting_elements
                         .get(new_entry_index)
-                        .expect("could not get new entry")
+                        .ok_or(HtmlParseError::new("could not get new entry"))?
                         .clone();
 
                     if let NodeOrMarker::Node(new_entry) = new_entry {
@@ -1303,7 +1303,7 @@ impl HtmlParser {
                     None
                 })
                 .map(|(i, e)| (i, e.clone()))
-                .expect("could not get new entry");
+                .ok_or(HtmlParseError::new("could not get new entry"))?;
 
             return step_8_create(parser, &new_entry, new_index);
         }

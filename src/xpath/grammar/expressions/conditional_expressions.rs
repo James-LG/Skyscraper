@@ -68,9 +68,9 @@ impl IfExpr {
 
 impl Display for IfExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "if ({})", self.condition)?;
-        writeln!(f, "  then {}", self.then)?;
-        writeln!(f, "  else {}", self.else_expr)
+        write!(f, "if ({})", self.condition)?;
+        write!(f, " then {}", self.then)?;
+        write!(f, " else {}", self.else_expr)
     }
 }
 
@@ -90,13 +90,7 @@ mod test {
         assert_eq!(next_input, "");
         assert_eq!(
             res.to_string(),
-            indoc::indoc!(
-                r#"
-                if ($widget1/unit-cost<$widget2/unit-cost)
-                  then $widget1
-                  else $widget2
-                "#
-            )
+            "if ($widget1/unit-cost<$widget2/unit-cost) then $widget1 else $widget2"
         );
     }
 
@@ -114,13 +108,7 @@ mod test {
         assert_eq!(next_input, "");
         assert_eq!(
             res.to_string(),
-            indoc::indoc!(
-                r#"
-                if ($widget1/unit-cost<$widget2/unit-cost)
-                  then $widget1
-                  else $widget2
-                "#
-            )
+            "if ($widget1/unit-cost<$widget2/unit-cost) then $widget1 else $widget2"
         );
     }
 }

@@ -33,12 +33,10 @@ pub use crate::html::grammar::parse_fragment;
 pub use crate::html::grammar::QuirksMode;
 
 /// List of HTML tags that do not have end tags and cannot have any content.
-static VOID_TAGS: Lazy<Vec<&'static str>> = Lazy::new(|| {
-    vec![
-        "meta", "link", "img", "input", "br", "hr", "col", "area", "base", "embed", "keygen",
-        "param", "source", "track", "wbr",
-    ]
-});
+static VOID_TAGS: &[&str] = &[
+    "meta", "link", "img", "input", "br", "hr", "col", "area", "base", "embed", "keygen",
+    "param", "source", "track", "wbr",
+];
 
 type TagAttributes = HashMap<String, String>;
 

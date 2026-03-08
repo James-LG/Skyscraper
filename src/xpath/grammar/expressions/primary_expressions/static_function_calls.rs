@@ -329,7 +329,8 @@ fn dispatch_by_local_name<'tree>(
         "round" => {
             if args.len() == 2 {
                 // fn:round($arg, $precision)
-                let precision = extract_double(&args[1], context.item_tree)? as i32;
+                let raw_precision = extract_double(&args[1], context.item_tree)?;
+                let precision = (raw_precision.round() as i64).clamp(-20, 20) as i32;
                 let factor = 10f64.powi(precision);
                 func_numeric_unary(
                     &args[0],
@@ -920,6 +921,16 @@ fn dispatch_by_local_name<'tree>(
                     AnyAtomicType::Integer(n) => total += *n as f64,
                     AnyAtomicType::Float(f) => total += f.0 as f64,
                     AnyAtomicType::Double(d) => total += d.0,
+                    AnyAtomicType::String(s) => {
+                        // xs:untypedAtomic -> cast to xs:double per XPath 3.1 F&O 15.4.5
+                        let d: f64 = s.trim().parse().map_err(|_| {
+                            ExpressionApplyError::new(format!(
+                                "fn:avg: cannot cast {:?} to xs:double",
+                                s
+                            ))
+                        })?;
+                        total += d;
+                    }
                     other => {
                         return Err(ExpressionApplyError::new(format!(
                             "fn:avg: non-numeric value {:?}",
@@ -948,7 +959,8 @@ fn dispatch_by_local_name<'tree>(
                 )));
             }
             let precision = if args.len() == 2 {
-                extract_double(&args[1], context.item_tree)? as i32
+                let raw = extract_double(&args[1], context.item_tree)?;
+                (raw.round() as i64).clamp(-20, 20) as i32
             } else {
                 0
             };

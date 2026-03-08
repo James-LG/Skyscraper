@@ -758,3 +758,90 @@ fn close_p_element_with_nested_inline() {
         "<strong> should be nested inside <em> inside <p>"
     );
 }
+
+// ============================================================================
+// Regression: CDATA namespace check — HTML elements should not enter CDATA mode
+// The bug was that element.namespace == None for HTML elements, and the check
+// `None != Some(HTML_NAMESPACE)` was always true, incorrectly entering CDATA.
+// ============================================================================
+
+#[test]
+fn cdata_in_html_namespace_treated_as_bogus_comment() {
+    // In HTML namespace, <![CDATA[...]]> must be treated as a bogus comment,
+    // not parsed as a CDATA section. The surrounding structure must be intact.
+    let text = "<html><body><div>before</div><![CDATA[data]]><div>after</div></body></html>";
+    let document = html::parse(text).unwrap();
+
+    // Both divs should be present; CDATA should not corrupt the tree.
+    let xp = xpath::parse("//div").unwrap();
+    let result = xp.apply(&document).unwrap();
+    assert_eq!(result.len(), 2, "both divs should survive CDATA bogus comment");
+
+    // Check text content of divs
+    let xp_before = xpath::parse("//div[1]/text()").unwrap();
+    let before = xp_before.apply(&document).unwrap();
+    assert!(!before.is_empty(), "first div should have text content");
+}
+
+// ============================================================================
+// Regression: Characters batch handling in early insertion modes
+// The tokenizer can batch consecutive characters into HtmlToken::Characters.
+// Insertion modes must handle this variant, not just HtmlToken::Character.
+// ============================================================================
+
+#[test]
+fn whitespace_before_doctype_preserved() {
+    // Whitespace before DOCTYPE should not trigger incorrect quirks mode
+    // or corrupt the document structure.
+    let text = "  <!DOCTYPE html><html><head></head><body>hello</body></html>";
+    let document = html::parse(text).unwrap();
+    let xp = xpath::parse("//body/text()").unwrap();
+    let result = xp.apply(&document).unwrap();
+    assert!(!result.is_empty(), "body text should be present");
+}
+
+#[test]
+fn whitespace_between_head_tags_preserved() {
+    // Whitespace in head context should be handled even when batched.
+    let text = "<html><head>  <title>test</title>  </head><body>ok</body></html>";
+    let document = html::parse(text).unwrap();
+    let xp = xpath::parse("//title/text()").unwrap();
+    let result = xp.apply(&document).unwrap();
+    assert!(!result.is_empty(), "title text should be present");
+}
+
+#[test]
+fn whitespace_after_head_before_body() {
+    // Whitespace between </head> and <body> should not cause spurious element creation.
+    let text = "<html><head></head>   <body><p>content</p></body></html>";
+    let document = html::parse(text).unwrap();
+    let xp = xpath::parse("//p/text()").unwrap();
+    let result = xp.apply(&document).unwrap();
+    assert!(!result.is_empty(), "paragraph content should be present");
+}
+
+// ============================================================================
+// Regression: .expect() replaced with error propagation
+// Parser should return errors instead of panicking on edge cases.
+// ============================================================================
+
+#[test]
+fn malformed_html_does_not_panic() {
+    // These inputs exercise edge cases that previously used .expect()
+    // and could panic instead of returning errors.
+    let inputs = [
+        "<html><body></body></html></html></html>",
+        "<html><head></head></head><body></body></html>",
+        "<!DOCTYPE html><html>",
+        "<noscript></noscript></noscript>",
+    ];
+
+    for input in &inputs {
+        let result = html::parse(input);
+        assert!(
+            result.is_ok(),
+            "parser should handle malformed HTML without panicking: {}",
+            input
+        );
+    }
+}

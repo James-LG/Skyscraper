@@ -1058,3 +1058,143 @@ fn regex_xpath_name_char_full() {
         r#"matches("a1", "^\c+$") should be true (a and 1 are name chars)"#
     );
 }
+
+// ============================================================================
+// Regression: SimpleMapExpr should set correct position/size context
+// Per XPath 3.1 section 3.5.2, the ! operator should set position() and
+// last() based on the LHS sequence.
+// ============================================================================
+
+#[test]
+fn simple_map_position_returns_correct_positions() {
+    let document = html::parse("<html><body><div>a</div><div>b</div><div>c</div></body></html>").unwrap();
+    // (1 to 3) ! position() should return (1, 2, 3)
+    let xpath = xpath::parse("(1 to 3) ! position()").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(result.len(), 3);
+    assert_eq!(result[0], XpathItem::AnyAtomicType(AnyAtomicType::Integer(1)));
+    assert_eq!(result[1], XpathItem::AnyAtomicType(AnyAtomicType::Integer(2)));
+    assert_eq!(result[2], XpathItem::AnyAtomicType(AnyAtomicType::Integer(3)));
+}
+
+#[test]
+fn simple_map_last_returns_correct_size() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    // (1 to 4) ! last() should return (4, 4, 4, 4)
+    let xpath = xpath::parse("(1 to 4) ! last()").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(result.len(), 4);
+    for item in &result {
+        assert_eq!(
+            *item,
+            XpathItem::AnyAtomicType(AnyAtomicType::Integer(4)),
+            "last() in simple map should reflect LHS size"
+        );
+    }
+}
+
+// ============================================================================
+// Regression: fn:round precision should be clamped to avoid overflow
+// ============================================================================
+
+#[test]
+fn round_with_normal_precision() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    let xpath = xpath::parse("round(3.14159, 2)").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(result.len(), 1);
+    match &result[0] {
+        XpathItem::AnyAtomicType(AnyAtomicType::Double(d)) => {
+            assert!(
+                (d.0 - 3.14).abs() < 0.001,
+                "round(3.14159, 2) should be approximately 3.14, got {}",
+                d.0
+            );
+        }
+        XpathItem::AnyAtomicType(AnyAtomicType::Float(f)) => {
+            assert!(
+                (f.0 - 3.14).abs() < 0.01,
+                "round(3.14159, 2) should be approximately 3.14, got {}",
+                f.0
+            );
+        }
+        other => panic!("expected Double or Float, got {:?}", other),
+    }
+}
+
+#[test]
+fn round_with_extreme_precision_does_not_panic() {
+    let document = html::parse("<html><body></body></html>").unwrap();
+    // Extreme precision that would previously overflow i32 or produce infinity.
+    let xpath = xpath::parse("round(1.5, 1000000)").unwrap();
+    let result = xpath.apply(&document);
+    // Should not panic; the result may vary but must not crash.
+    assert!(result.is_ok(), "round with extreme precision should not panic");
+}
+
+// ============================================================================
+// Regression: fn:avg should handle string (xs:untypedAtomic) values
+// ============================================================================
+
+#[test]
+fn avg_with_numeric_strings() {
+    let document =
+        html::parse("<html><body><span>10</span><span>20</span><span>30</span></body></html>")
+            .unwrap();
+    // //span/text() returns text nodes whose string values are "10", "20", "30".
+    // fn:avg should promote these to doubles and compute the average.
+    let xpath = xpath::parse("avg(//span/text())").unwrap();
+    let result = xpath.apply(&document).unwrap();
+    assert_eq!(result.len(), 1);
+    match &result[0] {
+        XpathItem::AnyAtomicType(AnyAtomicType::Double(d)) => {
+            assert!(
+                (d.0 - 20.0).abs() < 0.001,
+                "avg of 10, 20, 30 should be 20.0, got {}",
+                d.0
+            );
+        }
+        other => panic!("expected Double, got {:?}", other),
+    }
+}
+
+// ============================================================================
+// Regression: QName PartialOrd should not include prefix
+// ============================================================================
+
+#[test]
+fn qname_ordering_ignores_prefix() {
+    use std::cmp::Ordering;
+    // Two QNames with same namespace and local name but different prefix
+    // should compare as equal.
+    let qname1 = AnyAtomicType::QName {
+        namespace_uri: "http://example.com".to_string(),
+        local_name: "foo".to_string(),
+        prefix: Some("a".to_string()),
+    };
+    let qname2 = AnyAtomicType::QName {
+        namespace_uri: "http://example.com".to_string(),
+        local_name: "foo".to_string(),
+        prefix: Some("b".to_string()),
+    };
+    assert_eq!(
+        qname1.partial_cmp(&qname2),
+        Some(Ordering::Equal),
+        "QNames with same namespace+localname but different prefix should be equal"
+    );
+}
+
+// ============================================================================
+// Regression: IfExpr Display should not include trailing newlines
+// ============================================================================
+
+#[test]
+fn if_expr_display_no_trailing_newline() {
+    let xpath = xpath::parse("if (true()) then 1 else 2").unwrap();
+    let display = format!("{}", xpath);
+    assert!(
+        !display.ends_with('\n'),
+        "IfExpr Display should not end with newline, got: {:?}",
+        display
+    );
+}

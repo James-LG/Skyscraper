@@ -22,7 +22,7 @@ use super::{
     primary_expressions::{
         static_function_calls::dispatch_function, PrimaryExpr,
     },
-    Expr,
+    Expr, ExprSingle,
 };
 
 use crate::xpath::grammar::types::eq_name;
@@ -179,11 +179,26 @@ impl Predicate {
     /// Returns `Some(n)` if the predicate is a simple integer literal, `None` otherwise.
     /// This enables a fast path that skips the full AST evaluation for each item.
     pub(crate) fn try_constant_position(&self) -> Option<i64> {
-        // Use Display to get the string representation of the expression.
-        // For a simple integer literal like `1`, this produces exactly "1".
-        // For anything else (position(), last(), @attr, etc.), parse will fail.
-        // Cost: one allocation + format, but called once per predicate, not per item.
-        self.0.to_string().parse::<i64>().ok()
+        // Try to extract an integer literal by checking the AST structure.
+        // A predicate like `[1]` is parsed as Expr { expr: ExprSingle::OrExpr(...), items: [] }.
+        // We check if the inner expression is a single literal value.
+        // This is a best-effort optimization: if it returns None, the caller falls
+        // back to full evaluation per item.
+        if !self.0.items.is_empty() {
+            return None;
+        }
+        if let ExprSingle::OrExpr(or_expr) = &self.0.expr {
+            if !or_expr.items.is_empty() {
+                return None;
+            }
+            // Use Display on just the inner AndExpr (which is the narrowest
+            // expression that contains the literal). This is safe because
+            // integer literals display as plain digits (e.g. "1", "42").
+            // Non-literal expressions (position(), @attr, etc.) won't parse.
+            let s = or_expr.expr.to_string();
+            return s.parse::<i64>().ok();
+        }
+        None
     }
 
     pub(crate) fn is_match<'tree>(
