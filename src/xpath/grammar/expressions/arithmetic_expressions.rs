@@ -328,7 +328,17 @@ impl MultiplicativeExpr {
                                     msg: String::from("err:FOAR0002 Division by zero or overflow in integer division"),
                                 });
                             }
-                            AnyAtomicType::Integer((a / b).trunc() as i64)
+                            {
+                                let result = (a / b).trunc();
+                                if result > i64::MAX as f64 || result < i64::MIN as f64 {
+                                    return Err(ExpressionApplyError {
+                                        msg: String::from(
+                                            "err:FOAR0002 Integer overflow in integer division",
+                                        ),
+                                    });
+                                }
+                                AnyAtomicType::Integer(result as i64)
+                            }
                         }
                     }
                 }
@@ -458,7 +468,11 @@ impl UnaryExpr {
 
         // Negate the value.
         let negated = match val {
-            AnyAtomicType::Integer(n) => AnyAtomicType::Integer(-n),
+            AnyAtomicType::Integer(n) => AnyAtomicType::Integer(
+                n.checked_neg().ok_or_else(|| ExpressionApplyError {
+                    msg: String::from("err:FOAR0002 Integer overflow in unary negation"),
+                })?,
+            ),
             AnyAtomicType::Float(n) => AnyAtomicType::Float(OrderedFloat(-n.into_inner())),
             AnyAtomicType::Double(n) => AnyAtomicType::Double(OrderedFloat(-n.into_inner())),
             other => {

@@ -1,4 +1,4 @@
-use skyscraper::html::{self, QuirksMode};
+use skyscraper::html::{self, grammar::HtmlParser, QuirksMode};
 use skyscraper::xpath;
 use skyscraper::xpath::grammar::data_model::AnyAtomicType;
 
@@ -844,4 +844,120 @@ fn malformed_html_does_not_panic() {
             input
         );
     }
+}
+
+// ============================================================================
+// Regression: DOCTYPE quoted-identifier `>` handling (WHATWG 13.2.5.60-63)
+// A `>` inside a DOCTYPE quoted identifier should trigger force-quirks and
+// emit the token, not be appended as content.
+// ============================================================================
+
+#[test]
+fn doctype_public_identifier_double_quoted_abrupt_gt() {
+    // The `>` inside the public identifier terminates the doctype with force-quirks.
+    let text = r#"<!DOCTYPE html PUBLIC "foo>rest of document"#;
+    let document = html::parse(text).unwrap();
+    assert_eq!(
+        document.quirks_mode(),
+        QuirksMode::Quirks,
+        "abrupt `>` in double-quoted public identifier should trigger quirks mode"
+    );
+}
+
+#[test]
+fn doctype_public_identifier_single_quoted_abrupt_gt() {
+    let text = "<!DOCTYPE html PUBLIC 'foo>rest of document";
+    let document = html::parse(text).unwrap();
+    assert_eq!(
+        document.quirks_mode(),
+        QuirksMode::Quirks,
+        "abrupt `>` in single-quoted public identifier should trigger quirks mode"
+    );
+}
+
+#[test]
+fn doctype_system_identifier_double_quoted_abrupt_gt() {
+    let text = r#"<!DOCTYPE html SYSTEM "foo>rest of document"#;
+    let document = html::parse(text).unwrap();
+    assert_eq!(
+        document.quirks_mode(),
+        QuirksMode::Quirks,
+        "abrupt `>` in double-quoted system identifier should trigger quirks mode"
+    );
+}
+
+#[test]
+fn doctype_system_identifier_single_quoted_abrupt_gt() {
+    let text = "<!DOCTYPE html SYSTEM 'foo>rest of document";
+    let document = html::parse(text).unwrap();
+    assert_eq!(
+        document.quirks_mode(),
+        QuirksMode::Quirks,
+        "abrupt `>` in single-quoted system identifier should trigger quirks mode"
+    );
+}
+
+#[test]
+fn doctype_public_identifier_abrupt_gt_content_after_gt_is_parsed() {
+    // After the abrupt `>`, the parser returns to data state and should parse
+    // remaining content normally.
+    let text = r#"<!DOCTYPE html PUBLIC "foo><html><body><p>hello</p></body></html>"#;
+    let document = html::parse(text).unwrap();
+    let xp = xpath::parse("//p/text()").unwrap();
+    let result = xp.apply(&document).unwrap();
+    assert_eq!(result.len(), 1, "content after abrupt `>` should be parsed as HTML");
+}
+
+// ============================================================================
+// Regression: is_ascii_alphanumeric in ambiguous ampersand state
+// Unicode alphanumeric characters should NOT match in the ambiguous ampersand
+// state — only ASCII alphanumerics should.
+// ============================================================================
+
+#[test]
+fn ambiguous_ampersand_unicode_not_consumed() {
+    // The `&` followed by a Unicode letter (é) should not be treated as
+    // an entity reference continuation. The `&` and `é` should appear as
+    // separate text content.
+    let text = "<html><body>&é</body></html>";
+    let document = html::parse(text).unwrap();
+    let xp = xpath::parse("/html/body/text()").unwrap();
+    let result = xp.apply(&document).unwrap();
+    assert!(!result.is_empty());
+    let text_content = result[0].extract_as_node().extract_as_text_node().content.clone();
+    assert!(
+        text_content.contains('é'),
+        "Unicode letter after & should be preserved, got: {}",
+        text_content
+    );
+}
+
+// ============================================================================
+// Regression: HtmlParser reuse safety
+// Calling parse() twice on the same HtmlParser should work correctly.
+// ============================================================================
+
+#[test]
+fn html_parser_reuse_produces_correct_results() {
+    let mut parser = HtmlParser::new();
+
+    let doc1 = parser.parse("<html><body><p>first</p></body></html>").unwrap();
+    let xp = xpath::parse("//p/text()").unwrap();
+    let result1 = xp.apply(&doc1).unwrap();
+    assert_eq!(result1.len(), 1);
+    let text1 = result1[0].extract_as_node().extract_as_text_node().content.clone();
+    assert_eq!(text1, "first");
+
+    // Second parse on the same parser should produce independent, correct results.
+    let doc2 = parser.parse("<html><body><div>second</div></body></html>").unwrap();
+    let xp2 = xpath::parse("//div/text()").unwrap();
+    let result2 = xp2.apply(&doc2).unwrap();
+    assert_eq!(result2.len(), 1);
+    let text2 = result2[0].extract_as_node().extract_as_text_node().content.clone();
+    assert_eq!(text2, "second");
+
+    // Ensure the second document doesn't contain elements from the first.
+    let xp3 = xpath::parse("//p").unwrap();
+    let result3 = xp3.apply(&doc2).unwrap();
+    assert_eq!(result3.len(), 0, "second parse should not contain elements from first parse");
 }

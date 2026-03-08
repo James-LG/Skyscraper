@@ -471,6 +471,10 @@ fn coerce_for_comparison(
         }
     }
 
+    // Per XPath 3.1, general comparisons cast untypedAtomic to the type of the
+    // other operand. A failed cast to xs:double produces NaN (matching fn:number
+    // semantics for implicit casts), unlike explicit xs:double() which raises
+    // FORG0001. This is intentionally different from the arithmetic error path.
     fn string_to_double(s: &str) -> AnyAtomicType {
         let d = s.trim().parse::<f64>().unwrap_or(f64::NAN);
         AnyAtomicType::Double(OrderedFloat(d))

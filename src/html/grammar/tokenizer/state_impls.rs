@@ -1892,6 +1892,12 @@ impl<'a> Tokenizer<'a> {
                     .unwrap()
                     .push(chars::FEED_REPLACEMENT_CHARACTER);
             }
+            Some('>') => {
+                self.handle_error(TokenizerError::AbruptDoctypePublicIdentifier)?;
+                self.current_doctype_token_mut()?.force_quirks = true;
+                self.emit_current_doctype_token()?;
+                self.state = TokenizerState::Data;
+            }
             None => {
                 self.handle_error(TokenizerError::EofInDoctype)?;
 
@@ -1928,6 +1934,12 @@ impl<'a> Tokenizer<'a> {
                     .as_mut()
                     .unwrap()
                     .push(chars::FEED_REPLACEMENT_CHARACTER);
+            }
+            Some('>') => {
+                self.handle_error(TokenizerError::AbruptDoctypePublicIdentifier)?;
+                self.current_doctype_token_mut()?.force_quirks = true;
+                self.emit_current_doctype_token()?;
+                self.state = TokenizerState::Data;
             }
             None => {
                 self.handle_error(TokenizerError::EofInDoctype)?;
@@ -2142,6 +2154,12 @@ impl<'a> Tokenizer<'a> {
                     .unwrap()
                     .push(chars::FEED_REPLACEMENT_CHARACTER);
             }
+            Some('>') => {
+                self.handle_error(TokenizerError::AbruptDoctypeSystemIdentifier)?;
+                self.current_doctype_token_mut()?.force_quirks = true;
+                self.emit_current_doctype_token()?;
+                self.state = TokenizerState::Data;
+            }
             None => {
                 self.handle_error(TokenizerError::EofInDoctype)?;
 
@@ -2178,6 +2196,12 @@ impl<'a> Tokenizer<'a> {
                     .as_mut()
                     .unwrap()
                     .push(chars::FEED_REPLACEMENT_CHARACTER);
+            }
+            Some('>') => {
+                self.handle_error(TokenizerError::AbruptDoctypeSystemIdentifier)?;
+                self.current_doctype_token_mut()?.force_quirks = true;
+                self.emit_current_doctype_token()?;
+                self.state = TokenizerState::Data;
             }
             None => {
                 self.handle_error(TokenizerError::EofInDoctype)?;
@@ -2389,7 +2413,7 @@ impl<'a> Tokenizer<'a> {
     /// <https://html.spec.whatwg.org/multipage/parsing.html#ambiguous-ampersand-state>
     pub(super) fn ambiguous_ampersand_state(&mut self) -> Result<(), HtmlParseError> {
         match self.input_stream.next() {
-            Some(c) if c.is_alphanumeric() => {
+            Some(c) if c.is_ascii_alphanumeric() => {
                 let c = *c;
                 if self.charref_in_attribute() {
                     self.current_attribute_mut()?.value.push(c);

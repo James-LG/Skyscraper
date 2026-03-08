@@ -5,7 +5,7 @@
 pub struct VecPointerRef<'a, T> {
     values: &'a [T],
     /// The current index position within the slice.
-    pub index: usize,
+    pub(crate) index: usize,
 }
 
 impl<'a, T> VecPointerRef<'a, T> {

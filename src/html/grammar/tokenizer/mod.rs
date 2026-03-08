@@ -299,6 +299,8 @@ pub(crate) enum TokenizerError {
     MissingWhitespaceAfterDoctypePublicKeyword,
     #[error("missing doctype public identifier")]
     MissingDoctypePublicIdentifier,
+    #[error("abrupt doctype public identifier")]
+    AbruptDoctypePublicIdentifier,
     #[error("missing quote before doctype public identifier")]
     MissingQuoteBeforeDoctypePublicIdentifier,
     #[error("missing whitespace between doctype public and system identifiers")]
@@ -309,6 +311,8 @@ pub(crate) enum TokenizerError {
     MissingWhitespaceAfterDoctypeSystemKeyword,
     #[error("missing doctype system identifier")]
     MissingDoctypeSystemIdentifier,
+    #[error("abrupt doctype system identifier")]
+    AbruptDoctypeSystemIdentifier,
     #[error("unexpected character after doctype system identifier")]
     UnexpectedCharacterAfterDoctypeSystemIdentifier,
     #[error("eof in cdata section")]
@@ -562,7 +566,16 @@ impl<'a> Tokenizer<'a> {
     }
 
     pub fn emit_current_token(&mut self) -> Result<(), HtmlParseError> {
-        // this is an abritrary order, unclear if it is the correct behaviour
+        // Per WHATWG, the tokenizer only ever builds one token at a time, so at
+        // most one of these fields is set. We assert this in debug builds.
+        debug_assert!(
+            [self.comment_token.is_some(), self.doctype_token.is_some(), self.tag_token.is_some()]
+                .iter()
+                .filter(|&&v| v)
+                .count() <= 1,
+            "multiple token types set simultaneously"
+        );
+
         if self.comment_token.is_some() {
             self.emit_current_comment_token()?;
         } else if self.doctype_token.is_some() {

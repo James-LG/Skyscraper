@@ -706,7 +706,7 @@ impl HtmlParser {
                     )))?;
                 }
 
-                self.pop_until_tag_name_one_of(vec!["h1", "h2", "h3", "h4", "h5", "h6"])?;
+                self.pop_until_tag_name_one_of(&["h1", "h2", "h3", "h4", "h5", "h6"])?;
             }
             HtmlToken::TagToken(TagTokenType::EndTag(token)) if token.tag_name == "sarcasm" => {
                 // "Take a deep breath, then act as described in the 'any other end tag' entry below."

@@ -143,7 +143,7 @@ pub struct HtmlText {
 
 impl HtmlText {
     /// Creates a new [HtmlText] from the given string.
-    pub fn from_str(value: &str) -> HtmlText {
+    pub fn new(value: &str) -> HtmlText {
         let text = unescape_characters(value);
         HtmlText {
             value: text.to_string(),
@@ -729,7 +729,7 @@ mod tests {
     fn html_node_get_text_should_work_on_text_node() {
         // arrange
         let mut arena = Arena::new();
-        let text_node = HtmlNode::Text(HtmlText::from_str("hello world"));
+        let text_node = HtmlNode::Text(HtmlText::new("hello world"));
         let text_doc_node = DocumentNode::new(arena.new_node(text_node));
         let document = HtmlDocument::new(arena, text_doc_node);
 
@@ -745,7 +745,7 @@ mod tests {
     fn html_node_get_text_should_work_on_tag_node_with_one_text_child() {
         // arrange
         let mut arena = Arena::new();
-        let text_node = HtmlNode::Text(HtmlText::from_str("hello world"));
+        let text_node = HtmlNode::Text(HtmlText::new("hello world"));
         let text_node_id = arena.new_node(text_node);
 
         let tag_node = HtmlNode::Tag(HtmlTag::new(String::from("tag")));
@@ -767,10 +767,10 @@ mod tests {
     fn html_node_get_text_should_work_on_tag_node_with_two_text_children() {
         // arrange
         let mut arena = Arena::new();
-        let text_node = HtmlNode::Text(HtmlText::from_str("hello"));
+        let text_node = HtmlNode::Text(HtmlText::new("hello"));
         let text_node_id = arena.new_node(text_node);
 
-        let text_node2 = HtmlNode::Text(HtmlText::from_str("world"));
+        let text_node2 = HtmlNode::Text(HtmlText::new("world"));
         let text_node2_id = arena.new_node(text_node2);
 
         let tag_node = HtmlNode::Tag(HtmlTag::new(String::from("tag")));
@@ -793,10 +793,10 @@ mod tests {
     fn html_node_get_text_should_ignore_nested_text() {
         // arrange
         let mut arena = Arena::new();
-        let text_node = HtmlNode::Text(HtmlText::from_str("hello"));
+        let text_node = HtmlNode::Text(HtmlText::new("hello"));
         let text_node_id = arena.new_node(text_node);
 
-        let text_node2 = HtmlNode::Text(HtmlText::from_str("world"));
+        let text_node2 = HtmlNode::Text(HtmlText::new("world"));
         let text_node2_id = arena.new_node(text_node2);
 
         let tag_node = HtmlNode::Tag(HtmlTag::new(String::from("tag")));
@@ -823,10 +823,10 @@ mod tests {
     fn html_node_get_all_text_should_include_nested_text() {
         // arrange
         let mut arena = Arena::new();
-        let text_node = HtmlNode::Text(HtmlText::from_str("hello"));
+        let text_node = HtmlNode::Text(HtmlText::new("hello"));
         let text_node_id = arena.new_node(text_node);
 
-        let text_node2 = HtmlNode::Text(HtmlText::from_str("world"));
+        let text_node2 = HtmlNode::Text(HtmlText::new("world"));
         let text_node2_id = arena.new_node(text_node2);
 
         let tag_node = HtmlNode::Tag(HtmlTag::new(String::from("tag")));
@@ -865,7 +865,7 @@ mod tests {
     #[test]
     fn html_node_get_attributes_for_text() {
         // arrange
-        let node = HtmlNode::Text(HtmlText::from_str("hello world"));
+        let node = HtmlNode::Text(HtmlText::new("hello world"));
 
         // assert
         assert!(node.get_attributes().is_none())
@@ -895,7 +895,7 @@ mod tests {
     fn document_node_get_attributes_for_text() {
         // arrange
         let mut arena = Arena::new();
-        let html_node = HtmlNode::Text(HtmlText::from_str("hello world"));
+        let html_node = HtmlNode::Text(HtmlText::new("hello world"));
         let doc_node = DocumentNode::new(arena.new_node(html_node));
         let html_document = HtmlDocument::new(arena, doc_node);
 

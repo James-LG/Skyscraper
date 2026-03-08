@@ -548,6 +548,25 @@ impl HtmlParser {
 
     /// Parse an HTML string into an [`XpathItemTree`].
     pub fn parse(&mut self, text: &str) -> Result<XpathItemTree, HtmlParseError> {
+        // Reset all mutable state so the parser can be reused safely.
+        self.insertion_mode = InsertionMode::Initial;
+        self.template_insertion_modes.clear();
+        self.original_insertion_mode = None;
+        self.open_elements.clear();
+        self.context_element = None;
+        self.arena = Arena::new();
+        self.root_node = None;
+        self.foster_parenting = false;
+        self.frameset_ok = true;
+        self.active_formatting_elements.clear();
+        self.head_element_pointer = None;
+        self.form_element_pointer = None;
+        self.pending_table_character_tokens.clear();
+        self.skip_next_line_feed = false;
+        self.quirks_mode = QuirksMode::NoQuirks;
+        self.active_text_node = None;
+        self.tree_generation = 0;
+
         // set document node as the root node
         let document_node_id = self
             .arena
@@ -680,12 +699,6 @@ impl HtmlParser {
         self.open_elements
             .first()
             .map(|id| self.arena.get(*id).unwrap().get())
-    }
-
-    pub(crate) fn top_node_mut(&mut self) -> Option<&mut XpathItemTreeNode> {
-        self.open_elements
-            .first()
-            .map(|id| self.arena.get_mut(*id).unwrap().get_mut())
     }
 
     pub(crate) fn new_node(&mut self, node: XpathItemTreeNode) -> NodeId {
@@ -1247,114 +1260,65 @@ impl HtmlParser {
     pub(crate) fn reconstruct_the_active_formatting_elements(
         &mut self,
     ) -> Result<(), HtmlParseError> {
-        fn step_4_rewind(
-            parser: &mut HtmlParser,
-            entry: &NodeEntry,
-            entry_index: usize,
-        ) -> Result<(), HtmlParseError> {
-            let new_entry_index = parser
-                .active_formatting_elements
-                .iter()
-                .position(|e| {
-                    if let NodeOrMarker::Node(NodeEntry { node_id, .. }) = e {
-                        return *node_id == entry.node_id;
-                    } else {
-                        return false;
-                    }
-                })
-                .and_then(|i| if i == 0 { None } else { Some(i - 1) });
-
-            // if there are no entries before entry_id in the list of active formatting elements, then jump to step 8 (create)
-            match new_entry_index {
-                None => return step_8_create(parser, entry, entry_index),
-                Some(new_entry_index) => {
-                    let new_entry = parser
-                        .active_formatting_elements
-                        .get(new_entry_index)
-                        .ok_or(HtmlParseError::new("could not get new entry"))?
-                        .clone();
-
-                    if let NodeOrMarker::Node(new_entry) = new_entry {
-                        // if new_entry is not a marker and is not in the list of open elements, then jump to step 4 (rewind)
-                        if !parser.open_elements.contains(&new_entry.node_id) {
-                            return step_4_rewind(parser, &new_entry, new_entry_index);
-                        }
-                    }
-
-                    return step_7_advance(parser, new_entry_index);
-                }
-            }
-        }
-
-        fn step_7_advance(
-            parser: &mut HtmlParser,
-            entry_index: usize,
-        ) -> Result<(), HtmlParseError> {
-            let (new_index, new_entry) = parser
-                .active_formatting_elements
-                .iter()
-                .enumerate()
-                .skip(entry_index + 1)
-                .find_map(|(i, e)| {
-                    if let NodeOrMarker::Node(entry) = e {
-                        return Some((i, entry));
-                    }
-
-                    None
-                })
-                .map(|(i, e)| (i, e.clone()))
-                .ok_or(HtmlParseError::new("could not get new entry"))?;
-
-            return step_8_create(parser, &new_entry, new_index);
-        }
-
-        fn step_8_create(
-            parser: &mut HtmlParser,
-            entry: &NodeEntry,
-            index: usize,
-        ) -> Result<(), HtmlParseError> {
-            let element = parser.insert_an_html_element(entry.token.clone())?;
-
-            // replace the entry
-            let new_entry = NodeEntry {
-                node_id: element,
-                token: entry.token.clone(),
-            };
-
-            // replace the entry in the list of active formatting elements
-            parser.active_formatting_elements[index] = NodeOrMarker::Node(new_entry.clone());
-
-            // if the entry was not the last entry in the list of active formatting elements, then jump to advance
-            if index != parser.active_formatting_elements.len() - 1 {
-                return step_7_advance(parser, index);
-            }
-
-            return Ok(());
-        }
-
+        // Step 1: If the list is empty, there is nothing to do.
         if self.active_formatting_elements.is_empty() {
             return Ok(());
         }
 
-        // Check early-exit conditions without cloning the entry.
-        // The clone is expensive (TagToken contains String + Vec<Attribute>)
-        // and the common case is that the entry is already in open_elements.
-        let (node_id, needs_reconstruct) = match self.active_formatting_elements.last().unwrap() {
+        // Step 2-3: Check the last entry. If it is a marker or in open_elements, return.
+        let last_idx = self.active_formatting_elements.len() - 1;
+        match &self.active_formatting_elements[last_idx] {
             NodeOrMarker::Marker => return Ok(()),
-            NodeOrMarker::Node(entry) => (entry.node_id, !self.open_elements.contains(&entry.node_id)),
-        };
-
-        if !needs_reconstruct {
-            return Ok(());
+            NodeOrMarker::Node(entry) => {
+                if self.open_elements.contains(&entry.node_id) {
+                    return Ok(());
+                }
+            }
         }
 
-        // Only clone when we actually need to reconstruct (rare path).
-        let entry = match self.active_formatting_elements.last().unwrap() {
-            NodeOrMarker::Node(entry) => entry.clone(),
-            _ => unreachable!(),
-        };
+        // Step 4 (rewind): Walk backwards to find the starting index.
+        let mut rewind_idx = last_idx;
+        loop {
+            if rewind_idx == 0 {
+                // No earlier entries, start creating from index 0.
+                break;
+            }
+            rewind_idx -= 1;
 
-        step_4_rewind(self, &entry, self.active_formatting_elements.len() - 1)
+            match &self.active_formatting_elements[rewind_idx] {
+                NodeOrMarker::Marker => {
+                    // Step 6: This is a marker, advance past it and start creating.
+                    rewind_idx += 1;
+                    break;
+                }
+                NodeOrMarker::Node(entry) => {
+                    if self.open_elements.contains(&entry.node_id) {
+                        // Step 6: This entry is in open_elements, advance past it and start creating.
+                        rewind_idx += 1;
+                        break;
+                    }
+                    // Step 5: Continue rewinding.
+                }
+            }
+        }
+
+        // Steps 7-8 (advance + create): Walk forward, creating elements.
+        for idx in rewind_idx..=last_idx {
+            let token = match &self.active_formatting_elements[idx] {
+                NodeOrMarker::Node(entry) => entry.token.clone(),
+                NodeOrMarker::Marker => continue,
+            };
+
+            let element_id = self.insert_an_html_element(token.clone())?;
+
+            // Replace the entry with the new element.
+            self.active_formatting_elements[idx] = NodeOrMarker::Node(NodeEntry {
+                node_id: element_id,
+                token,
+            });
+        }
+
+        Ok(())
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#insert-a-character>
@@ -1697,7 +1661,7 @@ impl HtmlParser {
             }
         }
 
-        self.pop_until_tag_name_one_of(vec!["td", "th"])?;
+        self.pop_until_tag_name_one_of(&["td", "th"])?;
         self.clear_the_list_of_active_formatting_elements_up_to_the_last_marker()?;
         self.insertion_mode = InsertionMode::InRow;
 
@@ -1725,11 +1689,11 @@ impl HtmlParser {
     }
 
     pub(crate) fn pop_until_tag_name(&mut self, tag_name: &str) -> Result<(), HtmlParseError> {
-        self.pop_until_tag_name_one_of(vec![tag_name])
+        self.pop_until_tag_name_one_of(&[tag_name])
     }
     pub(crate) fn pop_until_tag_name_one_of(
         &mut self,
-        tag_names: Vec<&str>,
+        tag_names: &[&str],
     ) -> Result<(), HtmlParseError> {
         while let Some(node_id) = self.open_elements.pop() {
             let node = self.arena.get(node_id).unwrap().get();

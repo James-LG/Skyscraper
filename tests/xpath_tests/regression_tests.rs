@@ -1264,3 +1264,171 @@ fn predicate_position_one_based_all_positions() {
     let result = xpath.apply(&tree).unwrap();
     assert_eq!(result.len(), 3);
 }
+
+// ============================================================================
+// Regression: Unary negation of large values should use checked arithmetic.
+// ============================================================================
+
+#[test]
+fn unary_negation_normal_values_work() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("-(42)").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(*val, AnyAtomicType::Integer(-42));
+}
+
+#[test]
+fn double_negation_returns_positive() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("-(-42)").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(*val, AnyAtomicType::Integer(42));
+}
+
+// ============================================================================
+// Regression: idiv should raise error for results outside i64 range.
+// ============================================================================
+
+#[test]
+fn idiv_large_double_returns_error() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    // 1e20 idiv 1 produces a result > i64::MAX; should return err:FOAR0002.
+    let xpath = xpath::parse("1e20 idiv 1").unwrap();
+    let result = xpath.apply(&tree);
+    assert!(
+        result.is_err(),
+        "idiv result exceeding i64 range should return an error"
+    );
+}
+
+#[test]
+fn idiv_normal_values_work() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("7 idiv 2").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(*val, AnyAtomicType::Integer(3));
+}
+
+// ============================================================================
+// Regression: fn:round with precision should preserve large integer precision.
+// ============================================================================
+
+#[test]
+fn round_integer_negative_precision() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    // round(12345, -2) should round to nearest 100 → 12300
+    let xpath = xpath::parse("round(12345, -2)").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(*val, AnyAtomicType::Integer(12300));
+}
+
+#[test]
+fn round_integer_positive_precision_unchanged() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    // round(12345, 2) — positive precision on an integer has no effect.
+    let xpath = xpath::parse("round(12345, 2)").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(*val, AnyAtomicType::Integer(12345));
+}
+
+#[test]
+fn round_integer_zero_precision_unchanged() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    // round(99999, 0) should return the value unchanged.
+    let xpath = xpath::parse("round(99999, 0)").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(*val, AnyAtomicType::Integer(99999));
+}
+
+#[test]
+fn round_half_to_even_integer() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    // round-half-to-even(2550, -2) — ties to even → 2600 (26 is even)
+    let xpath = xpath::parse("round-half-to-even(2550, -2)").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(*val, AnyAtomicType::Integer(2600));
+}
+
+#[test]
+fn round_half_to_even_integer_ties_down() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    // round-half-to-even(2450, -2) — ties to even → 2400 (24 is even)
+    let xpath = xpath::parse("round-half-to-even(2450, -2)").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(*val, AnyAtomicType::Integer(2400));
+}
+
+// ============================================================================
+// Regression: map:find should return a single array of all found values.
+// ============================================================================
+
+#[test]
+fn map_find_returns_single_array() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    // map:find on a map with matching key should return array(*) containing the values.
+    let xpath = xpath::parse(r#"map:find(map { "a": 1, "b": 2 }, "a")"#).unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1, "map:find should return exactly one item (an array)");
+    // The result should be an array containing the found value(s).
+    match &result[0] {
+        XpathItem::Function(skyscraper::xpath::grammar::data_model::Function::Array { members }) => {
+            assert_eq!(members.len(), 1, "array should have one member for one matching key");
+        }
+        other => panic!("expected Function::Array, got {:?}", other),
+    }
+}
+
+// ============================================================================
+// Regression: fn:deep-equal should raise error for function items.
+// ============================================================================
+
+#[test]
+fn deep_equal_function_items_raises_error() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    // deep-equal on two function items should raise err:FOTY0015.
+    let xpath =
+        xpath::parse("deep-equal(true#0, false#0)").unwrap();
+    let result = xpath.apply(&tree);
+    assert!(
+        result.is_err(),
+        "fn:deep-equal on function items should raise an error"
+    );
+}
+
+#[test]
+fn deep_equal_atomic_values_still_works() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("deep-equal((1, 2, 3), (1, 2, 3))").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(*val, AnyAtomicType::Boolean(true));
+}

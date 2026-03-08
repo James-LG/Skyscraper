@@ -193,7 +193,7 @@ fn converts_doctype_with_public_and_system_ids() {
 fn converts_mixed_node_types() {
     let mut arena = Arena::new();
     let root = arena.new_node(HtmlNode::Tag(HtmlTag::new("div".to_string())));
-    let text = arena.new_node(HtmlNode::Text(HtmlText::from_str("hello")));
+    let text = arena.new_node(HtmlNode::Text(HtmlText::new("hello")));
     let comment = arena.new_node(HtmlNode::Comment(HtmlComment::new("a comment".to_string())));
     let pi = arena.new_node(HtmlNode::ProcessingInstruction(
         HtmlProcessingInstruction::new("target".to_string(), "data".to_string()),

@@ -334,10 +334,7 @@ fn dispatch_by_local_name<'tree>(
                 let factor = 10f64.powi(precision);
                 func_numeric_unary(
                     &args[0],
-                    |n| {
-                        let v = (n as f64 * factor).round() / factor;
-                        v as i64
-                    },
+                    |n| round_integer(n, precision),
                     |f| (f as f64 * factor as f64).round() as f32 / factor as f32,
                     |d| (d * factor as f64).round() / factor as f64,
                 )
@@ -967,10 +964,7 @@ fn dispatch_by_local_name<'tree>(
             let factor = 10f64.powi(precision);
             func_numeric_unary(
                 &args[0],
-                |n| {
-                    let v = (n as f64 * factor).round_ties_even() / factor;
-                    v as i64
-                },
+                |n| round_half_to_even_integer(n, precision),
                 |f| {
                     let v = (f as f64 * factor as f64).round_ties_even() / factor as f64;
                     v as f32
@@ -1173,11 +1167,15 @@ fn dispatch_by_local_name<'tree>(
         // https://www.w3.org/TR/xpath-functions-31/#func-deep-equal
         "deep-equal" => {
             check_arity("fn:deep-equal", args, 2)?;
-            let equal = args[0].len() == args[1].len()
-                && args[0]
-                    .iter()
-                    .zip(args[1].iter())
-                    .all(|(a, b)| deep_equal_items(a, b, context.item_tree));
+            let mut equal = args[0].len() == args[1].len();
+            if equal {
+                for (a, b) in args[0].iter().zip(args[1].iter()) {
+                    equal = deep_equal_items(a, b, context.item_tree)?;
+                    if !equal {
+                        break;
+                    }
+                }
+            }
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::Boolean(equal)
             )]))
@@ -2360,9 +2358,12 @@ fn dispatch_map_function<'tree>(
                 }
             };
             // Recursively search all maps in the input for matching keys.
-            let mut results = XpathItemSet::new();
-            func_map_find_recursive(&args[0], search_key, &mut results);
-            Ok(Some(results))
+            // Per spec, map:find returns a single array(*) containing all found values.
+            let mut found_values: Vec<Vec<AnyAtomicType>> = Vec::new();
+            func_map_find_recursive(&args[0], search_key, &mut found_values);
+            Ok(Some(xpath_item_set![XpathItem::Function(Function::Array {
+                members: found_values,
+            })]))
         }
         _ => Ok(None),
     }
@@ -2938,6 +2939,72 @@ fn extract_double(arg: &XpathItemSet, item_tree: &XpathItemTree) -> Result<f64, 
 }
 
 /// Apply a unary numeric operation, preserving the source type.
+/// Round an integer to the given precision using integer arithmetic,
+/// avoiding the precision loss of i64→f64→i64 round-trip for large values.
+fn round_integer(n: i64, precision: i32) -> i64 {
+    if precision >= 0 {
+        // Rounding at decimal places that don't exist for integers.
+        return n;
+    }
+    let shift = (-precision) as u32;
+    if shift >= 19 {
+        // 10^19 > i64::MAX, so any integer rounds to 0.
+        return 0;
+    }
+    let divisor = 10_i64.pow(shift);
+    let remainder = n % divisor;
+    let half = divisor / 2;
+    let truncated = n - remainder;
+    if n >= 0 {
+        if remainder >= half {
+            truncated + divisor
+        } else {
+            truncated
+        }
+    } else if (-remainder) >= half {
+        truncated - divisor
+    } else {
+        truncated
+    }
+}
+
+/// Round-half-to-even for integers, using integer arithmetic.
+fn round_half_to_even_integer(n: i64, precision: i32) -> i64 {
+    if precision >= 0 {
+        return n;
+    }
+    let shift = (-precision) as u32;
+    if shift >= 19 {
+        return 0;
+    }
+    let divisor = 10_i64.pow(shift);
+    let remainder = n % divisor;
+    let abs_remainder = remainder.unsigned_abs();
+    let half = divisor.unsigned_abs() / 2;
+    let truncated = n - remainder;
+    match abs_remainder.cmp(&half) {
+        std::cmp::Ordering::Less => truncated,
+        std::cmp::Ordering::Greater => {
+            if n >= 0 {
+                truncated + divisor
+            } else {
+                truncated - divisor
+            }
+        }
+        std::cmp::Ordering::Equal => {
+            // Tie: round to even (the quotient that is even).
+            let quotient = truncated / divisor;
+            if quotient % 2 == 0 {
+                truncated
+            } else if n >= 0 {
+                truncated + divisor
+            } else {
+                truncated - divisor
+            }
+        }
+    }
+}
+
 fn func_numeric_unary<'tree>(
     arg: &XpathItemSet<'tree>,
     int_op: impl Fn(i64) -> i64,
@@ -3535,27 +3602,24 @@ fn extract_array<'a>(
 }
 
 /// Recursively search for map entries with a given key.
-fn func_map_find_recursive<'tree>(
-    items: &XpathItemSet<'tree>,
+fn func_map_find_recursive(
+    items: &XpathItemSet<'_>,
     key: &AnyAtomicType,
-    results: &mut XpathItemSet<'tree>,
+    found_values: &mut Vec<Vec<AnyAtomicType>>,
 ) {
     for item in items.iter() {
         match item {
             XpathItem::Function(Function::Map { entries }) => {
                 for (k, v) in entries {
                     if k == key {
-                        // Return the value as an array.
-                        results.insert(XpathItem::Function(Function::Array {
-                            members: vec![v.clone()],
-                        }));
+                        found_values.push(v.clone());
                     }
                     // Recurse into nested map values.
                     let nested: XpathItemSet = v
                         .iter()
                         .map(|a| XpathItem::AnyAtomicType(a.clone()))
                         .collect();
-                    func_map_find_recursive(&nested, key, results);
+                    func_map_find_recursive(&nested, key, found_values);
                 }
             }
             XpathItem::Function(Function::Array { members }) => {
@@ -3564,7 +3628,7 @@ fn func_map_find_recursive<'tree>(
                         .iter()
                         .map(|a| XpathItem::AnyAtomicType(a.clone()))
                         .collect();
-                    func_map_find_recursive(&nested, key, results);
+                    func_map_find_recursive(&nested, key, found_values);
                 }
             }
             _ => {}
@@ -3757,16 +3821,24 @@ fn func_normalize_unicode(input: &str, form: &str) -> Result<String, ExpressionA
 
 /// Structurally compare two XPath items for deep equality per the XPath 3.1 spec.
 /// <https://www.w3.org/TR/xpath-functions-31/#func-deep-equal>
-fn deep_equal_items(a: &XpathItem, b: &XpathItem, tree: &XpathItemTree) -> bool {
+fn deep_equal_items(
+    a: &XpathItem,
+    b: &XpathItem,
+    tree: &XpathItemTree,
+) -> Result<bool, ExpressionApplyError> {
     match (a, b) {
         // Atomic values: use cross-type numeric equality.
-        (XpathItem::AnyAtomicType(a), XpathItem::AnyAtomicType(b)) => atoms_equal(a, b),
-        // Functions: not comparable by deep-equal per spec.
-        (XpathItem::Function(_), XpathItem::Function(_)) => false,
+        (XpathItem::AnyAtomicType(a), XpathItem::AnyAtomicType(b)) => Ok(atoms_equal(a, b)),
+        // Functions: per XPath 3.1, fn:deep-equal raises err:FOTY0015 for function items.
+        (XpathItem::Function(_), _) | (_, XpathItem::Function(_)) => {
+            Err(ExpressionApplyError::new(
+                "err:FOTY0015 fn:deep-equal does not support function items".to_string(),
+            ))
+        }
         // Nodes: structural comparison.
-        (XpathItem::Node(a), XpathItem::Node(b)) => deep_equal_nodes(a, b, tree),
+        (XpathItem::Node(a), XpathItem::Node(b)) => Ok(deep_equal_nodes(a, b, tree)),
         // Different kinds of items are never deep-equal.
-        _ => false,
+        _ => Ok(false),
     }
 }
 
