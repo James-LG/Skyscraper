@@ -1198,3 +1198,69 @@ fn if_expr_display_no_trailing_newline() {
         display
     );
 }
+
+// ============================================================================
+// Regression: XpathItemSet::insert works after insertb removal
+// Verify that insert (which replaced insertb) correctly adds items.
+// ============================================================================
+
+#[test]
+fn xpath_item_set_insert_adds_items() {
+    use skyscraper::xpath::xpath_item_set::XpathItemSet;
+
+    let mut set = XpathItemSet::new();
+    assert!(set.is_empty());
+
+    set.insert(XpathItem::AnyAtomicType(AnyAtomicType::Integer(1)));
+    assert_eq!(set.len(), 1);
+
+    set.insert(XpathItem::AnyAtomicType(AnyAtomicType::Integer(2)));
+    assert_eq!(set.len(), 2);
+
+    // Duplicates are preserved (it's a sequence, not a set)
+    set.insert(XpathItem::AnyAtomicType(AnyAtomicType::Integer(1)));
+    assert_eq!(set.len(), 3);
+}
+
+// ============================================================================
+// Regression: XPath predicate evaluation uses 1-based positions correctly
+// The new_with_variables method requires position >= 1. Verify that predicate
+// filtering (which calls new_with_variables with i+1) works for all positions.
+// ============================================================================
+
+#[test]
+fn predicate_position_one_based_first_child() {
+    let text = "<ul><li>a</li><li>b</li><li>c</li></ul>";
+    let tree = html::parse(text).unwrap();
+    // /html/body/ul/li[1] selects the first li
+    let xpath = xpath::parse("/html/body/ul/li[1]").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    let el = result[0].extract_as_node().extract_as_element_node();
+    assert_eq!(el.name, "li");
+    let text = el.text_content(&tree);
+    assert_eq!(text, "a");
+}
+
+#[test]
+fn predicate_position_one_based_last_child() {
+    let text = "<ul><li>a</li><li>b</li><li>c</li></ul>";
+    let tree = html::parse(text).unwrap();
+    // /html/body/ul/li[last()] selects the last li
+    let xpath = xpath::parse("/html/body/ul/li[last()]").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    let el = result[0].extract_as_node().extract_as_element_node();
+    let text = el.text_content(&tree);
+    assert_eq!(text, "c");
+}
+
+#[test]
+fn predicate_position_one_based_all_positions() {
+    let text = "<ul><li>a</li><li>b</li><li>c</li></ul>";
+    let tree = html::parse(text).unwrap();
+    // position() > 0 should match all elements (all positions are >= 1)
+    let xpath = xpath::parse("/html/body/ul/li[position() > 0]").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 3);
+}

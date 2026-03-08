@@ -296,6 +296,13 @@ impl<'tree> XpathExpressionContext<'tree> {
         position: usize,
         is_initial_step: bool,
     ) -> Self {
+        debug_assert!(position > 0, "XPath position is 1-based, got 0");
+        debug_assert!(
+            position <= items.len(),
+            "position {} exceeds items length {}",
+            position,
+            items.len()
+        );
         Self {
             item_tree: self.item_tree,
             item: items[position - 1].clone(),

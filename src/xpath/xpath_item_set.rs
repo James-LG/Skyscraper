@@ -73,17 +73,6 @@ impl<'tree> XpathItemSet<'tree> {
     }
 
     /// Inserts a new item into the sequence.
-    ///
-    /// Returns true (always inserted, duplicates are allowed).
-    pub fn insertb(&mut self, item: XpathItem<'tree>) -> bool {
-        self.items.push(item);
-        true
-    }
-
-    /// Inserts a new item into the sequence.
-    ///
-    /// Drops the bool returned by [`XpathItemSet::insertb`] so that it can be used in match arms
-    /// without causing incompatible types with [`XpathItemSet::extend`].
     pub fn insert(&mut self, item: XpathItem<'tree>) {
         self.items.push(item);
     }
