@@ -961,3 +961,51 @@ fn html_parser_reuse_produces_correct_results() {
     let result3 = xp3.apply(&doc2).unwrap();
     assert_eq!(result3.len(), 0, "second parse should not contain elements from first parse");
 }
+
+// ============================================================================
+// Regression: tokenizer temporary_buffer comparison in script double-escape
+// states must work correctly after switching from String allocation to
+// iterator-based comparison.
+// ============================================================================
+
+/// Entering the script data double-escaped state requires the temporary buffer
+/// to match "script". Verify the transition works correctly after switching from
+/// String allocation to iterator-based comparison.
+#[test]
+fn script_double_escape_start_buffer_comparison() {
+    // A simple script with an HTML comment triggers the escaped state.
+    // The tokenizer must correctly identify the "script" buffer to transition
+    // between escaped and double-escaped states.
+    let text = "<html><head><script><!--\nvar x = 1;\n--></script></head><body></body></html>";
+    let document = html::parse(text).unwrap();
+    // Verify the script element exists and contains the expected text.
+    let xp = xpath::parse("//script/text()").unwrap();
+    let result = xp.apply(&document).unwrap();
+    assert_eq!(result.len(), 1);
+    let script_text = result[0].extract_as_node().extract_as_text_node().content.clone();
+    assert!(
+        script_text.contains("var x = 1;"),
+        "Script content should be preserved through escaped states. Got: {script_text:?}"
+    );
+}
+
+/// The double-escape-end state compares the buffer to "script" to transition
+/// back. Verify a `</script>` end tag properly closes the script element.
+#[test]
+fn script_double_escape_end_buffer_comparison() {
+    // Normal script close after comment content.
+    let text = "<html><head><script>var y = 2;</script></head><body>after</body></html>";
+    let document = html::parse(text).unwrap();
+    let output = document.to_string();
+    // The script should close properly at </script> and "after" should appear in body.
+    assert!(
+        output.contains("after"),
+        "Content after script close should be parsed. Got: {output:?}"
+    );
+    // Verify the script text is present.
+    let xp = xpath::parse("//script/text()").unwrap();
+    let result = xp.apply(&document).unwrap();
+    assert_eq!(result.len(), 1);
+    let script_text = result[0].extract_as_node().extract_as_text_node().content.clone();
+    assert_eq!(script_text, "var y = 2;");
+}

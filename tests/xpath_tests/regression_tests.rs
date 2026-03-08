@@ -1432,3 +1432,58 @@ fn deep_equal_atomic_values_still_works() {
     let val = result[0].extract_as_any_atomic_type();
     assert_eq!(*val, AnyAtomicType::Boolean(true));
 }
+
+// ============================================================================
+// Regression: fn:substring with extreme f64 values must not overflow during
+// the 1-based to 0-based index conversion.
+// Previously, `(very_large_f64 as i64 - 1)` could overflow i64.
+// ============================================================================
+
+/// substring with a very large start position should return empty string.
+#[test]
+fn substring_extreme_large_start_returns_empty() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    // 1e19 is larger than i64::MAX (~9.2e18), previously caused overflow.
+    let xpath = xpath::parse(r#"substring("hello", 1e19)"#).unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(*val, AnyAtomicType::String(String::new()));
+}
+
+/// substring with a very large length should return from start to end.
+#[test]
+fn substring_extreme_large_length() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse(r#"substring("hello", 2, 1e19)"#).unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(*val, AnyAtomicType::String(String::from("ello")));
+}
+
+/// substring with a very negative start and large length should return full string.
+#[test]
+fn substring_extreme_negative_start_large_length() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse(r#"substring("hello", -1e19, 1e20)"#).unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(*val, AnyAtomicType::String(String::from("hello")));
+}
+
+/// substring with a very negative start and small length should return empty string.
+#[test]
+fn substring_extreme_negative_start_small_length() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse(r#"substring("hello", -1e19, 5)"#).unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(*val, AnyAtomicType::String(String::new()));
+}

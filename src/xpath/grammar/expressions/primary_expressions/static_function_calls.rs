@@ -481,10 +481,24 @@ fn dispatch_by_local_name<'tree>(
                         AnyAtomicType::String(String::new())
                     )]));
                 }
-                let end = ((start_double.round() + len_double.round()) as i64 - 1).max(0) as usize;
-                let start = (start_double.round() as i64 - 1).max(0) as usize;
-                let end = end.min(chars.len());
-                let start = start.min(chars.len());
+                // Perform 1-based to 0-based conversion in f64 space to avoid
+                // i64 overflow on extreme finite values (e.g. 1e19).
+                let end_f64 = start_double.round() + len_double.round() - 1.0;
+                let end = if end_f64 <= 0.0 {
+                    0
+                } else if end_f64 >= chars.len() as f64 {
+                    chars.len()
+                } else {
+                    end_f64 as usize
+                };
+                let start_f64 = start_double.round() - 1.0;
+                let start = if start_f64 <= 0.0 {
+                    0
+                } else if start_f64 >= chars.len() as f64 {
+                    chars.len()
+                } else {
+                    start_f64 as usize
+                };
                 if start >= end {
                     String::new()
                 } else {
@@ -497,8 +511,14 @@ fn dispatch_by_local_name<'tree>(
                         AnyAtomicType::String(chars.iter().collect())
                     )]));
                 }
-                let start = (start_double.round() as i64 - 1).max(0) as usize;
-                let start = start.min(chars.len());
+                let start_f64 = start_double.round() - 1.0;
+                let start = if start_f64 <= 0.0 {
+                    0
+                } else if start_f64 >= chars.len() as f64 {
+                    chars.len()
+                } else {
+                    start_f64 as usize
+                };
                 chars[start..].iter().collect()
             };
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(

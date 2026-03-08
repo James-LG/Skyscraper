@@ -724,8 +724,7 @@ impl<'a> Tokenizer<'a> {
                 .contains(c) =>
             {
                 let c = *c;
-                let buffer = self.temporary_buffer.iter().collect::<String>();
-                if buffer == "script" {
+                if self.temporary_buffer.iter().copied().eq("script".chars()) {
                     self.state = TokenizerState::ScriptDataDoubleEscaped;
                 } else {
                     self.state = TokenizerState::ScriptDataEscaped;
@@ -884,8 +883,7 @@ impl<'a> Tokenizer<'a> {
                 .contains(c) =>
             {
                 let c = *c;
-                let buffer = self.temporary_buffer.iter().collect::<String>();
-                if buffer == "script" {
+                if self.temporary_buffer.iter().copied().eq("script".chars()) {
                     self.state = TokenizerState::ScriptDataEscaped;
                 } else {
                     self.state = TokenizerState::ScriptDataDoubleEscaped;

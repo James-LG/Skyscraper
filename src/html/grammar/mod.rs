@@ -692,7 +692,7 @@ impl HtmlParser {
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#current-template-insertion-mode>
     pub(crate) fn current_template_insertion_mode(&self) -> Option<InsertionMode> {
-        self.template_insertion_modes.last().map(|mode| *mode)
+        self.template_insertion_modes.last().copied()
     }
 
     pub(crate) fn top_node(&self) -> Option<&XpathItemTreeNode> {
