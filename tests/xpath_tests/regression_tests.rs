@@ -1487,3 +1487,121 @@ fn substring_extreme_negative_start_small_length() {
     let val = result[0].extract_as_any_atomic_type();
     assert_eq!(*val, AnyAtomicType::String(String::new()));
 }
+
+// ============================================================================
+// Regression: idiv i64::MIN by -1 should return error, not panic from overflow.
+// ============================================================================
+
+#[test]
+fn idiv_i64_min_by_neg_one_returns_error() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    // i64::MIN = -2147483648 * 2147483648 * 2 = -9223372036854775808.
+    // Build it via multiplication of u32-range literals to reach i64::MIN,
+    // then idiv by -1 which would overflow i64.
+    let xpath =
+        xpath::parse("(-2147483648 * 2147483648 * 2) idiv (-1)").unwrap();
+    let result = xpath.apply(&tree);
+    assert!(
+        result.is_err(),
+        "i64::MIN idiv -1 should return an error, not panic from overflow"
+    );
+}
+
+// ============================================================================
+// Regression: format-integer with NaN or Infinity should return error.
+// ============================================================================
+
+#[test]
+fn format_integer_nan_returns_error() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("format-integer(number('NaN'), '1')").unwrap();
+    let result = xpath.apply(&tree);
+    assert!(
+        result.is_err(),
+        "format-integer(NaN, '1') should return an error"
+    );
+}
+
+#[test]
+fn format_integer_infinity_returns_error() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("format-integer(1 div 0, '1')").unwrap();
+    let result = xpath.apply(&tree);
+    assert!(
+        result.is_err(),
+        "format-integer(Infinity, '1') should return an error"
+    );
+}
+
+// ============================================================================
+// Regression: fn:root with too many arguments should return error.
+// ============================================================================
+
+#[test]
+fn fn_root_too_many_args_returns_error() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("fn:root(1, 2)").unwrap();
+    let result = xpath.apply(&tree);
+    assert!(
+        result.is_err(),
+        "fn:root(1, 2) should return an error for too many arguments"
+    );
+}
+
+// ============================================================================
+// Regression: Range expression too large should return error.
+// ============================================================================
+
+#[test]
+fn range_expr_too_large_returns_error() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("1 to 20000000").unwrap();
+    let result = xpath.apply(&tree);
+    assert!(
+        result.is_err(),
+        "1 to 20000000 should return an error (exceeds maximum range size)"
+    );
+}
+
+// ============================================================================
+// Regression: fn:innermost / fn:outermost correctness with HashSet optimization.
+// ============================================================================
+
+#[test]
+fn fn_innermost_hashset_optimization_correct() {
+    let text = "<html><body><div><p><span>deep</span></p></div></body></html>";
+    let tree = html::parse(text).unwrap();
+    // Select both div and span; innermost should return only span.
+    let xpath = xpath::parse("innermost(//div | //span)").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1, "innermost should return only the deepest node");
+    let node = result[0].extract_as_node();
+    match node {
+        XpathItemTreeNode::ElementNode(e) => {
+            assert_eq!(e.name, "span", "innermost should return span, not div");
+        }
+        other => panic!("Expected element node, got: {:?}", other),
+    }
+}
+
+#[test]
+fn fn_outermost_hashset_optimization_correct() {
+    let text = "<html><body><div><p><span>deep</span></p></div></body></html>";
+    let tree = html::parse(text).unwrap();
+    // Select both div and span; outermost should return only div.
+    let xpath = xpath::parse("outermost(//div | //span)").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1, "outermost should return only the shallowest node");
+    let node = result[0].extract_as_node();
+    match node {
+        XpathItemTreeNode::ElementNode(e) => {
+            assert_eq!(e.name, "div", "outermost should return div, not span");
+        }
+        other => panic!("Expected element node, got: {:?}", other),
+    }
+}

@@ -546,9 +546,8 @@ impl HtmlParser {
         }
     }
 
-    /// Parse an HTML string into an [`XpathItemTree`].
-    pub fn parse(&mut self, text: &str) -> Result<XpathItemTree, HtmlParseError> {
-        // Reset all mutable state so the parser can be reused safely.
+    /// Reset all mutable state so the parser can be reused safely.
+    fn reset_state(&mut self) {
         self.insertion_mode = InsertionMode::Initial;
         self.template_insertion_modes.clear();
         self.original_insertion_mode = None;
@@ -566,6 +565,11 @@ impl HtmlParser {
         self.quirks_mode = QuirksMode::NoQuirks;
         self.active_text_node = None;
         self.tree_generation = 0;
+    }
+
+    /// Parse an HTML string into an [`XpathItemTree`].
+    pub fn parse(&mut self, text: &str) -> Result<XpathItemTree, HtmlParseError> {
+        self.reset_state();
 
         // set document node as the root node
         let document_node_id = self
@@ -598,6 +602,8 @@ impl HtmlParser {
         context_element_name: &str,
         text: &str,
     ) -> Result<XpathItemTree, HtmlParseError> {
+        self.reset_state();
+
         // 1. Create a new Document node.
         let document_node_id = self
             .arena

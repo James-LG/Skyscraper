@@ -215,17 +215,11 @@ pub fn unescape_characters(text: &str) -> String {
     static NUMERIC_CHAR_REF_RE: Lazy<Regex> =
         Lazy::new(|| Regex::new(r"&#(?:x([0-9a-fA-F]+)|(\d+));").unwrap());
 
-    // Replace named entities first, then numeric references.
-    // &amp; must be replaced last to avoid double-unescaping
-    // (e.g. "&amp;lt;" → "&lt;" → "<" if &amp; were replaced first).
-    let text = text
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", r#"""#)
-        .replace("&amp;", "&");
-
-    NUMERIC_CHAR_REF_RE
-        .replace_all(&text, |caps: &Captures| {
+    // First: resolve numeric character references on the raw input,
+    // before any named entity replacement, to avoid double-unescaping
+    // (e.g. "&amp;#60;" should become "&#60;", not "<").
+    let text = NUMERIC_CHAR_REF_RE
+        .replace_all(text, |caps: &Captures| {
             // Group 1: hex digits (&#xHH;), Group 2: decimal digits (&#DD;)
             if let Some(hex) = caps.get(1) {
                 if let Ok(num) = u32::from_str_radix(hex.as_str(), 16) {
@@ -238,7 +232,14 @@ pub fn unescape_characters(text: &str) -> String {
             }
             String::new()
         })
-        .into_owned()
+        .into_owned();
+
+    // Then: named entities. &amp; must be replaced last to avoid
+    // double-unescaping (e.g. "&amp;lt;" → "&lt;", not "<").
+    text.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", r#"""#)
+        .replace("&amp;", "&")
 }
 
 /// Escapes commonly escaped characters in HTML text.
@@ -431,7 +432,7 @@ fn display_node(
 
     let mut str = String::new();
 
-    let html_node = doc.get_html_node(doc_node).unwrap();
+    let html_node = doc.get_html_node(doc_node).ok_or(fmt::Error)?;
 
     match html_node {
         HtmlNode::Tag(tag) => {

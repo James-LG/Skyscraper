@@ -12,7 +12,7 @@ mod types;
 mod whitespace_recipes;
 mod xml_names;
 
-use std::{fmt::Display, iter};
+use std::fmt::Display;
 
 use enum_extract_macro::EnumExtract;
 pub(crate) use expressions::xpath;

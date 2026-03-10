@@ -313,7 +313,7 @@ impl MultiplicativeExpr {
                 MultiplicativeExprOperator::IntegerDiv => {
                     match (&left, &right) {
                         (AnyAtomicType::Integer(a), AnyAtomicType::Integer(b)) => {
-                            if *b == 0 {
+                            if *b == 0 || (*a == i64::MIN && *b == -1) {
                                 return Err(ExpressionApplyError {
                                     msg: String::from("err:FOAR0002 Division by zero"),
                                 });

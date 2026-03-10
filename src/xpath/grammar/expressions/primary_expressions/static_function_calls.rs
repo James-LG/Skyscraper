@@ -1,5 +1,6 @@
 //! <https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-context-item-expression>
 
+use std::collections::HashSet;
 use std::fmt::Display;
 
 use nom::error::context;
@@ -67,6 +68,12 @@ impl FunctionCall {
             _ => false,
         };
         if is_fn_root {
+            if self.argument_list.0.len() > 1 {
+                return Err(ExpressionApplyError::new(format!(
+                    "fn:root expects 0-1 arguments, got {}",
+                    self.argument_list.0.len()
+                )));
+            }
             return Ok(xpath_item_set![XpathItem::Node(context.item_tree.root())]);
         }
 
@@ -996,7 +1003,13 @@ fn dispatch_by_local_name<'tree>(
         // https://www.w3.org/TR/xpath-functions-31/#func-format-integer
         "format-integer" => {
             check_arity("fn:format-integer", args, 2)?;
-            let n = extract_double(&args[0], context.item_tree)? as i64;
+            let n_f64 = extract_double(&args[0], context.item_tree)?;
+            if n_f64.is_nan() || n_f64.is_infinite() || n_f64 != n_f64.trunc() || n_f64 > i64::MAX as f64 || n_f64 < i64::MIN as f64 {
+                return Err(ExpressionApplyError::new(
+                    "err:XPTY0004 format-integer: argument is not a valid integer".to_string()
+                ));
+            }
+            let n = n_f64 as i64;
             let picture = extract_string_arg(&args[1], context.item_tree)?;
             let result = match picture.as_str() {
                 "1" => n.to_string(),
@@ -1650,25 +1663,23 @@ fn dispatch_by_local_name<'tree>(
                 .collect();
             let node_ids: Vec<Option<indextree::NodeId>> =
                 nodes.iter().map(|n| n.node_id()).collect();
+            let node_id_set: HashSet<indextree::NodeId> =
+                node_ids.iter().filter_map(|id| *id).collect();
+            let mut ancestor_ids: HashSet<indextree::NodeId> = HashSet::new();
+            for id in node_id_set.iter() {
+                for anc in id.ancestors(&context.item_tree.arena).skip(1) {
+                    if node_id_set.contains(&anc) {
+                        ancestor_ids.insert(anc);
+                    }
+                }
+            }
             let mut result = XpathItemSet::new();
             for (i, node) in nodes.iter().enumerate() {
-                let is_ancestor_of_another = if let Some(my_id) = node_ids[i] {
-                    node_ids.iter().enumerate().any(|(j, other_id)| {
-                        if i == j {
-                            return false;
-                        }
-                        if let Some(other_id) = other_id {
-                            other_id
-                                .ancestors(&context.item_tree.arena)
-                                .any(|anc| anc == my_id)
-                        } else {
-                            false
-                        }
-                    })
-                } else {
-                    false
+                let dominated = match node_ids[i] {
+                    Some(id) => ancestor_ids.contains(&id),
+                    None => false,
                 };
-                if !is_ancestor_of_another {
+                if !dominated {
                     result.insert(XpathItem::Node(node));
                 }
             }
@@ -1686,12 +1697,15 @@ fn dispatch_by_local_name<'tree>(
                 .collect();
             let node_ids: Vec<Option<indextree::NodeId>> =
                 nodes.iter().map(|n| n.node_id()).collect();
+            let node_id_set: HashSet<indextree::NodeId> =
+                node_ids.iter().filter_map(|id| *id).collect();
             let mut result = XpathItemSet::new();
             for (i, node) in nodes.iter().enumerate() {
                 let has_ancestor_in_set = if let Some(my_id) = node_ids[i] {
-                    my_id.ancestors(&context.item_tree.arena).skip(1).any(|anc| {
-                        node_ids.iter().any(|nid| *nid == Some(anc))
-                    })
+                    my_id
+                        .ancestors(&context.item_tree.arena)
+                        .skip(1)
+                        .any(|anc| node_id_set.contains(&anc))
                 } else {
                     false
                 };

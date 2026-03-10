@@ -78,6 +78,16 @@ impl RangeExpr {
             return Ok(XpathItemSet::new());
         }
 
+        const MAX_RANGE_SIZE: i64 = 10_000_000;
+        let range_size = end - start;
+        if range_size > MAX_RANGE_SIZE {
+            return Err(ExpressionApplyError::new(format!(
+                "Range expression too large: {} items exceeds maximum of {}",
+                range_size + 1,
+                MAX_RANGE_SIZE
+            )));
+        }
+
         let mut items = XpathItemSet::new();
         for i in start..=end {
             items.extend(xpath_item_set![XpathItem::AnyAtomicType(

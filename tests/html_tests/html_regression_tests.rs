@@ -1009,3 +1009,80 @@ fn script_double_escape_end_buffer_comparison() {
     let script_text = result[0].extract_as_node().extract_as_text_node().content.clone();
     assert_eq!(script_text, "var y = 2;");
 }
+
+// ============================================================================
+// Regression: unescape_characters should not double-unescape &amp; followed
+// by numeric character references. "&amp;#60;" should become "&#60;", not "<".
+// ============================================================================
+
+#[test]
+fn unescape_amp_numeric_ref_no_double_unescape() {
+    // "&amp;#60;" → the &amp; becomes &, yielding "&#60;" as literal text.
+    // It should NOT be further interpreted as a numeric ref producing "<".
+    assert_eq!(
+        html::unescape_characters("&amp;#60;"),
+        "&#60;",
+        "&amp;#60; should become literal &#60;, not <"
+    );
+    assert_eq!(
+        html::unescape_characters("&amp;#x3C;"),
+        "&#x3C;",
+        "&amp;#x3C; should become literal &#x3C;, not <"
+    );
+    // Existing behavior: bare numeric refs should still resolve.
+    assert_eq!(
+        html::unescape_characters("&#60;"),
+        "<",
+        "&#60; should still resolve to <"
+    );
+    // Existing behavior: &amp;lt; should become &lt; (not <).
+    assert_eq!(
+        html::unescape_characters("&amp;lt;"),
+        "&lt;",
+        "&amp;lt; should become &lt;"
+    );
+}
+
+// ============================================================================
+// Regression: parse_fragment() should reset state so reuse doesn't leak.
+// ============================================================================
+
+#[test]
+fn parse_fragment_reuse_does_not_leak_state() {
+    let mut parser = HtmlParser::new();
+
+    // First: parse a full document.
+    let doc1 = parser
+        .parse("<html><body><p>first</p></body></html>")
+        .unwrap();
+    let xp = xpath::parse("//p/text()").unwrap();
+    let result1 = xp.apply(&doc1).unwrap();
+    assert_eq!(result1.len(), 1);
+
+    // Second: parse a fragment with the same parser instance.
+    let doc2 = parser
+        .parse_fragment("body", "<div>fragment</div>")
+        .unwrap();
+    let xp2 = xpath::parse("//div/text()").unwrap();
+    let result2 = xp2.apply(&doc2).unwrap();
+    assert_eq!(
+        result2.len(),
+        1,
+        "Fragment should contain div text, not stale state from previous parse"
+    );
+    let text2 = result2[0]
+        .extract_as_node()
+        .extract_as_text_node()
+        .content
+        .clone();
+    assert_eq!(text2, "fragment");
+
+    // Ensure no elements from the first parse leaked into the fragment.
+    let xp3 = xpath::parse("//p").unwrap();
+    let result3 = xp3.apply(&doc2).unwrap();
+    assert_eq!(
+        result3.len(),
+        0,
+        "Fragment should not contain <p> from previous parse"
+    );
+}

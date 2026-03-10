@@ -14,11 +14,6 @@ impl<'a, T> VecPointerRef<'a, T> {
         VecPointerRef { values, index: 0 }
     }
 
-    /// Returns `true` if the current index points to a valid element.
-    pub fn has_next(&self) -> bool {
-        self.get(self.index).is_some()
-    }
-
     /// Returns a reference to the element at the current index, or `None` if past the end.
     pub fn current(&self) -> Option<&T> {
         self.get(self.index)
@@ -53,30 +48,9 @@ impl<'a, T> VecPointerRef<'a, T> {
         self.current()
     }
 
-    /// Returns a reference to the element one position ahead without advancing.
-    pub fn peek(&self) -> Option<&T> {
-        self.peek_add(1)
-    }
-
     /// Returns a reference to the element `i` positions ahead without advancing.
     pub fn peek_add(&self, i: usize) -> Option<&T> {
         self.get(self.index + i)
-    }
-
-    /// Returns references to the next `num` elements without advancing.
-    ///
-    /// Stops early if the end of the slice is reached, so the returned
-    /// vector may contain fewer than `num` elements.
-    pub fn peek_multiple(&self, num: usize) -> Vec<&T> {
-        let mut result = Vec::new();
-        for i in 1..=num {
-            if let Some(value) = self.peek_add(i) {
-                result.push(value);
-            } else {
-                break;
-            }
-        }
-        result
     }
 
     /// Returns references to the current element and the next `i - 1` elements without advancing.
