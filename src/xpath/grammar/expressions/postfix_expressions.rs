@@ -295,6 +295,7 @@ pub(crate) fn invoke_function_item<'tree>(
         Function::Inline {
             params,
             body_source,
+            body,
         } => {
             if arg_values.len() != params.len() {
                 return Err(ExpressionApplyError::new(format!(
@@ -303,20 +304,22 @@ pub(crate) fn invoke_function_item<'tree>(
                     arg_values.len()
                 )));
             }
-            // Re-parse the body source and evaluate.
-            if body_source.is_empty() {
-                return Ok(XpathItemSet::new());
-            }
-            // Bind parameters to argument values.
+            // Use cached body if available; otherwise re-parse from source.
             let bindings = params.iter().cloned().zip(arg_values);
             let inner_context = context.with_variables_iter(bindings);
-            let (_, body_expr) = expr(body_source).map_err(|e| {
-                ExpressionApplyError::new(format!(
-                    "Failed to parse inline function body '{}': {}",
-                    body_source, e
-                ))
-            })?;
-            body_expr.eval(&inner_context)
+            if let Some(cached_body) = body {
+                cached_body.eval(&inner_context)
+            } else if body_source.is_empty() {
+                Ok(XpathItemSet::new())
+            } else {
+                let (_, body_expr) = expr(body_source).map_err(|e| {
+                    ExpressionApplyError::new(format!(
+                        "Failed to parse inline function body '{}': {}",
+                        body_source, e
+                    ))
+                })?;
+                body_expr.eval(&inner_context)
+            }
         }
         Function::Map { .. } | Function::Array { .. } => {
             // Maps and arrays can be called as functions with a single argument:

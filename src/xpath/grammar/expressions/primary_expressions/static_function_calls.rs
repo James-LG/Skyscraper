@@ -11,6 +11,7 @@ use crate::{
             data_model::{AnyAtomicType, Function, XpathItem},
             expressions::{
                 common::{argument_list, Argument, ArgumentList},
+                expr,
                 postfix_expressions::invoke_function_item,
             },
             recipes::Res,
@@ -106,9 +107,11 @@ impl FunctionCall {
             }
 
             let body_source = format!("{}({})", self.name, body_args.join(", "));
+            let body_parsed = expr(&body_source).ok().map(|(_, e)| Box::new(e));
             return Ok(xpath_item_set![XpathItem::Function(Function::Inline {
                 params,
                 body_source,
+                body: body_parsed,
             })]);
         }
 
@@ -342,8 +345,8 @@ fn dispatch_by_local_name<'tree>(
                 func_numeric_unary(
                     &args[0],
                     |n| round_integer(n, precision),
-                    |f| (f as f64 * factor as f64).round() as f32 / factor as f32,
-                    |d| (d * factor as f64).round() / factor as f64,
+                    |f| ((f as f64 * factor).round() / factor) as f32,
+                    |d| (d * factor).round() / factor,
                 )
                 .map(Some)
             } else {
@@ -365,6 +368,11 @@ fn dispatch_by_local_name<'tree>(
                 if arg.is_empty() {
                     // empty sequence → empty string
                 } else {
+                    if arg.len() > 1 {
+                        return Err(ExpressionApplyError::new(
+                            "err:XPTY0004: fn:concat argument must be a single item or empty sequence".to_string(),
+                        ));
+                    }
                     result.push_str(&func_string(&arg[0], context.item_tree)?);
                 }
             }
@@ -1016,15 +1024,15 @@ fn dispatch_by_local_name<'tree>(
                 "01" => format!("{:02}", n),
                 "001" => format!("{:03}", n),
                 "a" => {
-                    if n >= 1 && n <= 26 {
-                        String::from((b'a' + (n - 1) as u8) as char)
+                    if n >= 1 {
+                        format_alpha(n, b'a')
                     } else {
                         n.to_string()
                     }
                 }
                 "A" => {
-                    if n >= 1 && n <= 26 {
-                        String::from((b'A' + (n - 1) as u8) as char)
+                    if n >= 1 {
+                        format_alpha(n, b'A')
                     } else {
                         n.to_string()
                     }
@@ -1774,9 +1782,9 @@ fn dispatch_by_local_name<'tree>(
             for item in args[0].iter() {
                 let s = func_string(item, context.item_tree)?;
                 if label.is_empty() {
-                    eprintln!("[fn:trace] {}", s);
+                    log::trace!("[fn:trace] {}", s);
                 } else {
-                    eprintln!("[fn:trace] {}: {}", label, s);
+                    log::trace!("[fn:trace] {}: {}", label, s);
                 }
             }
             Ok(Some(args[0].clone()))
@@ -2972,6 +2980,18 @@ fn extract_double(arg: &XpathItemSet, item_tree: &XpathItemTree) -> Result<f64, 
     }
 }
 
+/// Format a positive integer as bijective base-26 alphabetic (1=a, 26=z, 27=aa, 53=ba, etc.).
+fn format_alpha(mut n: i64, base: u8) -> String {
+    let mut result = Vec::new();
+    while n > 0 {
+        n -= 1;
+        result.push((base + (n % 26) as u8) as char);
+        n /= 26;
+    }
+    result.reverse();
+    result.into_iter().collect()
+}
+
 /// Apply a unary numeric operation, preserving the source type.
 /// Round an integer to the given precision using integer arithmetic,
 /// avoiding the precision loss of i64→f64→i64 round-trip for large values.
@@ -2986,17 +3006,24 @@ fn round_integer(n: i64, precision: i32) -> i64 {
         return 0;
     }
     let divisor = 10_i64.pow(shift);
-    let remainder = n % divisor;
-    let half = divisor / 2;
-    let truncated = n - remainder;
+    let remainder = match n.checked_rem(divisor) {
+        Some(r) => r,
+        None => return 0, // overflow (e.g. i64::MIN % -1)
+    };
+    let abs_remainder = remainder.unsigned_abs();
+    let half = divisor.unsigned_abs() / 2;
+    let truncated = match n.checked_sub(remainder) {
+        Some(t) => t,
+        None => return 0, // overflow near i64::MIN
+    };
     if n >= 0 {
-        if remainder >= half {
-            truncated + divisor
+        if abs_remainder >= half {
+            truncated.checked_add(divisor).unwrap_or(truncated)
         } else {
             truncated
         }
-    } else if (-remainder) >= half {
-        truncated - divisor
+    } else if abs_remainder >= half {
+        truncated.checked_sub(divisor).unwrap_or(truncated)
     } else {
         truncated
     }
@@ -3203,11 +3230,14 @@ fn atoms_equal(a: &AnyAtomicType, b: &AnyAtomicType) -> bool {
     match (a, b) {
         // Cross-type numeric comparison: promote both to f64.
         (AnyAtomicType::Integer(i), AnyAtomicType::Double(d))
-        | (AnyAtomicType::Double(d), AnyAtomicType::Integer(i)) => (*i as f64) == d.0,
+        | (AnyAtomicType::Double(d), AnyAtomicType::Integer(i)) => !d.0.is_nan() && (*i as f64) == d.0,
         (AnyAtomicType::Integer(i), AnyAtomicType::Float(f))
-        | (AnyAtomicType::Float(f), AnyAtomicType::Integer(i)) => (*i as f64) == (f.0 as f64),
+        | (AnyAtomicType::Float(f), AnyAtomicType::Integer(i)) => !f.0.is_nan() && (*i as f64) == (f.0 as f64),
         (AnyAtomicType::Float(f), AnyAtomicType::Double(d))
-        | (AnyAtomicType::Double(d), AnyAtomicType::Float(f)) => (f.0 as f64) == d.0,
+        | (AnyAtomicType::Double(d), AnyAtomicType::Float(f)) => !f.0.is_nan() && !d.0.is_nan() && (f.0 as f64) == d.0,
+        // NaN is never equal to itself per IEEE 754 / XPath spec.
+        (AnyAtomicType::Double(d1), AnyAtomicType::Double(d2)) => !d1.0.is_nan() && !d2.0.is_nan() && d1 == d2,
+        (AnyAtomicType::Float(f1), AnyAtomicType::Float(f2)) => !f1.0.is_nan() && !f2.0.is_nan() && f1 == f2,
         // Same-type: use derived PartialEq.
         _ => a == b,
     }

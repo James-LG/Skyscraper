@@ -190,7 +190,7 @@ impl<'arena> ElementBuilder<'arena> {
             parent_id,
             arena,
             funcs: Vec::new(),
-            tag_name: tag_name.to_string(),
+            tag_name,
         }
     }
 

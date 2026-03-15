@@ -1669,3 +1669,286 @@ fn round_half_to_even_normal_integer_still_works() {
         "round-half-to-even(2550, -2) should return 2600"
     );
 }
+
+// ============================================================================
+// Regression: #14 - atoms_equal NaN should never be equal to anything.
+// distinct-values and index-of rely on atoms_equal.
+// ============================================================================
+
+#[test]
+fn distinct_values_nan_not_collapsed() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    // NaN values should not be equal to each other per IEEE 754.
+    // distinct-values uses atoms_equal, so two NaN's should remain distinct.
+    let xpath = xpath::parse("count(distinct-values((number('NaN'), number('NaN'), 1)))").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(
+        *val,
+        AnyAtomicType::Integer(3),
+        "distinct-values should treat NaN values as distinct (NaN != NaN)"
+    );
+}
+
+#[test]
+fn index_of_nan_not_found() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    // index-of should not find NaN in a sequence since NaN != NaN.
+    let xpath = xpath::parse("count(index-of((1, number('NaN'), 3), number('NaN')))").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(
+        *val,
+        AnyAtomicType::Integer(0),
+        "index-of should not find NaN (NaN != NaN)"
+    );
+}
+
+// ============================================================================
+// Regression: #15 - fn:round float precision should compute in f64 space.
+// ============================================================================
+
+#[test]
+fn round_float_precision_no_double_rounding() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    // round(2.15e0, 1) should return 2.2 (rounds half-up).
+    // With the old code, casting factor to f32 could cause precision loss.
+    let xpath = xpath::parse("round(2.15e0, 1)").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    match &result[0] {
+        XpathItem::AnyAtomicType(AnyAtomicType::Double(d)) => {
+            assert!(
+                (d.0 - 2.2).abs() < 0.001,
+                "round(2.15e0, 1) should be 2.2, got {}",
+                d.0
+            );
+        }
+        other => panic!("Expected Double, got: {:?}", other),
+    }
+}
+
+// ============================================================================
+// Regression: #16 - fn:concat multi-item argument should error.
+// ============================================================================
+
+#[test]
+fn concat_multi_item_arg_errors() {
+    let text = "<html><body><div>a</div><div>b</div></body></html>";
+    let tree = html::parse(text).unwrap();
+    // concat with a multi-item sequence argument should raise XPTY0004.
+    let xpath = xpath::parse("concat(//div, 'x')").unwrap();
+    let result = xpath.apply(&tree);
+    assert!(
+        result.is_err(),
+        "fn:concat with multi-item argument should return an error"
+    );
+}
+
+#[test]
+fn concat_single_item_args_works() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("concat('hello', ' ', 'world')").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(
+        *val,
+        AnyAtomicType::String("hello world".to_string()),
+        "concat with single-item args should work"
+    );
+}
+
+#[test]
+fn concat_empty_sequence_treated_as_empty_string() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    // concat with an empty sequence arg should treat it as "".
+    let xpath = xpath::parse("concat('a', (), 'b')").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(
+        *val,
+        AnyAtomicType::String("ab".to_string()),
+        "concat with empty sequence should produce 'ab'"
+    );
+}
+
+// ============================================================================
+// Regression: #17 - round_integer near i64::MAX/MIN should not overflow.
+// ============================================================================
+
+#[test]
+fn round_integer_near_max_no_overflow() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    // Build a very large integer and round with negative precision.
+    // Should not panic from overflow.
+    let xpath = xpath::parse("round(2147483647 * 2147483647, -1)").unwrap();
+    let result = xpath.apply(&tree);
+    assert!(
+        result.is_ok(),
+        "round on large integer should not overflow: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn round_integer_near_min_no_overflow() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("round(-2147483648 * 2147483648 * 2, -1)").unwrap();
+    let result = xpath.apply(&tree);
+    assert!(
+        result.is_ok(),
+        "round on near-i64::MIN should not overflow: {:?}",
+        result.err()
+    );
+}
+
+// ============================================================================
+// Regression: #18 - format-integer alphabetic bijective base-26.
+// ============================================================================
+
+#[test]
+fn format_integer_alpha_basic() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("format-integer(1, 'a')").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(*val, AnyAtomicType::String("a".to_string()));
+}
+
+#[test]
+fn format_integer_alpha_z() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("format-integer(26, 'a')").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(*val, AnyAtomicType::String("z".to_string()));
+}
+
+#[test]
+fn format_integer_alpha_aa() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("format-integer(27, 'a')").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(
+        *val,
+        AnyAtomicType::String("aa".to_string()),
+        "format-integer(27, 'a') should be 'aa' (bijective base-26)"
+    );
+}
+
+#[test]
+fn format_integer_alpha_ba() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("format-integer(53, 'a')").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(
+        *val,
+        AnyAtomicType::String("ba".to_string()),
+        "format-integer(53, 'a') should be 'ba'"
+    );
+}
+
+#[test]
+fn format_integer_upper_alpha() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("format-integer(27, 'A')").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(
+        *val,
+        AnyAtomicType::String("AA".to_string()),
+        "format-integer(27, 'A') should be 'AA'"
+    );
+}
+
+// ============================================================================
+// Regression: #19 - fn:trace should return its input unchanged.
+// ============================================================================
+
+#[test]
+fn trace_returns_input_unchanged() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("trace(42)").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(
+        *val,
+        AnyAtomicType::Integer(42),
+        "fn:trace should return its input unchanged"
+    );
+}
+
+#[test]
+fn trace_with_label_returns_input() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("trace('hello', 'label')").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(
+        *val,
+        AnyAtomicType::String("hello".to_string()),
+        "fn:trace with label should return its input unchanged"
+    );
+}
+
+// ============================================================================
+// Regression: #20 - Inline function body should be cached as parsed AST.
+// Multiple calls should produce correct results without re-parsing.
+// ============================================================================
+
+#[test]
+fn inline_function_basic_call() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("let $f := function($x) { $x + 1 } return $f(5)").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    let val = result[0].extract_as_any_atomic_type();
+    assert_eq!(
+        *val,
+        AnyAtomicType::Integer(6),
+        "Inline function should return 5 + 1 = 6"
+    );
+}
+
+#[test]
+fn inline_function_multiple_calls() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    // Call the same inline function multiple times — cached body should work each time.
+    let xpath = xpath::parse(
+        "let $double := function($x) { $x * 2 } return ($double(3), $double(5), $double(7))",
+    )
+    .unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 3);
+    assert_eq!(
+        result[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Integer(6))
+    );
+    assert_eq!(
+        result[1],
+        XpathItem::AnyAtomicType(AnyAtomicType::Integer(10))
+    );
+    assert_eq!(
+        result[2],
+        XpathItem::AnyAtomicType(AnyAtomicType::Integer(14))
+    );
+}

@@ -178,14 +178,15 @@ impl PrimaryExpr {
                     } else {
                         Vec::new()
                     };
-                    let body_source = inline
-                        .body
-                        .expr()
+                    let body_expr = inline.body.expr().cloned();
+                    let body_source = body_expr
+                        .as_ref()
                         .map(|e| e.to_string())
                         .unwrap_or_default();
                     Ok(xpath_item_set![XpathItem::Function(Function::Inline {
                         params,
                         body_source,
+                        body: body_expr.map(Box::new),
                     })])
                 }
             },

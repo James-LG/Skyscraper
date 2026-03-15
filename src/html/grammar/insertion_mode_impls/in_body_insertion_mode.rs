@@ -403,7 +403,7 @@ impl HtmlParser {
                     let element = self
                         .arena
                         .get(node_id)
-                        .expect("node not found")
+                        .ok_or(HtmlParseError::new("node not found"))?
                         .get()
                         .as_element_node()
                         .map_err(|_| {
@@ -451,7 +451,7 @@ impl HtmlParser {
                     let element = self
                         .arena
                         .get(node_id)
-                        .expect("node not found")
+                        .ok_or(HtmlParseError::new("node not found"))?
                         .get()
                         .as_element_node()
                         .map_err(|_| {
@@ -560,10 +560,10 @@ impl HtmlParser {
                 .contains(&token.tag_name.as_str()) =>
             {
                 if !self.has_an_element_in_scope(&token.tag_name) {
-                    self.handle_error(HtmlParserError::MinorError(String::from(format!(
+                    self.handle_error(HtmlParserError::MinorError(format!(
                         "open elements has {} element in scope",
                         token.tag_name
-                    ))))?;
+                    )))?;
                 } else {
                     self.generate_implied_end_tags(None)?;
 
@@ -586,10 +586,10 @@ impl HtmlParser {
                             let element = self
                                 .arena
                                 .get(node)
-                                .expect("form element pointer is none")
+                                .ok_or(HtmlParseError::new("form element pointer is none"))?
                                 .get()
                                 .as_element_node()
-                                .expect("form element pointer is not an element node")
+                                .map_err(|_| HtmlParseError::new("form element pointer is not an element node"))?
                                 .clone();
 
                             if !self.has_an_element_in_scope(&element.name) {
@@ -1281,6 +1281,9 @@ impl HtmlParser {
 
             // Step 4.10: Let common ancestor be the element immediately above
             // the formatting element in the stack of open elements.
+            if formatting_in_stack_index == 0 {
+                return Ok(());
+            }
             let common_ancestor_id = self.open_elements[formatting_in_stack_index - 1];
 
             // Step 4.11: Let a bookmark note the position of the formatting element

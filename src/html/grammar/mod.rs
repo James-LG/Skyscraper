@@ -672,7 +672,7 @@ impl HtmlParser {
     }
 
     pub(crate) fn current_node_id(&self) -> Option<NodeId> {
-        self.open_elements.last().map(|id| *id)
+        self.open_elements.last().copied()
     }
 
     pub(crate) fn current_node_id_result(&self) -> Result<NodeId, HtmlParseError> {

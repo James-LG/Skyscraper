@@ -607,12 +607,12 @@ impl<'a> Tokenizer<'a> {
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#charref-in-attribute>
     pub fn charref_in_attribute(&self) -> bool {
-        match self.return_state {
+        matches!(
+            self.return_state,
             Some(TokenizerState::AttributeValueDoubleQuoted)
-            | Some(TokenizerState::AttributeValueSingleQuoted)
-            | Some(TokenizerState::AttributeValueUnquoted) => true,
-            _ => false,
-        }
+                | Some(TokenizerState::AttributeValueSingleQuoted)
+                | Some(TokenizerState::AttributeValueUnquoted)
+        )
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#flush-code-points-consumed-as-a-character-reference>

@@ -6,7 +6,10 @@ use enum_extract_macro::EnumExtract;
 use indextree::{Arena, NodeId};
 use ordered_float::OrderedFloat;
 
-use super::{DisplayFormatting, TextIter, XpathItemTree, XpathItemTreeNode, VOID_ELEMENTS};
+use super::{
+    expressions::Expr, DisplayFormatting, TextIter, XpathItemTree, XpathItemTreeNode,
+    VOID_ELEMENTS,
+};
 
 /// Escape characters in an attribute value for HTML serialization.
 fn escape_attribute_value(value: &str) -> String {
@@ -129,7 +132,7 @@ impl Display for AnyAtomicType {
 }
 
 /// <https://www.w3.org/TR/xpath-datamodel-31/#dt-function-item>
-#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub enum Function {
     /// A reference to a named function, e.g. `fn:abs#1`.
     Named {
@@ -140,9 +143,7 @@ pub enum Function {
     },
     /// An inline function expression, e.g. `function($x) { $x + 1 }`.
     ///
-    /// The body is stored as source text rather than a parsed AST to avoid
-    /// circular module dependencies (`data_model` cannot import `expressions`).
-    /// It is re-parsed via `expr()` each time the function is called.
+    /// The body is cached as a parsed AST to avoid re-parsing each call.
     ///
     /// Note: inline functions do not currently capture closure variables from the
     /// definition scope. They evaluate using the caller's variable context.
@@ -151,6 +152,8 @@ pub enum Function {
         params: Vec<String>,
         /// The source text of the function body expression (inside the braces).
         body_source: String,
+        /// Cached parsed body expression. Populated at construction time.
+        body: Option<Box<Expr>>,
     },
     /// An XPath 3.1 map, e.g. `map { "x": 1, "y": 2 }`.
     ///
@@ -169,6 +172,48 @@ pub enum Function {
     },
 }
 
+impl PartialEq for Function {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                Function::Named { name: n1, arity: a1 },
+                Function::Named { name: n2, arity: a2 },
+            ) => n1 == n2 && a1 == a2,
+            (
+                Function::Inline { params: p1, body_source: b1, .. },
+                Function::Inline { params: p2, body_source: b2, .. },
+            ) => p1 == p2 && b1 == b2,
+            (Function::Map { entries: e1 }, Function::Map { entries: e2 }) => e1 == e2,
+            (Function::Array { members: m1 }, Function::Array { members: m2 }) => m1 == m2,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Function {}
+
+impl std::hash::Hash for Function {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            Function::Named { name, arity } => {
+                name.hash(state);
+                arity.hash(state);
+            }
+            Function::Inline { params, body_source, .. } => {
+                params.hash(state);
+                body_source.hash(state);
+            }
+            Function::Map { entries } => {
+                entries.hash(state);
+            }
+            Function::Array { members } => {
+                members.hash(state);
+            }
+        }
+    }
+}
+
 impl Display for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -176,6 +221,7 @@ impl Display for Function {
             Function::Inline {
                 params,
                 body_source,
+                ..
             } => {
                 write!(f, "function(")?;
                 for (i, param) in params.iter().enumerate() {

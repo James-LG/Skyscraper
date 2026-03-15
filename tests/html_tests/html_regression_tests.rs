@@ -1086,3 +1086,113 @@ fn parse_fragment_reuse_does_not_leak_state() {
         "Fragment should not contain <p> from previous parse"
     );
 }
+
+// ============================================================================
+// Regression: #12 - li/dd/dt .expect("node not found") replaced with ?
+// Parsing <li>, <dd>, <dt> elements should not panic on edge cases.
+// ============================================================================
+
+#[test]
+fn li_element_parsing_correctness() {
+    let text = "<html><body><ul><li>one<li>two<li>three</ul></body></html>";
+    let document = html::parse(text).unwrap();
+    let xp = xpath::parse("count(//li)").unwrap();
+    let result = xp.apply(&document).unwrap();
+    match &result[0] {
+        skyscraper::xpath::grammar::data_model::XpathItem::AnyAtomicType(
+            skyscraper::xpath::grammar::data_model::AnyAtomicType::Integer(n),
+        ) => assert_eq!(*n, 3, "There should be 3 <li> elements"),
+        other => panic!("Expected integer count, got: {:?}", other),
+    }
+}
+
+#[test]
+fn dd_dt_element_parsing_correctness() {
+    let text = "<html><body><dl><dt>term1<dd>def1<dt>term2<dd>def2</dl></body></html>";
+    let document = html::parse(text).unwrap();
+    let xp_dt = xpath::parse("count(//dt)").unwrap();
+    let result_dt = xp_dt.apply(&document).unwrap();
+    match &result_dt[0] {
+        skyscraper::xpath::grammar::data_model::XpathItem::AnyAtomicType(
+            skyscraper::xpath::grammar::data_model::AnyAtomicType::Integer(n),
+        ) => assert_eq!(*n, 2, "There should be 2 <dt> elements"),
+        other => panic!("Expected integer count, got: {:?}", other),
+    }
+    let xp_dd = xpath::parse("count(//dd)").unwrap();
+    let result_dd = xp_dd.apply(&document).unwrap();
+    match &result_dd[0] {
+        skyscraper::xpath::grammar::data_model::XpathItem::AnyAtomicType(
+            skyscraper::xpath::grammar::data_model::AnyAtomicType::Integer(n),
+        ) => assert_eq!(*n, 2, "There should be 2 <dd> elements"),
+        other => panic!("Expected integer count, got: {:?}", other),
+    }
+}
+
+#[test]
+fn li_nested_in_special_element_does_not_panic() {
+    // <li> inside special elements exercises the arena lookup path.
+    let text = "<html><body><ol><li><div><li>nested</div></ol></body></html>";
+    let result = html::parse(text);
+    assert!(
+        result.is_ok(),
+        "li nested in special element should not panic: {:?}",
+        result.err()
+    );
+}
+
+// ============================================================================
+// Regression: #13 - form end-tag .expect() replaced with error propagation.
+// </form> processing should not panic.
+// ============================================================================
+
+#[test]
+fn form_end_tag_processing() {
+    let text = "<html><body><form><input><p>inside form</p></form><p>after form</p></body></html>";
+    let document = html::parse(text).unwrap();
+    let xp = xpath::parse("count(//p)").unwrap();
+    let result = xp.apply(&document).unwrap();
+    match &result[0] {
+        skyscraper::xpath::grammar::data_model::XpathItem::AnyAtomicType(
+            skyscraper::xpath::grammar::data_model::AnyAtomicType::Integer(n),
+        ) => assert_eq!(*n, 2, "There should be 2 <p> elements"),
+        other => panic!("Expected integer count, got: {:?}", other),
+    }
+}
+
+#[test]
+fn form_end_tag_without_template() {
+    // Without a <template>, the form element pointer path is used.
+    let text = "<html><body><form>content</form></body></html>";
+    let document = html::parse(text).unwrap();
+    let xp = xpath::parse("//form").unwrap();
+    let result = xp.apply(&document).unwrap();
+    assert_eq!(result.len(), 1, "Form element should be in the tree");
+}
+
+// ============================================================================
+// Regression: #14 - Adoption agency underflow guard at formatting_in_stack_index.
+// ============================================================================
+
+#[test]
+fn adoption_agency_no_underflow_on_formatting_at_stack_bottom() {
+    // Deeply overlapping formatting elements that could put the formatting
+    // element at index 0 in the open_elements stack.
+    let text = "<html><body><b><i><u>text</b></u></i></body></html>";
+    let result = html::parse(text);
+    assert!(
+        result.is_ok(),
+        "Adoption agency should not underflow: {:?}",
+        result.err()
+    );
+    let document = result.unwrap();
+    let xp = xpath::parse("//body//text()").unwrap();
+    let all_text = xp.apply(&document).unwrap();
+    let text_content: String = all_text
+        .iter()
+        .filter_map(|item| item.extract_as_node().text(&document))
+        .collect();
+    assert!(
+        text_content.contains("text"),
+        "Text should be preserved: {text_content}"
+    );
+}

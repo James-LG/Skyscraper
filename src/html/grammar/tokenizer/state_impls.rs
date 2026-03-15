@@ -64,7 +64,7 @@ impl<'a> Tokenizer<'a> {
                 &chars::NULL => {
                     self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
 
-                    self.emit(HtmlToken::Character(chars::FEED_REPLACEMENT_CHARACTER))?;
+                    self.emit(HtmlToken::Character(chars::REPLACEMENT_CHARACTER))?;
                 }
                 _ => {
                     let first = *c;
@@ -95,7 +95,7 @@ impl<'a> Tokenizer<'a> {
                 &chars::NULL => {
                     self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
 
-                    self.emit(HtmlToken::Character(chars::FEED_REPLACEMENT_CHARACTER))?;
+                    self.emit(HtmlToken::Character(chars::REPLACEMENT_CHARACTER))?;
                 }
                 _ => {
                     let first = *c;
@@ -125,7 +125,7 @@ impl<'a> Tokenizer<'a> {
             Some(&chars::NULL) => {
                 self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
 
-                self.emit(HtmlToken::Character(chars::FEED_REPLACEMENT_CHARACTER))?;
+                self.emit(HtmlToken::Character(chars::REPLACEMENT_CHARACTER))?;
             }
             None => self.emit(HtmlToken::EndOfFile)?,
             Some(c) => {
@@ -240,7 +240,7 @@ impl<'a> Tokenizer<'a> {
 
                     self.current_tag_token_mut()?
                         .tag_name_mut()
-                        .push(chars::FEED_REPLACEMENT_CHARACTER);
+                        .push(chars::REPLACEMENT_CHARACTER);
                 }
                 _ if c.is_ascii_uppercase() => {
                     let c = c.to_ascii_lowercase();
@@ -523,7 +523,7 @@ impl<'a> Tokenizer<'a> {
             Some(&chars::NULL) => {
                 self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
 
-                self.emit(HtmlToken::Character(chars::FEED_REPLACEMENT_CHARACTER))?;
+                self.emit(HtmlToken::Character(chars::REPLACEMENT_CHARACTER))?;
             }
             None => {
                 self.handle_error(TokenizerError::EofInScriptHtmlCommentLikeText)?;
@@ -553,7 +553,7 @@ impl<'a> Tokenizer<'a> {
                 self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
 
                 self.state = TokenizerState::ScriptDataEscaped;
-                self.emit(HtmlToken::Character(chars::FEED_REPLACEMENT_CHARACTER))?;
+                self.emit(HtmlToken::Character(chars::REPLACEMENT_CHARACTER))?;
             }
             None => {
                 self.handle_error(TokenizerError::EofInScriptHtmlCommentLikeText)?;
@@ -587,7 +587,7 @@ impl<'a> Tokenizer<'a> {
                 self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
 
                 self.state = TokenizerState::ScriptDataEscaped;
-                self.emit(HtmlToken::Character(chars::FEED_REPLACEMENT_CHARACTER))?;
+                self.emit(HtmlToken::Character(chars::REPLACEMENT_CHARACTER))?;
             }
             None => {
                 self.handle_error(TokenizerError::EofInScriptHtmlCommentLikeText)?;
@@ -767,7 +767,7 @@ impl<'a> Tokenizer<'a> {
             Some(&chars::NULL) => {
                 self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
 
-                self.emit(HtmlToken::Character(chars::FEED_REPLACEMENT_CHARACTER))?;
+                self.emit(HtmlToken::Character(chars::REPLACEMENT_CHARACTER))?;
             }
             None => {
                 self.handle_error(TokenizerError::EofInScriptHtmlCommentLikeText)?;
@@ -797,7 +797,7 @@ impl<'a> Tokenizer<'a> {
             Some(&chars::NULL) => {
                 self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
                 self.state = TokenizerState::ScriptDataDoubleEscaped;
-                self.emit(HtmlToken::Character(chars::FEED_REPLACEMENT_CHARACTER))?;
+                self.emit(HtmlToken::Character(chars::REPLACEMENT_CHARACTER))?;
             }
             None => {
                 self.handle_error(TokenizerError::EofInScriptHtmlCommentLikeText)?;
@@ -833,7 +833,7 @@ impl<'a> Tokenizer<'a> {
             Some(&chars::NULL) => {
                 self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
                 self.state = TokenizerState::ScriptDataDoubleEscaped;
-                self.emit(HtmlToken::Character(chars::FEED_REPLACEMENT_CHARACTER))?;
+                self.emit(HtmlToken::Character(chars::REPLACEMENT_CHARACTER))?;
             }
             None => {
                 self.handle_error(TokenizerError::EofInScriptHtmlCommentLikeText)?;
@@ -973,7 +973,7 @@ impl<'a> Tokenizer<'a> {
             Some(&chars::NULL) => {
                 self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
 
-                self.push_char_to_attribute_name(chars::FEED_REPLACEMENT_CHARACTER)?;
+                self.push_char_to_attribute_name(chars::REPLACEMENT_CHARACTER)?;
             }
             Some(c) if ['"', '\'', '<'].contains(c) => {
                 let c = *c;
@@ -1098,7 +1098,7 @@ impl<'a> Tokenizer<'a> {
             Some(&chars::NULL) => {
                 self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
 
-                self.push_char_to_attribute_value(chars::FEED_REPLACEMENT_CHARACTER)?;
+                self.push_char_to_attribute_value(chars::REPLACEMENT_CHARACTER)?;
             }
             None => {
                 self.handle_error(TokenizerError::EofInTag)?;
@@ -1137,7 +1137,7 @@ impl<'a> Tokenizer<'a> {
             Some(&chars::NULL) => {
                 self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
 
-                self.push_char_to_attribute_value(chars::FEED_REPLACEMENT_CHARACTER)?;
+                self.push_char_to_attribute_value(chars::REPLACEMENT_CHARACTER)?;
             }
             None => {
                 self.handle_error(TokenizerError::EofInTag)?;
@@ -1186,7 +1186,7 @@ impl<'a> Tokenizer<'a> {
             Some(&chars::NULL) => {
                 self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
 
-                self.push_char_to_attribute_value(chars::FEED_REPLACEMENT_CHARACTER)?;
+                self.push_char_to_attribute_value(chars::REPLACEMENT_CHARACTER)?;
             }
             Some(c) if ['"', '\'', '<', '=', '`'].contains(c) => {
                 let c = *c;
@@ -1310,7 +1310,7 @@ impl<'a> Tokenizer<'a> {
 
                 self.current_comment_token_mut()?
                     .data
-                    .push(chars::FEED_REPLACEMENT_CHARACTER);
+                    .push(chars::REPLACEMENT_CHARACTER);
             }
             Some(c) => {
                 let c = *c;
@@ -1446,7 +1446,7 @@ impl<'a> Tokenizer<'a> {
 
                 self.current_comment_token_mut()?
                     .data
-                    .push(chars::FEED_REPLACEMENT_CHARACTER);
+                    .push(chars::REPLACEMENT_CHARACTER);
             }
             None => {
                 self.handle_error(TokenizerError::EofInComment)?;
@@ -1658,7 +1658,7 @@ impl<'a> Tokenizer<'a> {
                 self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
 
                 self.doctype_token = Some(DoctypeToken::new(String::from(
-                    chars::FEED_REPLACEMENT_CHARACTER,
+                    chars::REPLACEMENT_CHARACTER,
                 )));
                 self.state = TokenizerState::DOCTYPEName;
             }
@@ -1715,7 +1715,7 @@ impl<'a> Tokenizer<'a> {
 
                 self.current_doctype_token_mut()?
                     .name
-                    .push(chars::FEED_REPLACEMENT_CHARACTER);
+                    .push(chars::REPLACEMENT_CHARACTER);
             }
             None => {
                 self.handle_error(TokenizerError::EofInDoctype)?;
@@ -1888,7 +1888,7 @@ impl<'a> Tokenizer<'a> {
                     .public_identifier
                     .as_mut()
                     .unwrap()
-                    .push(chars::FEED_REPLACEMENT_CHARACTER);
+                    .push(chars::REPLACEMENT_CHARACTER);
             }
             Some('>') => {
                 self.handle_error(TokenizerError::AbruptDoctypePublicIdentifier)?;
@@ -1931,7 +1931,7 @@ impl<'a> Tokenizer<'a> {
                     .public_identifier
                     .as_mut()
                     .unwrap()
-                    .push(chars::FEED_REPLACEMENT_CHARACTER);
+                    .push(chars::REPLACEMENT_CHARACTER);
             }
             Some('>') => {
                 self.handle_error(TokenizerError::AbruptDoctypePublicIdentifier)?;
@@ -2150,7 +2150,7 @@ impl<'a> Tokenizer<'a> {
                     .system_identifier
                     .as_mut()
                     .unwrap()
-                    .push(chars::FEED_REPLACEMENT_CHARACTER);
+                    .push(chars::REPLACEMENT_CHARACTER);
             }
             Some('>') => {
                 self.handle_error(TokenizerError::AbruptDoctypeSystemIdentifier)?;
@@ -2193,7 +2193,7 @@ impl<'a> Tokenizer<'a> {
                     .system_identifier
                     .as_mut()
                     .unwrap()
-                    .push(chars::FEED_REPLACEMENT_CHARACTER);
+                    .push(chars::REPLACEMENT_CHARACTER);
             }
             Some('>') => {
                 self.handle_error(TokenizerError::AbruptDoctypeSystemIdentifier)?;
@@ -2525,7 +2525,7 @@ impl<'a> Tokenizer<'a> {
             Some(&chars::NULL) => {
                 self.handle_error(TokenizerError::UnexpectedNullCharacter)?;
 
-                self.emit(HtmlToken::Character(chars::FEED_REPLACEMENT_CHARACTER))?;
+                self.emit(HtmlToken::Character(chars::REPLACEMENT_CHARACTER))?;
             }
             Some(c) => {
                 let first = *c;
