@@ -27,7 +27,7 @@ impl<'a, T> VecPointerRef<'a, T> {
     /// Returns the element at the current index and advances by `i` positions.
     pub fn next_add(&mut self, i: usize) -> Option<&T> {
         let index = self.index;
-        self.index += i;
+        self.index = self.index.saturating_add(i);
         self.get(index)
     }
 
@@ -50,7 +50,7 @@ impl<'a, T> VecPointerRef<'a, T> {
 
     /// Returns a reference to the element `i` positions ahead without advancing.
     pub fn peek_add(&self, i: usize) -> Option<&T> {
-        self.get(self.index + i)
+        self.index.checked_add(i).and_then(|idx| self.get(idx))
     }
 
     /// Returns references to the current element and the next `i - 1` elements without advancing.

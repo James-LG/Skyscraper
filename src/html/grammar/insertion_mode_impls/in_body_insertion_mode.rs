@@ -1209,7 +1209,11 @@ impl HtmlParser {
 
             let formatting_element_entry = match &self.active_formatting_elements[formatting_element_index] {
                 NodeOrMarker::Node(entry) => entry.clone(),
-                _ => unreachable!(),
+                NodeOrMarker::Marker => {
+                    return Err(HtmlParseError::new(
+                        "adoption agency: expected formatting element, found marker",
+                    ));
+                }
             };
             let formatting_element_id = formatting_element_entry.node_id;
 

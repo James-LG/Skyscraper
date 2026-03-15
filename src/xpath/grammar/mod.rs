@@ -306,7 +306,7 @@ impl XpathItemTree {
     /// Get an iterator over all nodes in the tree.
     pub fn iter(&self) -> impl Iterator<Item = &XpathItemTreeNode> {
         self.arena.iter().map(|node| {
-            let id = self.arena.get_node_id(node).unwrap();
+            let id = self.arena.get_node_id(node).expect("arena iterator yielded node without NodeId");
             self.get(id)
         })
     }

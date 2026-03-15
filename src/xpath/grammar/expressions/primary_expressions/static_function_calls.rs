@@ -3012,17 +3012,23 @@ fn round_half_to_even_integer(n: i64, precision: i32) -> i64 {
         return 0;
     }
     let divisor = 10_i64.pow(shift);
-    let remainder = n % divisor;
+    let remainder = match n.checked_rem(divisor) {
+        Some(r) => r,
+        None => return 0, // overflow (e.g. i64::MIN % -1)
+    };
     let abs_remainder = remainder.unsigned_abs();
     let half = divisor.unsigned_abs() / 2;
-    let truncated = n - remainder;
+    let truncated = match n.checked_sub(remainder) {
+        Some(t) => t,
+        None => return 0, // overflow near i64::MIN
+    };
     match abs_remainder.cmp(&half) {
         std::cmp::Ordering::Less => truncated,
         std::cmp::Ordering::Greater => {
             if n >= 0 {
-                truncated + divisor
+                truncated.checked_add(divisor).unwrap_or(truncated)
             } else {
-                truncated - divisor
+                truncated.checked_sub(divisor).unwrap_or(truncated)
             }
         }
         std::cmp::Ordering::Equal => {
@@ -3031,9 +3037,9 @@ fn round_half_to_even_integer(n: i64, precision: i32) -> i64 {
             if quotient % 2 == 0 {
                 truncated
             } else if n >= 0 {
-                truncated + divisor
+                truncated.checked_add(divisor).unwrap_or(truncated)
             } else {
-                truncated - divisor
+                truncated.checked_sub(divisor).unwrap_or(truncated)
             }
         }
     }

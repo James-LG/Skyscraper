@@ -1605,3 +1605,67 @@ fn fn_outermost_hashset_optimization_correct() {
         other => panic!("Expected element node, got: {:?}", other),
     }
 }
+
+// ============================================================================
+// Regression: i64::MIN mod -1 should return error, not panic from overflow.
+// ============================================================================
+
+#[test]
+fn mod_i64_min_by_neg_one_returns_error() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    // Build i64::MIN via multiplication, then mod by -1.
+    let xpath =
+        xpath::parse("(-2147483648 * 2147483648 * 2) mod (-1)").unwrap();
+    let result = xpath.apply(&tree);
+    assert!(
+        result.is_err(),
+        "i64::MIN mod -1 should return an error, not panic from overflow"
+    );
+}
+
+#[test]
+fn mod_normal_values_still_work() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("10 mod 3").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(
+        result[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Integer(1)),
+        "10 mod 3 should return 1"
+    );
+}
+
+// ============================================================================
+// Regression: round-half-to-even with extreme integer values should not panic.
+// ============================================================================
+
+#[test]
+fn round_half_to_even_extreme_integer_no_panic() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    // Build a very large negative integer near i64::MIN and apply
+    // round-half-to-even with negative precision. Should not panic.
+    let xpath =
+        xpath::parse("round-half-to-even(-2147483648 * 2147483648 * 2, -1)").unwrap();
+    let result = xpath.apply(&tree);
+    assert!(
+        result.is_ok(),
+        "round-half-to-even on extreme integer should not panic: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn round_half_to_even_normal_integer_still_works() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("round-half-to-even(2550, -2)").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(
+        result[0],
+        XpathItem::AnyAtomicType(AnyAtomicType::Integer(2600)),
+        "round-half-to-even(2550, -2) should return 2600"
+    );
+}
