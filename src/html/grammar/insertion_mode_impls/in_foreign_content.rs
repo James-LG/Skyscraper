@@ -207,7 +207,7 @@ impl HtmlParser {
                 // Insert a foreign element for the token, in the same namespace
                 // as the adjusted current node.
                 let self_closing = tag.self_closing;
-                self.insert_foreign_element(tag, &acn_ns, false)?;
+                self.insert_foreign_element(tag, &acn_ns)?;
 
                 // If the token has its self-closing flag set:
                 if self_closing {

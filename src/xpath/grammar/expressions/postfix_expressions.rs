@@ -99,7 +99,7 @@ impl PostfixExpr {
                         let predicate_context = context.new_with_variables(
                             &result,
                             i + 1,
-                            false,
+                            context.is_initial_step,
                         );
                         if predicate.is_match(&predicate_context)? {
                             filtered.insert(result[i].clone());

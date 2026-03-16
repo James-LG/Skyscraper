@@ -54,7 +54,7 @@ impl<'tree> From<&'tree XpathItemTreeNode> for XpathItem<'tree> {
 /// An atomic value.
 ///
 /// <https://www.w3.org/TR/xpath-datamodel-31/#types-hierarchy>
-#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub enum AnyAtomicType {
     /// A boolean value.
     Boolean(bool),
@@ -82,6 +82,54 @@ pub enum AnyAtomicType {
         /// The optional prefix used in the lexical form.
         prefix: Option<String>,
     },
+}
+
+impl PartialEq for AnyAtomicType {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (AnyAtomicType::Boolean(a), AnyAtomicType::Boolean(b)) => a == b,
+            (AnyAtomicType::Integer(a), AnyAtomicType::Integer(b)) => a == b,
+            (AnyAtomicType::Float(a), AnyAtomicType::Float(b)) => a == b,
+            (AnyAtomicType::Double(a), AnyAtomicType::Double(b)) => a == b,
+            (AnyAtomicType::String(a), AnyAtomicType::String(b)) => a == b,
+            (
+                AnyAtomicType::QName {
+                    namespace_uri: ns1,
+                    local_name: ln1,
+                    ..
+                },
+                AnyAtomicType::QName {
+                    namespace_uri: ns2,
+                    local_name: ln2,
+                    ..
+                },
+            ) => ns1 == ns2 && ln1 == ln2,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for AnyAtomicType {}
+
+impl std::hash::Hash for AnyAtomicType {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            AnyAtomicType::Boolean(b) => b.hash(state),
+            AnyAtomicType::Integer(i) => i.hash(state),
+            AnyAtomicType::Float(f) => f.hash(state),
+            AnyAtomicType::Double(d) => d.hash(state),
+            AnyAtomicType::String(s) => s.hash(state),
+            AnyAtomicType::QName {
+                namespace_uri,
+                local_name,
+                ..
+            } => {
+                namespace_uri.hash(state);
+                local_name.hash(state);
+            }
+        }
+    }
 }
 
 impl PartialOrd for AnyAtomicType {
@@ -745,17 +793,21 @@ impl ElementNode {
             ));
         }
 
-        // display the children
-        if !displayed_children.is_empty() {
-            display_string.push_str(&format!(
-                "\n{}\n{}",
-                &displayed_children.join("\n"),
-                indentation
-            ));
-        }
+        let is_void = VOID_ELEMENTS.contains(&self.name.as_str());
 
-        // display the end tag
-        display_string.push_str(&format!("</{}>", self.name));
+        if !is_void {
+            // display the children
+            if !displayed_children.is_empty() {
+                display_string.push_str(&format!(
+                    "\n{}\n{}",
+                    &displayed_children.join("\n"),
+                    indentation
+                ));
+            }
+
+            // display the end tag
+            display_string.push_str(&format!("</{}>", self.name));
+        }
 
         return display_string;
     }

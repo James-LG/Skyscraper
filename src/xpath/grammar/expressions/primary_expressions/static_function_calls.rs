@@ -205,16 +205,34 @@ fn dispatch_by_local_name<'tree>(
             if !args.is_empty() && args[0].is_empty() {
                 return Ok(Some(XpathItemSet::new()));
             }
-            if !args.is_empty() && !args[0].is_empty() {
+            let start_node = if !args.is_empty() && !args[0].is_empty() {
                 // Validate argument is a node.
-                if !args[0].iter().all(|item| matches!(item, XpathItem::Node(_))) {
-                    return Err(ExpressionApplyError::new(
-                        "err:XPTY0004 fn:root: argument must be a node".to_string(),
-                    ));
+                match &args[0][0] {
+                    XpathItem::Node(n) => *n,
+                    _ => {
+                        return Err(ExpressionApplyError::new(
+                            "err:XPTY0004 fn:root: argument must be a node".to_string(),
+                        ));
+                    }
                 }
+            } else {
+                // No argument: use the context item.
+                match &context.item {
+                    XpathItem::Node(n) => *n,
+                    _ => {
+                        return Err(ExpressionApplyError::new(
+                            "err:XPTY0004 fn:root: context item must be a node".to_string(),
+                        ));
+                    }
+                }
+            };
+            // Walk up from the start node to find the root.
+            let mut current = start_node;
+            while let Some(parent) = current.parent(context.item_tree) {
+                current = parent;
             }
             Ok(Some(
-                xpath_item_set![XpathItem::Node(context.item_tree.root())],
+                xpath_item_set![XpathItem::Node(current)],
             ))
         }
         "contains" => func_contains(args, context).map(Some),
@@ -983,18 +1001,11 @@ fn dispatch_by_local_name<'tree>(
                     }
                 }
             }
-            let count = atoms.len() as i64;
-            if all_integers && total_i64 % count == 0 {
-                Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
-                    AnyAtomicType::Integer(total_i64 / count)
-                )]))
-            } else {
-                Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
-                    AnyAtomicType::Double(ordered_float::OrderedFloat(
-                        total_f64 / atoms.len() as f64
-                    ))
-                )]))
-            }
+            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::Double(ordered_float::OrderedFloat(
+                    total_f64 / atoms.len() as f64
+                ))
+            )]))
         }
         // https://www.w3.org/TR/xpath-functions-31/#func-max
         "max" => func_min_max(args, context, false).map(Some),
@@ -1314,13 +1325,28 @@ fn dispatch_by_local_name<'tree>(
         }
         // https://www.w3.org/TR/xpath-functions-31/#func-lang
         "lang" => {
-            check_arity("fn:lang", args, 1)?;
+            check_arity_range("fn:lang", args, 1, 2)?;
             let test_lang = extract_string_arg(&args[0], context.item_tree)?;
             let test_lang_lower = test_lang.to_lowercase();
-            // Walk up from context node looking for xml:lang or lang attribute.
+            // Determine the starting node: use second argument if provided, else context item.
+            let start_node = if args.len() == 2 {
+                match &args[1][0] {
+                    XpathItem::Node(n) => Some(*n),
+                    _ => {
+                        return Err(ExpressionApplyError::new(
+                            "fn:lang: second argument must be a node".to_string(),
+                        ));
+                    }
+                }
+            } else if let XpathItem::Node(node) = &context.item {
+                Some(*node)
+            } else {
+                None
+            };
+            // Walk up from the start node looking for xml:lang or lang attribute.
             let mut result = false;
-            if let XpathItem::Node(node) = &context.item {
-                let mut current = Some(*node);
+            if let Some(node) = start_node {
+                let mut current = Some(node);
                 while let Some(cur) = current {
                     if let XpathItemTreeNode::ElementNode(e) = cur {
                         let lang_attr = e.attributes(context.item_tree)
@@ -2420,7 +2446,9 @@ fn dispatch_map_function<'tree>(
         "find" => {
             check_arity("map:find", args, 2)?;
             if args[1].is_empty() {
-                return Ok(Some(XpathItemSet::new()));
+                return Ok(Some(xpath_item_set![XpathItem::Function(Function::Array {
+                    members: vec![],
+                })]));
             }
             let search_key = match &args[1][0] {
                 XpathItem::AnyAtomicType(a) => a,

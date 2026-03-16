@@ -61,7 +61,9 @@ pub(crate) enum InsertionMode {
     AfterAfterFrameset,
 }
 
+// Variants match WHATWG spec parse errors; not all are emitted yet.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub(crate) enum HtmlParseErrorType {
     AbruptClosingOfEmptyComment,
     AbruptDoctypePublicIdentifier,
@@ -1008,7 +1010,7 @@ impl HtmlParser {
         &mut self,
         token: TagToken,
     ) -> Result<NodeId, HtmlParseError> {
-        self.insert_foreign_element(token, HTML_NAMESPACE, false)
+        self.insert_foreign_element(token, HTML_NAMESPACE)
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#insert-a-foreign-element>
@@ -1016,13 +1018,9 @@ impl HtmlParser {
         &mut self,
         token: TagToken,
         namespace: &str,
-        only_add_to_element_stack: bool,
     ) -> Result<NodeId, HtmlParseError> {
-        let adjusted_insertion_location = if only_add_to_element_stack {
-            None
-        } else {
-            Some(self.appropriate_place_for_inserting_a_node(None)?)
-        };
+        let adjusted_insertion_location =
+            Some(self.appropriate_place_for_inserting_a_node(None)?);
 
         let result = self.create_an_element_for_the_token(token, namespace)?;
 

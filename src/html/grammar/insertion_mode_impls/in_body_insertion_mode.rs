@@ -226,8 +226,14 @@ impl HtmlParser {
 
                 for token_attr in &token.attributes {
                     if !existing_attrs.contains(&token_attr.name) {
-                        let attr = self.arena.new_node(XpathItemTreeNode::AttributeNode(
-                            AttributeNode::new(token_attr.name.clone(), token_attr.value.clone()),
+                        let attr = self.new_node(XpathItemTreeNode::AttributeNode(
+                            AttributeNode::with_prefix(
+                                token_attr.name.clone(),
+                                token_attr.value.clone(),
+                                token_attr.prefix.clone(),
+                                token_attr.original_name.clone(),
+                                token_attr.namespace.clone(),
+                            ),
                         ));
                         second_element_id.append(attr, &mut self.arena);
                     }
@@ -1040,7 +1046,7 @@ impl HtmlParser {
                 Self::adjust_foreign_attributes(&mut token);
 
                 let self_closing = token.self_closing;
-                self.insert_foreign_element(token, MATHML_NAMESPACE, false)?;
+                self.insert_foreign_element(token, MATHML_NAMESPACE)?;
 
                 if self_closing {
                     self.open_elements.pop();
@@ -1054,7 +1060,7 @@ impl HtmlParser {
                 Self::adjust_foreign_attributes(&mut token);
 
                 let self_closing = token.self_closing;
-                self.insert_foreign_element(token, SVG_NAMESPACE, false)?;
+                self.insert_foreign_element(token, SVG_NAMESPACE)?;
 
                 if self_closing {
                     self.open_elements.pop();
@@ -1332,7 +1338,9 @@ impl HtmlParser {
                         if active_idx < bookmark {
                             bookmark -= 1;
                         }
-                        continue;
+                        // Fall through to step 4.14.5 which will re-check and
+                        // remove from open_elements since node was just removed
+                        // from active formatting elements.
                     }
                 }
 

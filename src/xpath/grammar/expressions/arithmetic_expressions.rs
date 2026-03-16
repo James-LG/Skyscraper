@@ -344,12 +344,16 @@ impl MultiplicativeExpr {
                 }
                 MultiplicativeExprOperator::Modulus => match (&left, &right) {
                     (AnyAtomicType::Integer(a), AnyAtomicType::Integer(b)) => {
-                        if *b == 0 || (*a == i64::MIN && *b == -1) {
+                        if *b == 0 {
                             return Err(ExpressionApplyError {
                                 msg: String::from("err:FOAR0002 Division by zero"),
                             });
                         }
-                        AnyAtomicType::Integer(a % b)
+                        if *a == i64::MIN && *b == -1 {
+                            AnyAtomicType::Integer(0)
+                        } else {
+                            AnyAtomicType::Integer(a % b)
+                        }
                     }
                     _ => {
                         let a = to_f64(&left)?;

@@ -70,10 +70,10 @@ impl DocumentBuilder {
         f: impl FnOnce(ElementBuilder) -> ElementBuilder + 'static,
     ) -> Self {
         let tag_name = tag_name.to_string();
-        self.funcs.push(Box::new(move |arena, parent_id| {
+        self.funcs.push(Box::new(move |arena, _parent_id| {
             f(ElementBuilder::new(
                 tag_name.clone(),
-                Some(parent_id),
+                None,
                 arena,
             ))
             .build()
@@ -166,7 +166,6 @@ impl DocumentBuilder {
 /// Provides methods for adding child elements, attributes, text, and comments
 /// to the element being built.
 pub struct ElementBuilder<'arena> {
-    parent_id: Option<NodeId>,
     arena: &'arena mut Arena<XpathItemTreeNode>,
     funcs: Vec<
         Box<
@@ -183,11 +182,10 @@ impl<'arena> ElementBuilder<'arena> {
     /// Create a new element builder with the given tag name.
     pub fn new(
         tag_name: String,
-        parent_id: Option<NodeId>,
+        _parent_id: Option<NodeId>,
         arena: &'arena mut Arena<XpathItemTreeNode>,
     ) -> Self {
         Self {
-            parent_id,
             arena,
             funcs: Vec::new(),
             tag_name,
@@ -203,10 +201,10 @@ impl<'arena> ElementBuilder<'arena> {
         f: impl FnOnce(ElementBuilder) -> ElementBuilder + 'static,
     ) -> Self {
         let tag_name = tag_name.to_string();
-        self.funcs.push(Box::new(move |arena, parent_id| {
+        self.funcs.push(Box::new(move |arena, _parent_id| {
             f(ElementBuilder::new(
                 tag_name.clone(),
-                Some(parent_id),
+                None,
                 arena,
             ))
             .build()
@@ -320,10 +318,6 @@ impl<'arena> ElementBuilder<'arena> {
         for func in self.funcs {
             let child_id = func(&mut self.arena, element_id)?;
             element_id.append(child_id, &mut self.arena);
-        }
-
-        if let Some(parent_id) = self.parent_id {
-            parent_id.append(element_id, self.arena);
         }
 
         Ok(element_id)

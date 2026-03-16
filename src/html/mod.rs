@@ -386,9 +386,7 @@ impl HtmlDocument {
     /// This ignores all text nodes that are solely whitespace.
     /// It does not trim whitespace on nodes that contain both whitespace and non-whitespace.
     pub fn to_formatted_string(&self, format_type: DocumentFormatType) -> String {
-        let text =
-            display_node(0, self, &self.root_node, format_type).expect("failed to display node");
-        format!("{}", text)
+        display_node(0, self, &self.root_node, format_type).expect("failed to display node")
     }
 
     /// Get an iterator over all nodes in this document.
@@ -502,7 +500,8 @@ fn display_node(
             if matches!(format_type, DocumentFormatType::Indented) {
                 display_indent(indent, &mut str)?;
             }
-            write!(&mut str, "<!--{}-->", comment.value)?;
+            let sanitized = comment.value.replace("--", "- -");
+            write!(&mut str, "<!--{}-->", sanitized)?;
             if matches!(format_type, DocumentFormatType::Indented) {
                 writeln!(&mut str)?;
             }

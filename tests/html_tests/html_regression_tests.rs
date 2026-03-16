@@ -1329,6 +1329,109 @@ fn scope_checking_is_namespace_aware() {
 }
 
 // ============================================================================
+// Regression: #16 — Fix 1: Adoption agency `continue` should not skip
+// open_elements removal. Deeply nested formatting triggers inner_loop_counter > 3.
+// ============================================================================
+
+#[test]
+fn adoption_agency_inner_loop_removes_from_open_elements() {
+    // Deeply nested <b> tags that trigger the inner_loop_counter > 3 path.
+    // The old code had a `continue` that skipped removing from open_elements.
+    let text = "<html><body><b><b><b><b><b><b>text</b></b></b></b></b></b></body></html>";
+    let result = html::parse(text);
+    assert!(
+        result.is_ok(),
+        "Deeply nested formatting elements should parse without error: {:?}",
+        result.err()
+    );
+    let document = result.unwrap();
+    let xp = xpath::parse("//b").unwrap();
+    let bs = xp.apply(&document).unwrap();
+    assert!(
+        !bs.is_empty(),
+        "Should find at least one <b> element after adoption agency"
+    );
+}
+
+// ============================================================================
+// Regression: #17 — Fix 10: Duplicate <body> tag with attributes should
+// merge attributes using correct node IDs (new_node instead of arena.new_node).
+// ============================================================================
+
+#[test]
+fn duplicate_body_merges_attributes() {
+    let text = r#"<html><body><body class="extra">content</body></body></html>"#;
+    let result = html::parse(text);
+    assert!(
+        result.is_ok(),
+        "Duplicate <body> with attributes should parse: {:?}",
+        result.err()
+    );
+    let document = result.unwrap();
+    let xp = xpath::parse("//body/@class").unwrap();
+    let result = xp.apply(&document).unwrap();
+    assert_eq!(
+        result.len(),
+        1,
+        "body should have the 'class' attribute merged from the second body tag"
+    );
+}
+
+// ============================================================================
+// Regression: #18 — Fix 14: DocumentBuilder double-append removed.
+// Nested elements should produce correct tree structure.
+// ============================================================================
+
+#[test]
+fn document_builder_nested_elements_correct_tree() {
+    use skyscraper::html::grammar::document_builder::DocumentBuilder;
+
+    let tree = DocumentBuilder::new()
+        .add_element("html", |html| {
+            html.add_element("body", |body| {
+                body.add_element("div", |div| div.add_text("hello"))
+            })
+        })
+        .build()
+        .unwrap();
+
+    let xp = xpath::parse("//div").unwrap();
+    let result = xp.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1, "Should find exactly one div");
+
+    let xp2 = xpath::parse("string(//div)").unwrap();
+    let result2 = xp2.apply(&tree).unwrap();
+    let text = result2[0]
+        .extract_as_any_atomic_type()
+        .to_string();
+    assert_eq!(text, "hello", "div text content should be 'hello'");
+}
+
+// ============================================================================
+// Regression: #19 — Fix 24: Comment serialization should sanitize `-->`.
+// ============================================================================
+
+#[test]
+fn comment_serialization_sanitizes_double_dash() {
+    use indextree::Arena;
+    use skyscraper::html::{HtmlNode, HtmlDocument, DocumentNode, DocumentFormatType, HtmlComment};
+
+    let mut arena = Arena::new();
+    let comment = HtmlNode::Comment(HtmlComment { value: " evil --> payload ".to_string() });
+    let comment_id = arena.new_node(comment);
+    let doc = HtmlDocument::new(arena, DocumentNode::new(comment_id));
+
+    let output = doc.to_formatted_string(DocumentFormatType::Standard);
+    // Count occurrences of "-->" — should be exactly 1 (the closing delimiter)
+    let count = output.matches("-->").count();
+    assert_eq!(
+        count, 1,
+        "Comment with '-->' in value should be sanitized to have exactly one '-->' (the closer), got: {}",
+        output
+    );
+}
+
+// ============================================================================
 // S23 — Display node sorts attributes
 // ============================================================================
 

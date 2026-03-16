@@ -157,7 +157,7 @@ impl NameTest {
                         XpathItemTreeNode::ElementNode(e) => {
                             (Some(&e.name), e.namespace.as_deref())
                         }
-                        XpathItemTreeNode::AttributeNode(a) => (Some(&a.name), None),
+                        XpathItemTreeNode::AttributeNode(a) => (Some(&a.name), a.namespace.as_deref()),
                         _ => (None, None),
                     };
 

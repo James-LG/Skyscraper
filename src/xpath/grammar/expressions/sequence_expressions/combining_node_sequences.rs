@@ -9,6 +9,7 @@ use nom::{
 
 use crate::xpath::{
     grammar::{
+        data_model::XpathItem,
         expressions::expressions_on_sequence_types::instance_of::{
             instanceof_expr, InstanceofExpr,
         },
@@ -80,9 +81,21 @@ impl UnionExpr {
             return Ok(result);
         }
 
+        // XPath 3.1 §3.12.1: operands must contain only nodes.
+        if result.iter().any(|item| !matches!(item, XpathItem::Node(_))) {
+            return Err(ExpressionApplyError {
+                msg: String::from("err:XPTY0004 union operands must contain only nodes"),
+            });
+        }
+
         // Union combines all items from both operands with duplicates removed.
         for pair in &self.items {
             let rhs = pair.1.eval(context)?;
+            if rhs.iter().any(|item| !matches!(item, XpathItem::Node(_))) {
+                return Err(ExpressionApplyError {
+                    msg: String::from("err:XPTY0004 union operands must contain only nodes"),
+                });
+            }
             result.extend(rhs);
         }
 
@@ -179,8 +192,20 @@ impl IntersectExceptExpr {
             return Ok(result);
         }
 
+        // XPath 3.1 §3.12.2: operands must contain only nodes.
+        if result.iter().any(|item| !matches!(item, XpathItem::Node(_))) {
+            return Err(ExpressionApplyError {
+                msg: String::from("err:XPTY0004 intersect/except operands must contain only nodes"),
+            });
+        }
+
         for pair in &self.items {
             let rhs = pair.1.eval(context)?;
+            if rhs.iter().any(|item| !matches!(item, XpathItem::Node(_))) {
+                return Err(ExpressionApplyError {
+                    msg: String::from("err:XPTY0004 intersect/except operands must contain only nodes"),
+                });
+            }
             match pair.0 {
                 IntersectExceptType::Intersect => {
                     // Keep only items present in both sets.

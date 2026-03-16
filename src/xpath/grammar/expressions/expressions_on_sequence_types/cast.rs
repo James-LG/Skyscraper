@@ -196,8 +196,8 @@ impl CastExpr {
                         msg: format!("cast as boolean: cannot cast string '{}'", s),
                     }),
                 },
-                AnyAtomicType::Float(f) => Ok(AnyAtomicType::Boolean(f.0 != 0.0)),
-                AnyAtomicType::Double(d) => Ok(AnyAtomicType::Boolean(d.0 != 0.0)),
+                AnyAtomicType::Float(f) => Ok(AnyAtomicType::Boolean(!f.0.is_nan() && f.0 != 0.0)),
+                AnyAtomicType::Double(d) => Ok(AnyAtomicType::Boolean(!d.0.is_nan() && d.0 != 0.0)),
                 AnyAtomicType::QName { .. } => Err(ExpressionApplyError {
                     msg: "err:XPTY0004 Cannot cast xs:QName to xs:boolean".to_string(),
                 }),

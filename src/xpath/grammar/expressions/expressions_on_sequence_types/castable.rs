@@ -89,7 +89,15 @@ impl CastableExpr {
         }
 
         // Try the cast — if it succeeds, castable is true.
-        let target_name = CastExpr::resolve_type_name(&single_type.type_name)?;
+        // If resolve_type_name fails (unknown type), return false instead of propagating the error.
+        let target_name = match CastExpr::resolve_type_name(&single_type.type_name) {
+            Ok(name) => name,
+            Err(_) => {
+                return Ok(xpath_item_set![XpathItem::AnyAtomicType(
+                    AnyAtomicType::Boolean(false)
+                )]);
+            }
+        };
         let castable = CastExpr::cast_atomic(&atomized[0], &target_name).is_ok();
 
         Ok(xpath_item_set![XpathItem::AnyAtomicType(
