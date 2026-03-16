@@ -164,7 +164,14 @@ impl NameTest {
                     match node_name {
                         Some(node_name) => match expected_name {
                             EQName::QName(qname) => match qname {
-                                QName::PrefixedName(p) => p.local_part == node_name,
+                                QName::PrefixedName(p) => {
+                                    let target_ns = match resolve_prefix(&p.prefix) {
+                                        Ok(ns) => ns,
+                                        Err(e) => return Err(e),
+                                    };
+                                    let effective_ns = node_ns.unwrap_or(HTML_NAMESPACE);
+                                    p.local_part == node_name && effective_ns == target_ns
+                                }
                                 QName::UnprefixedName(unprefixed_name) => {
                                     unprefixed_name == node_name
                                 }

@@ -179,20 +179,29 @@ pub(crate) const SVG_NAMESPACE: &str = "http://www.w3.org/2000/svg";
 /// <https://infra.spec.whatwg.org/#mathml-namespace>
 pub(crate) const MATHML_NAMESPACE: &str = "http://www.w3.org/1998/Math/MathML";
 
-pub(crate) static ELEMENT_IN_SCOPE_TYPES: [&str; 18] = [
-    "applet", "caption", "html", "table", "td", "th", "marquee", "object", "template",
+pub(crate) static ELEMENT_IN_SCOPE_TYPES: [(&str, Option<&str>); 18] = [
+    ("applet", None), ("caption", None), ("html", None), ("table", None),
+    ("td", None), ("th", None), ("marquee", None), ("object", None), ("template", None),
     // MathML scope barriers
-    "mi", "mo", "mn", "ms", "mtext", "annotation-xml",
+    ("mi", Some(MATHML_NAMESPACE)), ("mo", Some(MATHML_NAMESPACE)),
+    ("mn", Some(MATHML_NAMESPACE)), ("ms", Some(MATHML_NAMESPACE)),
+    ("mtext", Some(MATHML_NAMESPACE)), ("annotation-xml", Some(MATHML_NAMESPACE)),
     // SVG scope barriers
-    "foreignObject", "desc", "title",
+    ("foreignObject", Some(SVG_NAMESPACE)), ("desc", Some(SVG_NAMESPACE)),
+    ("title", Some(SVG_NAMESPACE)),
 ];
 pub(crate) static GENERATE_IMPLIED_END_TAG_TYPES: [&str; 10] = [
     "dd", "dt", "li", "optgroup", "option", "p", "rb", "rp", "rt", "rtc",
 ];
 
 /// <https://html.spec.whatwg.org/multipage/parsing.html#special>
-pub(crate) static SPECIAL_ELEMENTS: [&str; 83] = [
+/// <https://html.spec.whatwg.org/multipage/parsing.html#special>
+///
+/// IMPORTANT: This array is used with `binary_search` — entries MUST be sorted
+/// alphabetically (case-sensitive, uppercase before lowercase in ASCII).
+pub(crate) static SPECIAL_ELEMENTS: [&str; 91] = [
     "address",
+    "annotation-xml", // MathML
     "applet",
     "area",
     "article",
@@ -209,6 +218,7 @@ pub(crate) static SPECIAL_ELEMENTS: [&str; 83] = [
     "col",
     "colgroup",
     "dd",
+    "desc",           // SVG
     "details",
     "dir",
     "div",
@@ -219,6 +229,7 @@ pub(crate) static SPECIAL_ELEMENTS: [&str; 83] = [
     "figcaption",
     "figure",
     "footer",
+    "foreignObject",  // SVG
     "form",
     "frame",
     "frameset",
@@ -244,6 +255,11 @@ pub(crate) static SPECIAL_ELEMENTS: [&str; 83] = [
     "marquee",
     "menu",
     "meta",
+    "mi",             // MathML
+    "mn",             // MathML
+    "mo",             // MathML
+    "ms",             // MathML
+    "mtext",          // MathML
     "nav",
     "noembed",
     "noframes",
@@ -1110,7 +1126,7 @@ impl HtmlParser {
 
             self.open_elements
                 .last()
-                .cloned()
+                .copied()
                 .ok_or(HtmlParseError::new("no current node to insert a node into"))?
         };
 
@@ -1228,7 +1244,7 @@ impl HtmlParser {
             }
         }
 
-        let element = self.create_element(local_name, namespace, None, None)?;
+        let element = self.create_element(local_name, namespace)?;
 
         // add the attributes
         let attributes: Vec<AttributeNode> = token
@@ -1248,8 +1264,6 @@ impl HtmlParser {
         &mut self,
         local_name: String,
         namespace: &str,
-        prefix: Option<&str>,
-        is: Option<&str>,
     ) -> Result<ElementNode, HtmlParseError> {
         let mut element = ElementNode::new(local_name);
 
@@ -1513,7 +1527,7 @@ impl HtmlParser {
     pub(crate) fn has_an_element_in_the_specific_scope(
         &self,
         tag_names: &[&str],
-        element_types: &[&str],
+        element_types: &[(&str, Option<&str>)],
     ) -> bool {
         for node_id in self.open_elements.iter().rev() {
             if let Some(node) = self.arena.get(*node_id) {
@@ -1522,7 +1536,11 @@ impl HtmlParser {
                         return true;
                     }
 
-                    if element_types.contains(&element.name.as_str()) {
+                    let is_barrier = element_types.iter().any(|(name, ns)| {
+                        *name == element.name.as_str()
+                            && *ns == element.namespace.as_deref()
+                    });
+                    if is_barrier {
                         return false;
                     }
                 }
@@ -1556,7 +1574,11 @@ impl HtmlParser {
             }
             if let Some(node) = self.arena.get(*node_id) {
                 if let XpathItemTreeNode::ElementNode(element) = node.get() {
-                    if ELEMENT_IN_SCOPE_TYPES.contains(&element.name.as_str()) {
+                    let is_barrier = ELEMENT_IN_SCOPE_TYPES.iter().any(|(name, ns)| {
+                        *name == element.name.as_str()
+                            && *ns == element.namespace.as_deref()
+                    });
+                    if is_barrier {
                         return false;
                     }
                 }
@@ -1567,29 +1589,39 @@ impl HtmlParser {
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-button-scope>
     pub(crate) fn has_an_element_in_button_scope(&self, tag_name: &str) -> bool {
-        static BUTTON_SCOPE_TYPES: [&str; 19] = [
-            "applet", "caption", "html", "table", "td", "th", "marquee", "object", "template",
-            "mi", "mo", "mn", "ms", "mtext", "annotation-xml",
-            "foreignObject", "desc", "title",
-            "button",
+        static BUTTON_SCOPE_TYPES: [(&str, Option<&str>); 19] = [
+            ("applet", None), ("caption", None), ("html", None), ("table", None),
+            ("td", None), ("th", None), ("marquee", None), ("object", None), ("template", None),
+            ("mi", Some(MATHML_NAMESPACE)), ("mo", Some(MATHML_NAMESPACE)),
+            ("mn", Some(MATHML_NAMESPACE)), ("ms", Some(MATHML_NAMESPACE)),
+            ("mtext", Some(MATHML_NAMESPACE)), ("annotation-xml", Some(MATHML_NAMESPACE)),
+            ("foreignObject", Some(SVG_NAMESPACE)), ("desc", Some(SVG_NAMESPACE)),
+            ("title", Some(SVG_NAMESPACE)),
+            ("button", None),
         ];
         self.has_an_element_in_the_specific_scope(&[tag_name], &BUTTON_SCOPE_TYPES)
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-list-item-scope>
     pub(crate) fn has_an_element_in_list_item_scope(&self, tag_name: &str) -> bool {
-        static LIST_ITEM_SCOPE_TYPES: [&str; 20] = [
-            "applet", "caption", "html", "table", "td", "th", "marquee", "object", "template",
-            "mi", "mo", "mn", "ms", "mtext", "annotation-xml",
-            "foreignObject", "desc", "title",
-            "ol", "ul",
+        static LIST_ITEM_SCOPE_TYPES: [(&str, Option<&str>); 20] = [
+            ("applet", None), ("caption", None), ("html", None), ("table", None),
+            ("td", None), ("th", None), ("marquee", None), ("object", None), ("template", None),
+            ("mi", Some(MATHML_NAMESPACE)), ("mo", Some(MATHML_NAMESPACE)),
+            ("mn", Some(MATHML_NAMESPACE)), ("ms", Some(MATHML_NAMESPACE)),
+            ("mtext", Some(MATHML_NAMESPACE)), ("annotation-xml", Some(MATHML_NAMESPACE)),
+            ("foreignObject", Some(SVG_NAMESPACE)), ("desc", Some(SVG_NAMESPACE)),
+            ("title", Some(SVG_NAMESPACE)),
+            ("ol", None), ("ul", None),
         ];
         self.has_an_element_in_the_specific_scope(&[tag_name], &LIST_ITEM_SCOPE_TYPES)
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-table-scope>
     pub(crate) fn has_an_element_in_table_scope(&self, tag_name: &str) -> bool {
-        static TABLE_SCOPE_TYPES: [&str; 3] = ["html", "table", "template"];
+        static TABLE_SCOPE_TYPES: [(&str, Option<&str>); 3] = [
+            ("html", None), ("table", None), ("template", None),
+        ];
         self.has_an_element_in_the_specific_scope(&[tag_name], &TABLE_SCOPE_TYPES)
     }
 

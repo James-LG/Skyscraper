@@ -100,10 +100,10 @@ impl PartialOrd for AnyAtomicType {
                 a.partial_cmp(&OrderedFloat(*b as f64))
             }
             (AnyAtomicType::Integer(a), AnyAtomicType::Float(b)) => {
-                OrderedFloat(*a as f32).partial_cmp(b)
+                OrderedFloat(*a as f64).partial_cmp(&OrderedFloat(b.0 as f64))
             }
             (AnyAtomicType::Float(a), AnyAtomicType::Integer(b)) => {
-                a.partial_cmp(&OrderedFloat(*b as f32))
+                OrderedFloat(a.0 as f64).partial_cmp(&OrderedFloat(*b as f64))
             }
             (AnyAtomicType::Float(a), AnyAtomicType::Double(b)) => {
                 OrderedFloat(a.0 as f64).partial_cmp(b)
@@ -150,6 +150,51 @@ impl Display for AnyAtomicType {
     }
 }
 
+/// An owned XPath value that can appear as a map value or array member.
+///
+/// Unlike `XpathItem`, this does not borrow from the tree and can represent
+/// atomic values and function items without losing their identity through atomization.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum OwnedXpathValue {
+    /// An atomic value.
+    Atomic(AnyAtomicType),
+    /// A function item.
+    Function(Box<Function>),
+}
+
+impl std::fmt::Display for OwnedXpathValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OwnedXpathValue::Atomic(a) => write!(f, "{}", a),
+            OwnedXpathValue::Function(func) => write!(f, "{}", func),
+        }
+    }
+}
+
+impl OwnedXpathValue {
+    /// Convert an `XpathItem` into an `OwnedXpathValue`.
+    ///
+    /// Node items are converted to their string value (atomized).
+    pub fn from_xpath_item(item: &XpathItem<'_>, tree: &XpathItemTree) -> Self {
+        match item {
+            XpathItem::AnyAtomicType(a) => OwnedXpathValue::Atomic(a.clone()),
+            XpathItem::Function(f) => OwnedXpathValue::Function(Box::new(f.clone())),
+            XpathItem::Node(node) => {
+                let s = node.text_content(tree);
+                OwnedXpathValue::Atomic(AnyAtomicType::String(s))
+            }
+        }
+    }
+
+    /// Convert this value back to an `XpathItem`.
+    pub fn to_xpath_item<'tree>(&self) -> XpathItem<'tree> {
+        match self {
+            OwnedXpathValue::Atomic(a) => XpathItem::AnyAtomicType(a.clone()),
+            OwnedXpathValue::Function(f) => XpathItem::Function((**f).clone()),
+        }
+    }
+}
+
 /// <https://www.w3.org/TR/xpath-datamodel-31/#dt-function-item>
 #[derive(Debug, Clone)]
 pub enum Function {
@@ -176,18 +221,17 @@ pub enum Function {
     },
     /// An XPath 3.1 map, e.g. `map { "x": 1, "y": 2 }`.
     ///
-    /// Values are atomized on construction; node values are converted to their
-    /// string representations.
+    /// Values preserve their item types (atomic, function, etc.) without atomization.
     Map {
         /// The map entries as (key, value-sequence) pairs.
-        entries: Vec<(AnyAtomicType, Vec<AnyAtomicType>)>,
+        entries: Vec<(AnyAtomicType, Vec<OwnedXpathValue>)>,
     },
     /// An XPath 3.1 array, e.g. `[1, 2, 3]` or `array { 1, 2, 3 }`.
     ///
-    /// Each member is a sequence of atomic values (atomized on construction).
+    /// Each member is a sequence of values that preserve their item types.
     Array {
-        /// The array members, each of which is a sequence of atomic values.
-        members: Vec<Vec<AnyAtomicType>>,
+        /// The array members, each of which is a sequence of values.
+        members: Vec<Vec<OwnedXpathValue>>,
     },
 }
 
@@ -506,6 +550,14 @@ impl ElementNode {
         )));
         self.id().append(attr, arena);
 
+        arena
+            .get_mut(attr)
+            .unwrap()
+            .get_mut()
+            .as_attribute_node_mut()
+            .unwrap()
+            .set_id(attr);
+
         attr
     }
 
@@ -809,7 +861,7 @@ impl AttributeNode {
 
 impl Display for AttributeNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}=\"{}\"", self.name, self.value)
+        write!(f, "{}=\"{}\"", self.name, escape_attribute_value(&self.value))
     }
 }
 
@@ -827,7 +879,7 @@ impl std::hash::Hash for AttributeNode {
 }
 
 /// <https://www.w3.org/TR/xpath-datamodel-31/#ProcessingInstructionNode>
-#[derive(PartialOrd, Eq, Ord, Debug, Clone)]
+#[derive(Eq, Debug, Clone)]
 pub struct PINode {
     /// The target of the processing instruction (an NCName).
     pub target: String,
@@ -884,6 +936,18 @@ impl PartialEq for PINode {
     }
 }
 
+impl PartialOrd for PINode {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for PINode {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (&self.target, &self.data).cmp(&(&other.target, &other.data))
+    }
+}
+
 impl std::hash::Hash for PINode {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.target.hash(state);
@@ -902,7 +966,7 @@ impl Display for PINode {
 }
 
 /// <https://www.w3.org/TR/xpath-datamodel-31/#CommentNode>
-#[derive(PartialOrd, Eq, Ord, Debug, Clone)]
+#[derive(Eq, Debug, Clone)]
 pub struct CommentNode {
     /// The value of the comment.
     pub content: String,
@@ -967,6 +1031,18 @@ impl PartialEq for CommentNode {
     }
 }
 
+impl PartialOrd for CommentNode {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for CommentNode {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.content.cmp(&other.content)
+    }
+}
+
 impl std::hash::Hash for CommentNode {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.content.hash(state);
@@ -978,7 +1054,7 @@ impl std::hash::Hash for CommentNode {
 /// Note: DOCTYPE is not a valid XPath 3.1 node type. It is kept in the tree
 /// for serialization fidelity but is excluded from `node()` kind tests and
 /// axis traversal results.
-#[derive(PartialOrd, Eq, Ord, Debug, Clone)]
+#[derive(Eq, Debug, Clone)]
 pub struct DoctypeNode {
     /// The name of the document type (e.g. "html").
     pub name: String,
@@ -1040,6 +1116,22 @@ impl PartialEq for DoctypeNode {
         self.name == other.name
             && self.public_id == other.public_id
             && self.system_id == other.system_id
+    }
+}
+
+impl PartialOrd for DoctypeNode {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for DoctypeNode {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (&self.name, &self.public_id, &self.system_id).cmp(&(
+            &other.name,
+            &other.public_id,
+            &other.system_id,
+        ))
     }
 }
 

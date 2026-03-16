@@ -1422,7 +1422,7 @@ impl<'a> Tokenizer<'a> {
                 self.emit(HtmlToken::EndOfFile)?;
             }
             _ => {
-                self.current_comment_token_mut()?.data.push_str("-");
+                self.current_comment_token_mut()?.data.push('-');
 
                 self.reconsume_in_state(TokenizerState::Comment)?;
             }
@@ -1435,7 +1435,7 @@ impl<'a> Tokenizer<'a> {
     pub(super) fn comment_state(&mut self) -> Result<(), HtmlParseError> {
         match self.input_stream.next() {
             Some('<') => {
-                self.current_comment_token_mut()?.data.push_str("<");
+                self.current_comment_token_mut()?.data.push('<');
                 self.state = TokenizerState::CommentLessThanSign;
             }
             Some('-') => {
@@ -1467,11 +1467,11 @@ impl<'a> Tokenizer<'a> {
     pub(super) fn comment_less_than_sign_state(&mut self) -> Result<(), HtmlParseError> {
         match self.input_stream.next() {
             Some('!') => {
-                self.current_comment_token_mut()?.data.push_str("!");
+                self.current_comment_token_mut()?.data.push('!');
                 self.state = TokenizerState::CommentLessThanSignBang;
             }
             Some('<') => {
-                self.current_comment_token_mut()?.data.push_str("<");
+                self.current_comment_token_mut()?.data.push('<');
             }
             _ => {
                 self.reconsume_in_state(TokenizerState::Comment)?;
@@ -1543,7 +1543,7 @@ impl<'a> Tokenizer<'a> {
                 self.emit(HtmlToken::EndOfFile)?;
             }
             _ => {
-                self.current_comment_token_mut()?.data.push_str("-");
+                self.current_comment_token_mut()?.data.push('-');
 
                 self.reconsume_in_state(TokenizerState::Comment)?;
             }
@@ -1563,7 +1563,7 @@ impl<'a> Tokenizer<'a> {
                 self.state = TokenizerState::CommentEndBang;
             }
             Some('-') => {
-                self.current_comment_token_mut()?.data.push_str("-");
+                self.current_comment_token_mut()?.data.push('-');
             }
             None => {
                 self.handle_error(TokenizerError::EofInComment)?;
@@ -2359,6 +2359,7 @@ impl<'a> Tokenizer<'a> {
             // For non-semicolon matches, push key chars to temporary_buffer
             // for the historical_reasons flush path.
             if !ends_with_semi {
+                self.temporary_buffer.clear();
                 for code_point in key_buf.chars() {
                     self.temporary_buffer.push(code_point);
                 }

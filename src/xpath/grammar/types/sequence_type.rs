@@ -388,7 +388,7 @@ impl ItemType {
                         }
                         let value_set: XpathItemSet = values
                             .iter()
-                            .map(|v| XpathItem::AnyAtomicType(v.clone()))
+                            .map(|v| v.to_xpath_item())
                             .collect();
                         if !typed.sequence_type.is_match(&value_set, item_tree)? {
                             return Ok(false);
@@ -415,7 +415,7 @@ impl ItemType {
                     for member in members {
                         let member_set: XpathItemSet = member
                             .iter()
-                            .map(|v| XpathItem::AnyAtomicType(v.clone()))
+                            .map(|v| v.to_xpath_item())
                             .collect();
                         if !typed.0.is_match(&member_set, item_tree)? {
                             return Ok(false);

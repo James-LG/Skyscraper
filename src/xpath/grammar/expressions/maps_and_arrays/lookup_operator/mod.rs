@@ -1,7 +1,7 @@
 //! <https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-lookup>
 
 use crate::xpath::{
-    grammar::data_model::{AnyAtomicType, Function, XpathItem},
+    grammar::data_model::{AnyAtomicType, Function, OwnedXpathValue, XpathItem},
     xpath_item_set::XpathItemSet,
     ExpressionApplyError, XpathExpressionContext,
 };
@@ -40,7 +40,7 @@ pub(crate) fn apply_key_specifier<'tree>(
 }
 
 fn apply_key_to_map<'tree>(
-    entries: &[(AnyAtomicType, Vec<AnyAtomicType>)],
+    entries: &[(AnyAtomicType, Vec<OwnedXpathValue>)],
     key_spec: &KeySpecifier,
     context: &XpathExpressionContext<'tree>,
 ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
@@ -58,7 +58,7 @@ fn apply_key_to_map<'tree>(
             let mut result = XpathItemSet::new();
             for (_, values) in entries {
                 for v in values {
-                    result.insert(XpathItem::AnyAtomicType(v.clone()));
+                    result.insert(v.to_xpath_item());
                 }
             }
             Ok(result)
@@ -86,14 +86,14 @@ fn apply_key_to_map<'tree>(
 }
 
 fn lookup_map_key<'tree>(
-    entries: &[(AnyAtomicType, Vec<AnyAtomicType>)],
+    entries: &[(AnyAtomicType, Vec<OwnedXpathValue>)],
     key: &AnyAtomicType,
 ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
     for (k, v) in entries {
         if k == key {
             return Ok(v
                 .iter()
-                .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                .map(|a| a.to_xpath_item())
                 .collect());
         }
     }
@@ -101,7 +101,7 @@ fn lookup_map_key<'tree>(
 }
 
 fn apply_key_to_array<'tree>(
-    members: &[Vec<AnyAtomicType>],
+    members: &[Vec<OwnedXpathValue>],
     key_spec: &KeySpecifier,
     context: &XpathExpressionContext<'tree>,
 ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
@@ -112,7 +112,7 @@ fn apply_key_to_array<'tree>(
             let mut result = XpathItemSet::new();
             for member in members {
                 for v in member {
-                    result.insert(XpathItem::AnyAtomicType(v.clone()));
+                    result.insert(v.to_xpath_item());
                 }
             }
             Ok(result)
@@ -174,7 +174,7 @@ pub(crate) fn call_with_key<'tree>(
 }
 
 fn lookup_array_index<'tree>(
-    members: &[Vec<AnyAtomicType>],
+    members: &[Vec<OwnedXpathValue>],
     idx: i64,
 ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
     if idx < 1 || idx as usize > members.len() {
@@ -187,6 +187,6 @@ fn lookup_array_index<'tree>(
     let member = &members[(idx - 1) as usize];
     Ok(member
         .iter()
-        .map(|a| XpathItem::AnyAtomicType(a.clone()))
+        .map(|a| a.to_xpath_item())
         .collect())
 }

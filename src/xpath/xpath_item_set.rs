@@ -56,6 +56,12 @@ impl<'tree> Extend<XpathItem<'tree>> for XpathItemSet<'tree> {
     }
 }
 
+impl Default for XpathItemSet<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'tree> XpathItemSet<'tree> {
     /// Create a new empty [`XpathItemSet`].
     pub fn new() -> Self {

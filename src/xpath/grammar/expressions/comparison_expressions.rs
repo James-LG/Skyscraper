@@ -390,8 +390,12 @@ fn compare_atomic(
     lt: bool,
     gt: bool,
 ) -> bool {
+    // Ordering comparisons (<, >, <=, >=) cast string operands to double per
+    // XPath 3.1 §3.7.  Equality (=) and inequality (!=) compare strings as strings.
+    let is_ordering = (lt || gt) && !(lt && gt && !eq);
+
     let (a, b);
-    let (lhs, rhs) = if let Some(coerced) = coerce_for_comparison(first, second) {
+    let (lhs, rhs) = if let Some(coerced) = coerce_for_comparison(first, second, is_ordering) {
         a = coerced.0;
         b = coerced.1;
         (&a, &b)
@@ -450,6 +454,7 @@ fn compare_atomic(
 fn coerce_for_comparison(
     first: &AnyAtomicType,
     second: &AnyAtomicType,
+    is_ordering: bool,
 ) -> Option<(AnyAtomicType, AnyAtomicType)> {
     fn is_numeric(v: &AnyAtomicType) -> bool {
         matches!(
@@ -487,6 +492,10 @@ fn coerce_for_comparison(
         }
         (other, AnyAtomicType::String(s)) if is_numeric(other) => {
             Some((to_double(other), string_to_double(s)))
+        }
+        // String vs String ordering: cast both to double per XPath 3.1 §3.7.2.
+        (AnyAtomicType::String(s1), AnyAtomicType::String(s2)) if is_ordering => {
+            Some((string_to_double(s1), string_to_double(s2)))
         }
         // Mixed numeric types: promote both to double.
         (a, b)

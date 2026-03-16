@@ -8,7 +8,7 @@ use nom::error::context;
 use crate::{
     xpath::{
         grammar::{
-            data_model::{AnyAtomicType, Function, XpathItem},
+            data_model::{AnyAtomicType, Function, OwnedXpathValue, XpathItem},
             expressions::{
                 common::{argument_list, Argument, ArgumentList},
                 expr,
@@ -202,6 +202,9 @@ fn dispatch_by_local_name<'tree>(
     match local_name {
         "root" => {
             check_arity_range("fn:root", args, 0, 1)?;
+            if !args.is_empty() && args[0].is_empty() {
+                return Ok(Some(XpathItemSet::new()));
+            }
             if !args.is_empty() && !args[0].is_empty() {
                 // Validate argument is a node.
                 if !args[0].iter().all(|item| matches!(item, XpathItem::Node(_))) {
@@ -216,6 +219,7 @@ fn dispatch_by_local_name<'tree>(
         }
         "contains" => func_contains(args, context).map(Some),
         "data" => {
+            check_arity_range("fn:data", args, 0, 1)?;
             let target = if args.is_empty() {
                 xpath_item_set![context.item.clone()]
             } else {
@@ -230,6 +234,7 @@ fn dispatch_by_local_name<'tree>(
             ))
         }
         "string" => {
+            check_arity_range("fn:string", args, 0, 1)?;
             if !args.is_empty() && args[0].is_empty() {
                 // XPath 3.1 spec: if $arg is the empty sequence, return zero-length string
                 return Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
@@ -335,13 +340,13 @@ fn dispatch_by_local_name<'tree>(
                 func_numeric_unary(
                     &args[0],
                     |n| round_integer(n, precision),
-                    |f| ((f as f64 * factor).round() / factor) as f32,
-                    |d| (d * factor).round() / factor,
+                    |f| (xpath_round_f64(f as f64 * factor) / factor) as f32,
+                    |d| xpath_round_f64(d * factor) / factor,
                 )
                 .map(Some)
             } else {
                 check_arity("fn:round", args, 1)?;
-                func_numeric_unary(&args[0], |i| i, |f| f.round(), |d| d.round()).map(Some)
+                func_numeric_unary(&args[0], |i| i, |f| xpath_round_f32(f), |d| xpath_round_f64(d)).map(Some)
             }
         }
         // String functions
@@ -1035,8 +1040,20 @@ fn dispatch_by_local_name<'tree>(
             let picture = extract_string_arg(&args[1], context.item_tree)?;
             let result = match picture.as_str() {
                 "1" => n.to_string(),
-                "01" => format!("{:02}", n),
-                "001" => format!("{:03}", n),
+                "01" => {
+                    if n < 0 {
+                        format!("-{:02}", n.unsigned_abs())
+                    } else {
+                        format!("{:02}", n)
+                    }
+                }
+                "001" => {
+                    if n < 0 {
+                        format!("-{:03}", n.unsigned_abs())
+                    } else {
+                        format!("{:03}", n)
+                    }
+                }
                 "a" => {
                     if n >= 1 {
                         format_alpha(n, b'a')
@@ -1544,7 +1561,7 @@ fn dispatch_by_local_name<'tree>(
                         .map(|member| {
                             member
                                 .iter()
-                                .map(|v| XpathItem::AnyAtomicType(v.clone()))
+                                .map(|v| v.to_xpath_item())
                                 .collect()
                         })
                         .collect()
@@ -2279,7 +2296,7 @@ fn dispatch_map_function<'tree>(
                 if k == key {
                     let result: XpathItemSet = v
                         .iter()
-                        .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                        .map(|a| a.to_xpath_item())
                         .collect();
                     return Ok(Some(result));
                 }
@@ -2303,8 +2320,8 @@ fn dispatch_map_function<'tree>(
                     ));
                 }
             };
-            let new_val: Vec<AnyAtomicType> = func_data(&args[2], context.item_tree)?;
-            let mut new_entries: Vec<(AnyAtomicType, Vec<AnyAtomicType>)> = map
+            let new_val: Vec<OwnedXpathValue> = args[2].iter().map(|item| OwnedXpathValue::from_xpath_item(item, context.item_tree)).collect();
+            let mut new_entries: Vec<(AnyAtomicType, Vec<OwnedXpathValue>)> = map
                 .iter()
                 .filter(|(k, _)| *k != new_key)
                 .cloned()
@@ -2330,7 +2347,7 @@ fn dispatch_map_function<'tree>(
                     ));
                 }
             };
-            let val: Vec<AnyAtomicType> = func_data(&args[1], context.item_tree)?;
+            let val: Vec<OwnedXpathValue> = args[1].iter().map(|item| OwnedXpathValue::from_xpath_item(item, context.item_tree)).collect();
             Ok(Some(xpath_item_set![XpathItem::Function(Function::Map {
                 entries: vec![(key, val)]
             })]))
@@ -2346,7 +2363,7 @@ fn dispatch_map_function<'tree>(
                     _ => None,
                 })
                 .collect();
-            let new_entries: Vec<(AnyAtomicType, Vec<AnyAtomicType>)> = map
+            let new_entries: Vec<(AnyAtomicType, Vec<OwnedXpathValue>)> = map
                 .iter()
                 .filter(|(k, _)| !keys_to_remove.contains(&k))
                 .cloned()
@@ -2364,7 +2381,7 @@ fn dispatch_map_function<'tree>(
                 )));
             }
             // Arg 2 is an options map (ignored); default duplicates policy is "use-first".
-            let mut merged: Vec<(AnyAtomicType, Vec<AnyAtomicType>)> = Vec::new();
+            let mut merged: Vec<(AnyAtomicType, Vec<OwnedXpathValue>)> = Vec::new();
             for item in args[0].iter() {
                 if let XpathItem::Function(Function::Map { entries }) = item {
                     for (k, v) in entries {
@@ -2389,7 +2406,7 @@ fn dispatch_map_function<'tree>(
                 let key_set = xpath_item_set![XpathItem::AnyAtomicType(k.clone())];
                 let val_set: XpathItemSet = v
                     .iter()
-                    .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                    .map(|a| a.to_xpath_item())
                     .collect();
                 let call_result =
                     invoke_function_item(func, vec![key_set, val_set], context)?;
@@ -2415,7 +2432,7 @@ fn dispatch_map_function<'tree>(
             };
             // Recursively search all maps in the input for matching keys.
             // Per spec, map:find returns a single array(*) containing all found values.
-            let mut found_values: Vec<Vec<AnyAtomicType>> = Vec::new();
+            let mut found_values: Vec<Vec<OwnedXpathValue>> = Vec::new();
             func_map_find_recursive(&args[0], search_key, &mut found_values);
             Ok(Some(xpath_item_set![XpathItem::Function(Function::Array {
                 members: found_values,
@@ -2457,7 +2474,7 @@ fn dispatch_array_function<'tree>(
             }
             let member: XpathItemSet = arr[idx - 1]
                 .iter()
-                .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                .map(|a| a.to_xpath_item())
                 .collect();
             Ok(Some(member))
         }
@@ -2473,7 +2490,7 @@ fn dispatch_array_function<'tree>(
                     arr.len()
                 )));
             }
-            let new_val: Vec<AnyAtomicType> = func_data(&args[2], context.item_tree)?;
+            let new_val: Vec<OwnedXpathValue> = args[2].iter().map(|item| OwnedXpathValue::from_xpath_item(item, context.item_tree)).collect();
             let mut new_members = arr.clone();
             new_members[idx - 1] = new_val;
             Ok(Some(xpath_item_set![XpathItem::Function(
@@ -2484,7 +2501,7 @@ fn dispatch_array_function<'tree>(
         "append" => {
             check_arity("array:append", args, 2)?;
             let arr = extract_array(&args[0], "array:append")?;
-            let new_val: Vec<AnyAtomicType> = func_data(&args[1], context.item_tree)?;
+            let new_val: Vec<OwnedXpathValue> = args[1].iter().map(|item| OwnedXpathValue::from_xpath_item(item, context.item_tree)).collect();
             let mut new_members = arr.clone();
             new_members.push(new_val);
             Ok(Some(xpath_item_set![XpathItem::Function(
@@ -2529,7 +2546,7 @@ fn dispatch_array_function<'tree>(
                     _ => None,
                 })
                 .collect();
-            let new_members: Vec<Vec<AnyAtomicType>> = arr
+            let new_members: Vec<Vec<OwnedXpathValue>> = arr
                 .iter()
                 .enumerate()
                 .filter(|(i, _)| !positions.contains(&(i + 1)))
@@ -2550,7 +2567,7 @@ fn dispatch_array_function<'tree>(
                     pos
                 )));
             }
-            let new_val: Vec<AnyAtomicType> = func_data(&args[2], context.item_tree)?;
+            let new_val: Vec<OwnedXpathValue> = args[2].iter().map(|item| OwnedXpathValue::from_xpath_item(item, context.item_tree)).collect();
             let mut new_members = arr.clone();
             new_members.insert(pos - 1, new_val);
             Ok(Some(xpath_item_set![XpathItem::Function(
@@ -2568,7 +2585,7 @@ fn dispatch_array_function<'tree>(
             }
             let member: XpathItemSet = arr[0]
                 .iter()
-                .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                .map(|a| a.to_xpath_item())
                 .collect();
             Ok(Some(member))
         }
@@ -2599,7 +2616,7 @@ fn dispatch_array_function<'tree>(
         // https://www.w3.org/TR/xpath-functions-31/#func-array-join
         "join" => {
             check_arity("array:join", args, 1)?;
-            let mut all_members: Vec<Vec<AnyAtomicType>> = Vec::new();
+            let mut all_members: Vec<Vec<OwnedXpathValue>> = Vec::new();
             for item in args[0].iter() {
                 if let XpathItem::Function(Function::Array { members }) = item {
                     all_members.extend(members.iter().cloned());
@@ -2621,16 +2638,16 @@ fn dispatch_array_function<'tree>(
             check_arity("array:for-each", args, 2)?;
             let arr = extract_array(&args[0], "array:for-each")?;
             let func = extract_function_item(&args[1], "array:for-each")?;
-            let mut new_members: Vec<Vec<AnyAtomicType>> = Vec::new();
+            let mut new_members: Vec<Vec<OwnedXpathValue>> = Vec::new();
             for member in arr {
                 let member_set: XpathItemSet = member
                     .iter()
-                    .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                    .map(|a| a.to_xpath_item())
                     .collect();
                 let call_result =
                     invoke_function_item(func, vec![member_set], context)?;
-                let atoms = func_data(&call_result, context.item_tree)?;
-                new_members.push(atoms);
+                let items: Vec<OwnedXpathValue> = call_result.iter().map(|item| OwnedXpathValue::from_xpath_item(item, context.item_tree)).collect();
+                new_members.push(items);
             }
             Ok(Some(xpath_item_set![XpathItem::Function(
                 Function::Array { members: new_members }
@@ -2641,11 +2658,11 @@ fn dispatch_array_function<'tree>(
             check_arity("array:filter", args, 2)?;
             let arr = extract_array(&args[0], "array:filter")?;
             let func = extract_function_item(&args[1], "array:filter")?;
-            let mut new_members: Vec<Vec<AnyAtomicType>> = Vec::new();
+            let mut new_members: Vec<Vec<OwnedXpathValue>> = Vec::new();
             for member in arr {
                 let member_set: XpathItemSet = member
                     .iter()
-                    .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                    .map(|a| a.to_xpath_item())
                     .collect();
                 let call_result =
                     invoke_function_item(func, vec![member_set], context)?;
@@ -2666,7 +2683,7 @@ fn dispatch_array_function<'tree>(
             for member in arr {
                 let member_set: XpathItemSet = member
                     .iter()
-                    .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                    .map(|a| a.to_xpath_item())
                     .collect();
                 accumulator =
                     invoke_function_item(func, vec![accumulator, member_set], context)?;
@@ -2682,7 +2699,7 @@ fn dispatch_array_function<'tree>(
             for member in arr.iter().rev() {
                 let member_set: XpathItemSet = member
                     .iter()
-                    .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                    .map(|a| a.to_xpath_item())
                     .collect();
                 accumulator =
                     invoke_function_item(func, vec![member_set, accumulator], context)?;
@@ -2695,13 +2712,13 @@ fn dispatch_array_function<'tree>(
             let arr1 = extract_array(&args[0], "array:for-each-pair")?;
             let arr2 = extract_array(&args[1], "array:for-each-pair")?;
             let func = extract_function_item(&args[2], "array:for-each-pair")?;
-            let mut new_members: Vec<Vec<AnyAtomicType>> = Vec::new();
+            let mut new_members: Vec<Vec<OwnedXpathValue>> = Vec::new();
             for (m1, m2) in arr1.iter().zip(arr2.iter()) {
-                let set1: XpathItemSet = m1.iter().map(|a| XpathItem::AnyAtomicType(a.clone())).collect();
-                let set2: XpathItemSet = m2.iter().map(|a| XpathItem::AnyAtomicType(a.clone())).collect();
+                let set1: XpathItemSet = m1.iter().map(|a| a.to_xpath_item()).collect();
+                let set2: XpathItemSet = m2.iter().map(|a| a.to_xpath_item()).collect();
                 let call_result = invoke_function_item(func, vec![set1, set2], context)?;
-                let atoms = func_data(&call_result, context.item_tree)?;
-                new_members.push(atoms);
+                let items: Vec<OwnedXpathValue> = call_result.iter().map(|item| OwnedXpathValue::from_xpath_item(item, context.item_tree)).collect();
+                new_members.push(items);
             }
             Ok(Some(xpath_item_set![XpathItem::Function(
                 Function::Array { members: new_members }
@@ -2723,13 +2740,13 @@ fn dispatch_array_function<'tree>(
             } else {
                 None
             };
-            let mut members_with_keys: Vec<(Vec<AnyAtomicType>, String)> = Vec::new();
+            let mut members_with_keys: Vec<(Vec<OwnedXpathValue>, String)> = Vec::new();
             for member in arr {
                 let key = if let Some(key_arg) = key_func_arg {
                     let func = extract_function_item(key_arg, "array:sort")?;
                     let member_set: XpathItemSet = member
                         .iter()
-                        .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                        .map(|a| a.to_xpath_item())
                         .collect();
                     let key_result = invoke_function_item(func, vec![member_set], context)?;
                     extract_string_arg(&key_result, context.item_tree)?
@@ -2738,7 +2755,7 @@ fn dispatch_array_function<'tree>(
                         .iter()
                         .map(|a| {
                             func_string(
-                                &XpathItem::AnyAtomicType(a.clone()),
+                                &a.to_xpath_item(),
                                 context.item_tree,
                             )
                         })
@@ -2748,7 +2765,7 @@ fn dispatch_array_function<'tree>(
                 members_with_keys.push((member.clone(), key));
             }
             members_with_keys.sort_by(|(_, ka), (_, kb)| ka.cmp(kb));
-            let new_members: Vec<Vec<AnyAtomicType>> =
+            let new_members: Vec<Vec<OwnedXpathValue>> =
                 members_with_keys.into_iter().map(|(m, _)| m).collect();
             Ok(Some(xpath_item_set![XpathItem::Function(
                 Function::Array { members: new_members }
@@ -3026,6 +3043,17 @@ fn format_alpha(mut n: i64, base: u8) -> String {
     result.into_iter().collect()
 }
 
+/// XPath "round half towards positive infinity" for f64.
+/// round(-0.5) = 0.0, round(0.5) = 1.0 (towards +inf, not away from zero).
+fn xpath_round_f64(x: f64) -> f64 {
+    (x + 0.5).floor()
+}
+
+/// XPath "round half towards positive infinity" for f32.
+fn xpath_round_f32(x: f32) -> f32 {
+    (x + 0.5).floor()
+}
+
 /// Apply a unary numeric operation, preserving the source type.
 /// Round an integer to the given precision using integer arithmetic,
 /// avoiding the precision loss of i64→f64→i64 round-trip for large values.
@@ -3056,7 +3084,7 @@ fn round_integer(n: i64, precision: i32) -> i64 {
         } else {
             truncated
         }
-    } else if abs_remainder >= half {
+    } else if abs_remainder > half {
         truncated.checked_sub(divisor).unwrap_or(truncated)
     } else {
         truncated
@@ -3678,7 +3706,7 @@ fn extract_function_item<'a, 'tree>(
 fn extract_map<'a>(
     items: &'a XpathItemSet,
     fn_name: &str,
-) -> Result<&'a Vec<(AnyAtomicType, Vec<AnyAtomicType>)>, ExpressionApplyError> {
+) -> Result<&'a Vec<(AnyAtomicType, Vec<OwnedXpathValue>)>, ExpressionApplyError> {
     if items.is_empty() {
         return Err(ExpressionApplyError::new(format!(
             "{}: argument is empty",
@@ -3698,7 +3726,7 @@ fn extract_map<'a>(
 fn extract_array<'a>(
     items: &'a XpathItemSet,
     fn_name: &str,
-) -> Result<&'a Vec<Vec<AnyAtomicType>>, ExpressionApplyError> {
+) -> Result<&'a Vec<Vec<OwnedXpathValue>>, ExpressionApplyError> {
     if items.is_empty() {
         return Err(ExpressionApplyError::new(format!(
             "{}: argument is empty",
@@ -3718,7 +3746,7 @@ fn extract_array<'a>(
 fn func_map_find_recursive(
     items: &XpathItemSet<'_>,
     key: &AnyAtomicType,
-    found_values: &mut Vec<Vec<AnyAtomicType>>,
+    found_values: &mut Vec<Vec<OwnedXpathValue>>,
 ) {
     for item in items.iter() {
         match item {
@@ -3730,7 +3758,7 @@ fn func_map_find_recursive(
                     // Recurse into nested map values.
                     let nested: XpathItemSet = v
                         .iter()
-                        .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                        .map(|a| a.to_xpath_item())
                         .collect();
                     func_map_find_recursive(&nested, key, found_values);
                 }
@@ -3739,7 +3767,7 @@ fn func_map_find_recursive(
                 for member in members {
                     let nested: XpathItemSet = member
                         .iter()
-                        .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                        .map(|a| a.to_xpath_item())
                         .collect();
                     func_map_find_recursive(&nested, key, found_values);
                 }
@@ -3757,7 +3785,7 @@ fn func_array_flatten<'tree>(items: &XpathItemSet<'tree>, result: &mut XpathItem
                 for member in members {
                     let nested: XpathItemSet = member
                         .iter()
-                        .map(|a| XpathItem::AnyAtomicType(a.clone()))
+                        .map(|a| a.to_xpath_item())
                         .collect();
                     func_array_flatten(&nested, result);
                 }

@@ -196,15 +196,14 @@ pub(crate) static VOID_ELEMENTS: [&str; 15] = [
 
 /// An iterator over all text contained in an element and its descendants.
 pub struct TextIter {
-    texts: Vec<String>,
-    pos: usize,
+    inner: std::vec::IntoIter<String>,
 }
 
 impl TextIter {
     pub(crate) fn new(tree: &XpathItemTree, node: &XpathItemTreeNode) -> TextIter {
         let mut texts = Vec::new();
         Self::collect_texts(tree, node, &mut texts);
-        TextIter { texts, pos: 0 }
+        TextIter { inner: texts.into_iter() }
     }
 
     fn collect_texts(tree: &XpathItemTree, node: &XpathItemTreeNode, out: &mut Vec<String>) {
@@ -226,13 +225,7 @@ impl Iterator for TextIter {
     type Item = String;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.pos < self.texts.len() {
-            let s = self.texts[self.pos].clone();
-            self.pos += 1;
-            Some(s)
-        } else {
-            None
-        }
+        self.inner.next()
     }
 }
 
@@ -305,10 +298,7 @@ impl XpathItemTree {
 
     /// Get an iterator over all nodes in the tree.
     pub fn iter(&self) -> impl Iterator<Item = &XpathItemTreeNode> {
-        self.arena.iter().map(|node| {
-            let id = self.arena.get_node_id(node).expect("arena iterator yielded node without NodeId");
-            self.get(id)
-        })
+        self.arena.iter().map(|node| node.get())
     }
 }
 

@@ -7,7 +7,7 @@ use nom::{branch::alt, character::complete::char, error::context};
 use crate::{
     xpath::{
         grammar::{
-            data_model::{Function, XpathItem},
+            data_model::{Function, OwnedXpathValue, XpathItem},
             expressions::{
                 maps_and_arrays::{
                     arrays::array_constructor, lookup_operator::unary_lookup::unary_lookup,
@@ -210,10 +210,13 @@ impl PrimaryExpr {
                             key
                         )));
                     }
-                    // Evaluate the value and atomize.
+                    // Evaluate the value — preserve item types without atomization.
                     let value_set = entry.value.eval(context)?;
-                    let value_atoms = func_data(&value_set, context.item_tree)?;
-                    entries.push((key, value_atoms));
+                    let value_items: Vec<OwnedXpathValue> = value_set
+                        .iter()
+                        .map(|item| OwnedXpathValue::from_xpath_item(item, context.item_tree))
+                        .collect();
+                    entries.push((key, value_items));
                 }
                 Ok(xpath_item_set![XpathItem::Function(Function::Map {
                     entries
@@ -226,8 +229,11 @@ impl PrimaryExpr {
                         let mut members = Vec::new();
                         for entry in &sq.entries {
                             let value_set = entry.eval(context)?;
-                            let atoms = func_data(&value_set, context.item_tree)?;
-                            members.push(atoms);
+                            let items: Vec<OwnedXpathValue> = value_set
+                                .iter()
+                                .map(|item| OwnedXpathValue::from_xpath_item(item, context.item_tree))
+                                .collect();
+                            members.push(items);
                         }
                         members
                     }
@@ -236,8 +242,10 @@ impl PrimaryExpr {
                         // becomes one member (a singleton sequence).
                         if let Some(expr) = cu.enclosed_expr().expr() {
                             let value_set = expr.eval(context)?;
-                            let atoms = func_data(&value_set, context.item_tree)?;
-                            atoms.into_iter().map(|a| vec![a]).collect()
+                            value_set
+                                .iter()
+                                .map(|item| vec![OwnedXpathValue::from_xpath_item(item, context.item_tree)])
+                                .collect()
                         } else {
                             Vec::new()
                         }

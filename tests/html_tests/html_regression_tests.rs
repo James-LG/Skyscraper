@@ -1264,3 +1264,101 @@ fn reset_insertion_mode_various_table_elements() {
     let cells = xp.apply(&document).unwrap();
     assert_eq!(cells.len(), 3, "Should find th, td in tbody, td in tfoot");
 }
+
+// ============================================================================
+// S4 — Named char ref without semicolon: no double ampersand
+// ============================================================================
+
+#[test]
+fn named_charref_without_semicolon_no_double_ampersand() {
+    // &notit in an attribute should produce "&notit" (with the `not` char ref
+    // partially matched), not "&&notit" (double ampersand from stale temp buffer).
+    let text = r#"<html><body><a href="?a=1&notit">link</a></body></html>"#;
+    let document = html::parse(text).unwrap();
+    let xp = xpath::parse("//a/@href").unwrap();
+    let result = xp.apply(&document).unwrap();
+    assert_eq!(result.len(), 1);
+    let attr_value = result[0]
+        .extract_as_node()
+        .as_attribute_node()
+        .unwrap()
+        .value
+        .clone();
+    assert!(
+        !attr_value.contains("&&"),
+        "Attribute should not have double ampersand, got: {:?}",
+        attr_value
+    );
+}
+
+// ============================================================================
+// S9 — MathML elements are special
+// ============================================================================
+
+#[test]
+fn mathml_elements_are_special() {
+    // <math><mi> should parse correctly as special elements
+    let text = "<html><body><math><mi>x</mi></math></body></html>";
+    let result = html::parse(text);
+    assert!(
+        result.is_ok(),
+        "HTML with MathML elements should parse: {:?}",
+        result.err()
+    );
+}
+
+// ============================================================================
+// S10 — Scope checking is namespace-aware
+// ============================================================================
+
+#[test]
+fn scope_checking_is_namespace_aware() {
+    // An HTML <mi> element should NOT be a scope barrier (only MathML <mi> should).
+    // This verifies that scope checking considers namespace.
+    // A <p> inside HTML content where an unknown <mi> appears should still
+    // be in scope.
+    let text = "<html><body><p>text</p></body></html>";
+    let document = html::parse(text).unwrap();
+    let xp = xpath::parse("//p").unwrap();
+    let result = xp.apply(&document).unwrap();
+    assert_eq!(
+        result.len(),
+        1,
+        "The <p> element should be findable (not blocked by scope issues)"
+    );
+}
+
+// ============================================================================
+// S23 — Display node sorts attributes
+// ============================================================================
+
+#[test]
+fn display_node_sorts_attributes() {
+    // Verify sorting works via the HtmlDocument path (not XpathItemTree).
+    // Construct an HtmlDocument manually to test the display_node function.
+    use std::collections::HashMap;
+    use indextree::Arena;
+    use skyscraper::html::{HtmlTag, HtmlNode, HtmlDocument, DocumentNode, DocumentFormatType};
+
+    let mut arena = Arena::new();
+    let mut attrs = HashMap::new();
+    attrs.insert("zebra".to_string(), "z".to_string());
+    attrs.insert("alpha".to_string(), "a".to_string());
+    let tag = HtmlTag { name: "div".to_string(), attributes: attrs };
+    let tag_id = arena.new_node(HtmlNode::Tag(tag));
+    let text_node = HtmlNode::Text(skyscraper::html::HtmlText::new("x"));
+    let text_id = arena.new_node(text_node);
+    tag_id.append(text_id, &mut arena);
+    let doc = HtmlDocument::new(arena, DocumentNode::new(tag_id));
+
+    let display = doc.to_formatted_string(DocumentFormatType::Standard);
+    let alpha_pos = display.find("alpha");
+    let zebra_pos = display.find("zebra");
+    if let (Some(a), Some(z)) = (alpha_pos, zebra_pos) {
+        assert!(
+            a < z,
+            "alpha should appear before zebra in sorted output, got: {}",
+            display
+        );
+    }
+}

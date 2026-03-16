@@ -145,9 +145,10 @@ impl HtmlText {
     /// Creates a new [HtmlText] from the given string.
     pub fn new(value: &str) -> HtmlText {
         let text = unescape_characters(value);
+        let only_whitespace = text.trim().is_empty();
         HtmlText {
-            value: text.to_string(),
-            only_whitespace: text.trim().is_empty(),
+            value: text,
+            only_whitespace,
         }
     }
 }
@@ -442,7 +443,9 @@ fn display_node(
                 display_indent(indent, &mut str)?;
             }
             write!(&mut str, "<{}", tag.name)?;
-            for attribute in &tag.attributes {
+            let mut sorted_attrs: Vec<_> = tag.attributes.iter().collect();
+            sorted_attrs.sort_by_key(|(k, _)| k.clone());
+            for attribute in sorted_attrs {
                 write!(&mut str, r#" {}="{}""#, attribute.0, attribute.1)?;
             }
             write!(&mut str, ">")?;

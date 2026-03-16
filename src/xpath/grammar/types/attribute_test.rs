@@ -29,13 +29,13 @@ pub fn attribute_test(input: &str) -> Res<&str, AttributeTest> {
             char('('),
             opt(ws((
                 attrib_name_or_wildcard,
-                opt(ws((char(','), type_name, opt(char('?'))))),
+                opt(ws((char(','), type_name))),
             ))),
             char(')'),
         )),
     )(input)
     .map(|(next_input, res)| {
-        let res = res.2.map(|tup| (tup.0, tup.1.map(|tup2| tup2.1)));
+        let res = res.2.map(|tup| (tup.0, tup.1.map(|tup2| tup2.1 )));
         let element_test = AttributeTest {
             pair: res.map(|tup| AttributeTestPair {
                 name_or_wildcard: tup.0,

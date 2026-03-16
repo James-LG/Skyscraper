@@ -225,7 +225,7 @@ impl HtmlParser {
         token: HtmlToken,
     ) -> Result<Acknowledgement, HtmlParseError> {
         fn anything_else(parser: &mut HtmlParser, token: HtmlToken) -> Result<(), HtmlParseError> {
-            let result = parser.create_element(String::from("html"), HTML_NAMESPACE, None, None)?;
+            let result = parser.create_element(String::from("html"), HTML_NAMESPACE)?;
 
             // append the node to the document
             let node_id = parser.new_node(XpathItemTreeNode::ElementNode(result));
