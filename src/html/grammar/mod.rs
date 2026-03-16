@@ -1893,79 +1893,19 @@ impl HtmlParser {
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#reset-the-insertion-mode-appropriately>
     pub(crate) fn reset_the_insertion_mode_appropriately(&mut self) -> Result<(), HtmlParseError> {
-        fn step_3_loop(
-            parser: &mut HtmlParser,
-            node_id: NodeId,
-            last: bool,
-        ) -> Result<(), HtmlParseError> {
-            let mut last = last;
-            let mut node_id = node_id;
-            if node_id == parser.open_elements[0] {
-                last = true;
-
-                if let Some(context_element) = parser.context_element {
+        // Walk backwards through the stack of open elements.
+        for i in (0..self.open_elements.len()).rev() {
+            let mut node_id = self.open_elements[i];
+            let last = if i == 0 {
+                if let Some(context_element) = self.context_element {
                     node_id = context_element;
                 }
-            }
+                true
+            } else {
+                false
+            };
 
-            return step_4(parser, node_id, last);
-        }
-
-        fn step_4(
-            parser: &mut HtmlParser,
-            node_id: NodeId,
-            last: bool,
-        ) -> Result<(), HtmlParseError> {
-            fn step_4_3_loop(
-                parser: &mut HtmlParser,
-                ancestor_id: NodeId,
-                last: bool,
-            ) -> Result<(), HtmlParseError> {
-                if ancestor_id == parser.open_elements[0] {
-                    return step_4_8_done(parser);
-                }
-
-                // let ancestor be the node before ancestor in the stack of open elements
-                let ancestor_position = parser
-                    .open_elements
-                    .iter()
-                    .position(|id| *id == ancestor_id)
-                    .ok_or(HtmlParseError::new(
-                        "ancestor id not found in open elements",
-                    ))?;
-                let ancestor_id =
-                    parser
-                        .open_elements
-                        .get(ancestor_position - 1)
-                        .ok_or(HtmlParseError::new(
-                            "ancestor id not found in open elements",
-                        ))?;
-
-                let ancestor = parser
-                    .arena
-                    .get(*ancestor_id)
-                    .unwrap()
-                    .get()
-                    .as_element_node()
-                    .map_err(|_| HtmlParseError::new("ancestor is not an element node"))?;
-
-                if ancestor.name == "template" {
-                    return step_4_8_done(parser);
-                }
-
-                if ancestor.name == "table" {
-                    parser.insertion_mode = InsertionMode::InSelectInTable;
-                    return Ok(());
-                }
-
-                return step_4_3_loop(parser, *ancestor_id, last);
-            }
-
-            fn step_4_8_done(parser: &mut HtmlParser) -> Result<(), HtmlParseError> {
-                parser.insertion_mode = InsertionMode::InSelect;
-                Ok(())
-            }
-            let node = parser
+            let node = self
                 .arena
                 .get(node_id)
                 .unwrap()
@@ -1974,101 +1914,102 @@ impl HtmlParser {
                 .map_err(|_| HtmlParseError::new("node is not an element node"))?;
 
             if node.name == "select" {
-                if last {
-                    return step_4_8_done(parser);
+                if !last {
+                    // Walk ancestors to find "template" or "table".
+                    for j in (0..i).rev() {
+                        let ancestor_id = self.open_elements[j];
+                        let ancestor = self
+                            .arena
+                            .get(ancestor_id)
+                            .unwrap()
+                            .get()
+                            .as_element_node()
+                            .map_err(|_| {
+                                HtmlParseError::new("ancestor is not an element node")
+                            })?;
+
+                        if ancestor.name == "template" {
+                            break;
+                        }
+
+                        if ancestor.name == "table" {
+                            self.insertion_mode = InsertionMode::InSelectInTable;
+                            return Ok(());
+                        }
+                    }
                 }
-                return step_4_3_loop(parser, node_id, last);
+                self.insertion_mode = InsertionMode::InSelect;
+                return Ok(());
             }
 
             if (node.name == "td" || node.name == "th") && !last {
-                parser.insertion_mode = InsertionMode::InCell;
+                self.insertion_mode = InsertionMode::InCell;
                 return Ok(());
             }
 
             if node.name == "tr" {
-                parser.insertion_mode = InsertionMode::InRow;
+                self.insertion_mode = InsertionMode::InRow;
                 return Ok(());
             }
 
             if node.name == "tbody" || node.name == "thead" || node.name == "tfoot" {
-                parser.insertion_mode = InsertionMode::InTableBody;
+                self.insertion_mode = InsertionMode::InTableBody;
                 return Ok(());
             }
 
             if node.name == "caption" {
-                parser.insertion_mode = InsertionMode::InCaption;
+                self.insertion_mode = InsertionMode::InCaption;
                 return Ok(());
             }
 
             if node.name == "colgroup" {
-                parser.insertion_mode = InsertionMode::InColumnGroup;
+                self.insertion_mode = InsertionMode::InColumnGroup;
                 return Ok(());
             }
 
             if node.name == "table" {
-                parser.insertion_mode = InsertionMode::InTable;
+                self.insertion_mode = InsertionMode::InTable;
                 return Ok(());
             }
 
             if node.name == "template" {
-                parser.insertion_mode = parser
+                self.insertion_mode = self
                     .current_template_insertion_mode()
                     .ok_or(HtmlParseError::new("no current template insertion mode"))?;
                 return Ok(());
             }
 
             if node.name == "head" && !last {
-                parser.insertion_mode = InsertionMode::InHead;
+                self.insertion_mode = InsertionMode::InHead;
                 return Ok(());
             }
 
             if node.name == "body" {
-                parser.insertion_mode = InsertionMode::InBody;
+                self.insertion_mode = InsertionMode::InBody;
                 return Ok(());
             }
 
             if node.name == "frameset" {
-                parser.insertion_mode = InsertionMode::InFrameset;
+                self.insertion_mode = InsertionMode::InFrameset;
                 return Ok(());
             }
 
             if node.name == "html" {
-                if parser.head_element_pointer.is_none() {
-                    parser.insertion_mode = InsertionMode::BeforeHead;
+                if self.head_element_pointer.is_none() {
+                    self.insertion_mode = InsertionMode::BeforeHead;
                 } else {
-                    parser.insertion_mode = InsertionMode::AfterHead;
+                    self.insertion_mode = InsertionMode::AfterHead;
                 }
                 return Ok(());
             }
 
             if last {
-                parser.insertion_mode = InsertionMode::InBody;
+                self.insertion_mode = InsertionMode::InBody;
                 return Ok(());
             }
-
-            // let node be the node before node in the stack of open elements
-            let node_position = parser
-                .open_elements
-                .iter()
-                .position(|id| *id == node_id)
-                .ok_or(HtmlParseError::new(
-                    "ancestor id not found in open elements",
-                ))?;
-            let node_id =
-                parser
-                    .open_elements
-                    .get(node_position - 1)
-                    .ok_or(HtmlParseError::new(
-                        "ancestor id not found in open elements",
-                    ))?;
-
-            return step_3_loop(parser, *node_id, last);
         }
 
-        let last = false;
-        let node_id = self.current_node_id_result()?;
-
-        step_3_loop(self, node_id, last)
+        Ok(())
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#generic-raw-text-element-parsing-algorithm>

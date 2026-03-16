@@ -2511,7 +2511,7 @@ impl<'a> Tokenizer<'a> {
 
         self.temporary_buffer.clear();
         self.temporary_buffer
-            .push(std::char::from_u32(self.character_reference_code).unwrap());
+            .push(std::char::from_u32(self.character_reference_code).unwrap_or(chars::REPLACEMENT_CHARACTER));
 
         self.flush_code_points_consumed_as_character_reference()?;
         self.state = self.current_return_state()?;

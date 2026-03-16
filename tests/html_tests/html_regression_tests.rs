@@ -1196,3 +1196,71 @@ fn adoption_agency_no_underflow_on_formatting_at_stack_bottom() {
         "Text should be preserved: {text_content}"
     );
 }
+
+// ============================================================================
+// Regression: #15 - reset_the_insertion_mode_appropriately was implemented
+// with mutual recursion, risking stack overflow on deeply nested documents.
+// Now iterative. Test that nested select-in-table still resolves correctly.
+// ============================================================================
+
+#[test]
+fn reset_insertion_mode_select_in_table() {
+    // A <select> inside a <table> should trigger InSelectInTable mode.
+    let text = "<html><body><table><tr><td><select><option>A</option></select></td></tr></table></body></html>";
+    let result = html::parse(text);
+    assert!(
+        result.is_ok(),
+        "Nested select-in-table should parse without error: {:?}",
+        result.err()
+    );
+    let document = result.unwrap();
+    let xp = xpath::parse("//option").unwrap();
+    let result = xp.apply(&document).unwrap();
+    assert_eq!(result.len(), 1, "Should find the option element");
+}
+
+#[test]
+fn reset_insertion_mode_deeply_nested_elements() {
+    // Deep nesting that would have caused stack overflow with recursive impl.
+    let mut html = String::from("<html><body>");
+    for _ in 0..200 {
+        html.push_str("<div>");
+    }
+    html.push_str("<select><option>deep</option></select>");
+    for _ in 0..200 {
+        html.push_str("</div>");
+    }
+    html.push_str("</body></html>");
+    let result = html::parse(&html);
+    assert!(
+        result.is_ok(),
+        "Deeply nested elements should not stack overflow: {:?}",
+        result.err()
+    );
+    let document = result.unwrap();
+    let xp = xpath::parse("//option").unwrap();
+    let options = xp.apply(&document).unwrap();
+    assert_eq!(options.len(), 1, "Should find the deeply nested option");
+}
+
+#[test]
+fn reset_insertion_mode_various_table_elements() {
+    // Tests multiple tag types that reset_the_insertion_mode checks.
+    let text = "<html><body>\
+        <table><caption>cap</caption>\
+        <colgroup><col></colgroup>\
+        <thead><tr><th>H</th></tr></thead>\
+        <tbody><tr><td>D</td></tr></tbody>\
+        <tfoot><tr><td>F</td></tr></tfoot>\
+        </table></body></html>";
+    let result = html::parse(text);
+    assert!(
+        result.is_ok(),
+        "Table with multiple section elements should parse: {:?}",
+        result.err()
+    );
+    let document = result.unwrap();
+    let xp = xpath::parse("//td | //th").unwrap();
+    let cells = xp.apply(&document).unwrap();
+    assert_eq!(cells.len(), 3, "Should find th, td in tbody, td in tfoot");
+}

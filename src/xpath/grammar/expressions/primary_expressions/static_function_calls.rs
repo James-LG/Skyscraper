@@ -57,27 +57,6 @@ impl FunctionCall {
         &self,
         context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
-        // fn:root is special: its arguments are never evaluated because path
-        // expansion passes `self::node()` which may hit unimplemented axes.
-        let is_fn_root = match &self.name {
-            EQName::QName(QName::PrefixedName(p)) => {
-                p.prefix == "fn" && p.local_part == "root"
-            }
-            EQName::UriQualifiedName(uqn) => {
-                uqn.uri == XPATH_FUNCTIONS_NS && uqn.name == "root"
-            }
-            _ => false,
-        };
-        if is_fn_root {
-            if self.argument_list.0.len() > 1 {
-                return Err(ExpressionApplyError::new(format!(
-                    "fn:root expects 0-1 arguments, got {}",
-                    self.argument_list.0.len()
-                )));
-            }
-            return Ok(xpath_item_set![XpathItem::Node(context.item_tree.root())]);
-        }
-
         // Check for partial function application (argument placeholders).
         let has_placeholder = self
             .argument_list
@@ -221,9 +200,20 @@ fn dispatch_by_local_name<'tree>(
     context: &XpathExpressionContext<'tree>,
 ) -> Result<Option<XpathItemSet<'tree>>, ExpressionApplyError> {
     match local_name {
-        "root" => Ok(Some(
-            xpath_item_set![XpathItem::Node(context.item_tree.root())],
-        )),
+        "root" => {
+            check_arity_range("fn:root", args, 0, 1)?;
+            if !args.is_empty() && !args[0].is_empty() {
+                // Validate argument is a node.
+                if !args[0].iter().all(|item| matches!(item, XpathItem::Node(_))) {
+                    return Err(ExpressionApplyError::new(
+                        "err:XPTY0004 fn:root: argument must be a node".to_string(),
+                    ));
+                }
+            }
+            Ok(Some(
+                xpath_item_set![XpathItem::Node(context.item_tree.root())],
+            ))
+        }
         "contains" => func_contains(args, context).map(Some),
         "data" => {
             let target = if args.is_empty() {
@@ -947,13 +937,30 @@ fn dispatch_by_local_name<'tree>(
                 return Ok(Some(XpathItemSet::new()));
             }
             let atoms = func_data(&args[0], context.item_tree)?;
-            let mut total: f64 = 0.0;
+            let mut total_f64: f64 = 0.0;
+            let mut total_i64: i64 = 0;
+            let mut all_integers = true;
             for atom in &atoms {
                 match atom {
-                    AnyAtomicType::Integer(n) => total += *n as f64,
-                    AnyAtomicType::Float(f) => total += f.0 as f64,
-                    AnyAtomicType::Double(d) => total += d.0,
+                    AnyAtomicType::Integer(n) => {
+                        if all_integers {
+                            match total_i64.checked_add(*n) {
+                                Some(v) => total_i64 = v,
+                                None => all_integers = false,
+                            }
+                        }
+                        total_f64 += *n as f64;
+                    }
+                    AnyAtomicType::Float(f) => {
+                        all_integers = false;
+                        total_f64 += f.0 as f64;
+                    }
+                    AnyAtomicType::Double(d) => {
+                        all_integers = false;
+                        total_f64 += d.0;
+                    }
                     AnyAtomicType::String(s) => {
+                        all_integers = false;
                         // xs:untypedAtomic -> cast to xs:double per XPath 3.1 F&O 15.4.5
                         let d: f64 = s.trim().parse().map_err(|_| {
                             ExpressionApplyError::new(format!(
@@ -961,7 +968,7 @@ fn dispatch_by_local_name<'tree>(
                                 s
                             ))
                         })?;
-                        total += d;
+                        total_f64 += d;
                     }
                     other => {
                         return Err(ExpressionApplyError::new(format!(
@@ -971,11 +978,18 @@ fn dispatch_by_local_name<'tree>(
                     }
                 }
             }
-            Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
-                AnyAtomicType::Double(ordered_float::OrderedFloat(
-                    total / atoms.len() as f64
-                ))
-            )]))
+            let count = atoms.len() as i64;
+            if all_integers && total_i64 % count == 0 {
+                Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                    AnyAtomicType::Integer(total_i64 / count)
+                )]))
+            } else {
+                Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
+                    AnyAtomicType::Double(ordered_float::OrderedFloat(
+                        total_f64 / atoms.len() as f64
+                    ))
+                )]))
+            }
         }
         // https://www.w3.org/TR/xpath-functions-31/#func-max
         "max" => func_min_max(args, context, false).map(Some),
@@ -2948,9 +2962,29 @@ fn check_arity(
     }
 }
 
-/// Extract a single numeric value as a positive integer index from an argument.
+fn check_arity_range(
+    name: &str,
+    args: &[XpathItemSet],
+    min: usize,
+    max: usize,
+) -> Result<(), ExpressionApplyError> {
+    if args.len() < min || args.len() > max {
+        Err(ExpressionApplyError::new(format!(
+            "{} expects {}-{} argument(s), got {}",
+            name,
+            min,
+            max,
+            args.len()
+        )))
+    } else {
+        Ok(())
+    }
+}
+
+/// Extract a single numeric value as a non-negative integer from an argument.
 ///
-/// Validates that the value is finite, not NaN, and positive before casting.
+/// Validates that the value is finite, not NaN, non-negative, and a whole number.
+/// Callers that require 1-based indexing should check `>= 1` separately.
 fn extract_index(arg: &XpathItemSet, item_tree: &XpathItemTree, func_name: &str) -> Result<usize, ExpressionApplyError> {
     let val = extract_double(arg, item_tree)?;
     if val.is_nan() || val.is_infinite() || val < 0.0 || val != val.trunc() {
@@ -3355,9 +3389,18 @@ fn func_min_max<'tree>(
         )
     });
     let has_string = atoms.iter().any(|a| matches!(a, AnyAtomicType::String(_)));
-    if has_numeric && has_string {
+    let has_other = atoms.iter().any(|a| {
+        !matches!(
+            a,
+            AnyAtomicType::Integer(_)
+                | AnyAtomicType::Float(_)
+                | AnyAtomicType::Double(_)
+                | AnyAtomicType::String(_)
+        )
+    });
+    if has_other || (has_numeric && has_string) {
         return Err(ExpressionApplyError::new(format!(
-            "err:FORG0006 fn:{func_name}: mixed numeric and string types are not comparable"
+            "err:FORG0006 fn:{func_name}: non-comparable value types"
         )));
     }
 

@@ -137,8 +137,22 @@ impl CastExpr {
                         msg: format!("cast as integer: cannot cast string '{}'", s),
                     }
                 }),
-                AnyAtomicType::Float(f) => Ok(AnyAtomicType::Integer(f.0 as i64)),
-                AnyAtomicType::Double(d) => Ok(AnyAtomicType::Integer(d.0 as i64)),
+                AnyAtomicType::Float(f) => {
+                    if f.0.is_nan() || f.0.is_infinite() {
+                        return Err(ExpressionApplyError {
+                            msg: format!("err:FOCA0002 Cannot cast {} to xs:integer", f.0),
+                        });
+                    }
+                    Ok(AnyAtomicType::Integer(f.0 as i64))
+                }
+                AnyAtomicType::Double(d) => {
+                    if d.0.is_nan() || d.0.is_infinite() {
+                        return Err(ExpressionApplyError {
+                            msg: format!("err:FOCA0002 Cannot cast {} to xs:integer", d.0),
+                        });
+                    }
+                    Ok(AnyAtomicType::Integer(d.0 as i64))
+                }
                 AnyAtomicType::Boolean(b) => Ok(AnyAtomicType::Integer(if *b { 1 } else { 0 })),
                 AnyAtomicType::QName { .. } => Err(ExpressionApplyError {
                     msg: "err:XPTY0004 Cannot cast xs:QName to xs:integer".to_string(),

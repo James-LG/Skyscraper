@@ -257,8 +257,6 @@ pub(crate) struct XpathExpressionContext<'tree> {
     item: XpathItem<'tree>,
     position: usize,
 
-    // size is part of the XPath expression context spec, and will be used eventually
-    #[allow(unused)]
     size: usize,
 
     /// `true` if this is the initial step of a path expression evaluation;

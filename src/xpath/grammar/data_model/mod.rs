@@ -92,6 +92,25 @@ impl PartialOrd for AnyAtomicType {
             (AnyAtomicType::Float(a), AnyAtomicType::Float(b)) => a.partial_cmp(b),
             (AnyAtomicType::Double(a), AnyAtomicType::Double(b)) => a.partial_cmp(b),
             (AnyAtomicType::String(a), AnyAtomicType::String(b)) => a.partial_cmp(b),
+            // Cross-type numeric comparisons: promote to the wider type.
+            (AnyAtomicType::Integer(a), AnyAtomicType::Double(b)) => {
+                OrderedFloat(*a as f64).partial_cmp(b)
+            }
+            (AnyAtomicType::Double(a), AnyAtomicType::Integer(b)) => {
+                a.partial_cmp(&OrderedFloat(*b as f64))
+            }
+            (AnyAtomicType::Integer(a), AnyAtomicType::Float(b)) => {
+                OrderedFloat(*a as f32).partial_cmp(b)
+            }
+            (AnyAtomicType::Float(a), AnyAtomicType::Integer(b)) => {
+                a.partial_cmp(&OrderedFloat(*b as f32))
+            }
+            (AnyAtomicType::Float(a), AnyAtomicType::Double(b)) => {
+                OrderedFloat(a.0 as f64).partial_cmp(b)
+            }
+            (AnyAtomicType::Double(a), AnyAtomicType::Float(b)) => {
+                a.partial_cmp(&OrderedFloat(b.0 as f64))
+            }
             (
                 AnyAtomicType::QName {
                     namespace_uri: ns1,
@@ -423,7 +442,7 @@ impl ElementNode {
 
     /// Get the ID of the element.
     pub(crate) fn id(&self) -> NodeId {
-        self.id.unwrap()
+        self.id.expect("BUG: node ID not set -- was set_id() called?")
     }
 
     /// Get all attributes of the element.
@@ -771,7 +790,7 @@ impl AttributeNode {
 
     /// Get the ID of the attribute.
     pub(crate) fn id(&self) -> NodeId {
-        self.id.unwrap()
+        self.id.expect("BUG: node ID not set -- was set_id() called?")
     }
 
     /// Get the parent of the attribute.
@@ -855,7 +874,7 @@ impl PINode {
 
     /// Get the ID of the processing instruction node.
     pub(crate) fn id(&self) -> NodeId {
-        self.id.unwrap()
+        self.id.expect("BUG: node ID not set -- was set_id() called?")
     }
 }
 
@@ -919,7 +938,7 @@ impl CommentNode {
 
     /// Get the ID of the comment node.
     pub(crate) fn id(&self) -> NodeId {
-        self.id.unwrap()
+        self.id.expect("BUG: node ID not set -- was set_id() called?")
     }
 
     /// Get the parent of the comment.
@@ -1012,7 +1031,7 @@ impl DoctypeNode {
 
     /// Get the ID of the doctype node.
     pub(crate) fn id(&self) -> NodeId {
-        self.id.unwrap()
+        self.id.expect("BUG: node ID not set -- was set_id() called?")
     }
 }
 
@@ -1090,7 +1109,7 @@ impl TextNode {
 
     /// Get the ID of the text node.
     pub(crate) fn id(&self) -> NodeId {
-        self.id.unwrap()
+        self.id.expect("BUG: node ID not set -- was set_id() called?")
     }
 
     /// Whether the text contains only whitespace.

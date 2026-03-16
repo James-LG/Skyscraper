@@ -196,61 +196,7 @@ impl NameTest {
             return Ok(None);
         };
 
-        let is_match = match self {
-            NameTest::Name(expected_name) => {
-                // A name test is true only if the node is the principal node kind
-                // for the axis. (XPath 3.1 §2.5.4.2)
-                // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#dt-principal-node-kind
-                let is_principal_node_kind = match axis {
-                    BiDirectionalAxis::ForwardAxis(ForwardAxis::Attribute) => {
-                        matches!(node, XpathItemTreeNode::AttributeNode(_))
-                    }
-                    _ => {
-                        matches!(node, XpathItemTreeNode::ElementNode(_))
-                    }
-                };
-
-                if !is_principal_node_kind {
-                    false
-                } else {
-                // Get the name and namespace of the node, if available for the node type.
-                let (node_name, node_ns): (Option<&str>, Option<&str>) = match node {
-                    XpathItemTreeNode::ElementNode(e) => {
-                        (Some(&e.name), e.namespace.as_deref())
-                    }
-                    XpathItemTreeNode::AttributeNode(a) => (Some(&a.name), None),
-                    _ => (None, None),
-                };
-
-                match node_name {
-                    Some(node_name) => match expected_name {
-                        EQName::QName(qname) => match qname {
-                            QName::PrefixedName(p) => {
-                                // In HTML context, there are no in-scope namespace
-                                // bindings for prefixes. Match the local part only
-                                // when the prefix is a well-known namespace.
-                                // For now, treat the local part as the name to match.
-                                p.local_part == node_name
-                            }
-                            QName::UnprefixedName(unprefixed_name) => unprefixed_name == node_name,
-                        },
-                        EQName::UriQualifiedName(uqn) => {
-                            // Match both the namespace URI and the local name.
-                            uqn.name == node_name
-                                && node_ns.map_or(false, |ns| ns == uqn.uri)
-                        }
-                    },
-
-                    // Name tests need a name to match.
-                    // If the node does not have a name, it cannot match.
-                    None => false,
-                }
-                }
-            }
-            NameTest::Wildcard(wildcard) => wildcard.is_match(axis, node)?,
-        };
-
-        if is_match {
+        if self.matches_node(axis, node)? {
             Ok(Some(*node))
         } else {
             Ok(None)

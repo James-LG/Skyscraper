@@ -60,7 +60,7 @@ impl StringConcatExpr {
         // Evaluate the first expression.
         let result = self.expr.eval(context)?;
 
-        // If there's only one parameter, return it's eval.
+        // If there's only one parameter, return its eval.
         if self.items.is_empty() {
             return Ok(result);
         }

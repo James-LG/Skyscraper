@@ -100,7 +100,7 @@ impl XpathItemTreeNode {
     /// Get the parent of this node, or `None` for the document root.
     pub fn parent<'tree>(&self, tree: &'tree XpathItemTree) -> Option<&'tree XpathItemTreeNode> {
         self.node_id().and_then(|id| {
-            let parent_id = tree.arena.get(id).unwrap().parent()?;
+            let parent_id = tree.arena.get(id).expect("xpath item node missing from tree").parent()?;
             Some(tree.get(parent_id))
         })
     }

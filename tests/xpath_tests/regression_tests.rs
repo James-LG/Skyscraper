@@ -1952,3 +1952,305 @@ fn inline_function_multiple_calls() {
         XpathItem::AnyAtomicType(AnyAtomicType::Integer(14))
     );
 }
+
+// ============================================================================
+// Regression: #21 - cast NaN/Infinity to xs:integer should raise FOCA0002,
+// not silently produce a wrong integer via saturating `as i64`.
+// ============================================================================
+
+#[test]
+fn cast_nan_to_integer_should_error() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("number('not-a-number') cast as integer").unwrap();
+    let result = xpath.apply(&tree);
+    assert!(result.is_err(), "Casting NaN to integer should raise FOCA0002");
+    let msg = result.unwrap_err().to_string();
+    assert!(
+        msg.contains("FOCA0002"),
+        "Error should mention FOCA0002, got: {msg}"
+    );
+}
+
+#[test]
+fn cast_infinity_to_integer_should_error() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    // 1.0e308 * 10 overflows to Infinity.
+    let xpath = xpath::parse("(1.0e308 * 10) cast as integer").unwrap();
+    let result = xpath.apply(&tree);
+    assert!(result.is_err(), "Casting Infinity to integer should raise FOCA0002");
+    let msg = result.unwrap_err().to_string();
+    assert!(
+        msg.contains("FOCA0002"),
+        "Error should mention FOCA0002, got: {msg}"
+    );
+}
+
+#[test]
+fn cast_negative_infinity_to_integer_should_error() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("(-1.0e308 * 10) cast as integer").unwrap();
+    let result = xpath.apply(&tree);
+    assert!(result.is_err(), "Casting -Infinity to integer should raise FOCA0002");
+}
+
+#[test]
+fn cast_normal_float_to_integer_succeeds() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("3.7 cast as integer").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    assert_eq!(
+        *result[0].extract_as_any_atomic_type(),
+        AnyAtomicType::Integer(3),
+        "Truncation of 3.7 should yield 3"
+    );
+}
+
+// ============================================================================
+// Regression: #22 - fn:min/fn:max should raise FORG0006 for non-comparable
+// types (Boolean, QName) instead of silently ignoring them.
+// ============================================================================
+
+#[test]
+fn fn_min_boolean_should_error() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("min((true(), 'hello'))").unwrap();
+    let result = xpath.apply(&tree);
+    assert!(
+        result.is_err(),
+        "fn:min with Boolean and String should raise FORG0006"
+    );
+    let msg = result.unwrap_err().to_string();
+    assert!(
+        msg.contains("FORG0006"),
+        "Error should mention FORG0006, got: {msg}"
+    );
+}
+
+#[test]
+fn fn_max_boolean_should_error() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("max((true(), false()))").unwrap();
+    let result = xpath.apply(&tree);
+    assert!(
+        result.is_err(),
+        "fn:max with Boolean values should raise FORG0006"
+    );
+}
+
+#[test]
+fn fn_min_all_strings_succeeds() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("min(('banana', 'apple', 'cherry'))").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    assert_eq!(
+        *result[0].extract_as_any_atomic_type(),
+        AnyAtomicType::String("apple".to_string())
+    );
+}
+
+// ============================================================================
+// Regression: #23 - fn:root should validate its argument is a node, rejecting
+// non-node types with XPTY0004 instead of silently returning the document root.
+// ============================================================================
+
+#[test]
+fn fn_root_string_argument_should_error() {
+    let text = "<html><body><div>hello</div></body></html>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("fn:root('some string')").unwrap();
+    let result = xpath.apply(&tree);
+    assert!(
+        result.is_err(),
+        "fn:root('string') should raise XPTY0004"
+    );
+    let msg = result.unwrap_err().to_string();
+    assert!(
+        msg.contains("XPTY0004"),
+        "Error should mention XPTY0004, got: {msg}"
+    );
+}
+
+#[test]
+fn fn_root_integer_argument_should_error() {
+    let text = "<html><body><div>hello</div></body></html>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("fn:root(42)").unwrap();
+    let result = xpath.apply(&tree);
+    assert!(
+        result.is_err(),
+        "fn:root(42) should raise XPTY0004"
+    );
+}
+
+#[test]
+fn fn_root_node_argument_succeeds() {
+    let text = "<html><body><div>hello</div></body></html>";
+    let tree = html::parse(text).unwrap();
+    // fn:root with a node argument should return the document root.
+    let xpath = xpath::parse("name(fn:root(//div)/html)").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    assert_eq!(
+        *result[0].extract_as_any_atomic_type(),
+        AnyAtomicType::String("html".to_string()),
+        "fn:root(node) should return the document root"
+    );
+}
+
+#[test]
+fn fn_root_no_argument_succeeds() {
+    let text = "<html><body><div>hello</div></body></html>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("name(fn:root()/html)").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    assert_eq!(
+        *result[0].extract_as_any_atomic_type(),
+        AnyAtomicType::String("html".to_string()),
+    );
+}
+
+// ============================================================================
+// Regression: #24 - PartialOrd for AnyAtomicType should support cross-type
+// numeric comparison (Integer vs Double, etc.) to prevent fn:sort from
+// falling back to string comparison for mixed numeric sequences.
+// ============================================================================
+
+#[test]
+fn sort_mixed_integer_float_numeric_order() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    // Without cross-type comparison, string fallback would sort as "1","10","2.5".
+    let xpath = xpath::parse("sort((10, 1, 2.5))").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 3);
+    assert_eq!(
+        *result[0].extract_as_any_atomic_type(),
+        AnyAtomicType::Integer(1),
+        "First element should be 1"
+    );
+    // 2.5 literal is parsed as Float
+    match result[1].extract_as_any_atomic_type() {
+        AnyAtomicType::Float(f) => assert!(
+            (f.0 - 2.5).abs() < f32::EPSILON,
+            "Second element should be 2.5, got {}",
+            f.0
+        ),
+        other => panic!("Expected Float(2.5), got {:?}", other),
+    }
+    assert_eq!(
+        *result[2].extract_as_any_atomic_type(),
+        AnyAtomicType::Integer(10),
+        "Third element should be 10"
+    );
+}
+
+#[test]
+fn partial_ord_integer_double_comparison() {
+    // Verify the PartialOrd implementation directly.
+    let i = AnyAtomicType::Integer(5);
+    let d = AnyAtomicType::Double(ordered_float::OrderedFloat(3.0));
+    assert!(i > d, "Integer(5) should be > Double(3.0)");
+    assert!(d < i, "Double(3.0) should be < Integer(5)");
+
+    let d2 = AnyAtomicType::Double(ordered_float::OrderedFloat(5.0));
+    assert!(
+        i.partial_cmp(&d2) == Some(std::cmp::Ordering::Equal),
+        "Integer(5) should == Double(5.0)"
+    );
+}
+
+// ============================================================================
+// Regression: #25 - fn:avg should preserve integer precision when all values
+// are integers and the sum is evenly divisible by the count.
+// ============================================================================
+
+#[test]
+fn fn_avg_all_integers_returns_integer() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("avg((2, 4, 6))").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    assert_eq!(
+        *result[0].extract_as_any_atomic_type(),
+        AnyAtomicType::Integer(4),
+        "avg((2,4,6)) should return Integer(4)"
+    );
+}
+
+#[test]
+fn fn_avg_non_divisible_returns_double() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("avg((1, 2))").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    match result[0].extract_as_any_atomic_type() {
+        AnyAtomicType::Double(d) => assert!(
+            (d.0 - 1.5).abs() < f64::EPSILON,
+            "avg((1,2)) should return 1.5, got {}",
+            d.0
+        ),
+        other => panic!("Expected Double, got {:?}", other),
+    }
+}
+
+#[test]
+fn fn_avg_mixed_numeric_returns_double() {
+    let text = "<x/>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("avg((1, 2.0, 3))").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    match result[0].extract_as_any_atomic_type() {
+        AnyAtomicType::Double(d) => assert!(
+            (d.0 - 2.0).abs() < f64::EPSILON,
+            "avg((1,2.0,3)) should return 2.0, got {}",
+            d.0
+        ),
+        other => panic!("Expected Double, got {:?}", other),
+    }
+}
+
+// ============================================================================
+// Regression: #26 - NameTest::eval should delegate to matches_node to avoid
+// code duplication. Verify that name matching still works correctly after the
+// refactor.
+// ============================================================================
+
+#[test]
+fn name_test_still_matches_after_eval_refactor() {
+    let text = "<html><body><div class='a'>1</div><span>2</span><div class='b'>3</div></body></html>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("//div").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 2, "Should find 2 div elements");
+}
+
+#[test]
+fn name_test_attribute_axis_after_refactor() {
+    let text = "<html><body><div id='test' class='foo'>x</div></body></html>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("//div/@class").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1, "Should find 1 class attribute");
+}
+
+#[test]
+fn name_test_wildcard_after_refactor() {
+    let text = "<html><body><div>1</div><span>2</span></body></html>";
+    let tree = html::parse(text).unwrap();
+    let xpath = xpath::parse("//body/*").unwrap();
+    let result = xpath.apply(&tree).unwrap();
+    assert_eq!(result.len(), 2, "Wildcard should match div and span");
+}
