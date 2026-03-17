@@ -16,7 +16,6 @@ use crate::{
         xpath_item_set::XpathItemSet,
         ExpressionApplyError, XpathExpressionContext,
     },
-    xpath_item_set,
 };
 
 pub fn range_expr(input: &str) -> Res<&str, RangeExpr> {
@@ -90,9 +89,7 @@ impl RangeExpr {
 
         let mut items = XpathItemSet::new();
         for i in start..=end {
-            items.extend(xpath_item_set![XpathItem::AnyAtomicType(
-                AnyAtomicType::Integer(i)
-            )]);
+            items.insert(XpathItem::AnyAtomicType(AnyAtomicType::Integer(i)));
         }
         Ok(items)
     }

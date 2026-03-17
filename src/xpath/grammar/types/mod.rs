@@ -8,14 +8,17 @@ use nom::{
     sequence::tuple,
 };
 
-use crate::xpath::{
-    grammar::{
-        terminal_symbols::{string_literal, uri_qualified_name},
-        whitespace_recipes::ws,
-        xml_names::qname,
+use crate::{
+    html::grammar::{HTML_NAMESPACE, MATHML_NAMESPACE, SVG_NAMESPACE, XLINK_NAMESPACE, XML_NAMESPACE},
+    xpath::{
+        grammar::{
+            terminal_symbols::{string_literal, uri_qualified_name},
+            whitespace_recipes::ws,
+            xml_names::qname,
+        },
+        xpath_item_set::XpathItemSet,
+        ExpressionApplyError,
     },
-    xpath_item_set::XpathItemSet,
-    ExpressionApplyError,
 };
 
 use self::{
@@ -41,6 +44,23 @@ pub mod function_test;
 pub mod map_test;
 pub mod schema_element_test;
 pub mod sequence_type;
+
+/// Resolve a namespace prefix to a namespace URI using well-known bindings.
+///
+/// Supports `html`, `svg`, and `mathml` prefixes per WHATWG HTML spec.
+/// Returns `Err` with `XPST0081` for unrecognized prefixes per XPath 3.1 §3.1.1.
+pub(crate) fn resolve_prefix(prefix: &str) -> Result<&'static str, ExpressionApplyError> {
+    match prefix {
+        "html" => Ok(HTML_NAMESPACE),
+        "svg" => Ok(SVG_NAMESPACE),
+        "mathml" => Ok(MATHML_NAMESPACE),
+        "xml" => Ok(XML_NAMESPACE),
+        "xlink" => Ok(XLINK_NAMESPACE),
+        _ => Err(ExpressionApplyError::new(format!(
+            "err:XPST0081 Namespace prefix `{prefix}` is not bound to a namespace URI"
+        ))),
+    }
+}
 
 pub fn kind_test(input: &str) -> Res<&str, KindTest> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-KindTest
@@ -267,15 +287,13 @@ impl KindTest {
                         None => true,
                         Some(item) => {
                             match &item.element_name_or_wildcard {
-                                crate::xpath::grammar::types::element_test::ElementNameOrWildcard::Wildcard => true,
-                                crate::xpath::grammar::types::element_test::ElementNameOrWildcard::ElementName(name) => {
-                                    match &name.0 {
-                                        EQName::QName(qname) => match qname {
-                                            crate::xpath::grammar::xml_names::QName::PrefixedName(p) => p.local_part == element.name,
-                                            crate::xpath::grammar::xml_names::QName::UnprefixedName(name) => name == &element.name,
-                                        },
-                                        EQName::UriQualifiedName(uqn) => uqn.name == element.name,
-                                    }
+                                element_test::ElementNameOrWildcard::Wildcard => true,
+                                element_test::ElementNameOrWildcard::ElementName(name) => {
+                                    element_test::match_element_name(
+                                        &name.0,
+                                        &element.name,
+                                        element.namespace.as_deref(),
+                                    )?
                                 }
                             }
                         }

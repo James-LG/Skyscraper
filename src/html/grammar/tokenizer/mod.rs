@@ -61,7 +61,7 @@ impl TagTokenType {
         }
     }
 
-    pub fn attributes(&self) -> &Vec<Attribute> {
+    pub fn attributes(&self) -> &[Attribute] {
         match self {
             TagTokenType::StartTag(tag) => &tag.attributes,
             TagTokenType::EndTag(tag) => &tag.attributes,

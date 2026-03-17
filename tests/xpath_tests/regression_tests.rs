@@ -2810,3 +2810,123 @@ fn union_node_items_succeeds() {
     let result = xp.apply(&tree).unwrap();
     assert_eq!(result.len(), 2, "union of node items should succeed");
 }
+
+// ============================================================================
+// Regression: Fix 1 — fn:lang should not panic on empty second argument.
+// ============================================================================
+
+#[test]
+fn fn_lang_empty_second_arg_returns_error() {
+    let tree = html::parse(r#"<html><body><div xml:lang="en">x</div></body></html>"#).unwrap();
+    // Pass () as the second argument — an empty sequence, not a node.
+    let xp = xpath::parse(r#"lang("en", ())"#).unwrap();
+    let result = xp.apply(&tree);
+    assert!(
+        result.is_err(),
+        "fn:lang with empty second argument should return an error, not panic"
+    );
+}
+
+// ============================================================================
+// Regression: Fix 3 — element_test should respect namespace prefix.
+// ============================================================================
+
+#[test]
+fn element_test_respects_svg_namespace_prefix() {
+    // SVG elements have namespace "http://www.w3.org/2000/svg".
+    // element(svg:circle) should match only SVG circle elements.
+    let text = r#"<html><body><svg><circle r="5"/></svg></body></html>"#;
+    let tree = html::parse(text).unwrap();
+    let xp = xpath::parse("//self::element(svg:circle)").unwrap();
+    let result = xp.apply(&tree).unwrap();
+    assert_eq!(
+        result.len(),
+        1,
+        "element(svg:circle) should match the SVG circle element"
+    );
+}
+
+#[test]
+fn element_test_unprefixed_matches_any_namespace() {
+    // element(circle) with no prefix should match by local name only.
+    let text = r#"<html><body><svg><circle r="5"/></svg></body></html>"#;
+    let tree = html::parse(text).unwrap();
+    let xp = xpath::parse("//self::element(circle)").unwrap();
+    let result = xp.apply(&tree).unwrap();
+    assert_eq!(
+        result.len(),
+        1,
+        "element(circle) without prefix should match by local name"
+    );
+}
+
+// ============================================================================
+// Regression: Fix 4 — attribute_test should respect namespace prefix.
+// ============================================================================
+
+#[test]
+fn attribute_test_unprefixed_matches_by_name() {
+    // attribute(lang) should match the "lang" attribute regardless of namespace.
+    let text = r#"<html><body><div lang="en">x</div></body></html>"#;
+    let tree = html::parse(text).unwrap();
+    let xp = xpath::parse("//div/@*[self::attribute(lang)]").unwrap();
+    let result = xp.apply(&tree).unwrap();
+    assert_eq!(
+        result.len(),
+        1,
+        "attribute(lang) should match by local name"
+    );
+}
+
+// ============================================================================
+// Regression: Fix 5 — for binding parser separator after `in`.
+// ============================================================================
+
+#[test]
+fn for_expr_with_spaces() {
+    let tree = html::parse("<x/>").unwrap();
+    let xp = xpath::parse("for $x in (1, 2, 3) return $x").unwrap();
+    let result = xp.apply(&tree).unwrap();
+    assert_eq!(result.len(), 3, "for expression should return 3 items");
+}
+
+// ============================================================================
+// Regression: Fix 6 — fn:avg dead code removal (no behavioral change).
+// ============================================================================
+
+#[test]
+fn fn_avg_returns_correct_value_after_dead_code_removal() {
+    let tree = html::parse("<x/>").unwrap();
+    let xp = xpath::parse("avg((1, 2, 3))").unwrap();
+    let result = xp.apply(&tree).unwrap();
+    assert_eq!(result.len(), 1);
+    match result[0].extract_as_any_atomic_type() {
+        AnyAtomicType::Double(d) => assert!(
+            (d.0 - 2.0).abs() < f64::EPSILON,
+            "avg((1,2,3)) should return 2.0, got {}",
+            d.0
+        ),
+        other => panic!("Expected Double, got {:?}", other),
+    }
+}
+
+// ============================================================================
+// Regression: Fix 14 — RangeExpr no behavioral change after optimization.
+// ============================================================================
+
+#[test]
+fn range_expr_returns_correct_items() {
+    let tree = html::parse("<x/>").unwrap();
+    let xp = xpath::parse("1 to 5").unwrap();
+    let result = xp.apply(&tree).unwrap();
+    assert_eq!(result.len(), 5, "1 to 5 should return 5 items");
+    for (i, item) in result.iter().enumerate() {
+        assert_eq!(
+            *item.extract_as_any_atomic_type(),
+            AnyAtomicType::Integer((i + 1) as i64),
+            "Item {} should be {}",
+            i,
+            i + 1
+        );
+    }
+}

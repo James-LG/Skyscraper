@@ -14,6 +14,8 @@ use crate::xpath::{
     ExpressionApplyError,
 };
 
+use super::resolve_prefix;
+
 use super::{
     common::{type_name, AttributeName, TypeName},
     EQName,
@@ -155,10 +157,18 @@ impl AttribNameOrWildcard {
                 if let XpathItemTreeNode::AttributeNode(attr) = node {
                     let matches = match &attr_name.0 {
                         EQName::QName(qname) => match qname {
-                            QName::PrefixedName(p) => p.local_part == attr.name,
+                            QName::PrefixedName(p) => {
+                                let target_ns = resolve_prefix(&p.prefix)?;
+                                let ns_matches =
+                                    attr.namespace.as_deref().map_or(false, |ns| ns == target_ns);
+                                p.local_part == attr.name && ns_matches
+                            }
                             QName::UnprefixedName(name) => name == &attr.name,
                         },
-                        EQName::UriQualifiedName(uqn) => uqn.name == attr.name,
+                        EQName::UriQualifiedName(uqn) => {
+                            uqn.name == attr.name
+                                && attr.namespace.as_deref().map_or(false, |ns| ns == uqn.uri)
+                        }
                     };
                     Ok(matches)
                 } else {

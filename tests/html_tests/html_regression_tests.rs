@@ -1432,6 +1432,29 @@ fn comment_serialization_sanitizes_double_dash() {
 }
 
 // ============================================================================
+// Regression: Fix 10 — unescape_characters should produce U+FFFD for
+// failed numeric references, not empty string.
+// ============================================================================
+
+#[test]
+fn unescape_failed_numeric_ref_produces_replacement_char() {
+    // &#99999999999; overflows u32 — should produce U+FFFD, not "".
+    let input = "&#99999999999;";
+    let result = html::unescape_characters(input);
+    assert_eq!(
+        result, "\u{FFFD}",
+        "Failed numeric character reference should produce U+FFFD"
+    );
+}
+
+#[test]
+fn unescape_valid_numeric_ref_still_works() {
+    let input = "&#65;"; // 'A'
+    let result = html::unescape_characters(input);
+    assert_eq!(result, "A", "Valid numeric reference &#65; should produce 'A'");
+}
+
+// ============================================================================
 // S23 — Display node sorts attributes
 // ============================================================================
 

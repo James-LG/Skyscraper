@@ -152,6 +152,7 @@ fn simple_for_binding(input: &str) -> Res<&str, SimpleForBinding> {
             var_name,
             symbol_separator,
             tag("in"),
+            symbol_separator,
             expr_single,
         )),
     )(input)
@@ -160,7 +161,7 @@ fn simple_for_binding(input: &str) -> Res<&str, SimpleForBinding> {
             next_input,
             SimpleForBinding {
                 var: res.1,
-                expr: res.4,
+                expr: res.5,
             },
         )
     })

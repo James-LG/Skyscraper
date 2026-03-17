@@ -47,7 +47,7 @@
 //! # }
 //! ```
 //!
-//! # Example: get links programatically
+//! # Example: get links programmatically
 //!
 //! ```rust
 //! # use std::error::Error;
@@ -128,7 +128,7 @@
 //! # }
 //! ```
 //!
-//! # Example: get text programatically
+//! # Example: get text programmatically
 //!
 //! ```rust
 //! # use std::error::Error;

@@ -1,11 +1,11 @@
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
-pub(crate) static NAMED_CHARACTER_REFS_MAX_LENGTH: usize = 33;
+pub(crate) const NAMED_CHARACTER_REFS_MAX_LENGTH: usize = 33;
 
 pub(crate) static NAMED_CHARACTER_REFS: Lazy<HashMap<&'static str, &'static str>> =
     Lazy::new(|| {
-        let mut m = HashMap::new();
+        let mut m = HashMap::with_capacity(2231);
         m.insert("&AElig", "\u{00c6}");
         m.insert("&AElig;", "\u{00c6}");
         m.insert("&AMP", "\u{0026}");

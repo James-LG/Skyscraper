@@ -4,13 +4,16 @@ use std::fmt::Display;
 
 use indexmap::IndexSet;
 
-use crate::xpath::{
-    grammar::{
-        data_model::XpathItem, recipes::Res, types::common::element_name, whitespace_recipes::ws,
-        xml_names::QName, XpathItemTreeNode,
+use crate::{
+    html::grammar::HTML_NAMESPACE,
+    xpath::{
+        grammar::{
+            data_model::XpathItem, recipes::Res, types::common::element_name,
+            whitespace_recipes::ws, xml_names::QName, XpathItemTreeNode,
+        },
+        xpath_item_set::XpathItemSet,
+        ExpressionApplyError,
     },
-    xpath_item_set::XpathItemSet,
-    ExpressionApplyError,
 };
 
 use super::{
@@ -70,7 +73,11 @@ impl ElementTest {
                             let name_matches = match &item.element_name_or_wildcard {
                                 ElementNameOrWildcard::Wildcard => true,
                                 ElementNameOrWildcard::ElementName(name) => {
-                                    match_element_name(&name.0, &element.name)
+                                    match_element_name(
+                                        &name.0,
+                                        &element.name,
+                                        element.namespace.as_deref(),
+                                    )?
                                 }
                             };
                             // Type names are ignored in a non-schema-aware processor.
@@ -89,14 +96,24 @@ impl ElementTest {
     }
 }
 
-/// Match an element name from an EQName against a node's local name.
-fn match_element_name(expected: &EQName, node_name: &str) -> bool {
+/// Match an element name from an EQName against a node's local name and namespace.
+pub(crate) fn match_element_name(
+    expected: &EQName,
+    node_name: &str,
+    node_ns: Option<&str>,
+) -> Result<bool, ExpressionApplyError> {
     match expected {
         EQName::QName(qname) => match qname {
-            QName::PrefixedName(p) => p.local_part == node_name,
-            QName::UnprefixedName(name) => name == node_name,
+            QName::PrefixedName(p) => {
+                let target_ns = super::resolve_prefix(&p.prefix)?;
+                let effective_ns = node_ns.unwrap_or(HTML_NAMESPACE);
+                Ok(p.local_part == node_name && effective_ns == target_ns)
+            }
+            QName::UnprefixedName(name) => Ok(name == node_name),
         },
-        EQName::UriQualifiedName(uqn) => uqn.name == node_name,
+        EQName::UriQualifiedName(uqn) => {
+            Ok(uqn.name == node_name && node_ns.map_or(false, |ns| ns == uqn.uri))
+        }
     }
 }
 

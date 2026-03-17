@@ -231,7 +231,7 @@ pub fn unescape_characters(text: &str) -> String {
                     return char::from_u32(num).unwrap_or('\u{FFFD}').to_string();
                 }
             }
-            String::new()
+            "\u{FFFD}".to_string()
         })
         .into_owned();
 
@@ -442,7 +442,7 @@ fn display_node(
             }
             write!(&mut str, "<{}", tag.name)?;
             let mut sorted_attrs: Vec<_> = tag.attributes.iter().collect();
-            sorted_attrs.sort_by_key(|(k, _)| k.clone());
+            sorted_attrs.sort_by(|a, b| a.0.cmp(b.0));
             for attribute in sorted_attrs {
                 write!(&mut str, r#" {}="{}""#, attribute.0, attribute.1)?;
             }
@@ -490,7 +490,7 @@ fn display_node(
                     if !text.only_whitespace {
                         display_indent(indent, &mut str)?;
 
-                        // Trim the text incase there's leading or trailing whitespace.
+                        // Trim the text in case there's leading or trailing whitespace.
                         writeln!(&mut str, "{}", output_text.trim())?;
                     }
                 }

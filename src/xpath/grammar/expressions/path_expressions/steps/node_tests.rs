@@ -7,13 +7,13 @@ use nom::{
 };
 
 use crate::{
-    html::grammar::{HTML_NAMESPACE, MATHML_NAMESPACE, SVG_NAMESPACE},
+    html::grammar::HTML_NAMESPACE,
     xpath::{
         grammar::{
             data_model::XpathItem,
             recipes::Res,
             terminal_symbols::braced_uri_literal,
-            types::{eq_name, kind_test, EQName, KindTest},
+            types::{self, eq_name, kind_test, EQName, KindTest},
             xml_names::{nc_name, QName},
             XpathItemTree, XpathItemTreeNode,
         },
@@ -264,29 +264,9 @@ impl Display for Wildcard {
     }
 }
 
-/// Resolve a namespace prefix to its namespace URI using well-known bindings.
-///
-/// In an HTML-only processor there are no in-scope namespace bindings from an
-/// XML context, so we use the three namespaces defined by the WHATWG HTML spec:
-/// - `html`   → `http://www.w3.org/1999/xhtml`
-/// - `svg`    → `http://www.w3.org/2000/svg`
-/// - `mathml` → `http://www.w3.org/1998/Math/MathML`
-///
-/// Note: `math` is deliberately *not* bound here because the XPath 3.1 spec
-/// reserves it for the XPath math functions namespace
-/// (`http://www.w3.org/2005/xpath-functions/math`), which is already used by
-/// function dispatch (e.g. `math:pi()`). Use `mathml` for MathML elements.
-///
-/// Returns `Err` with `XPST0081` for unrecognized prefixes per XPath 3.1 §3.1.1.
+/// Delegates to the shared `types::resolve_prefix` function.
 fn resolve_prefix(prefix: &str) -> Result<&'static str, ExpressionApplyError> {
-    match prefix {
-        "html" => Ok(HTML_NAMESPACE),
-        "svg" => Ok(SVG_NAMESPACE),
-        "mathml" => Ok(MATHML_NAMESPACE),
-        _ => Err(ExpressionApplyError::new(format!(
-            "err:XPST0081 Namespace prefix `{prefix}` is not bound to a namespace URI"
-        ))),
-    }
+    types::resolve_prefix(prefix)
 }
 
 impl Wildcard {

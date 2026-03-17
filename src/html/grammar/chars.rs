@@ -7,3 +7,4 @@ pub const SPACE: char = '\u{0020}';
 pub const REPLACEMENT_CHARACTER: char = '\u{FFFD}';
 pub const LATIN_SMALL_LETTER_X: char = '\u{0078}';
 pub const LATIN_CAPITAL_LETTER_X: char = '\u{0058}';
+pub const WHITESPACE_CHARS: [char; 5] = [CHARACTER_TABULATION, LINE_FEED, FORM_FEED, CARRIAGE_RETURN, SPACE];

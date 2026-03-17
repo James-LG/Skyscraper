@@ -414,10 +414,10 @@ fn svg_attribute_name(lowered: &str) -> Option<&'static str> {
 }
 
 /// The XLink namespace URI.
-const XLINK_NAMESPACE: &str = "http://www.w3.org/1999/xlink";
+pub(crate) const XLINK_NAMESPACE: &str = "http://www.w3.org/1999/xlink";
 
 /// The XML namespace URI.
-const XML_NAMESPACE: &str = "http://www.w3.org/XML/1998/namespace";
+pub(crate) const XML_NAMESPACE: &str = "http://www.w3.org/XML/1998/namespace";
 
 /// The XMLNS namespace URI.
 const XMLNS_NAMESPACE: &str = "http://www.w3.org/2000/xmlns/";
@@ -510,8 +510,8 @@ pub(crate) struct NodeEntry {
 /// A stateful HTML parser implementing the WHATWG parsing algorithm.
 ///
 /// For most use cases, prefer the [`parse`] free function which creates a parser
-/// internally. Use `HtmlParser` directly only if you need to configure the
-/// error handler or reuse the parser across multiple inputs.
+/// internally. Use `HtmlParser` directly only if you need to reuse the parser
+/// across multiple inputs.
 pub struct HtmlParser {
     error_handler: Box<dyn ParseErrorHandler>,
     insertion_mode: InsertionMode,

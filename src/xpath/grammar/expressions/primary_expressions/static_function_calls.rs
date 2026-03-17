@@ -961,29 +961,18 @@ fn dispatch_by_local_name<'tree>(
             }
             let atoms = func_data(&args[0], context.item_tree)?;
             let mut total_f64: f64 = 0.0;
-            let mut total_i64: i64 = 0;
-            let mut all_integers = true;
             for atom in &atoms {
                 match atom {
                     AnyAtomicType::Integer(n) => {
-                        if all_integers {
-                            match total_i64.checked_add(*n) {
-                                Some(v) => total_i64 = v,
-                                None => all_integers = false,
-                            }
-                        }
                         total_f64 += *n as f64;
                     }
                     AnyAtomicType::Float(f) => {
-                        all_integers = false;
                         total_f64 += f.0 as f64;
                     }
                     AnyAtomicType::Double(d) => {
-                        all_integers = false;
                         total_f64 += d.0;
                     }
                     AnyAtomicType::String(s) => {
-                        all_integers = false;
                         // xs:untypedAtomic -> cast to xs:double per XPath 3.1 F&O 15.4.5
                         let d: f64 = s.trim().parse().map_err(|_| {
                             ExpressionApplyError::new(format!(
@@ -1330,6 +1319,12 @@ fn dispatch_by_local_name<'tree>(
             let test_lang_lower = test_lang.to_lowercase();
             // Determine the starting node: use second argument if provided, else context item.
             let start_node = if args.len() == 2 {
+                if args[1].is_empty() {
+                    return Err(ExpressionApplyError::new(
+                        "fn:lang: second argument must be a node, got empty sequence"
+                            .to_string(),
+                    ));
+                }
                 match &args[1][0] {
                     XpathItem::Node(n) => Some(*n),
                     _ => {

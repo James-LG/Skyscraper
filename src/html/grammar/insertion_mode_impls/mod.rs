@@ -385,14 +385,7 @@ impl HtmlParser {
         }
         match token {
             HtmlToken::Character(c)
-                if [
-                    chars::CHARACTER_TABULATION,
-                    chars::LINE_FEED,
-                    chars::FORM_FEED,
-                    chars::CARRIAGE_RETURN,
-                    chars::SPACE,
-                ]
-                .contains(&c) =>
+                if chars::WHITESPACE_CHARS.contains(&c) =>
             {
                 self.insert_character(c)?;
             }
@@ -559,14 +552,7 @@ impl HtmlParser {
             // A character token that is one of U+0009, U+000A, U+000C, U+000D, or U+0020:
             // Process the token using the rules for the "in head" insertion mode.
             HtmlToken::Character(c)
-                if [
-                    chars::CHARACTER_TABULATION,
-                    chars::LINE_FEED,
-                    chars::FORM_FEED,
-                    chars::CARRIAGE_RETURN,
-                    chars::SPACE,
-                ]
-                .contains(&c) =>
+                if chars::WHITESPACE_CHARS.contains(&c) =>
             {
                 return self.in_head_insertion_mode(HtmlToken::Character(c));
             }
@@ -643,14 +629,7 @@ impl HtmlParser {
         }
         match token {
             HtmlToken::Character(c)
-                if [
-                    chars::CHARACTER_TABULATION,
-                    chars::LINE_FEED,
-                    chars::FORM_FEED,
-                    chars::CARRIAGE_RETURN,
-                    chars::SPACE,
-                ]
-                .contains(&c) =>
+                if chars::WHITESPACE_CHARS.contains(&c) =>
             {
                 self.insert_character(c)?;
             }
@@ -898,14 +877,7 @@ impl HtmlParser {
     ) -> Result<Acknowledgement, HtmlParseError> {
         match token {
             HtmlToken::Character(c)
-                if [
-                    chars::CHARACTER_TABULATION,
-                    chars::LINE_FEED,
-                    chars::FORM_FEED,
-                    chars::CARRIAGE_RETURN,
-                    chars::SPACE,
-                ]
-                .contains(&c) =>
+                if chars::WHITESPACE_CHARS.contains(&c) =>
             {
                 // WHATWG says use InBody rules, but we insert as a child of
                 // the html element (after body) for round-trip fidelity.
@@ -982,14 +954,7 @@ impl HtmlParser {
                 self.using_the_rules_for(token, InsertionMode::InBody)?;
             }
             HtmlToken::Character(c)
-                if [
-                    chars::CHARACTER_TABULATION,
-                    chars::LINE_FEED,
-                    chars::FORM_FEED,
-                    chars::CARRIAGE_RETURN,
-                    chars::SPACE,
-                ]
-                .contains(&c) =>
+                if chars::WHITESPACE_CHARS.contains(&c) =>
             {
                 // WHATWG says use InBody rules, but we preserve at document
                 // level for round-trip fidelity (whitespace after </html>).
@@ -1030,14 +995,7 @@ impl HtmlParser {
         match token {
             // A character token that is one of U+0009, U+000A, U+000C, U+000D, or U+0020
             HtmlToken::Character(c)
-                if [
-                    chars::CHARACTER_TABULATION,
-                    chars::LINE_FEED,
-                    chars::FORM_FEED,
-                    chars::CARRIAGE_RETURN,
-                    chars::SPACE,
-                ]
-                .contains(&c) =>
+                if chars::WHITESPACE_CHARS.contains(&c) =>
             {
                 self.insert_character(c)?;
             }
@@ -1139,14 +1097,7 @@ impl HtmlParser {
         match token {
             // A character token that is one of U+0009, U+000A, U+000C, U+000D, or U+0020
             HtmlToken::Character(c)
-                if [
-                    chars::CHARACTER_TABULATION,
-                    chars::LINE_FEED,
-                    chars::FORM_FEED,
-                    chars::CARRIAGE_RETURN,
-                    chars::SPACE,
-                ]
-                .contains(&c) =>
+                if chars::WHITESPACE_CHARS.contains(&c) =>
             {
                 self.insert_character(c)?;
             }
@@ -1217,14 +1168,7 @@ impl HtmlParser {
             // A character token that is one of U+0009, U+000A, U+000C, U+000D, or U+0020:
             // process using the rules for the "in body" insertion mode.
             HtmlToken::Character(c)
-                if [
-                    chars::CHARACTER_TABULATION,
-                    chars::LINE_FEED,
-                    chars::FORM_FEED,
-                    chars::CARRIAGE_RETURN,
-                    chars::SPACE,
-                ]
-                .contains(&c) =>
+                if chars::WHITESPACE_CHARS.contains(&c) =>
             {
                 self.using_the_rules_for(HtmlToken::Character(c), InsertionMode::InBody)?;
             }
@@ -1643,14 +1587,7 @@ impl HtmlParser {
         match token {
             // A character token that is whitespace
             HtmlToken::Character(c)
-                if [
-                    chars::CHARACTER_TABULATION,
-                    chars::LINE_FEED,
-                    chars::FORM_FEED,
-                    chars::CARRIAGE_RETURN,
-                    chars::SPACE,
-                ]
-                .contains(&c) =>
+                if chars::WHITESPACE_CHARS.contains(&c) =>
             {
                 self.insert_character(c)?;
             }

@@ -54,14 +54,7 @@ impl HtmlParser {
                 )))?;
             }
             HtmlToken::Character(c)
-                if [
-                    chars::CHARACTER_TABULATION,
-                    chars::LINE_FEED,
-                    chars::FORM_FEED,
-                    chars::CARRIAGE_RETURN,
-                    chars::SPACE,
-                ]
-                .contains(&c) =>
+                if chars::WHITESPACE_CHARS.contains(&c) =>
             {
                 self.reconstruct_the_active_formatting_elements()?;
 
