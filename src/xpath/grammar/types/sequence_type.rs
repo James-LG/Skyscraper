@@ -260,6 +260,10 @@ fn atomic_matches_type_name(
         // xs:QName — matches QName atomic values.
         Some("QName") => Ok(matches!(atomic, AnyAtomicType::QName { .. })),
 
+        // xs:untypedAtomic — in this implementation, all string values from
+        // HTML parsing are treated as untypedAtomic per XDM §6.7.1.
+        Some("untypedAtomic") => Ok(matches!(atomic, AnyAtomicType::String(_))),
+
         // Recognized but unimplemented types — no values of these types exist
         // in this implementation, so no atomic value can match them.
         Some(name) if is_recognized_xsd_atomic_type(name) => Ok(false),

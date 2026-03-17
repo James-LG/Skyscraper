@@ -1324,13 +1324,9 @@ impl<'a> Tokenizer<'a> {
     /// <https://html.spec.whatwg.org/multipage/parsing.html#markup-declaration-open-state>
     pub(super) fn markup_declaration_open_state(&mut self) -> Result<(), HtmlParseError> {
         // if the next two characters are hyphens
-        let next_two_chars = self
-            .input_stream
-            .peek_current_and_multiple(2)
-            .into_iter()
-            .collect::<String>();
-
-        if next_two_chars == "--" {
+        if self.input_stream.peek_add(0) == Some(&'-')
+            && self.input_stream.peek_add(1) == Some(&'-')
+        {
             self.input_stream.next_add(2);
             self.comment_token = Some(CommentToken::new(String::new()));
             self.state = TokenizerState::CommentStart;
@@ -1338,20 +1334,22 @@ impl<'a> Tokenizer<'a> {
         }
 
         // if the next seven characters are case-insensitive "DOCTYPE"
-        let next_seven_chars = self
-            .input_stream
-            .peek_current_and_multiple(7)
-            .into_iter()
-            .collect::<String>();
-
-        if next_seven_chars.eq_ignore_ascii_case("DOCTYPE") {
+        let doctype_target = ['D', 'O', 'C', 'T', 'Y', 'P', 'E'];
+        if doctype_target.iter().enumerate().all(|(i, target)| {
+            self.input_stream
+                .peek_add(i)
+                .map_or(false, |c| c.eq_ignore_ascii_case(target))
+        }) {
             self.input_stream.next_add(7);
             self.state = TokenizerState::DOCTYPE;
             return Ok(());
         }
 
         // if the next seven characters are case-sensitive "[CDATA["
-        if next_seven_chars == "[CDATA[" {
+        let cdata_target = ['[', 'C', 'D', 'A', 'T', 'A', '['];
+        if cdata_target.iter().enumerate().all(|(i, target)| {
+            self.input_stream.peek_add(i) == Some(target)
+        }) {
             self.input_stream.next_add(7);
 
             // if there is an adjusted current node and it is not in the HTML namespace,
@@ -1757,19 +1755,24 @@ impl<'a> Tokenizer<'a> {
             }
             Some(_) => {
                 self.input_stream.prev(); // rewind to the last character
-                let next_six_chars = self
-                    .input_stream
-                    .peek_current_and_multiple(6)
-                    .into_iter()
-                    .collect::<String>();
 
-                if next_six_chars.eq_ignore_ascii_case("PUBLIC") {
+                let public_target = ['P', 'U', 'B', 'L', 'I', 'C'];
+                if public_target.iter().enumerate().all(|(i, target)| {
+                    self.input_stream
+                        .peek_add(i)
+                        .map_or(false, |c| c.eq_ignore_ascii_case(target))
+                }) {
                     self.input_stream.next_add(6);
                     self.state = TokenizerState::AfterDOCTYPEPublicKeyword;
                     return Ok(());
                 }
 
-                if next_six_chars.eq_ignore_ascii_case("SYSTEM") {
+                let system_target = ['S', 'Y', 'S', 'T', 'E', 'M'];
+                if system_target.iter().enumerate().all(|(i, target)| {
+                    self.input_stream
+                        .peek_add(i)
+                        .map_or(false, |c| c.eq_ignore_ascii_case(target))
+                }) {
                     self.input_stream.next_add(6);
                     self.state = TokenizerState::AfterDOCTYPESystemKeyword;
                     return Ok(());
@@ -1886,8 +1889,7 @@ impl<'a> Tokenizer<'a> {
 
                 self.current_doctype_token_mut()?
                     .public_identifier
-                    .as_mut()
-                    .unwrap()
+                    .get_or_insert_with(String::new)
                     .push(chars::REPLACEMENT_CHARACTER);
             }
             Some('>') => {
@@ -1907,8 +1909,7 @@ impl<'a> Tokenizer<'a> {
                 let c = *c;
                 self.current_doctype_token_mut()?
                     .public_identifier
-                    .as_mut()
-                    .unwrap()
+                    .get_or_insert_with(String::new)
                     .push(c);
             }
         }
@@ -1929,8 +1930,7 @@ impl<'a> Tokenizer<'a> {
 
                 self.current_doctype_token_mut()?
                     .public_identifier
-                    .as_mut()
-                    .unwrap()
+                    .get_or_insert_with(String::new)
                     .push(chars::REPLACEMENT_CHARACTER);
             }
             Some('>') => {
@@ -1950,8 +1950,7 @@ impl<'a> Tokenizer<'a> {
                 let c = *c;
                 self.current_doctype_token_mut()?
                     .public_identifier
-                    .as_mut()
-                    .unwrap()
+                    .get_or_insert_with(String::new)
                     .push(c);
             }
         }
@@ -2148,8 +2147,7 @@ impl<'a> Tokenizer<'a> {
 
                 self.current_doctype_token_mut()?
                     .system_identifier
-                    .as_mut()
-                    .unwrap()
+                    .get_or_insert_with(String::new)
                     .push(chars::REPLACEMENT_CHARACTER);
             }
             Some('>') => {
@@ -2169,8 +2167,7 @@ impl<'a> Tokenizer<'a> {
                 let c = *c;
                 self.current_doctype_token_mut()?
                     .system_identifier
-                    .as_mut()
-                    .unwrap()
+                    .get_or_insert_with(String::new)
                     .push(c);
             }
         }
@@ -2191,8 +2188,7 @@ impl<'a> Tokenizer<'a> {
 
                 self.current_doctype_token_mut()?
                     .system_identifier
-                    .as_mut()
-                    .unwrap()
+                    .get_or_insert_with(String::new)
                     .push(chars::REPLACEMENT_CHARACTER);
             }
             Some('>') => {
@@ -2212,8 +2208,7 @@ impl<'a> Tokenizer<'a> {
                 let c = *c;
                 self.current_doctype_token_mut()?
                     .system_identifier
-                    .as_mut()
-                    .unwrap()
+                    .get_or_insert_with(String::new)
                     .push(c);
             }
         }

@@ -2342,12 +2342,12 @@ fn dispatch_map_function<'tree>(
                 }
             };
             let new_val: Vec<OwnedXpathValue> = args[2].iter().map(|item| OwnedXpathValue::from_xpath_item(item, context.item_tree)).collect();
-            let mut new_entries: Vec<(AnyAtomicType, Vec<OwnedXpathValue>)> = map
+            let mut new_entries: indexmap::IndexMap<AnyAtomicType, Vec<OwnedXpathValue>> = map
                 .iter()
-                .filter(|(k, _)| *k != new_key)
-                .cloned()
+                .filter(|(k, _)| *k != &new_key)
+                .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
-            new_entries.push((new_key, new_val));
+            new_entries.insert(new_key, new_val);
             Ok(Some(xpath_item_set![XpathItem::Function(Function::Map {
                 entries: new_entries
             })]))
@@ -2369,8 +2369,10 @@ fn dispatch_map_function<'tree>(
                 }
             };
             let val: Vec<OwnedXpathValue> = args[1].iter().map(|item| OwnedXpathValue::from_xpath_item(item, context.item_tree)).collect();
+            let mut entries = indexmap::IndexMap::new();
+            entries.insert(key, val);
             Ok(Some(xpath_item_set![XpathItem::Function(Function::Map {
-                entries: vec![(key, val)]
+                entries
             })]))
         }
         // https://www.w3.org/TR/xpath-functions-31/#func-map-remove
@@ -2384,10 +2386,10 @@ fn dispatch_map_function<'tree>(
                     _ => None,
                 })
                 .collect();
-            let new_entries: Vec<(AnyAtomicType, Vec<OwnedXpathValue>)> = map
+            let new_entries: indexmap::IndexMap<AnyAtomicType, Vec<OwnedXpathValue>> = map
                 .iter()
-                .filter(|(k, _)| !keys_to_remove.contains(&k))
-                .cloned()
+                .filter(|(k, _)| !keys_to_remove.contains(k))
+                .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
             Ok(Some(xpath_item_set![XpathItem::Function(Function::Map {
                 entries: new_entries
@@ -2402,14 +2404,12 @@ fn dispatch_map_function<'tree>(
                 )));
             }
             // Arg 2 is an options map (ignored); default duplicates policy is "use-first".
-            let mut merged: Vec<(AnyAtomicType, Vec<OwnedXpathValue>)> = Vec::new();
+            let mut merged: indexmap::IndexMap<AnyAtomicType, Vec<OwnedXpathValue>> = indexmap::IndexMap::new();
             for item in args[0].iter() {
                 if let XpathItem::Function(Function::Map { entries }) = item {
                     for (k, v) in entries {
                         // First-wins: only insert if key not already present.
-                        if !merged.iter().any(|(mk, _)| mk == k) {
-                            merged.push((k.clone(), v.clone()));
-                        }
+                        merged.entry(k.clone()).or_insert_with(|| v.clone());
                     }
                 }
             }
@@ -3729,7 +3729,7 @@ fn extract_function_item<'a, 'tree>(
 fn extract_map<'a>(
     items: &'a XpathItemSet,
     fn_name: &str,
-) -> Result<&'a Vec<(AnyAtomicType, Vec<OwnedXpathValue>)>, ExpressionApplyError> {
+) -> Result<&'a indexmap::IndexMap<AnyAtomicType, Vec<OwnedXpathValue>>, ExpressionApplyError> {
     if items.is_empty() {
         return Err(ExpressionApplyError::new(format!(
             "{}: argument is empty",

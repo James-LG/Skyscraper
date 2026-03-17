@@ -143,12 +143,24 @@ impl CastExpr {
                             msg: format!("err:FOCA0002 Cannot cast {} to xs:integer", f.0),
                         });
                     }
+                    let truncated = f.0.trunc() as f64;
+                    if truncated > i64::MAX as f64 || truncated < i64::MIN as f64 {
+                        return Err(ExpressionApplyError {
+                            msg: format!("err:FOAR0002 Value {} out of range for xs:integer", f.0),
+                        });
+                    }
                     Ok(AnyAtomicType::Integer(f.0 as i64))
                 }
                 AnyAtomicType::Double(d) => {
                     if d.0.is_nan() || d.0.is_infinite() {
                         return Err(ExpressionApplyError {
                             msg: format!("err:FOCA0002 Cannot cast {} to xs:integer", d.0),
+                        });
+                    }
+                    let truncated = d.0.trunc();
+                    if truncated > i64::MAX as f64 || truncated < i64::MIN as f64 {
+                        return Err(ExpressionApplyError {
+                            msg: format!("err:FOAR0002 Value {} out of range for xs:integer", d.0),
                         });
                     }
                     Ok(AnyAtomicType::Integer(d.0 as i64))
@@ -162,11 +174,20 @@ impl CastExpr {
                 AnyAtomicType::Double(_) => Ok(source.clone()),
                 AnyAtomicType::Integer(n) => Ok(AnyAtomicType::Double(OrderedFloat(*n as f64))),
                 AnyAtomicType::Float(f) => Ok(AnyAtomicType::Double(OrderedFloat(f.0 as f64))),
-                AnyAtomicType::String(s) => s.trim().parse::<f64>().map(|v| AnyAtomicType::Double(OrderedFloat(v))).map_err(|_| {
-                    ExpressionApplyError {
-                        msg: format!("cast as double: cannot cast string '{}'", s),
-                    }
-                }),
+                AnyAtomicType::String(s) => {
+                    let trimmed = s.trim();
+                    let v = match trimmed {
+                        "INF" => f64::INFINITY,
+                        "-INF" => f64::NEG_INFINITY,
+                        "NaN" => f64::NAN,
+                        _ => trimmed.parse::<f64>().map_err(|_| {
+                            ExpressionApplyError {
+                                msg: format!("cast as double: cannot cast string '{}'", s),
+                            }
+                        })?,
+                    };
+                    Ok(AnyAtomicType::Double(OrderedFloat(v)))
+                }
                 AnyAtomicType::Boolean(b) => Ok(AnyAtomicType::Double(OrderedFloat(if *b { 1.0 } else { 0.0 }))),
                 AnyAtomicType::QName { .. } => Err(ExpressionApplyError {
                     msg: "err:XPTY0004 Cannot cast xs:QName to xs:double".to_string(),
@@ -176,11 +197,20 @@ impl CastExpr {
                 AnyAtomicType::Float(_) => Ok(source.clone()),
                 AnyAtomicType::Integer(n) => Ok(AnyAtomicType::Float(OrderedFloat(*n as f32))),
                 AnyAtomicType::Double(d) => Ok(AnyAtomicType::Float(OrderedFloat(d.0 as f32))),
-                AnyAtomicType::String(s) => s.trim().parse::<f32>().map(|v| AnyAtomicType::Float(OrderedFloat(v))).map_err(|_| {
-                    ExpressionApplyError {
-                        msg: format!("cast as float: cannot cast string '{}'", s),
-                    }
-                }),
+                AnyAtomicType::String(s) => {
+                    let trimmed = s.trim();
+                    let v = match trimmed {
+                        "INF" => f32::INFINITY,
+                        "-INF" => f32::NEG_INFINITY,
+                        "NaN" => f32::NAN,
+                        _ => trimmed.parse::<f32>().map_err(|_| {
+                            ExpressionApplyError {
+                                msg: format!("cast as float: cannot cast string '{}'", s),
+                            }
+                        })?,
+                    };
+                    Ok(AnyAtomicType::Float(OrderedFloat(v)))
+                }
                 AnyAtomicType::Boolean(b) => Ok(AnyAtomicType::Float(OrderedFloat(if *b { 1.0 } else { 0.0 }))),
                 AnyAtomicType::QName { .. } => Err(ExpressionApplyError {
                     msg: "err:XPTY0004 Cannot cast xs:QName to xs:float".to_string(),

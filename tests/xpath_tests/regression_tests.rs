@@ -2930,3 +2930,250 @@ fn range_expr_returns_correct_items() {
         );
     }
 }
+
+// ============================================================================
+// Regression: Finding 1 - find_elements/find_attributes filter instead of error
+// ============================================================================
+
+#[test]
+fn find_elements_filters_non_element_results() {
+    let text = r#"<html><body><div>text</div></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    // "//div/text()" returns text nodes, but find_elements should filter them out
+    let xp = xpath::parse("//div/text()").unwrap();
+    let elements = xp.find_elements(&doc).unwrap();
+    assert!(
+        elements.is_empty(),
+        "find_elements should filter out non-element nodes"
+    );
+}
+
+#[test]
+fn find_elements_returns_elements() {
+    let text = r#"<html><body><div>text</div><span>more</span></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse("//div | //span").unwrap();
+    let elements = xp.find_elements(&doc).unwrap();
+    assert_eq!(elements.len(), 2, "should find both div and span");
+}
+
+// ============================================================================
+// Regression: Finding 2A - Float/double-to-integer overflow
+// ============================================================================
+
+#[test]
+fn cast_large_double_to_integer_errors() {
+    let text = r#"<html><body></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse("1e300 cast as xs:integer").unwrap();
+    let result = xp.apply(&doc);
+    assert!(result.is_err(), "1e300 cast to integer should error (overflow)");
+}
+
+#[test]
+fn cast_normal_double_to_integer_works() {
+    let text = r#"<html><body></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse("42.7 cast as xs:integer").unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert_eq!(
+        *result[0].extract_as_any_atomic_type(),
+        AnyAtomicType::Integer(42)
+    );
+}
+
+// ============================================================================
+// Regression: Finding 2B - String "INF"/"-INF"/"NaN" cast to double/float
+// ============================================================================
+
+#[test]
+fn cast_string_inf_to_double() {
+    let text = r#"<html><body></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse(r#""INF" cast as xs:double"#).unwrap();
+    let result = xp.apply(&doc).unwrap();
+    match result[0].extract_as_any_atomic_type() {
+        AnyAtomicType::Double(d) => assert!(d.is_infinite() && d.is_sign_positive()),
+        other => panic!("expected Double(INF), got {:?}", other),
+    }
+}
+
+#[test]
+fn cast_string_neg_inf_to_double() {
+    let text = r#"<html><body></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse(r#""-INF" cast as xs:double"#).unwrap();
+    let result = xp.apply(&doc).unwrap();
+    match result[0].extract_as_any_atomic_type() {
+        AnyAtomicType::Double(d) => assert!(d.is_infinite() && d.is_sign_negative()),
+        other => panic!("expected Double(-INF), got {:?}", other),
+    }
+}
+
+#[test]
+fn cast_string_nan_to_double() {
+    let text = r#"<html><body></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse(r#""NaN" cast as xs:double"#).unwrap();
+    let result = xp.apply(&doc).unwrap();
+    match result[0].extract_as_any_atomic_type() {
+        AnyAtomicType::Double(d) => assert!(d.is_nan()),
+        other => panic!("expected Double(NaN), got {:?}", other),
+    }
+}
+
+// ============================================================================
+// Regression: Finding 3 - idiv with infinite divisor
+// ============================================================================
+
+#[test]
+fn idiv_finite_by_infinity_returns_zero() {
+    let text = r#"<html><body></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    // 2.0 idiv (1.0 div 0.0) — floating-point division by zero produces INF
+    let xp = xpath::parse("2.0 idiv (1.0 div 0.0)").unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert_eq!(
+        *result[0].extract_as_any_atomic_type(),
+        AnyAtomicType::Integer(0),
+        "finite idiv INF should return 0"
+    );
+}
+
+#[test]
+fn idiv_infinity_by_finite_errors() {
+    let text = r#"<html><body></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse("(1.0 div 0.0) idiv 2.0").unwrap();
+    let result = xp.apply(&doc);
+    assert!(
+        result.is_err(),
+        "INF idiv finite should error"
+    );
+}
+
+// ============================================================================
+// Regression: Finding 4 - Boolean coercion in comparison
+// ============================================================================
+
+#[test]
+fn comparison_one_equals_true() {
+    let text = r#"<html><body></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse("1 = true()").unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert_eq!(
+        *result[0].extract_as_any_atomic_type(),
+        AnyAtomicType::Boolean(true),
+        "1 = true() should be true (boolean coercion)"
+    );
+}
+
+#[test]
+fn comparison_zero_equals_false() {
+    let text = r#"<html><body></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse("0 = false()").unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert_eq!(
+        *result[0].extract_as_any_atomic_type(),
+        AnyAtomicType::Boolean(true),
+        "0 = false() should be true (boolean coercion)"
+    );
+}
+
+// ============================================================================
+// Regression: Finding 5 - xs:untypedAtomic type matching
+// ============================================================================
+
+#[test]
+fn instance_of_untyped_atomic_string() {
+    let text = r#"<html><body></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse(r#""hello" instance of xs:untypedAtomic"#).unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert_eq!(
+        *result[0].extract_as_any_atomic_type(),
+        AnyAtomicType::Boolean(true),
+        "strings should match xs:untypedAtomic"
+    );
+}
+
+// ============================================================================
+// Regression: Finding 6 - Axis ordering (following/preceding)
+// ============================================================================
+
+#[test]
+fn following_axis_document_order() {
+    let text = r#"<html><body><div id="a"><span id="b">B</span></div><div id="c">C</div><div id="d">D</div></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    // following::div from the first div
+    let xp = xpath::parse("//div[@id='a']/following::div").unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert!(result.len() >= 2, "should find following divs");
+    // Verify document order: c before d
+    let names: Vec<_> = result
+        .iter()
+        .filter_map(|item| {
+            if let XpathItem::Node(XpathItemTreeNode::ElementNode(e)) = item {
+                e.get_attribute(&doc, "id").map(|s| s.to_string())
+            } else {
+                None
+            }
+        })
+        .collect();
+    assert_eq!(names, vec!["c", "d"], "following axis should be in document order");
+}
+
+// ============================================================================
+// Regression: Finding 7 - try_constant_position validation
+// ============================================================================
+
+#[test]
+fn predicate_numeric_position_works() {
+    let text = r#"<html><body><div>A</div><div>B</div></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse("//div[2]").unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert_eq!(result.len(), 1, "//div[2] should return one element");
+}
+
+// ============================================================================
+// Regression: Finding 8 - Map uses IndexMap
+// ============================================================================
+
+#[test]
+fn map_creation_and_lookup() {
+    let text = r#"<html><body></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse(r#"map {"a": 1, "b": 2}?a"#).unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert_eq!(
+        *result[0].extract_as_any_atomic_type(),
+        AnyAtomicType::Integer(1),
+        "map lookup should return correct value"
+    );
+}
+
+// ============================================================================
+// Regression: Finding 16 - Node id() returns Result
+// ============================================================================
+
+#[test]
+fn xpath_operations_work_with_result_id() {
+    let text = r#"<html><body><div>text</div></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse("//div").unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert_eq!(result.len(), 1, "normal XPath should work with Result-based id()");
+    if let XpathItem::Node(XpathItemTreeNode::ElementNode(e)) = &result[0] {
+        // children() should work
+        let children: Vec<_> = e.children(&doc).collect();
+        assert!(!children.is_empty(), "children() should work with Result id()");
+        // parent() should work
+        let parent = e.parent(&doc);
+        assert!(parent.is_some(), "parent() should work with Result id()");
+    } else {
+        panic!("expected element node");
+    }
+}

@@ -191,7 +191,7 @@ impl PrimaryExpr {
                 }
             },
             PrimaryExpr::MapConstructor(mc) => {
-                let mut entries = Vec::new();
+                let mut entries = indexmap::IndexMap::new();
                 for entry in &mc.entries {
                     // Evaluate the key — must produce a single atomic value.
                     let key_set = entry.key.eval(context)?;
@@ -204,7 +204,7 @@ impl PrimaryExpr {
                     }
                     let key = key_atoms.into_iter().next().unwrap();
                     // XPath 3.1 requires err:XQDY0137 for duplicate keys.
-                    if entries.iter().any(|(k, _)| k == &key) {
+                    if entries.contains_key(&key) {
                         return Err(ExpressionApplyError::new(format!(
                             "Duplicate key in map constructor: {}",
                             key
@@ -216,7 +216,7 @@ impl PrimaryExpr {
                         .iter()
                         .map(|item| OwnedXpathValue::from_xpath_item(item, context.item_tree))
                         .collect();
-                    entries.push((key, value_items));
+                    entries.insert(key, value_items);
                 }
                 Ok(xpath_item_set![XpathItem::Function(Function::Map {
                     entries

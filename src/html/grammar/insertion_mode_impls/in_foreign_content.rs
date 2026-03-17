@@ -261,6 +261,9 @@ impl HtmlParser {
         token: HtmlToken,
     ) -> Result<Acknowledgement, HtmlParseError> {
         // 1. Initialize node to be the current node (the bottommost node of the stack).
+        if self.open_elements.is_empty() {
+            return Ok(Acknowledgement::no());
+        }
         let mut node_index = self.open_elements.len() - 1;
 
         // 2. If node's tag name, converted to ASCII lowercase, is not the same

@@ -20,6 +20,7 @@ pub use expressions::Xpath;
 
 use indextree::{Arena, NodeId};
 
+#[allow(deprecated)]
 use crate::{
     html::{DocumentNode, HtmlDocument, HtmlNode},
     xpath::grammar::data_model::{
@@ -87,12 +88,12 @@ impl XpathItemTreeNode {
     /// Document nodes do not have a `NodeId` and return `None`.
     pub(crate) fn node_id(&self) -> Option<NodeId> {
         match self {
-            XpathItemTreeNode::ElementNode(e) => Some(e.id()),
-            XpathItemTreeNode::TextNode(t) => Some(t.id()),
-            XpathItemTreeNode::AttributeNode(a) => Some(a.id()),
-            XpathItemTreeNode::CommentNode(c) => Some(c.id()),
-            XpathItemTreeNode::PINode(p) => Some(p.id()),
-            XpathItemTreeNode::DoctypeNode(d) => Some(d.id()),
+            XpathItemTreeNode::ElementNode(e) => e.id().ok(),
+            XpathItemTreeNode::TextNode(t) => t.id().ok(),
+            XpathItemTreeNode::AttributeNode(a) => a.id().ok(),
+            XpathItemTreeNode::CommentNode(c) => c.id().ok(),
+            XpathItemTreeNode::PINode(p) => p.id().ok(),
+            XpathItemTreeNode::DoctypeNode(d) => d.id().ok(),
             XpathItemTreeNode::DocumentNode(_) => None,
         }
     }
@@ -312,6 +313,7 @@ impl Display for XpathItemTree {
     }
 }
 
+#[allow(deprecated)]
 impl From<&HtmlDocument> for XpathItemTree {
     fn from(html_document: &HtmlDocument) -> Self {
         fn internal_from(

@@ -1488,3 +1488,137 @@ fn display_node_sorts_attributes() {
         );
     }
 }
+
+// ============================================================================
+// Regression: Finding 9 - Markup declaration allocations
+// Verify that comments, DOCTYPE, and CDATA parse correctly after replacing
+// peek_current_and_multiple with direct peek_add comparisons.
+// ============================================================================
+
+#[test]
+fn markup_declaration_comments_parse_correctly() {
+    let text = r#"<html><body><!-- comment 1 --><!-- comment 2 --><div>text</div><!-- comment 3 --></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse("//div").unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert_eq!(result.len(), 1, "comments should not affect div parsing");
+}
+
+#[test]
+fn markup_declaration_doctype_parses_correctly() {
+    let text = r#"<!DOCTYPE html><html><body><div>text</div></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse("//div").unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert_eq!(result.len(), 1, "DOCTYPE should parse correctly");
+}
+
+#[test]
+fn markup_declaration_doctype_public_system() {
+    let text = r#"<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html><body><div>ok</div></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse("//div").unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert_eq!(result.len(), 1, "DOCTYPE with PUBLIC/SYSTEM should parse");
+}
+
+// ============================================================================
+// Regression: Finding 10 - pop_until_tag_name_one_of stack guard
+// ============================================================================
+
+#[test]
+fn end_tag_for_missing_element_does_not_panic() {
+    // An end tag for an element that was never opened should not panic.
+    let text = r#"<html><body></nonexistent><div>ok</div></body></html>"#;
+    let result = html::parse(text);
+    assert!(result.is_ok(), "end tag for missing element should not panic");
+}
+
+// ============================================================================
+// Regression: Finding 11 - Remove unwrap() on user-input paths
+// ============================================================================
+
+#[test]
+fn extremely_malformed_html_does_not_panic() {
+    let text = r#"<html><body><li><dd><dt><li></p></div></span></body></html>"#;
+    let result = html::parse(text);
+    assert!(result.is_ok(), "malformed HTML should not panic");
+}
+
+#[test]
+fn empty_document_does_not_panic() {
+    let text = "";
+    let result = html::parse(text);
+    assert!(result.is_ok(), "empty document should not panic");
+}
+
+// ============================================================================
+// Regression: Finding 12 - using_the_rules_for returns Acknowledgement
+// ============================================================================
+
+#[test]
+fn script_tag_content_not_parsed_as_html() {
+    let text = r#"<html><body><script>var x = "<div>not a real div</div>";</script><div>real</div></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse("//div").unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert_eq!(
+        result.len(),
+        1,
+        "script content should not be parsed as HTML elements"
+    );
+}
+
+// ============================================================================
+// Regression: Finding 13 - Iterative traversal
+// ============================================================================
+
+#[test]
+fn deeply_nested_divs_do_not_stack_overflow() {
+    // Build a 1000-deep nested div structure.
+    let mut text = String::new();
+    text.push_str("<html><body>");
+    for _ in 0..1000 {
+        text.push_str("<div>");
+    }
+    text.push_str("deep text");
+    for _ in 0..1000 {
+        text.push_str("</div>");
+    }
+    text.push_str("</body></html>");
+
+    let doc = html::parse(&text).unwrap();
+    // Verify parsing works and the deeply nested text is accessible via XPath
+    let xp = xpath::parse("//text()").unwrap();
+    let result = xp.apply(&doc).unwrap();
+    let texts: Vec<String> = result
+        .iter()
+        .filter_map(|item| {
+            if let skyscraper::xpath::grammar::XpathItemTreeNode::TextNode(t) = item.extract_as_node() {
+                Some(t.content.clone())
+            } else {
+                None
+            }
+        })
+        .collect();
+    assert!(
+        texts.iter().any(|t| t.contains("deep text")),
+        "deeply nested content should be accessible"
+    );
+}
+
+// ============================================================================
+// Regression: Finding 14 - SPECIAL_ELEMENTS namespace check
+// ============================================================================
+
+#[test]
+fn svg_title_parses_correctly_in_svg_context() {
+    let text = r#"<html><body><svg><title>SVG Title</title><rect/></svg><title>HTML Title</title></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse("//title").unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert!(
+        !result.is_empty(),
+        "title elements should be found in both HTML and SVG contexts"
+    );
+}

@@ -682,9 +682,9 @@ fn instance_of_unimplemented_type_returns_false() {
     );
 }
 
-/// A string is not an instance of xs:untypedAtomic (recognized but unimplemented).
+/// A string IS an instance of xs:untypedAtomic (strings are treated as untypedAtomic).
 #[test]
-fn instance_of_untyped_atomic_returns_false() {
+fn instance_of_untyped_atomic_returns_true() {
     let text = r#"<html><body></body></html>"#;
 
     let document = html::parse(text).unwrap();
@@ -694,6 +694,6 @@ fn instance_of_untyped_atomic_returns_false() {
     assert_eq!(items.len(), 1);
     assert_eq!(
         items[0],
-        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(false))
+        XpathItem::AnyAtomicType(AnyAtomicType::Boolean(true))
     );
 }

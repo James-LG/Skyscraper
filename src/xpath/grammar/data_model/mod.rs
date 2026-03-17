@@ -3,8 +3,11 @@
 use std::fmt::{Debug, Display};
 
 use enum_extract_macro::EnumExtract;
+use indexmap::IndexMap;
 use indextree::{Arena, NodeId};
 use ordered_float::OrderedFloat;
+
+use crate::xpath::ExpressionApplyError;
 
 use super::{
     expressions::Expr, DisplayFormatting, TextIter, XpathItemTree, XpathItemTreeNode,
@@ -270,9 +273,10 @@ pub enum Function {
     /// An XPath 3.1 map, e.g. `map { "x": 1, "y": 2 }`.
     ///
     /// Values preserve their item types (atomic, function, etc.) without atomization.
+    /// Uses `IndexMap` for O(1) key lookup while preserving insertion order.
     Map {
-        /// The map entries as (key, value-sequence) pairs.
-        entries: Vec<(AnyAtomicType, Vec<OwnedXpathValue>)>,
+        /// The map entries as key→value-sequence pairs (insertion-ordered).
+        entries: IndexMap<AnyAtomicType, Vec<OwnedXpathValue>>,
     },
     /// An XPath 3.1 array, e.g. `[1, 2, 3]` or `array { 1, 2, 3 }`.
     ///
@@ -316,7 +320,11 @@ impl std::hash::Hash for Function {
                 body_source.hash(state);
             }
             Function::Map { entries } => {
-                entries.hash(state);
+                entries.len().hash(state);
+                for (k, v) in entries {
+                    k.hash(state);
+                    v.hash(state);
+                }
             }
             Function::Array { members } => {
                 members.hash(state);
@@ -533,8 +541,8 @@ impl ElementNode {
     }
 
     /// Get the ID of the element.
-    pub(crate) fn id(&self) -> NodeId {
-        self.id.expect("BUG: node ID not set -- was set_id() called?")
+    pub(crate) fn id(&self) -> Result<NodeId, ExpressionApplyError> {
+        self.id.ok_or_else(|| ExpressionApplyError::new("BUG: node ID not set -- was set_id() called?".to_string()))
     }
 
     /// Get all attributes of the element.
@@ -592,11 +600,11 @@ impl ElementNode {
         arena: &mut Arena<XpathItemTreeNode>,
         name: String,
         value: String,
-    ) -> NodeId {
+    ) -> Result<NodeId, ExpressionApplyError> {
         let attr = arena.new_node(XpathItemTreeNode::AttributeNode(AttributeNode::new(
             name, value,
         )));
-        self.id().append(attr, arena);
+        self.id()?.append(attr, arena);
 
         arena
             .get_mut(attr)
@@ -606,7 +614,7 @@ impl ElementNode {
             .unwrap()
             .set_id(attr);
 
-        attr
+        Ok(attr)
     }
 
     /// Get all direct child nodes of the given element.
@@ -623,14 +631,14 @@ impl ElementNode {
         &self,
         tree: &'tree XpathItemTree,
     ) -> impl Iterator<Item = &'tree XpathItemTreeNode> {
-        self.id().children(&tree.arena).map(|x| tree.get(x))
+        self.id().expect("node ID not set").children(&tree.arena).map(|x| tree.get(x))
     }
 
     pub(crate) fn children_arena<'arena>(
         &self,
         arena: &'arena Arena<XpathItemTreeNode>,
     ) -> impl Iterator<Item = &'arena XpathItemTreeNode> {
-        self.id()
+        self.id().expect("node ID not set")
             .children(arena)
             .map(|x| arena.get(x).expect("node missing from arena").get())
     }
@@ -645,7 +653,7 @@ impl ElementNode {
     ///
     /// The parent of the element if it exists, or `None` if it does not.
     pub fn parent<'tree>(&self, tree: &'tree XpathItemTree) -> Option<&'tree XpathItemTreeNode> {
-        tree.get(self.id()).parent(tree)
+        tree.get(self.id().ok()?).parent(tree)
     }
 
     /// Get an iterator over all text contained in this element and its descendants.
@@ -653,7 +661,7 @@ impl ElementNode {
     /// Includes whitespace text nodes.
     /// Text nodes are split by opening and closing tags contained in the current element.
     pub fn itertext(&self, tree: &XpathItemTree) -> TextIter {
-        TextIter::new(tree, tree.get(self.id()))
+        TextIter::new(tree, tree.get(self.id().expect("node ID not set")))
     }
 
     /// Get all text contained in this element and its descendants.
@@ -706,7 +714,7 @@ impl ElementNode {
 
     /// Get the [XpathItem] representation of the element.
     pub fn to_item<'tree>(&self, tree: &'tree XpathItemTree) -> XpathItem<'tree> {
-        XpathItem::Node(tree.get(self.id()))
+        XpathItem::Node(tree.get(self.id().expect("node ID not set")))
     }
 
     /// Render this element as an HTML string with the given formatting and indentation level.
@@ -893,8 +901,8 @@ impl AttributeNode {
     }
 
     /// Get the ID of the attribute.
-    pub(crate) fn id(&self) -> NodeId {
-        self.id.expect("BUG: node ID not set -- was set_id() called?")
+    pub(crate) fn id(&self) -> Result<NodeId, ExpressionApplyError> {
+        self.id.ok_or_else(|| ExpressionApplyError::new("BUG: node ID not set -- was set_id() called?".to_string()))
     }
 
     /// Get the parent of the attribute.
@@ -907,7 +915,7 @@ impl AttributeNode {
     ///
     /// The parent of the attribute if it exists, or `None` if it does not.
     pub fn parent<'tree>(&self, tree: &'tree XpathItemTree) -> Option<&'tree XpathItemTreeNode> {
-        tree.get(self.id()).parent(tree)
+        tree.get(self.id().ok()?).parent(tree)
     }
 }
 
@@ -977,8 +985,8 @@ impl PINode {
     }
 
     /// Get the ID of the processing instruction node.
-    pub(crate) fn id(&self) -> NodeId {
-        self.id.expect("BUG: node ID not set -- was set_id() called?")
+    pub(crate) fn id(&self) -> Result<NodeId, ExpressionApplyError> {
+        self.id.ok_or_else(|| ExpressionApplyError::new("BUG: node ID not set -- was set_id() called?".to_string()))
     }
 }
 
@@ -1053,8 +1061,8 @@ impl CommentNode {
     }
 
     /// Get the ID of the comment node.
-    pub(crate) fn id(&self) -> NodeId {
-        self.id.expect("BUG: node ID not set -- was set_id() called?")
+    pub(crate) fn id(&self) -> Result<NodeId, ExpressionApplyError> {
+        self.id.ok_or_else(|| ExpressionApplyError::new("BUG: node ID not set -- was set_id() called?".to_string()))
     }
 
     /// Get the parent of the comment.
@@ -1067,7 +1075,7 @@ impl CommentNode {
     ///
     /// The parent of the comment if it exists, or `None` if it does not.
     pub fn parent<'tree>(&self, tree: &'tree XpathItemTree) -> Option<&'tree XpathItemTreeNode> {
-        tree.get(self.id()).parent(tree)
+        tree.get(self.id().ok()?).parent(tree)
     }
 }
 
@@ -1158,8 +1166,8 @@ impl DoctypeNode {
     }
 
     /// Get the ID of the doctype node.
-    pub(crate) fn id(&self) -> NodeId {
-        self.id.expect("BUG: node ID not set -- was set_id() called?")
+    pub(crate) fn id(&self) -> Result<NodeId, ExpressionApplyError> {
+        self.id.ok_or_else(|| ExpressionApplyError::new("BUG: node ID not set -- was set_id() called?".to_string()))
     }
 }
 
@@ -1252,8 +1260,8 @@ impl TextNode {
     }
 
     /// Get the ID of the text node.
-    pub(crate) fn id(&self) -> NodeId {
-        self.id.expect("BUG: node ID not set -- was set_id() called?")
+    pub(crate) fn id(&self) -> Result<NodeId, ExpressionApplyError> {
+        self.id.ok_or_else(|| ExpressionApplyError::new("BUG: node ID not set -- was set_id() called?".to_string()))
     }
 
     /// Whether the text contains only whitespace.
@@ -1271,7 +1279,7 @@ impl TextNode {
     ///
     /// The parent of the text if it exists, or `None` if it does not.
     pub fn parent<'tree>(&self, tree: &'tree XpathItemTree) -> Option<&'tree XpathItemTreeNode> {
-        tree.get(self.id()).parent(tree)
+        tree.get(self.id().ok()?).parent(tree)
     }
 
     /// Render this text node as a string with the given formatting and indentation level.

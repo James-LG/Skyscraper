@@ -196,104 +196,50 @@ pub(crate) static GENERATE_IMPLIED_END_TAG_TYPES: [&str; 10] = [
     "dd", "dt", "li", "optgroup", "option", "p", "rb", "rp", "rt", "rtc",
 ];
 
-/// <https://html.spec.whatwg.org/multipage/parsing.html#special>
+/// HTML namespace special elements.
+///
 /// <https://html.spec.whatwg.org/multipage/parsing.html#special>
 ///
 /// IMPORTANT: This array is used with `binary_search` — entries MUST be sorted
 /// alphabetically (case-sensitive, uppercase before lowercase in ASCII).
-pub(crate) static SPECIAL_ELEMENTS: [&str; 91] = [
-    "address",
-    "annotation-xml", // MathML
-    "applet",
-    "area",
-    "article",
-    "aside",
-    "base",
-    "basefont",
-    "bgsound",
-    "blockquote",
-    "body",
-    "br",
-    "button",
-    "caption",
-    "center",
-    "col",
-    "colgroup",
-    "dd",
-    "desc",           // SVG
-    "details",
-    "dir",
-    "div",
-    "dl",
-    "dt",
-    "embed",
-    "fieldset",
-    "figcaption",
-    "figure",
-    "footer",
-    "foreignObject",  // SVG
-    "form",
-    "frame",
-    "frameset",
-    "h1",
-    "h2",
-    "h3",
-    "h4",
-    "h5",
-    "h6",
-    "head",
-    "header",
-    "hgroup",
-    "hr",
-    "html",
-    "iframe",
-    "img",
-    "input",
-    "keygen",
-    "li",
-    "link",
-    "listing",
-    "main",
-    "marquee",
-    "menu",
-    "meta",
-    "mi",             // MathML
-    "mn",             // MathML
-    "mo",             // MathML
-    "ms",             // MathML
-    "mtext",          // MathML
-    "nav",
-    "noembed",
-    "noframes",
-    "noscript",
-    "object",
-    "ol",
-    "p",
-    "param",
-    "plaintext",
-    "pre",
-    "script",
-    "search",
-    "section",
-    "select",
-    "source",
-    "style",
-    "summary",
-    "table",
-    "tbody",
-    "td",
-    "template",
-    "textarea",
-    "tfoot",
-    "th",
-    "thead",
-    "title",
-    "tr",
-    "track",
-    "ul",
-    "wbr",
-    "xmp",
+static SPECIAL_ELEMENTS_HTML: [&str; 83] = [
+    "address", "applet", "area", "article", "aside", "base", "basefont", "bgsound",
+    "blockquote", "body", "br", "button", "caption", "center", "col", "colgroup",
+    "dd", "details", "dir", "div", "dl", "dt", "embed", "fieldset", "figcaption",
+    "figure", "footer", "form", "frame", "frameset", "h1", "h2", "h3", "h4", "h5",
+    "h6", "head", "header", "hgroup", "hr", "html", "iframe", "img", "input",
+    "keygen", "li", "link", "listing", "main", "marquee", "menu", "meta", "nav",
+    "noembed", "noframes", "noscript", "object", "ol", "p", "param", "plaintext",
+    "pre", "script", "search", "section", "select", "source", "style", "summary",
+    "table", "tbody", "td", "template", "textarea", "tfoot", "th", "thead", "title",
+    "tr", "track", "ul", "wbr", "xmp",
 ];
+
+/// MathML namespace special elements.
+///
+/// <https://html.spec.whatwg.org/multipage/parsing.html#special>
+static SPECIAL_ELEMENTS_MATHML: [&str; 6] = [
+    "annotation-xml", "mi", "mn", "mo", "ms", "mtext",
+];
+
+/// SVG namespace special elements.
+///
+/// <https://html.spec.whatwg.org/multipage/parsing.html#special>
+static SPECIAL_ELEMENTS_SVG: [&str; 3] = [
+    "desc", "foreignObject", "title",
+];
+
+/// Check if an element is in the "special" category, considering its namespace.
+///
+/// <https://html.spec.whatwg.org/multipage/parsing.html#special>
+pub(crate) fn is_special_element(name: &str, namespace: Option<&str>) -> bool {
+    match namespace.unwrap_or(HTML_NAMESPACE) {
+        ns if ns == HTML_NAMESPACE => SPECIAL_ELEMENTS_HTML.binary_search(&name).is_ok(),
+        ns if ns == MATHML_NAMESPACE => SPECIAL_ELEMENTS_MATHML.binary_search(&name).is_ok(),
+        ns if ns == SVG_NAMESPACE => SPECIAL_ELEMENTS_SVG.binary_search(&name).is_ok(),
+        _ => false,
+    }
+}
 
 /// Returns the correctly-cased SVG element name for a lowercased tag name,
 /// or `None` if the element name does not need adjustment.
@@ -1731,12 +1677,25 @@ impl HtmlParser {
         &mut self,
         tag_names: &[&str],
     ) -> Result<(), HtmlParseError> {
-        while let Some(node_id) = self.open_elements.pop() {
+        loop {
+            let node_id = match self.open_elements.last().copied() {
+                Some(id) => id,
+                None => break, // stack is empty
+            };
+
             let node = self.arena.get(node_id).unwrap().get();
             if let XpathItemTreeNode::ElementNode(element) = node {
-                if tag_names.contains(&element.name.as_str()) {
+                // Never pop below the root html element.
+                if element.name == "html" && !tag_names.contains(&"html") {
                     break;
                 }
+                let found = tag_names.contains(&element.name.as_str());
+                self.open_elements.pop();
+                if found {
+                    break;
+                }
+            } else {
+                self.open_elements.pop();
             }
         }
 
@@ -1775,10 +1734,8 @@ impl HtmlParser {
         &mut self,
         token: HtmlToken,
         insertion_mode: InsertionMode,
-    ) -> Result<(), HtmlParseError> {
-        self.handle_token(token, insertion_mode)?;
-
-        Ok(())
+    ) -> Result<Acknowledgement, HtmlParseError> {
+        self.handle_token(token, insertion_mode)
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#generic-rcdata-element-parsing-algorithm>
@@ -1853,7 +1810,7 @@ impl HtmlParser {
             // remove the earliest matching element from the list
             // matching_elements were collected from a .rev() iterator, so the last entry is the earliest
             let earliest_element = matching_elements.last().unwrap();
-            let earliest_element_id = earliest_element.id();
+            let earliest_element_id = earliest_element.id().map_err(|e| HtmlParseError::new(&e.to_string()))?;
             self.active_formatting_elements.retain(|node_or_marker| {
                 if let NodeOrMarker::Node(entry) = node_or_marker {
                     return entry.node_id != earliest_element_id;

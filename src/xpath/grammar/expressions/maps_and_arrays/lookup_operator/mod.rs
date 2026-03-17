@@ -40,7 +40,7 @@ pub(crate) fn apply_key_specifier<'tree>(
 }
 
 fn apply_key_to_map<'tree>(
-    entries: &[(AnyAtomicType, Vec<OwnedXpathValue>)],
+    entries: &indexmap::IndexMap<AnyAtomicType, Vec<OwnedXpathValue>>,
     key_spec: &KeySpecifier,
     context: &XpathExpressionContext<'tree>,
 ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
@@ -86,18 +86,14 @@ fn apply_key_to_map<'tree>(
 }
 
 fn lookup_map_key<'tree>(
-    entries: &[(AnyAtomicType, Vec<OwnedXpathValue>)],
+    entries: &indexmap::IndexMap<AnyAtomicType, Vec<OwnedXpathValue>>,
     key: &AnyAtomicType,
 ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
-    for (k, v) in entries {
-        if k == key {
-            return Ok(v
-                .iter()
-                .map(|a| a.to_xpath_item())
-                .collect());
-        }
+    if let Some(v) = entries.get(key) {
+        Ok(v.iter().map(|a| a.to_xpath_item()).collect())
+    } else {
+        Ok(XpathItemSet::new())
     }
-    Ok(XpathItemSet::new())
 }
 
 fn apply_key_to_array<'tree>(

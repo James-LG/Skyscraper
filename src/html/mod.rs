@@ -16,6 +16,9 @@
 //! # }
 //! ```
 
+// HtmlDocument and DocumentNode are deprecated but still used internally.
+#![allow(deprecated)]
+
 pub mod grammar;
 
 use std::{
@@ -79,28 +82,25 @@ impl HtmlTag {
         recurse: bool,
     ) -> Option<String> {
         let mut o_text: Option<String> = None;
-        let children = doc_node.children(document);
+        let mut stack: Vec<DocumentNode> = doc_node.children(document).collect();
+        stack.reverse(); // process in order by popping from end
 
-        // Iterate through this tag's children
-        for child in children {
+        while let Some(child) = stack.pop() {
             let child_node = document.get_html_node(&child);
             if let Some(child_node) = child_node {
                 match child_node {
                     HtmlNode::Text(text) => {
-                        // If the child is a text, simply append its text.
                         o_text = Some(HtmlTag::append_text(o_text, text.value.to_string()));
                     }
                     HtmlNode::Tag(_) => {
-                        // If the child is a tag, only append its text if recurse=true was passed,
-                        // otherwise skip this node.
                         if recurse {
-                            let o_child_text = child_node.internal_get_text(&child, document, true);
-                            if let Some(child_text) = o_child_text {
-                                o_text = Some(HtmlTag::append_text(o_text, child_text));
+                            // Push children onto the stack in reverse order
+                            let grandchildren: Vec<DocumentNode> = child.children(document).collect();
+                            for gc in grandchildren.into_iter().rev() {
+                                stack.push(gc);
                             }
                         }
                     }
-                    // Comments, PIs, and doctypes do not contribute visible text.
                     HtmlNode::Comment(_)
                     | HtmlNode::ProcessingInstruction(_)
                     | HtmlNode::Doctype(_) => {}
@@ -363,6 +363,10 @@ impl HtmlNode {
 /// HTML document tree represented by an indextree arena and a root node.
 ///
 /// Documents must have a single root node to be valid.
+#[deprecated(
+    since = "0.8.0",
+    note = "Use `XpathItemTree` directly via `html::parse()` and `XpathItemTree::from(&doc)` instead"
+)]
 #[derive(Clone)]
 pub struct HtmlDocument {
     pub(crate) arena: Arena<HtmlNode>,
@@ -417,9 +421,9 @@ pub enum DocumentFormatType {
 }
 
 fn display_node(
-    indent: usize,
+    start_indent: usize,
     doc: &HtmlDocument,
-    doc_node: &DocumentNode,
+    start_node: &DocumentNode,
     format_type: DocumentFormatType,
 ) -> Result<String, fmt::Error> {
     fn display_indent(indent: usize, str: &mut String) -> fmt::Result {
@@ -429,117 +433,121 @@ fn display_node(
         Ok(())
     }
 
-    let mut str = String::new();
+    enum Phase {
+        Enter(DocumentNode, usize),
+        Exit(String, usize), // tag_name, indent
+    }
 
-    let html_node = doc.get_html_node(doc_node).ok_or(fmt::Error)?;
+    let mut result = String::new();
+    let mut stack: Vec<Phase> = vec![Phase::Enter(*start_node, start_indent)];
 
-    match html_node {
-        HtmlNode::Tag(tag) => {
-            // display begin tag
+    while let Some(phase) = stack.pop() {
+        match phase {
+            Phase::Enter(doc_node, indent) => {
+                let html_node = doc.get_html_node(&doc_node).ok_or(fmt::Error)?;
 
-            if matches!(format_type, DocumentFormatType::Indented) {
-                display_indent(indent, &mut str)?;
-            }
-            write!(&mut str, "<{}", tag.name)?;
-            let mut sorted_attrs: Vec<_> = tag.attributes.iter().collect();
-            sorted_attrs.sort_by(|a, b| a.0.cmp(b.0));
-            for attribute in sorted_attrs {
-                write!(&mut str, r#" {}="{}""#, attribute.0, attribute.1)?;
-            }
-            write!(&mut str, ">")?;
-            if matches!(format_type, DocumentFormatType::Indented) {
-                write!(&mut str, "\n")?;
-            }
+                match html_node {
+                    HtmlNode::Tag(tag) => {
+                        if matches!(format_type, DocumentFormatType::Indented) {
+                            display_indent(indent, &mut result)?;
+                        }
+                        write!(&mut result, "<{}", tag.name)?;
+                        let mut sorted_attrs: Vec<_> = tag.attributes.iter().collect();
+                        sorted_attrs.sort_by(|a, b| a.0.cmp(b.0));
+                        for attribute in sorted_attrs {
+                            write!(&mut result, r#" {}="{}""#, attribute.0, attribute.1)?;
+                        }
+                        write!(&mut result, ">")?;
+                        if matches!(format_type, DocumentFormatType::Indented) {
+                            write!(&mut result, "\n")?;
+                        }
 
-            // self-closing tags cannot have content or an end tag
-            if !VOID_TAGS.contains(&tag.name.as_str()) {
-                // recursively display all children
-                let children = doc_node.children(doc);
-                for child in children {
-                    write!(
-                        &mut str,
-                        "{}",
-                        display_node(indent + 1, doc, &child, format_type)?
-                    )?;
-                }
+                        if !VOID_TAGS.contains(&tag.name.as_str()) {
+                            // Push the exit phase first (will be processed after children).
+                            stack.push(Phase::Exit(tag.name.clone(), indent));
 
-                // display end tag
-                if matches!(format_type, DocumentFormatType::Indented) {
-                    display_indent(indent, &mut str)?;
-                }
-                write!(&mut str, "</{}>", tag.name)?;
-                if matches!(format_type, DocumentFormatType::Indented) {
-                    write!(&mut str, "\n")?;
-                }
-            }
-        }
-        HtmlNode::Text(text) => {
-            let output_text = escape_characters(text.value.as_str());
-            match format_type {
-                DocumentFormatType::Standard => {
-                    write!(&mut str, "{}", output_text)?;
-                }
-                DocumentFormatType::IgnoreWhitespace => {
-                    // If ignoring whitespace texts, only display if this text is not solely whitespace.
-                    if !text.only_whitespace {
-                        write!(&mut str, "{}", output_text)?;
+                            // Push children in reverse order so they are processed in order.
+                            let children: Vec<DocumentNode> = doc_node.children(doc).collect();
+                            for child in children.into_iter().rev() {
+                                stack.push(Phase::Enter(child, indent + 1));
+                            }
+                        }
+                    }
+                    HtmlNode::Text(text) => {
+                        let output_text = escape_characters(text.value.as_str());
+                        match format_type {
+                            DocumentFormatType::Standard => {
+                                write!(&mut result, "{}", output_text)?;
+                            }
+                            DocumentFormatType::IgnoreWhitespace => {
+                                if !text.only_whitespace {
+                                    write!(&mut result, "{}", output_text)?;
+                                }
+                            }
+                            DocumentFormatType::Indented => {
+                                if !text.only_whitespace {
+                                    display_indent(indent, &mut result)?;
+                                    writeln!(&mut result, "{}", output_text.trim())?;
+                                }
+                            }
+                        }
+                    }
+                    HtmlNode::Comment(comment) => {
+                        if matches!(format_type, DocumentFormatType::Indented) {
+                            display_indent(indent, &mut result)?;
+                        }
+                        let sanitized = comment.value.replace("--", "- -");
+                        write!(&mut result, "<!--{}-->", sanitized)?;
+                        if matches!(format_type, DocumentFormatType::Indented) {
+                            writeln!(&mut result)?;
+                        }
+                    }
+                    HtmlNode::ProcessingInstruction(pi) => {
+                        if matches!(format_type, DocumentFormatType::Indented) {
+                            display_indent(indent, &mut result)?;
+                        }
+                        if pi.data.is_empty() {
+                            write!(&mut result, "<?{}?>", pi.target)?;
+                        } else {
+                            write!(&mut result, "<?{} {}?>", pi.target, pi.data)?;
+                        }
+                        if matches!(format_type, DocumentFormatType::Indented) {
+                            writeln!(&mut result)?;
+                        }
+                    }
+                    HtmlNode::Doctype(doctype) => {
+                        if matches!(format_type, DocumentFormatType::Indented) {
+                            display_indent(indent, &mut result)?;
+                        }
+                        write!(&mut result, "<!DOCTYPE {}", doctype.name)?;
+                        if let Some(ref public_id) = doctype.public_id {
+                            write!(&mut result, r#" PUBLIC "{}""#, public_id)?;
+                            if let Some(ref system_id) = doctype.system_id {
+                                write!(&mut result, r#" "{}""#, system_id)?;
+                            }
+                        } else if let Some(ref system_id) = doctype.system_id {
+                            write!(&mut result, r#" SYSTEM "{}""#, system_id)?;
+                        }
+                        write!(&mut result, ">")?;
+                        if matches!(format_type, DocumentFormatType::Indented) {
+                            writeln!(&mut result)?;
+                        }
                     }
                 }
-                DocumentFormatType::Indented => {
-                    // If indenting, only display if this text is not solely whitespace.
-                    if !text.only_whitespace {
-                        display_indent(indent, &mut str)?;
-
-                        // Trim the text in case there's leading or trailing whitespace.
-                        writeln!(&mut str, "{}", output_text.trim())?;
-                    }
+            }
+            Phase::Exit(tag_name, indent) => {
+                if matches!(format_type, DocumentFormatType::Indented) {
+                    display_indent(indent, &mut result)?;
                 }
-            }
-        }
-        HtmlNode::Comment(comment) => {
-            if matches!(format_type, DocumentFormatType::Indented) {
-                display_indent(indent, &mut str)?;
-            }
-            let sanitized = comment.value.replace("--", "- -");
-            write!(&mut str, "<!--{}-->", sanitized)?;
-            if matches!(format_type, DocumentFormatType::Indented) {
-                writeln!(&mut str)?;
-            }
-        }
-        HtmlNode::ProcessingInstruction(pi) => {
-            if matches!(format_type, DocumentFormatType::Indented) {
-                display_indent(indent, &mut str)?;
-            }
-            if pi.data.is_empty() {
-                write!(&mut str, "<?{}?>", pi.target)?;
-            } else {
-                write!(&mut str, "<?{} {}?>", pi.target, pi.data)?;
-            }
-            if matches!(format_type, DocumentFormatType::Indented) {
-                writeln!(&mut str)?;
-            }
-        }
-        HtmlNode::Doctype(doctype) => {
-            if matches!(format_type, DocumentFormatType::Indented) {
-                display_indent(indent, &mut str)?;
-            }
-            write!(&mut str, "<!DOCTYPE {}", doctype.name)?;
-            if let Some(ref public_id) = doctype.public_id {
-                write!(&mut str, r#" PUBLIC "{}""#, public_id)?;
-                if let Some(ref system_id) = doctype.system_id {
-                    write!(&mut str, r#" "{}""#, system_id)?;
+                write!(&mut result, "</{}>", tag_name)?;
+                if matches!(format_type, DocumentFormatType::Indented) {
+                    write!(&mut result, "\n")?;
                 }
-            } else if let Some(ref system_id) = doctype.system_id {
-                write!(&mut str, r#" SYSTEM "{}""#, system_id)?;
-            }
-            write!(&mut str, ">")?;
-            if matches!(format_type, DocumentFormatType::Indented) {
-                writeln!(&mut str)?;
             }
         }
     }
 
-    Ok(str)
+    Ok(result)
 }
 
 /// A key representing a single [HtmlNode] contained in a [HtmlDocument].
@@ -597,6 +605,10 @@ fn display_node(
 /// # Ok(())
 /// # }
 /// ```
+#[deprecated(
+    since = "0.8.0",
+    note = "Use `XpathItemTree` directly via `html::parse()` and `XpathItemTree::from(&doc)` instead"
+)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug, Hash)]
 pub struct DocumentNode {
     id: NodeId,

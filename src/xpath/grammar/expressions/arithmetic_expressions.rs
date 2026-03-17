@@ -323,7 +323,7 @@ impl MultiplicativeExpr {
                         _ => {
                             let a = to_f64(&left)?;
                             let b = to_f64(&right)?;
-                            if b == 0.0 || a.is_nan() || b.is_nan() || a.is_infinite() || b.is_infinite() {
+                            if b == 0.0 || a.is_nan() || b.is_nan() || a.is_infinite() {
                                 return Err(ExpressionApplyError {
                                     msg: String::from("err:FOAR0002 Division by zero or overflow in integer division"),
                                 });

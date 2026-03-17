@@ -235,6 +235,8 @@ fn eval_forward_axis<'tree>(
                             context.item_tree.arena.get(cur_id).and_then(|n| n.parent());
                     }
                 }
+                // Sort in document order (ascending by node_id).
+                nodes.sort_by_key(|n| n.node_id());
             } else {
                 return Err(ExpressionApplyError {
                     msg: String::from(

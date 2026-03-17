@@ -485,7 +485,26 @@ fn coerce_for_comparison(
         AnyAtomicType::Double(OrderedFloat(d))
     }
 
+    fn to_boolean(v: &AnyAtomicType) -> AnyAtomicType {
+        let b = match v {
+            AnyAtomicType::Boolean(b) => *b,
+            AnyAtomicType::Integer(n) => *n != 0,
+            AnyAtomicType::Float(f) => !f.is_nan() && f.0 != 0.0,
+            AnyAtomicType::Double(d) => !d.is_nan() && d.0 != 0.0,
+            AnyAtomicType::String(s) => !s.is_empty(),
+            AnyAtomicType::QName { .. } => true,
+        };
+        AnyAtomicType::Boolean(b)
+    }
+
     match (first, second) {
+        // Boolean coercion: when one operand is Boolean, cast the other to Boolean.
+        (AnyAtomicType::Boolean(_), other) if !matches!(other, AnyAtomicType::Boolean(_)) => {
+            Some((first.clone(), to_boolean(other)))
+        }
+        (other, AnyAtomicType::Boolean(_)) if !matches!(other, AnyAtomicType::Boolean(_)) => {
+            Some((to_boolean(other), second.clone()))
+        }
         // String (untyped) vs numeric: cast string to double, promote numeric to double.
         (AnyAtomicType::String(s), other) if is_numeric(other) => {
             Some((string_to_double(s), to_double(other)))

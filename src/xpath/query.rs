@@ -15,47 +15,41 @@ use super::{
 
 impl Xpath {
     /// Find attributes in an [XpathItemTree] using an xpath expression.
+    ///
+    /// Non-attribute items in the result are silently filtered out.
     pub fn find_attributes<'tree>(
         &self,
         tree: &'tree XpathItemTree,
     ) -> Result<Vec<&'tree AttributeNode>, ExpressionApplyError> {
         let items = self.apply(tree)?;
 
-        let mut attributes: Vec<&AttributeNode> = Vec::new();
-        for item in items {
-            let attribute = item
-                .as_node()
-                .and_then(|node| node.as_attribute_node())
-                .map_err(|e| ExpressionApplyError::new(e.to_string()))?;
-
-            attributes.push(attribute);
-        }
-
-        Ok(attributes)
+        Ok(items
+            .iter()
+            .filter_map(|item| item.as_node().ok())
+            .filter_map(|node| node.as_attribute_node().ok())
+            .collect())
     }
 
     /// Find elements in an [XpathItemTree] using an xpath expression.
+    ///
+    /// Non-element items in the result are silently filtered out.
     pub fn find_elements<'tree>(
         &self,
         tree: &'tree XpathItemTree,
     ) -> Result<Vec<&'tree ElementNode>, ExpressionApplyError> {
         let items = self.apply(tree)?;
 
-        let mut elements: Vec<&ElementNode> = Vec::new();
-        for item in items {
-            let element = item
-                .as_node()
-                .and_then(|node| node.as_element_node())
-                .map_err(|e| ExpressionApplyError::new(e.to_string()))?;
-
-            elements.push(element);
-        }
-
-        Ok(elements)
+        Ok(items
+            .iter()
+            .filter_map(|item| item.as_node().ok())
+            .filter_map(|node| node.as_element_node().ok())
+            .collect())
     }
 
     /// Find elements from an [XpathItem] in an [XpathItemTree] using an xpath expression.
     /// The expression will be evaluated relative to the given item.
+    ///
+    /// Non-element items in the result are silently filtered out.
     pub fn find_elements_from_item<'tree>(
         &self,
         tree: &'tree XpathItemTree,
@@ -63,17 +57,11 @@ impl Xpath {
     ) -> Result<Vec<&'tree ElementNode>, ExpressionApplyError> {
         let items = self.apply_to_item(tree, item)?;
 
-        let mut elements: Vec<&'tree ElementNode> = Vec::new();
-        for item in items {
-            let element = item
-                .as_node()
-                .and_then(|node| node.as_element_node())
-                .map_err(|e| ExpressionApplyError::new(e.to_string()))?;
-
-            elements.push(element);
-        }
-
-        Ok(elements)
+        Ok(items
+            .iter()
+            .filter_map(|item| item.as_node().ok())
+            .filter_map(|node| node.as_element_node().ok())
+            .collect())
     }
 
     /// Find elements from an [ElementNode] in an [XpathItemTree] using an xpath expression.

@@ -1,7 +1,7 @@
 use indextree::NodeId;
 
 use crate::{
-    html::grammar::{tokenizer::TokenizerState, NodeEntry, NodeOrMarker, MATHML_NAMESPACE, SPECIAL_ELEMENTS, SVG_NAMESPACE},
+    html::grammar::{tokenizer::TokenizerState, is_special_element, NodeEntry, NodeOrMarker, MATHML_NAMESPACE, SVG_NAMESPACE},
     xpath::grammar::{
         data_model::{AttributeNode, ElementNode},
         XpathItemTreeNode,
@@ -34,7 +34,8 @@ impl HtmlParser {
             if parser
                 .open_elements
                 .iter()
-                .map(|node_id| parser.arena.get(*node_id).unwrap().get())
+                .filter_map(|node_id| parser.arena.get(*node_id))
+                .map(|node| node.get())
                 .filter_map(|node| node.as_element_node().ok())
                 .any(|node| !valid_elements.contains(&node.name.as_str()))
             {
@@ -117,7 +118,10 @@ impl HtmlParser {
                 }
 
                 // for each attribute, check if the attribute is already present on top element of the stack
-                let top_element_res = self.top_node().unwrap().as_element_node();
+                let top_element_res = match self.top_node() {
+                    Some(node) => node.as_element_node(),
+                    None => return Ok(Acknowledgement::no()),
+                };
 
                 let top_element = match top_element_res {
                     Ok(node) => node,
@@ -426,7 +430,7 @@ impl HtmlParser {
                         break;
                     }
 
-                    if SPECIAL_ELEMENTS.binary_search(&element.name.as_str()).is_ok()
+                    if is_special_element(&element.name, element.namespace.as_deref())
                         && !["address", "div", "p"].contains(&element.name.as_str())
                     {
                         break;
@@ -485,7 +489,7 @@ impl HtmlParser {
                         break;
                     }
 
-                    if SPECIAL_ELEMENTS.binary_search(&element.name.as_str()).is_ok()
+                    if is_special_element(&element.name, element.namespace.as_deref())
                         && !["address", "div", "p"].contains(&element.name.as_str())
                     {
                         break;
@@ -1120,7 +1124,7 @@ impl HtmlParser {
             }
 
             // If node is in the special category, parse error; ignore the token.
-            if SPECIAL_ELEMENTS.binary_search(&node.name.as_str()).is_ok() {
+            if is_special_element(&node.name, node.namespace.as_deref()) {
                 self.handle_error(HtmlParserError::MinorError(String::from(
                     "node is in special category",
                 )))?;
@@ -1256,7 +1260,7 @@ impl HtmlParser {
                 .find_map(|(i, id)| {
                     let node = self.arena.get(*id).unwrap().get();
                     if let Ok(element) = node.as_element_node() {
-                        if SPECIAL_ELEMENTS.binary_search(&element.name.as_str()).is_ok() {
+                        if is_special_element(&element.name, element.namespace.as_deref()) {
                             return Some(i);
                         }
                     }

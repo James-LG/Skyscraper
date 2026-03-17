@@ -196,7 +196,13 @@ impl Predicate {
             // integer literals display as plain digits (e.g. "1", "42").
             // Non-literal expressions (position(), @attr, etc.) won't parse.
             let s = or_expr.expr.to_string();
-            return s.parse::<i64>().ok();
+            // Validate the string looks like a plain integer literal before parsing.
+            // This prevents expressions like function calls or variables from being
+            // misinterpreted as integer positions.
+            if s.bytes().all(|b| b.is_ascii_digit()) || (s.starts_with('-') && s.len() > 1 && s[1..].bytes().all(|b| b.is_ascii_digit())) {
+                return s.parse::<i64>().ok();
+            }
+            return None;
         }
         None
     }

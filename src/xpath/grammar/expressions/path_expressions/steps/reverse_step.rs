@@ -217,6 +217,8 @@ fn eval_reverse_axis<'tree>(
                             context.item_tree.arena.get(cur_id).and_then(|n| n.parent());
                     }
                 }
+                // Sort in reverse document order (descending by node_id).
+                nodes.sort_by(|a, b| b.node_id().cmp(&a.node_id()));
             } else {
                 return Err(ExpressionApplyError {
                     msg: String::from(
