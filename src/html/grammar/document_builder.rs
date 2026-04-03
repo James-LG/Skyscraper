@@ -297,7 +297,7 @@ impl<'arena> ElementBuilder<'arena> {
     }
 
     /// Consume the builder and insert the element (with all its children) into the arena.
-    pub fn build(mut self) -> Result<NodeId, DocumentBuilderError> {
+    pub fn build(self) -> Result<NodeId, DocumentBuilderError> {
         let element_id = self
             .arena
             .new_node(XpathItemTreeNode::ElementNode(ElementNode::new(
@@ -313,8 +313,8 @@ impl<'arena> ElementBuilder<'arena> {
             .set_id(element_id);
 
         for func in self.funcs {
-            let child_id = func(&mut self.arena, element_id)?;
-            element_id.append(child_id, &mut self.arena);
+            let child_id = func(self.arena, element_id)?;
+            element_id.append(child_id, self.arena);
         }
 
         Ok(element_id)

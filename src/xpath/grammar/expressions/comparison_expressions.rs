@@ -104,8 +104,8 @@ impl ComparisonExpr {
         let second_result = comparison.1.eval(context)?;
 
         // Atomize both results.
-        let atomized1 = func_data(&result, &context.item_tree)?;
-        let atomized2 = func_data(&second_result, &context.item_tree)?;
+        let atomized1 = func_data(&result, context.item_tree)?;
+        let atomized2 = func_data(&second_result, context.item_tree)?;
 
         let bool_value = match comparison.0 {
             ComparisonType::GeneralComp(comp) => {
@@ -472,7 +472,7 @@ fn coerce_for_comparison(
                 AnyAtomicType::Double(OrderedFloat(f.0 as f64))
             }
             AnyAtomicType::Double(_) => v.clone(),
-            _ => unreachable!("to_double called with non-numeric value"),
+            _ => AnyAtomicType::Double(OrderedFloat(f64::NAN)),
         }
     }
 

@@ -63,7 +63,7 @@ fn atomize_single<'tree>(
     result: &XpathItemSet<'tree>,
     context: &XpathExpressionContext<'tree>,
 ) -> Result<Option<AnyAtomicType>, ExpressionApplyError> {
-    let atomized = func_data(result, &context.item_tree)?;
+    let atomized = func_data(result, context.item_tree)?;
     if atomized.is_empty() {
         return Ok(None);
     }

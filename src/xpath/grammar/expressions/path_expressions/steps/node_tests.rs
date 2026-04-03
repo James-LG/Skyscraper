@@ -10,16 +10,14 @@ use crate::{
     html::grammar::HTML_NAMESPACE,
     xpath::{
         grammar::{
-            data_model::XpathItem,
             recipes::Res,
             terminal_symbols::braced_uri_literal,
             types::{self, eq_name, kind_test, EQName, KindTest},
             xml_names::{nc_name, QName},
             XpathItemTree, XpathItemTreeNode,
         },
-        ExpressionApplyError, XpathExpressionContext,
+        ExpressionApplyError,
     },
-    xpath_item_set,
 };
 
 use super::axes::{forward_axis::ForwardAxis, reverse_axis::ReverseAxis};
@@ -54,27 +52,6 @@ impl Display for NodeTest {
 }
 
 impl NodeTest {
-    pub(crate) fn eval<'tree>(
-        &self,
-        axis: BiDirectionalAxis,
-        context: &XpathExpressionContext<'tree>,
-    ) -> Result<Option<&'tree XpathItemTreeNode>, ExpressionApplyError> {
-        match self {
-            NodeTest::KindTest(test) => {
-                let filtered_nodes =
-                    test.filter(&xpath_item_set![context.item.clone()], context.item_tree)?;
-
-                if !filtered_nodes.is_empty() {
-                    let node: &'tree XpathItemTreeNode = filtered_nodes.into_iter().next().unwrap();
-                    Ok(Some(node))
-                } else {
-                    Ok(None)
-                }
-            }
-            NodeTest::NameTest(test) => test.eval(axis, context),
-        }
-    }
-
     /// Test whether a node matches this node test directly, without creating
     /// an `XpathExpressionContext`. This avoids per-node allocation overhead
     /// in axis evaluation loops.
@@ -128,16 +105,16 @@ impl Display for NameTest {
 #[derive(Clone, Copy)]
 pub(crate) enum BiDirectionalAxis {
     ForwardAxis(ForwardAxis),
-    ReverseAxis(ReverseAxis),
+    ReverseAxis(#[allow(dead_code)] ReverseAxis),
 }
 
 impl NameTest {
     /// Test whether a node matches this name test directly, without requiring
     /// a full `XpathExpressionContext`.
-    pub(crate) fn matches_node<'tree>(
+    pub(crate) fn matches_node(
         &self,
         axis: BiDirectionalAxis,
-        node: &'tree XpathItemTreeNode,
+        node: &XpathItemTreeNode,
     ) -> Result<bool, ExpressionApplyError> {
         let is_match = match self {
             NameTest::Name(expected_name) => {
@@ -165,10 +142,7 @@ impl NameTest {
                         Some(node_name) => match expected_name {
                             EQName::QName(qname) => match qname {
                                 QName::PrefixedName(p) => {
-                                    let target_ns = match resolve_prefix(&p.prefix) {
-                                        Ok(ns) => ns,
-                                        Err(e) => return Err(e),
-                                    };
+                                    let target_ns = resolve_prefix(&p.prefix)?;
                                     let effective_ns = node_ns.unwrap_or(HTML_NAMESPACE);
                                     p.local_part == node_name && effective_ns == target_ns
                                 }
@@ -178,7 +152,7 @@ impl NameTest {
                             },
                             EQName::UriQualifiedName(uqn) => {
                                 uqn.name == node_name
-                                    && node_ns.map_or(false, |ns| ns == uqn.uri)
+                                    && node_ns.is_some_and(|ns| ns == uqn.uri)
                             }
                         },
                         None => false,
@@ -191,24 +165,6 @@ impl NameTest {
         Ok(is_match)
     }
 
-    pub(crate) fn eval<'tree>(
-        &self,
-        axis: BiDirectionalAxis,
-        context: &XpathExpressionContext<'tree>,
-    ) -> Result<Option<&'tree XpathItemTreeNode>, ExpressionApplyError> {
-        let node = if let XpathItem::Node(node) = &context.item {
-            node
-        } else {
-            // Name tests only match nodes; non-node items never match.
-            return Ok(None);
-        };
-
-        if self.matches_node(axis, node)? {
-            Ok(Some(*node))
-        } else {
-            Ok(None)
-        }
-    }
 }
 
 fn wildcard(input: &str) -> Res<&str, Wildcard> {
@@ -270,10 +226,10 @@ fn resolve_prefix(prefix: &str) -> Result<&'static str, ExpressionApplyError> {
 }
 
 impl Wildcard {
-    pub(crate) fn is_match<'tree>(
+    pub(crate) fn is_match(
         &self,
         axis: BiDirectionalAxis,
-        node: &'tree XpathItemTreeNode,
+        node: &XpathItemTreeNode,
     ) -> Result<bool, ExpressionApplyError> {
         // Wildcards only match context items that are the axis' principal node kind.
         // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#dt-principal-node-kind
@@ -306,7 +262,7 @@ impl Wildcard {
             Wildcard::Simple => Ok(true),
             Wildcard::PrefixedName(local) => {
                 // `*:local` — matches any namespace, local name must match.
-                Ok(node_name.map_or(false, |n| n == local))
+                Ok(node_name.is_some_and(|n| n == local))
             }
             Wildcard::SuffixedName(prefix) => {
                 // `prefix:*` — matches any local name in the namespace bound

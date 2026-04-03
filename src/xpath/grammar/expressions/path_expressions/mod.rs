@@ -7,7 +7,7 @@ use nom::{
     multi::many0, sequence::tuple,
 };
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::xpath::grammar::data_model::XpathItem;
 use crate::xpath::grammar::types::KindTest;
@@ -31,21 +31,21 @@ pub mod abbreviated_syntax;
 pub mod steps;
 
 /// Lazily-parsed `(fn:root(self::node()) treat as document-node())` step expression.
-static ROOT_STEP: Lazy<StepExpr> = Lazy::new(|| {
+static ROOT_STEP: LazyLock<StepExpr> = LazyLock::new(|| {
     step_expr("(fn:root(self::node()) treat as document-node())")
         .expect("ROOT_STEP parse failed")
         .1
 });
 
 /// Lazily-parsed `descendant-or-self::node()` step expression.
-static DESC_OR_SELF_STEP: Lazy<StepExpr> = Lazy::new(|| {
+static DESC_OR_SELF_STEP: LazyLock<StepExpr> = LazyLock::new(|| {
     step_expr("descendant-or-self::node()")
         .expect("DESC_OR_SELF_STEP parse failed")
         .1
 });
 
 /// Lazily-parsed `.` (context item) step expression.
-static DOT_STEP: Lazy<StepExpr> = Lazy::new(|| {
+static DOT_STEP: LazyLock<StepExpr> = LazyLock::new(|| {
     step_expr(".")
         .expect("DOT_STEP parse failed")
         .1

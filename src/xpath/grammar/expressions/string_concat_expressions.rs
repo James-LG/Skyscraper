@@ -66,7 +66,7 @@ impl StringConcatExpr {
         }
 
         // Atomize the first operand and cast to string.
-        let atomized = func_data(&result, &context.item_tree)?;
+        let atomized = func_data(&result, context.item_tree)?;
         let mut concatenated = String::new();
         for a in &atomized {
             concatenated.push_str(&a.to_string());
@@ -75,7 +75,7 @@ impl StringConcatExpr {
         // Evaluate and concatenate each additional operand.
         for item in &self.items {
             let item_result = item.eval(context)?;
-            let item_atomized = func_data(&item_result, &context.item_tree)?;
+            let item_atomized = func_data(&item_result, context.item_tree)?;
             for a in &item_atomized {
                 concatenated.push_str(&a.to_string());
             }

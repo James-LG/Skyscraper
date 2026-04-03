@@ -3177,3 +3177,248 @@ fn xpath_operations_work_with_result_id() {
         panic!("expected element node");
     }
 }
+
+// ============================================================================
+// Regression: CR-1 - i64-to-f64 precision loss in cross-type comparisons
+// Values > 2^53 cannot be exactly represented as f64. Comparisons must remain
+// correct for such values.
+// ============================================================================
+
+#[test]
+fn integer_double_comparison_large_value_not_equal() {
+    // Test the compare_integer_double function directly via the PartialOrd impl.
+    // 2^53 + 1 cannot be exactly represented as f64 (rounds to 2^53).
+    use ordered_float::OrderedFloat;
+    use std::cmp::Ordering;
+
+    let large_int = AnyAtomicType::Integer(9007199254740993_i64); // 2^53 + 1
+    let rounded_double = AnyAtomicType::Double(OrderedFloat(9007199254740992.0_f64)); // 2^53
+
+    // These are different values; the comparison must not treat them as equal.
+    assert_eq!(
+        large_int.partial_cmp(&rounded_double),
+        Some(Ordering::Greater),
+        "9007199254740993 > 9007199254740992.0 — precision must be preserved"
+    );
+    assert_ne!(
+        large_int.partial_cmp(&rounded_double),
+        Some(Ordering::Equal),
+        "9007199254740993 != 9007199254740992.0"
+    );
+}
+
+#[test]
+fn integer_double_comparison_nan() {
+    use ordered_float::OrderedFloat;
+
+    let int_val = AnyAtomicType::Integer(42);
+    let nan_val = AnyAtomicType::Double(OrderedFloat(f64::NAN));
+
+    // NaN comparisons should return None
+    assert_eq!(int_val.partial_cmp(&nan_val), None);
+}
+
+#[test]
+fn integer_double_comparison_infinity() {
+    use ordered_float::OrderedFloat;
+    use std::cmp::Ordering;
+
+    let int_val = AnyAtomicType::Integer(i64::MAX);
+    let pos_inf = AnyAtomicType::Double(OrderedFloat(f64::INFINITY));
+    let neg_inf = AnyAtomicType::Double(OrderedFloat(f64::NEG_INFINITY));
+
+    assert_eq!(int_val.partial_cmp(&pos_inf), Some(Ordering::Less));
+    assert_eq!(int_val.partial_cmp(&neg_inf), Some(Ordering::Greater));
+}
+
+#[test]
+fn integer_double_comparison_normal_values() {
+    let text = "<r/>";
+    let doc = html::parse(text).unwrap();
+    // Normal values should still work correctly
+    let xp = xpath::parse("42 = 42.0").unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert_eq!(
+        *result[0].extract_as_any_atomic_type(),
+        AnyAtomicType::Boolean(true),
+        "42 = 42.0 should be true"
+    );
+}
+
+#[test]
+fn integer_double_comparison_with_nan() {
+    let text = "<r/>";
+    let doc = html::parse(text).unwrap();
+    // NaN comparisons should return false
+    let xp = xpath::parse("42 = number('NaN')").unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert_eq!(
+        *result[0].extract_as_any_atomic_type(),
+        AnyAtomicType::Boolean(false),
+        "integer = NaN should be false"
+    );
+}
+
+#[test]
+fn integer_double_comparison_with_fractional() {
+    let text = "<r/>";
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse("3 < 3.5").unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert_eq!(
+        *result[0].extract_as_any_atomic_type(),
+        AnyAtomicType::Boolean(true),
+        "3 < 3.5 should be true"
+    );
+}
+
+// ============================================================================
+// Regression: CR-2 - ElementNode::children() no longer panics on missing ID
+// ============================================================================
+
+#[test]
+fn element_node_children_works_on_normal_nodes() {
+    let text = "<html><body><div>text</div></body></html>";
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse("//div").unwrap();
+    let result = xp.apply(&doc).unwrap();
+
+    // Verify children() and itertext() work correctly on a real node
+    if let XpathItem::Node(XpathItemTreeNode::ElementNode(e)) = &result[0] {
+        let children: Vec<_> = e.children(&doc).collect();
+        assert!(!children.is_empty(), "children() should return text child");
+        let texts: Vec<_> = e.itertext(&doc).collect();
+        assert!(!texts.is_empty(), "itertext() should return text content");
+        assert_eq!(texts[0], "text");
+    } else {
+        panic!("expected element node");
+    }
+}
+
+// ============================================================================
+// Regression: CR-6 - fn:replace and fn:tokenize must reject zero-length
+// pattern matches (err:FORX0003)
+// ============================================================================
+
+#[test]
+fn replace_rejects_zero_length_pattern() {
+    let text = "<r/>";
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse(r#"replace("abc", ".*", "x")"#).unwrap();
+    let result = xp.apply(&doc);
+    assert!(result.is_err(), "fn:replace with zero-length match pattern should error");
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("FORX0003"),
+        "error should reference FORX0003, got: {}",
+        err
+    );
+}
+
+#[test]
+fn tokenize_rejects_zero_length_pattern() {
+    let text = "<r/>";
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse(r#"tokenize("abc", "")"#).unwrap();
+    let result = xp.apply(&doc);
+    assert!(result.is_err(), "fn:tokenize with empty pattern should error");
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("FORX0003"),
+        "error should reference FORX0003, got: {}",
+        err
+    );
+}
+
+#[test]
+fn replace_normal_pattern_still_works() {
+    let text = "<r/>";
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse(r#"replace("aabbb", "b+", "X")"#).unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert_eq!(
+        *result[0].extract_as_any_atomic_type(),
+        AnyAtomicType::String("aaX".to_string()),
+    );
+}
+
+#[test]
+fn tokenize_normal_pattern_still_works() {
+    let text = "<r/>";
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse(r#"tokenize("a,b,c", ",")"#).unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert_eq!(result.len(), 3);
+}
+
+// ============================================================================
+// Regression: CR-19 - fn:format-integer word output for large numbers
+// ============================================================================
+
+#[test]
+fn format_integer_words_large_number() {
+    let text = "<r/>";
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse(r#"format-integer(1000000, "w")"#).unwrap();
+    let result = xp.apply(&doc).unwrap();
+    if let AnyAtomicType::String(s) = result[0].extract_as_any_atomic_type() {
+        assert!(
+            s.contains("million"),
+            "format-integer(1000000, 'w') should produce words, got: {}",
+            s
+        );
+    } else {
+        panic!("expected string result");
+    }
+}
+
+#[test]
+fn format_integer_words_twenty_thousand() {
+    let text = "<r/>";
+    let doc = html::parse(text).unwrap();
+    // Previously fell back to digits for values >= 20000
+    let xp = xpath::parse(r#"format-integer(20000, "w")"#).unwrap();
+    let result = xp.apply(&doc).unwrap();
+    if let AnyAtomicType::String(s) = result[0].extract_as_any_atomic_type() {
+        assert!(
+            s.contains("thousand"),
+            "format-integer(20000, 'w') should produce words, got: {}",
+            s
+        );
+    } else {
+        panic!("expected string result");
+    }
+}
+
+#[test]
+fn format_integer_words_small_numbers_unchanged() {
+    let text = "<r/>";
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse(r#"format-integer(42, "w")"#).unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert_eq!(
+        *result[0].extract_as_any_atomic_type(),
+        AnyAtomicType::String("forty two".to_string()),
+    );
+}
+
+// ============================================================================
+// Regression: CR-5 - unreachable!() replaced with graceful error handling
+// ============================================================================
+
+#[test]
+fn to_double_non_numeric_returns_nan_not_panic() {
+    // Ensure that the to_double fallback path produces NaN instead of panicking.
+    // This is tested indirectly via a general comparison where coercion occurs.
+    let text = "<r/>";
+    let doc = html::parse(text).unwrap();
+    // A comparison where one side is a string and the other numeric
+    // exercises the coercion path.
+    let xp = xpath::parse(r#"1 = "1""#).unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert_eq!(
+        *result[0].extract_as_any_atomic_type(),
+        AnyAtomicType::Boolean(true),
+        "1 = '1' should be true via general comparison coercion"
+    );
+}

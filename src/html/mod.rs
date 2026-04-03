@@ -28,7 +28,7 @@ use std::{
 
 use enum_extract_macro::EnumExtract;
 use indextree::{Arena, NodeId};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use regex::{Captures, Regex};
 
 pub use crate::html::grammar::parse;
@@ -213,8 +213,8 @@ impl HtmlDoctype {
 /// - `&quot;` becomes `"`
 /// - `&#39;` becomes `'`
 pub fn unescape_characters(text: &str) -> String {
-    static NUMERIC_CHAR_REF_RE: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r"&#(?:x([0-9a-fA-F]+)|(\d+));").unwrap());
+    static NUMERIC_CHAR_REF_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"&#(?:x([0-9a-fA-F]+)|(\d+));").unwrap());
 
     // First: resolve numeric character references on the raw input,
     // before any named entity replacement, to avoid double-unescaping
@@ -459,7 +459,7 @@ fn display_node(
                         }
                         write!(&mut result, ">")?;
                         if matches!(format_type, DocumentFormatType::Indented) {
-                            write!(&mut result, "\n")?;
+                            writeln!(&mut result)?;
                         }
 
                         if !VOID_TAGS.contains(&tag.name.as_str()) {
@@ -541,7 +541,7 @@ fn display_node(
                 }
                 write!(&mut result, "</{}>", tag_name)?;
                 if matches!(format_type, DocumentFormatType::Indented) {
-                    write!(&mut result, "\n")?;
+                    writeln!(&mut result)?;
                 }
             }
         }

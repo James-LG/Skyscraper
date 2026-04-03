@@ -846,7 +846,7 @@ impl HtmlParser {
                 self.insertion_mode = InsertionMode::InBody;
                 self.token_emitted(HtmlToken::TagToken(TagTokenType::StartTag(token)))?;
             }
-            HtmlToken::TagToken(TagTokenType::EndTag(token)) => {
+            HtmlToken::TagToken(TagTokenType::EndTag(_token)) => {
                 self.handle_error(HtmlParserError::MinorError(String::from(
                     "unexpected end tag",
                 )))?;

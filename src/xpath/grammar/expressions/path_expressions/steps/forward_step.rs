@@ -148,7 +148,7 @@ fn eval_forward_axis<'tree>(
         ForwardAxis::SelfAxis => {
             let mut nodes = Vec::new();
             if let XpathItem::Node(node) = &context.item {
-                if node_test.matches_node(bi_axis, *node, context.item_tree)? {
+                if node_test.matches_node(bi_axis, node, context.item_tree)? {
                     nodes.push(*node);
                 }
             } else {

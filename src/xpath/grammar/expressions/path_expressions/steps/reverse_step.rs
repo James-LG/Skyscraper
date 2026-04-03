@@ -85,7 +85,7 @@ fn eval_reverse_axis<'tree>(
             let mut nodes = Vec::new();
             if let XpathItem::Node(node) = &context.item {
                 if let Some(parent) = &node.parent(context.item_tree) {
-                    if node_test.matches_node(bi_axis, *parent, context.item_tree)? {
+                    if node_test.matches_node(bi_axis, parent, context.item_tree)? {
                         nodes.push(*parent);
                     }
                 }
@@ -128,7 +128,7 @@ fn eval_reverse_axis<'tree>(
         ReverseAxis::AncestorOrSelf => {
             let mut nodes = Vec::new();
             if let XpathItem::Node(node) = &context.item {
-                if node_test.matches_node(bi_axis, *node, context.item_tree)? {
+                if node_test.matches_node(bi_axis, node, context.item_tree)? {
                     nodes.push(*node);
                 }
                 if let Some(node_id) = node.node_id() {
@@ -218,7 +218,7 @@ fn eval_reverse_axis<'tree>(
                     }
                 }
                 // Sort in reverse document order (descending by node_id).
-                nodes.sort_by(|a, b| b.node_id().cmp(&a.node_id()));
+                nodes.sort_by_key(|b| std::cmp::Reverse(b.node_id()));
             } else {
                 return Err(ExpressionApplyError {
                     msg: String::from(

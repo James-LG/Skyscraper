@@ -1,10 +1,10 @@
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::collections::HashMap;
 
 pub(crate) const NAMED_CHARACTER_REFS_MAX_LENGTH: usize = 33;
 
-pub(crate) static NAMED_CHARACTER_REFS: Lazy<HashMap<&'static str, &'static str>> =
-    Lazy::new(|| {
+pub(crate) static NAMED_CHARACTER_REFS: LazyLock<HashMap<&'static str, &'static str>> =
+    LazyLock::new(|| {
         let mut m = HashMap::with_capacity(2231);
         m.insert("&AElig", "\u{00c6}");
         m.insert("&AElig;", "\u{00c6}");

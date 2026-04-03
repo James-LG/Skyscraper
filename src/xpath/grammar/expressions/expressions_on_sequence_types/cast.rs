@@ -243,7 +243,7 @@ impl CastExpr {
                             AnyAtomicType::Float(_) => "xs:float",
                             AnyAtomicType::Double(_) => "xs:double",
                             AnyAtomicType::Boolean(_) => "xs:boolean",
-                            AnyAtomicType::QName { .. } => unreachable!(),
+                            AnyAtomicType::QName { .. } => "xs:QName",
                         }
                     ),
                 }),

@@ -211,7 +211,7 @@ impl Predicate {
         &self,
         context: &XpathExpressionContext<'tree>,
     ) -> Result<bool, ExpressionApplyError> {
-        let res = self.0.eval(&context)?;
+        let res = self.0.eval(context)?;
 
         // The predicate truth value is derived by applying the following rules, in order:
         // 1. If the value of the predicate expression is a singleton atomic value of a numeric type or derived from a numeric type,
@@ -221,15 +221,12 @@ impl Predicate {
 
         // Step 1. If the value is a number, check if it matches the context position.
         if res.len() == 1 {
-            match &res[0] {
-                XpathItem::AnyAtomicType(atomic_type) => match atomic_type {
-                    AnyAtomicType::Integer(n) => return Ok(*n == context.position as i64),
-                    AnyAtomicType::Float(n) => return Ok(*n == context.position as f32),
-                    AnyAtomicType::Double(n) => return Ok(*n == context.position as f64),
-                    _ => {}
-                },
+            if let XpathItem::AnyAtomicType(atomic_type) = &res[0] { match atomic_type {
+                AnyAtomicType::Integer(n) => return Ok(*n == context.position as i64),
+                AnyAtomicType::Float(n) => return Ok(*n == context.position as f32),
+                AnyAtomicType::Double(n) => return Ok(*n == context.position as f64),
                 _ => {}
-            }
+            } }
         }
 
         res.boolean()

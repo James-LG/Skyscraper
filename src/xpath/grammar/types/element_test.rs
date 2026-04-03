@@ -112,7 +112,7 @@ pub(crate) fn match_element_name(
             QName::UnprefixedName(name) => Ok(name == node_name),
         },
         EQName::UriQualifiedName(uqn) => {
-            Ok(uqn.name == node_name && node_ns.map_or(false, |ns| ns == uqn.uri))
+            Ok(uqn.name == node_name && node_ns.is_some_and(|ns| ns == uqn.uri))
         }
     }
 }

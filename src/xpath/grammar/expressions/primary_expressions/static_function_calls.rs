@@ -107,7 +107,7 @@ impl FunctionCall {
 ///
 /// Used by `ArrowExpr::eval` where the left-hand side is prepended as the
 /// first argument.
-
+///
 /// The XPath Functions namespace URI.
 const XPATH_FUNCTIONS_NS: &str = "http://www.w3.org/2005/xpath-functions";
 const XPATH_MAP_NS: &str = "http://www.w3.org/2005/xpath-functions/map";
@@ -247,7 +247,7 @@ fn dispatch_by_local_name<'tree>(
             Ok(Some(
                 atoms
                     .into_iter()
-                    .map(|a| XpathItem::AnyAtomicType(a))
+                    .map(XpathItem::AnyAtomicType)
                     .collect(),
             ))
         }
@@ -364,7 +364,7 @@ fn dispatch_by_local_name<'tree>(
                 .map(Some)
             } else {
                 check_arity("fn:round", args, 1)?;
-                func_numeric_unary(&args[0], |i| i, |f| xpath_round_f32(f), |d| xpath_round_f64(d)).map(Some)
+                func_numeric_unary(&args[0], |i| i, xpath_round_f32, xpath_round_f64).map(Some)
             }
         }
         // String functions
@@ -767,6 +767,11 @@ fn dispatch_by_local_name<'tree>(
                 String::new()
             };
             let re = build_regex(&pattern, &flags)?;
+            if re.is_match("") {
+                return Err(ExpressionApplyError::new(
+                    "err:FORX0003: pattern matches zero-length string in fn:replace".to_string(),
+                ));
+            }
             // Convert XPath replacement syntax (\1, \2, ...) to regex crate syntax ($1, $2, ...)
             // and escape literal $ signs that have no special meaning in XPath.
             let converted_replacement = xpath_replacement_to_regex(&replacement);
@@ -803,6 +808,11 @@ fn dispatch_by_local_name<'tree>(
                 String::new()
             };
             let re = build_regex(&pattern, &flags)?;
+            if re.is_match("") {
+                return Err(ExpressionApplyError::new(
+                    "err:FORX0003: pattern matches zero-length string in fn:tokenize".to_string(),
+                ));
+            }
             let tokens: XpathItemSet = re
                 .split(&input)
                 .map(|s| XpathItem::AnyAtomicType(AnyAtomicType::String(s.to_string())))
@@ -2833,7 +2843,12 @@ fn dispatch_math_function<'tree>(
                 "asin" => val.asin(),
                 "acos" => val.acos(),
                 "atan" => val.atan(),
-                _ => unreachable!(),
+                _ => {
+                    return Err(ExpressionApplyError::new(format!(
+                        "math:{}: unknown single-argument math function",
+                        local_name
+                    )));
+                }
             };
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::Double(ordered_float::OrderedFloat(result))
@@ -2849,7 +2864,12 @@ fn dispatch_math_function<'tree>(
             let result = match local_name {
                 "pow" => x.powf(y),
                 "atan2" => x.atan2(y),
-                _ => unreachable!(),
+                _ => {
+                    return Err(ExpressionApplyError::new(format!(
+                        "math:{}: unknown two-argument math function",
+                        local_name
+                    )));
+                }
             };
             Ok(Some(xpath_item_set![XpathItem::AnyAtomicType(
                 AnyAtomicType::Double(ordered_float::OrderedFloat(result))
@@ -2907,9 +2927,9 @@ pub(crate) fn func_data<'tree>(
     set: &XpathItemSet<'tree>,
     item_tree: &'tree XpathItemTree,
 ) -> Result<Vec<AnyAtomicType>, ExpressionApplyError> {
-    fn atomize<'tree>(
+    fn atomize(
         item: &XpathItem,
-        item_tree: &'tree XpathItemTree,
+        item_tree: &XpathItemTree,
     ) -> Result<AnyAtomicType, ExpressionApplyError> {
         match item {
             XpathItem::Node(node) => match node {
@@ -2944,9 +2964,9 @@ pub(crate) fn func_data<'tree>(
 }
 
 /// https://www.w3.org/TR/xpath-functions-31/#func-string
-pub(crate) fn func_string<'tree>(
+pub(crate) fn func_string(
     item: &XpathItem,
-    item_tree: &'tree XpathItemTree,
+    item_tree: &XpathItemTree,
 ) -> Result<String, ExpressionApplyError> {
     match item {
         XpathItem::Node(node) => match node {
@@ -3555,7 +3575,7 @@ fn func_min_max<'tree>(
 
 /// Convert a positive integer to a Roman numeral string. Returns None for values outside 1-3999.
 fn func_to_roman(n: i64) -> Option<String> {
-    if n < 1 || n > 3999 {
+    if !(1..=3999).contains(&n) {
         return None;
     }
     let mut n = n as usize;
@@ -3584,60 +3604,80 @@ fn func_to_roman(n: i64) -> Option<String> {
     Some(result)
 }
 
-/// Convert an integer to English words (simplified). Falls back to digits for
-/// values outside the supported range.
+/// Convert an integer to English words. Handles values up to trillions.
 fn func_number_to_words(n: i64) -> String {
     if n == 0 {
-        return "Zero".to_string();
+        return String::from("Zero");
     }
-    let negative = n < 0;
-    let n = n.unsigned_abs();
-    // Fall back to digits for values too large for word representation.
-    if n >= 20_000 {
-        return if negative {
-            format!("Minus {}", n)
-        } else {
-            n.to_string()
-        };
+    if n < 0 {
+        return format!("Minus {}", func_number_to_words(-n));
     }
+
     let ones = [
-        "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
-        "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen",
-        "Eighteen", "Nineteen",
+        "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
+        "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen",
+        "Seventeen", "Eighteen", "Nineteen",
     ];
     let tens = [
         "", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety",
     ];
-    let mut parts = Vec::new();
-    if negative {
-        parts.push("Minus".to_string());
-    }
-    if n >= 1000 {
-        let thousands = n / 1000;
-        parts.push(format!("{} Thousand", ones[thousands as usize]));
-        let remainder = n % 1000;
-        if remainder > 0 {
-            parts.push(func_number_to_words(remainder as i64));
+
+    fn chunk_to_words(n: i64, ones: &[&str], tens: &[&str]) -> String {
+        if n == 0 {
+            return String::new();
         }
-    } else if n >= 100 {
-        let hundreds = n / 100;
-        parts.push(format!("{} Hundred", ones[hundreds as usize]));
-        let remainder = n % 100;
-        if remainder > 0 {
-            parts.push(func_number_to_words(remainder as i64));
+        if n < 20 {
+            return ones[n as usize].to_string();
         }
-    } else if n >= 20 {
-        let t = n / 10;
-        let o = n % 10;
-        if o > 0 {
-            parts.push(format!("{} {}", tens[t as usize], ones[o as usize]));
+        if n < 100 {
+            let t = tens[(n / 10) as usize];
+            let o = n % 10;
+            if o == 0 {
+                return t.to_string();
+            }
+            return format!("{} {}", t, ones[o as usize]);
+        }
+        // n < 1000
+        let h = n / 100;
+        let rem = n % 100;
+        if rem == 0 {
+            format!("{} Hundred", ones[h as usize])
         } else {
-            parts.push(tens[t as usize].to_string());
+            format!("{} Hundred {}", ones[h as usize], chunk_to_words(rem, ones, tens))
         }
-    } else {
-        parts.push(ones[n as usize].to_string());
     }
-    parts.join(" ")
+
+    let magnitudes: &[(i64, &str)] = &[
+        (1_000_000_000_000, "Trillion"),
+        (1_000_000_000, "Billion"),
+        (1_000_000, "Million"),
+        (1_000, "Thousand"),
+    ];
+
+    let mut result = String::new();
+    let mut remaining = n;
+
+    for &(divisor, name) in magnitudes {
+        if remaining >= divisor {
+            let count = remaining / divisor;
+            remaining %= divisor;
+            if !result.is_empty() {
+                result.push(' ');
+            }
+            result.push_str(&chunk_to_words(count, &ones, &tens));
+            result.push(' ');
+            result.push_str(name);
+        }
+    }
+
+    if remaining > 0 {
+        if !result.is_empty() {
+            result.push(' ');
+        }
+        result.push_str(&chunk_to_words(remaining, &ones, &tens));
+    }
+
+    result
 }
 
 /// Build the XPath path expression for a node (e.g., `/document-node()/html[1]/body[1]`).
@@ -3859,7 +3899,7 @@ fn func_format_number(value: f64, picture: &str) -> Result<String, ExpressionApp
     let (pos_pic, neg_pic) = if let Some(idx) = picture.find(';') {
         (&picture[..idx], Some(&picture[idx + 1..]))
     } else {
-        (picture.as_ref(), None)
+        (picture, None)
     };
 
     let is_negative = value < 0.0;

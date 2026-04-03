@@ -47,24 +47,10 @@ pub enum TagTokenType {
 }
 
 impl TagTokenType {
-    pub fn tag_name(&self) -> &str {
-        match self {
-            TagTokenType::StartTag(tag) => &tag.tag_name,
-            TagTokenType::EndTag(tag) => &tag.tag_name,
-        }
-    }
-
     pub fn tag_name_mut(&mut self) -> &mut String {
         match self {
             TagTokenType::StartTag(tag) => &mut tag.tag_name,
             TagTokenType::EndTag(tag) => &mut tag.tag_name,
-        }
-    }
-
-    pub fn attributes(&self) -> &[Attribute] {
-        match self {
-            TagTokenType::StartTag(tag) => &tag.attributes,
-            TagTokenType::EndTag(tag) => &tag.attributes,
         }
     }
 
@@ -335,7 +321,7 @@ impl TokenizerErrorHandler for DefaultTokenizerErrorHandler {
     fn error_emitted(
         &self,
         error: TokenizerError,
-        tokenizer: &mut Tokenizer,
+        _tokenizer: &mut Tokenizer,
     ) -> Result<(), HtmlParseError> {
         let _ = error;
         Ok(())
@@ -417,10 +403,8 @@ impl<'a> Tokenizer<'a> {
     }
 
     pub fn is_current_end_tag_token_appropriate(&self) -> bool {
-        if let Some(tag_token) = &self.tag_token {
-            if let TagTokenType::EndTag(end_tag) = tag_token {
-                return self.is_appropriate_end_tag_token(end_tag);
-            }
+        if let Some(TagTokenType::EndTag(end_tag)) = &self.tag_token {
+            return self.is_appropriate_end_tag_token(end_tag);
         }
 
         false

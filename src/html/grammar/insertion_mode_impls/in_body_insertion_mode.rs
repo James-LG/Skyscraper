@@ -186,7 +186,7 @@ impl HtmlParser {
                     .arena
                     .get(second_element_id)
                     .and_then(|node| node.get().as_element_node().ok())
-                    .map_or(false, |el| el.name == "body");
+                    .is_some_and(|el| el.name == "body");
 
                 if !is_body {
                     return Ok(Acknowledgement::no());
@@ -197,7 +197,7 @@ impl HtmlParser {
                     self.arena
                         .get(*id)
                         .and_then(|node| node.get().as_element_node().ok())
-                        .map_or(false, |el| el.name == "template")
+                        .is_some_and(|el| el.name == "template")
                 }) {
                     return Ok(Acknowledgement::no());
                 }
@@ -253,7 +253,7 @@ impl HtmlParser {
                     .arena
                     .get(second_element_id)
                     .and_then(|node| node.get().as_element_node().ok())
-                    .map_or(false, |el| el.name == "body");
+                    .is_some_and(|el| el.name == "body");
 
                 if !is_body {
                     return Ok(Acknowledgement::no());
@@ -283,7 +283,7 @@ impl HtmlParser {
                 if !self.template_insertion_modes.is_empty() {
                     self.using_the_rules_for(token, InsertionMode::InTemplate)?;
                 } else {
-                    ensure_open_elements_has_valid_element(&self)?;
+                    ensure_open_elements_has_valid_element(self)?;
                     self.stop_parsing()?;
                 }
             }
@@ -294,7 +294,7 @@ impl HtmlParser {
                     )))?;
                     // Per WHATWG: ignore the token when body is not in scope.
                 } else {
-                    ensure_open_elements_has_valid_element(&self)?;
+                    ensure_open_elements_has_valid_element(self)?;
                     self.insertion_mode = InsertionMode::AfterBody;
                 }
             }
@@ -305,7 +305,7 @@ impl HtmlParser {
                     )))?;
                     // Per WHATWG: ignore the token when body is not in scope.
                 } else {
-                    ensure_open_elements_has_valid_element(&self)?;
+                    ensure_open_elements_has_valid_element(self)?;
                     self.insertion_mode = InsertionMode::AfterBody;
                     self.token_emitted(HtmlToken::TagToken(TagTokenType::EndTag(token)))?;
                 }
@@ -1107,7 +1107,7 @@ impl HtmlParser {
             if node.name == token.tag_name {
                 self.generate_implied_end_tags(Some(&token.tag_name))?;
 
-                if node != self.current_node_as_element_result()?.clone() {
+                if node_id != self.current_node_id().ok_or(HtmlParseError::new("no current node"))? {
                     self.handle_error(HtmlParserError::MinorError(String::from(
                         "node is not the same as the current node",
                     )))?;
@@ -1366,7 +1366,11 @@ impl HtmlParser {
                 // the new element, and let "node" be the new element.
                 let old_token = match &self.active_formatting_elements[node_active_index] {
                     NodeOrMarker::Node(entry) => entry.token.clone(),
-                    _ => unreachable!(),
+                    _ => {
+                        return Err(HtmlParseError::new(
+                            "adoption agency: expected formatting element, found marker",
+                        ));
+                    }
                 };
 
                 let new_element_id = self.create_an_element_for_the_token(old_token.clone(), super::HTML_NAMESPACE)?;

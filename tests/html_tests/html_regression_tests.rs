@@ -1622,3 +1622,86 @@ fn svg_title_parses_correctly_in_svg_context() {
         "title elements should be found in both HTML and SVG contexts"
     );
 }
+
+// ============================================================================
+// Regression: CR-3 - Namespace-aware scope checks
+// An SVG <title> must not satisfy HTML-namespace scope checks for "title".
+// ============================================================================
+
+#[test]
+fn scope_check_distinguishes_svg_title_from_html_title() {
+    // The <p> should be implicitly closed by the <title> in body context.
+    // But the SVG <title> should NOT close the <p> since it's in the SVG namespace.
+    let text = r#"<html><body><p>text<svg><title>SVG</title></svg></p></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    // The <p> should contain the <svg> element as a descendant
+    let xp = xpath::parse("//p/svg").unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert!(
+        !result.is_empty(),
+        "SVG element should be a child of <p>, not a sibling — SVG <title> should not close <p>"
+    );
+}
+
+#[test]
+fn scope_check_html_title_still_works() {
+    // An HTML <title> in body should still trigger the correct scope-related behavior.
+    let text = r#"<html><head><title>Test</title></head><body></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse("//head/title").unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert_eq!(result.len(), 1, "HTML <title> should be under <head>");
+}
+
+// ============================================================================
+// Regression: CR-13 - any_other_end_tag uses NodeId comparison, not element value
+// ============================================================================
+
+#[test]
+fn any_other_end_tag_identity_comparison() {
+    // Two elements with the same name should be tracked by identity, not value.
+    // This ensures the parser correctly identifies which node to pop.
+    let text = r#"<html><body><span><span>inner</span></span></body></html>"#;
+    let doc = html::parse(text).unwrap();
+    // Both span elements should be present in the tree
+    let xp = xpath::parse("//span").unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert_eq!(result.len(), 2, "both nested spans should be in the tree");
+
+    // The inner span should be a child of the outer span
+    let xp = xpath::parse("//span/span").unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert_eq!(result.len(), 1, "inner span should be child of outer span");
+}
+
+// ============================================================================
+// Regression: CR-10 - insert_character delegates to insert_characters (DRY)
+// ============================================================================
+
+#[test]
+fn character_insertion_produces_correct_text() {
+    // Verifies that the refactored insert_character (now delegating to
+    // insert_characters) still produces correct text content.
+    let text = r#"<html><body>Hello &amp; world</body></html>"#;
+    let doc = html::parse(text).unwrap();
+    let xp = xpath::parse("//body/text()").unwrap();
+    let result = xp.apply(&doc).unwrap();
+    assert!(!result.is_empty(), "body should have text content");
+}
+
+// ============================================================================
+// Regression: CR-14 - LazyLock replaces once_cell::sync::Lazy
+// ============================================================================
+
+#[test]
+fn lazy_lock_xpath_static_still_works() {
+    use std::sync::LazyLock;
+    use skyscraper::xpath::Xpath;
+
+    static TEST_XPATH: LazyLock<Xpath> = LazyLock::new(|| xpath::parse("//div").unwrap());
+
+    let text = "<html><body><div>test</div></body></html>";
+    let doc = html::parse(text).unwrap();
+    let result = TEST_XPATH.apply(&doc).unwrap();
+    assert_eq!(result.len(), 1, "LazyLock-based static XPath should work");
+}

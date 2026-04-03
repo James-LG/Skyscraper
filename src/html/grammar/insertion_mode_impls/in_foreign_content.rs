@@ -222,7 +222,7 @@ impl HtmlParser {
             // an SVG script element.
             HtmlToken::TagToken(TagTokenType::EndTag(ref tag))
                 if tag.tag_name == "script"
-                    && self.current_node_id().map_or(false, |id| {
+                    && self.current_node_id().is_some_and(|id| {
                         self.element_namespace(id) == Some(SVG_NAMESPACE)
                             && self.element_name(id) == Some("script")
                     }) =>

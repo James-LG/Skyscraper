@@ -64,9 +64,9 @@ impl Display for AttributeTest {
 }
 
 impl AttributeTest {
-    pub(crate) fn is_match<'tree>(
+    pub(crate) fn is_match(
         &self,
-        node: &'tree XpathItemTreeNode,
+        node: &XpathItemTreeNode,
     ) -> Result<bool, ExpressionApplyError> {
         match &self.pair {
             Some(pair) => pair.is_match(node),
@@ -99,9 +99,9 @@ impl Display for AttributeTestPair {
 }
 
 impl AttributeTestPair {
-    pub(crate) fn is_match<'tree>(
+    pub(crate) fn is_match(
         &self,
-        node: &'tree XpathItemTreeNode,
+        node: &XpathItemTreeNode,
     ) -> Result<bool, ExpressionApplyError> {
         let is_match = self.name_or_wildcard.is_match(node)?;
 
@@ -148,9 +148,9 @@ impl Display for AttribNameOrWildcard {
 }
 
 impl AttribNameOrWildcard {
-    pub(crate) fn is_match<'tree>(
+    pub(crate) fn is_match(
         &self,
-        node: &'tree XpathItemTreeNode,
+        node: &XpathItemTreeNode,
     ) -> Result<bool, ExpressionApplyError> {
         match self {
             AttribNameOrWildcard::AttributeName(attr_name) => {
@@ -160,14 +160,14 @@ impl AttribNameOrWildcard {
                             QName::PrefixedName(p) => {
                                 let target_ns = resolve_prefix(&p.prefix)?;
                                 let ns_matches =
-                                    attr.namespace.as_deref().map_or(false, |ns| ns == target_ns);
+                                    attr.namespace.as_deref() == Some(target_ns);
                                 p.local_part == attr.name && ns_matches
                             }
                             QName::UnprefixedName(name) => name == &attr.name,
                         },
                         EQName::UriQualifiedName(uqn) => {
                             uqn.name == attr.name
-                                && attr.namespace.as_deref().map_or(false, |ns| ns == uqn.uri)
+                                && attr.namespace.as_deref().is_some_and(|ns| ns == uqn.uri)
                         }
                     };
                     Ok(matches)

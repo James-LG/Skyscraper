@@ -75,7 +75,7 @@ impl TreatExpr {
                 msg: format!(
                     "err:XPDY0050 Cannot treat {:?} as {}",
                     result,
-                    treat_type.to_string()
+                    treat_type
                 ),
             });
         }

@@ -123,7 +123,7 @@ impl XpathItemTreeNode {
     /// # Returns
     ///
     /// A string of all text contained in this element and its descendants.
-    pub fn text_content<'tree>(&self, tree: &'tree XpathItemTree) -> String {
+    pub fn text_content(&self, tree: &XpathItemTree) -> String {
         match self {
             XpathItemTreeNode::DocumentNode(node) => node.text_content(tree),
             XpathItemTreeNode::ElementNode(node) => node.text_content(tree),
@@ -146,7 +146,7 @@ impl XpathItemTreeNode {
     /// # Returns
     ///
     /// A string of all text contained in this element.
-    pub fn text<'tree>(&self, tree: &'tree XpathItemTree) -> Option<String> {
+    pub fn text(&self, tree: &XpathItemTree) -> Option<String> {
         match self {
             XpathItemTreeNode::DocumentNode(node) => node.text(tree),
             XpathItemTreeNode::ElementNode(node) => node.text(tree),
@@ -201,6 +201,13 @@ pub struct TextIter {
 }
 
 impl TextIter {
+    /// Create an empty `TextIter` that yields no items.
+    pub(crate) fn empty() -> Self {
+        TextIter {
+            inner: Vec::new().into_iter(),
+        }
+    }
+
     pub(crate) fn new(tree: &XpathItemTree, node: &XpathItemTreeNode) -> TextIter {
         let mut texts = Vec::new();
         Self::collect_texts(tree, node, &mut texts);
@@ -322,7 +329,7 @@ impl From<&HtmlDocument> for XpathItemTree {
             item_arena: &mut Arena<XpathItemTreeNode>,
         ) -> NodeId {
             let html_node = html_document
-                .get_html_node(&current_html_node)
+                .get_html_node(current_html_node)
                 .expect("html document missing expected node");
 
             let root_item_id = match html_node {
@@ -392,7 +399,7 @@ impl From<&HtmlDocument> for XpathItemTree {
                 ),
             };
 
-            for child in current_html_node.children(&html_document) {
+            for child in current_html_node.children(html_document) {
                 let child_node = internal_from(&child, html_document, item_arena);
                 root_item_id.append(child_node, item_arena);
             }
@@ -403,7 +410,7 @@ impl From<&HtmlDocument> for XpathItemTree {
         let mut item_arena = Arena::<XpathItemTreeNode>::new();
         let root_node_id =
             item_arena.new_node(XpathItemTreeNode::DocumentNode(XpathDocumentNode {}));
-        let first_child = internal_from(&html_document.root_node, &html_document, &mut item_arena);
+        let first_child = internal_from(&html_document.root_node, html_document, &mut item_arena);
         root_node_id.append(first_child, &mut item_arena);
 
         XpathItemTree {

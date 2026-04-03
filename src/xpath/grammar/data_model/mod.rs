@@ -135,6 +135,57 @@ impl std::hash::Hash for AnyAtomicType {
     }
 }
 
+/// Compare an i64 integer to an f64 double without precision loss.
+///
+/// For integers outside the exact f64 range (|n| > 2^53), direct casting
+/// would silently round, producing incorrect comparisons. This function
+/// handles those cases by comparing via the integer domain.
+fn compare_integer_double(int_val: i64, dbl_val: f64) -> Option<std::cmp::Ordering> {
+    if dbl_val.is_nan() {
+        return None;
+    }
+    if dbl_val.is_infinite() {
+        return if dbl_val > 0.0 {
+            Some(std::cmp::Ordering::Less)
+        } else {
+            Some(std::cmp::Ordering::Greater)
+        };
+    }
+    // If the double has a fractional part, compare truncated value
+    let trunc = dbl_val.trunc();
+    if dbl_val != trunc {
+        // dbl_val has a fractional part — compare int_val to truncated value
+        // e.g., 3 vs 3.5: 3 < 3.5, so 3 < trunc(3.5)=3.0, so we know 3 < 3.5
+        // Actually we need: if int_val == trunc as i64, then compare based on fraction sign
+        if trunc >= i64::MIN as f64 && trunc <= i64::MAX as f64 {
+            let trunc_int = trunc as i64;
+            match int_val.cmp(&trunc_int) {
+                std::cmp::Ordering::Equal => {
+                    // int_val == trunc, so compare 0 vs fractional part
+                    if dbl_val > trunc {
+                        Some(std::cmp::Ordering::Less) // int < dbl
+                    } else {
+                        Some(std::cmp::Ordering::Greater) // int > dbl
+                    }
+                }
+                other => Some(other),
+            }
+        } else {
+            // trunc is outside i64 range, so compare as f64 (safe since both are "big")
+            OrderedFloat(int_val as f64).partial_cmp(&OrderedFloat(dbl_val))
+        }
+    } else {
+        // dbl_val is an integer value — check if it's in exact i64 range
+        if trunc >= i64::MIN as f64 && trunc <= i64::MAX as f64 {
+            let dbl_as_int = trunc as i64;
+            Some(int_val.cmp(&dbl_as_int))
+        } else {
+            // dbl_val is outside i64 range
+            OrderedFloat(int_val as f64).partial_cmp(&OrderedFloat(dbl_val))
+        }
+    }
+}
+
 impl PartialOrd for AnyAtomicType {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         match (self, other) {
@@ -143,18 +194,18 @@ impl PartialOrd for AnyAtomicType {
             (AnyAtomicType::Float(a), AnyAtomicType::Float(b)) => a.partial_cmp(b),
             (AnyAtomicType::Double(a), AnyAtomicType::Double(b)) => a.partial_cmp(b),
             (AnyAtomicType::String(a), AnyAtomicType::String(b)) => a.partial_cmp(b),
-            // Cross-type numeric comparisons: promote to the wider type.
+            // Cross-type numeric comparisons: precision-safe promotion.
             (AnyAtomicType::Integer(a), AnyAtomicType::Double(b)) => {
-                OrderedFloat(*a as f64).partial_cmp(b)
+                compare_integer_double(*a, b.0)
             }
             (AnyAtomicType::Double(a), AnyAtomicType::Integer(b)) => {
-                a.partial_cmp(&OrderedFloat(*b as f64))
+                compare_integer_double(*b, a.0).map(|o| o.reverse())
             }
             (AnyAtomicType::Integer(a), AnyAtomicType::Float(b)) => {
-                OrderedFloat(*a as f64).partial_cmp(&OrderedFloat(b.0 as f64))
+                compare_integer_double(*a, b.0 as f64)
             }
             (AnyAtomicType::Float(a), AnyAtomicType::Integer(b)) => {
-                OrderedFloat(a.0 as f64).partial_cmp(&OrderedFloat(*b as f64))
+                compare_integer_double(*b, a.0 as f64).map(|o| o.reverse())
             }
             (AnyAtomicType::Float(a), AnyAtomicType::Double(b)) => {
                 OrderedFloat(a.0 as f64).partial_cmp(b)
@@ -418,17 +469,16 @@ impl XpathDocumentNode {
     /// # Returns
     ///
     /// A string of all text contained in this document and its descendants.
-    pub fn text_content<'tree>(&self, tree: &'tree XpathItemTree) -> String {
+    pub fn text_content(&self, tree: &XpathItemTree) -> String {
         let strings: Vec<String> = tree
             .root_node
             .children(&tree.arena)
-            .into_iter()
             .map(|x| tree.get(x))
             .map(|x| x.text_content(tree))
             .collect();
 
-        let text = strings.join("");
-        text
+        
+        strings.join("")
     }
 
     /// Text before the first subelement. This is either a string or the value None, if there was no text.
@@ -442,10 +492,9 @@ impl XpathDocumentNode {
     /// # Returns
     ///
     /// A string of all text contained in this document.
-    pub fn text<'tree>(&self, tree: &'tree XpathItemTree) -> Option<String> {
+    pub fn text(&self, tree: &XpathItemTree) -> Option<String> {
         tree.root_node
             .children(&tree.arena)
-            .into_iter()
             .map(|x| tree.get(x))
             .find_map(|x| x.text(tree))
     }
@@ -467,9 +516,9 @@ impl XpathDocumentNode {
     }
 
     /// Render the document's children as an HTML string with the given formatting.
-    pub fn display<'tree>(
+    pub fn display(
         &self,
-        tree: &'tree XpathItemTree,
+        tree: &XpathItemTree,
         formatting: DisplayFormatting,
     ) -> String {
         match formatting {
@@ -595,28 +644,6 @@ impl ElementNode {
             .map(|x| &*x.value)
     }
 
-    pub(crate) fn add_attribute<'arena>(
-        &self,
-        arena: &mut Arena<XpathItemTreeNode>,
-        name: String,
-        value: String,
-    ) -> Result<NodeId, ExpressionApplyError> {
-        let attr = arena.new_node(XpathItemTreeNode::AttributeNode(AttributeNode::new(
-            name, value,
-        )));
-        self.id()?.append(attr, arena);
-
-        arena
-            .get_mut(attr)
-            .unwrap()
-            .get_mut()
-            .as_attribute_node_mut()
-            .unwrap()
-            .set_id(attr);
-
-        Ok(attr)
-    }
-
     /// Get all direct child nodes of the given element.
     /// Note this _does_ include attribute nodes.
     ///
@@ -630,17 +657,24 @@ impl ElementNode {
     pub fn children<'tree>(
         &self,
         tree: &'tree XpathItemTree,
-    ) -> impl Iterator<Item = &'tree XpathItemTreeNode> {
-        self.id().expect("node ID not set").children(&tree.arena).map(|x| tree.get(x))
+    ) -> Box<dyn Iterator<Item = &'tree XpathItemTreeNode> + 'tree> {
+        match self.id() {
+            Ok(id) => Box::new(id.children(&tree.arena).map(|x| tree.get(x))),
+            Err(_) => Box::new(std::iter::empty()),
+        }
     }
 
     pub(crate) fn children_arena<'arena>(
         &self,
         arena: &'arena Arena<XpathItemTreeNode>,
-    ) -> impl Iterator<Item = &'arena XpathItemTreeNode> {
-        self.id().expect("node ID not set")
-            .children(arena)
-            .map(|x| arena.get(x).expect("node missing from arena").get())
+    ) -> Box<dyn Iterator<Item = &'arena XpathItemTreeNode> + 'arena> {
+        match self.id() {
+            Ok(id) => Box::new(
+                id.children(arena)
+                    .map(|x| arena.get(x).expect("node missing from arena").get()),
+            ),
+            Err(_) => Box::new(std::iter::empty()),
+        }
     }
 
     /// Get the parent of the element.
@@ -661,7 +695,10 @@ impl ElementNode {
     /// Includes whitespace text nodes.
     /// Text nodes are split by opening and closing tags contained in the current element.
     pub fn itertext(&self, tree: &XpathItemTree) -> TextIter {
-        TextIter::new(tree, tree.get(self.id().expect("node ID not set")))
+        match self.id() {
+            Ok(id) => TextIter::new(tree, tree.get(id)),
+            Err(_) => TextIter::empty(),
+        }
     }
 
     /// Get all text contained in this element and its descendants.
@@ -673,7 +710,7 @@ impl ElementNode {
     /// # Returns
     ///
     /// A string of all text contained in this element and its descendants.
-    pub fn text_content<'tree>(&self, tree: &'tree XpathItemTree) -> String {
+    pub fn text_content(&self, tree: &XpathItemTree) -> String {
         self.itertext(tree).collect::<Vec<String>>().join("")
     }
 
@@ -718,9 +755,9 @@ impl ElementNode {
     }
 
     /// Render this element as an HTML string with the given formatting and indentation level.
-    pub fn display<'tree>(
+    pub fn display(
         &self,
-        tree: &'tree XpathItemTree,
+        tree: &XpathItemTree,
         formatting: DisplayFormatting,
         indent: usize,
     ) -> String {
@@ -730,7 +767,7 @@ impl ElementNode {
         }
     }
 
-    fn display_raw<'tree>(&self, tree: &'tree XpathItemTree) -> String {
+    fn display_raw(&self, tree: &XpathItemTree) -> String {
         let attributes = self.attributes(tree);
 
         let mut display_string = String::new();
@@ -762,9 +799,9 @@ impl ElementNode {
         display_string
     }
 
-    fn display_pretty<'tree>(
+    fn display_pretty(
         &self,
-        tree: &'tree XpathItemTree,
+        tree: &XpathItemTree,
         formatting: DisplayFormatting,
         indent: usize,
     ) -> String {
@@ -778,7 +815,7 @@ impl ElementNode {
                     .collect()
             }
             DisplayFormatting::NoChildren => Vec::new(),
-            DisplayFormatting::Raw => unreachable!(),
+            DisplayFormatting::Raw => Vec::new(),
         };
 
         let attributes = self.attributes(tree);
@@ -817,7 +854,7 @@ impl ElementNode {
             display_string.push_str(&format!("</{}>", self.name));
         }
 
-        return display_string;
+        display_string
     }
 }
 

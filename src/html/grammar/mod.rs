@@ -719,20 +719,6 @@ impl HtmlParser {
         }
     }
 
-    pub(crate) fn add_attribute_to_element(
-        &mut self,
-        element_id: NodeId,
-        name: String,
-        value: String,
-    ) -> Result<(), HtmlParseError> {
-        let attribute = AttributeNode::new(name, value);
-        let item_id = self.new_node(XpathItemTreeNode::AttributeNode(attribute));
-
-        element_id.append(item_id, &mut self.arena);
-
-        Ok(())
-    }
-
     /// Adjust SVG tag names on a token.
     ///
     /// The HTML tokenizer lowercases all tag names, but SVG uses camelCase for
@@ -1025,18 +1011,6 @@ impl HtmlParser {
         Ok(element_id)
     }
 
-    /// <https://html.spec.whatwg.org/multipage/parsing.html#insert-an-element-at-the-adjusted-insertion-location>
-    pub(crate) fn insert_element_at_adjusted_insertion_location(
-        &mut self,
-        element_id: NodeId,
-    ) -> Result<(), HtmlParseError> {
-        let adjusted_insertion_location = self.appropriate_place_for_inserting_a_node(None)?;
-
-        adjusted_insertion_location.insert(element_id, &mut self.arena);
-
-        Ok(())
-    }
-
     /// <https://html.spec.whatwg.org/multipage/parsing.html#insert-a-comment>
     pub(crate) fn insert_a_comment(
         &mut self,
@@ -1296,60 +1270,8 @@ impl HtmlParser {
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#insert-a-character>
     pub(crate) fn insert_character(&mut self, c: char) -> Result<(), HtmlParseError> {
-        // Fast path: if we have a cached text node and no non-character tokens
-        // have been processed since, append directly.
-        if let Some((text_id, gen)) = self.active_text_node {
-            if self.tree_generation == gen {
-                if let Some(node) = self.arena.get_mut(text_id) {
-                    if let XpathItemTreeNode::TextNode(ref mut text) = node.get_mut() {
-                        text.content.push(c);
-                        return Ok(());
-                    }
-                }
-            }
-            // Cache was stale, clear it.
-            self.active_text_node = None;
-        }
-
-        let adjusted_insertion_location = self.appropriate_place_for_inserting_a_node(None)?;
-
-        // Check if the parent is a Document node — DOM doesn't allow Document nodes to have Text children.
-        if let Some(parent_id) = adjusted_insertion_location.parent(&self.arena) {
-            let node = self.arena.get(parent_id).unwrap().get();
-            if let XpathItemTreeNode::DocumentNode(_) = node {
-                return Ok(());
-            }
-        }
-
-        // Get the previous sibling at the insertion point to check for text node merging.
-        let prev_sibling_id = adjusted_insertion_location.previous_sibling(&self.arena);
-
-        let prev_sibling: Option<&mut XpathItemTreeNode> =
-            prev_sibling_id.map(|id| self.arena.get_mut(id).unwrap().get_mut());
-
-        if let Some(&mut XpathItemTreeNode::TextNode(ref mut text)) = prev_sibling {
-            // If the previous sibling is a Text node, append the character to that Text node.
-            text.content.push(c);
-            self.active_text_node = prev_sibling_id.map(|id| (id, self.tree_generation));
-        } else {
-            // Otherwise, insert a new Text node with the character as its data.
-            let string = c.to_string();
-            let text = XpathItemTreeNode::TextNode(TextNode::new(string));
-            let text_id = self.new_node(text);
-
-            self.arena
-                .get_mut(text_id)
-                .unwrap()
-                .get_mut()
-                .as_text_node_mut()
-                .unwrap()
-                .set_id(text_id);
-            self.active_text_node = Some((text_id, self.tree_generation));
-
-            adjusted_insertion_location.insert(text_id, &mut self.arena);
-        }
-
-        Ok(())
+        let mut buf = [0u8; 4];
+        self.insert_characters(c.encode_utf8(&mut buf))
     }
 
     /// Bulk insert a string of characters at the appropriate place.
@@ -1485,7 +1407,10 @@ impl HtmlParser {
         for node_id in self.open_elements.iter().rev() {
             if let Some(node) = self.arena.get(*node_id) {
                 if let XpathItemTreeNode::ElementNode(element) = node.get() {
-                    if tag_names.contains(&element.name.as_str()) {
+                    if tag_names.contains(&element.name.as_str())
+                        && (element.namespace.is_none()
+                            || element.namespace.as_deref() == Some(HTML_NAMESPACE))
+                    {
                         return true;
                     }
 
@@ -1664,13 +1589,11 @@ impl HtmlParser {
         self.generate_implied_end_tags(Some("p"))?;
 
         // If the current node is not a p element, then this is a parse error.
-        if let Some(node) = self.current_node() {
-            if let XpathItemTreeNode::ElementNode(element) = node {
-                if element.name != "p" {
-                    self.handle_error(HtmlParserError::MinorError(
-                        "closing a p element that is not the current node".to_string(),
-                    ))?;
-                }
+        if let Some(XpathItemTreeNode::ElementNode(element)) = self.current_node() {
+            if element.name != "p" {
+                self.handle_error(HtmlParserError::MinorError(
+                    "closing a p element that is not the current node".to_string(),
+                ))?;
             }
         }
 
@@ -1836,26 +1759,6 @@ impl HtmlParser {
             }));
 
         Ok(())
-    }
-
-    /// Gets active formatting elements between the end of the list and the last marker,
-    /// if there is a marker, or the start of the list otherwise.
-    pub(crate) fn active_formatting_elements_until_marker(
-        &self,
-    ) -> impl Iterator<Item = &ElementNode> {
-        self.active_formatting_elements
-            .iter()
-            .rev()
-            .map_while(|node_or_marker| {
-                if let NodeOrMarker::Node(entry) = node_or_marker {
-                    let node = self.arena.get(entry.node_id).unwrap().get();
-                    if let XpathItemTreeNode::ElementNode(element) = node {
-                        return Some(element);
-                    }
-                }
-
-                None
-            })
     }
 
     pub(crate) fn remove_from_active_formatting_elements(
@@ -2028,16 +1931,6 @@ impl HtmlParser {
     pub(crate) fn stop_parsing(&mut self) -> Result<(), HtmlParseError> {
         // mostly scripting stuff that is unsupported by Skyscraper
         Ok(())
-    }
-
-    fn adjusted_current_node_id(&self) -> Result<NodeId, HtmlParseError> {
-        if let Some(context_element) = self.context_element {
-            if self.open_elements.len() == 1 {
-                return Ok(context_element);
-            }
-        }
-
-        self.current_node_id_result()
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#generate-all-implied-end-tags-thoroughly>

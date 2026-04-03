@@ -57,19 +57,19 @@
 //! # }
 //! ```
 //!
-//! # Example: use once_cell if Xpath expressions are static
+//! # Example: use LazyLock if Xpath expressions are static
 //!
 //! If your Xpath expressions are static, and you have a function that
 //! parses and applies the expression every time the function is called,
-//! consider using [mod@once_cell] to prevent the expression from being
+//! consider using [`std::sync::LazyLock`] to prevent the expression from being
 //! repeatedly parsed.
 //!
 //! ```rust
 //! use std::error::Error;
+//! use std::sync::LazyLock;
 //! use skyscraper::{html, xpath::{self, Xpath, XpathItemTree}};
-//! use once_cell::sync::Lazy;
 //!
-//! static SPAN_XPATH: Lazy<Xpath> = Lazy::new(|| xpath::parse("//span").unwrap());
+//! static SPAN_XPATH: LazyLock<Xpath> = LazyLock::new(|| xpath::parse("//span").unwrap());
 //!
 //! fn my_func(tree: &XpathItemTree) -> Result<String, Box<dyn Error>> {
 //!     let result = SPAN_XPATH.apply(tree)?;

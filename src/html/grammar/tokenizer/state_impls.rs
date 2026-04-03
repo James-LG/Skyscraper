@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::{
     html::grammar::{chars, HtmlParseError, HTML_NAMESPACE},
@@ -1338,7 +1338,7 @@ impl<'a> Tokenizer<'a> {
         if doctype_target.iter().enumerate().all(|(i, target)| {
             self.input_stream
                 .peek_add(i)
-                .map_or(false, |c| c.eq_ignore_ascii_case(target))
+                .is_some_and(|c| c.eq_ignore_ascii_case(target))
         }) {
             self.input_stream.next_add(7);
             self.state = TokenizerState::DOCTYPE;
@@ -1354,12 +1354,10 @@ impl<'a> Tokenizer<'a> {
 
             // if there is an adjusted current node and it is not in the HTML namespace,
             // switch to CDATA section state.
-            if let Some(node) = self.parser.adjusted_current_node() {
-                if let XpathItemTreeNode::ElementNode(element) = node {
-                    if element.namespace.as_deref().unwrap_or(HTML_NAMESPACE) != HTML_NAMESPACE {
-                        self.state = TokenizerState::CDATASection;
-                        return Ok(());
-                    }
+            if let Some(XpathItemTreeNode::ElementNode(element)) = self.parser.adjusted_current_node() {
+                if element.namespace.as_deref().unwrap_or(HTML_NAMESPACE) != HTML_NAMESPACE {
+                    self.state = TokenizerState::CDATASection;
+                    return Ok(());
                 }
             }
 
@@ -1760,7 +1758,7 @@ impl<'a> Tokenizer<'a> {
                 if public_target.iter().enumerate().all(|(i, target)| {
                     self.input_stream
                         .peek_add(i)
-                        .map_or(false, |c| c.eq_ignore_ascii_case(target))
+                        .is_some_and(|c| c.eq_ignore_ascii_case(target))
                 }) {
                     self.input_stream.next_add(6);
                     self.state = TokenizerState::AfterDOCTYPEPublicKeyword;
@@ -1771,7 +1769,7 @@ impl<'a> Tokenizer<'a> {
                 if system_target.iter().enumerate().all(|(i, target)| {
                     self.input_stream
                         .peek_add(i)
-                        .map_or(false, |c| c.eq_ignore_ascii_case(target))
+                        .is_some_and(|c| c.eq_ignore_ascii_case(target))
                 }) {
                     self.input_stream.next_add(6);
                     self.state = TokenizerState::AfterDOCTYPESystemKeyword;
@@ -2742,17 +2740,17 @@ fn is_surrogate(code_point: u32) -> bool {
 
 /// <https://infra.spec.whatwg.org/#leading-surrogate>
 fn is_leading_surrogate(code_point: u32) -> bool {
-    code_point >= 0xD800 && code_point <= 0xDBFF
+    (0xD800..=0xDBFF).contains(&code_point)
 }
 
 /// <https://infra.spec.whatwg.org/#trailing-surrogate>
 fn is_trailing_surrogate(code_point: u32) -> bool {
-    code_point >= 0xDC00 && code_point <= 0xDFFF
+    (0xDC00..=0xDFFF).contains(&code_point)
 }
 
 /// <https://infra.spec.whatwg.org/#noncharacter>
 fn is_noncharacter(code_point: u32) -> bool {
-    code_point >= 0xFDD0 && code_point <= 0xFDEF
+    (0xFDD0..=0xFDEF).contains(&code_point)
         || [
             0xFFFE, 0xFFFF, 0x1FFFE, 0x1FFFF, 0x2FFFE, 0x2FFFF, 0x3FFFE, 0x3FFFF, 0x4FFFE, 0x4FFFF,
             0x5FFFE, 0x5FFFF, 0x6FFFE, 0x6FFFF, 0x7FFFE, 0x7FFFF, 0x8FFFE, 0x8FFFF, 0x9FFFE,
@@ -2764,7 +2762,7 @@ fn is_noncharacter(code_point: u32) -> bool {
 
 /// <https://infra.spec.whatwg.org/#control>
 fn is_control(code_point: u32) -> bool {
-    is_c0_control(code_point) || (code_point >= 0x007F && code_point <= 0x009F)
+    is_c0_control(code_point) || (0x007F..=0x009F).contains(&code_point)
 }
 
 /// <https://infra.spec.whatwg.org/#c0-control>
@@ -2782,7 +2780,7 @@ fn is_ascii_whitespace(code_point: u32) -> bool {
 }
 
 /// <https://html.spec.whatwg.org/multipage/parsing.html#numeric-character-reference-end-state>
-static NUMERIC_CHARACTER_REF_END_TABLE: Lazy<HashMap<u32, u32>> = Lazy::new(|| {
+static NUMERIC_CHARACTER_REF_END_TABLE: LazyLock<HashMap<u32, u32>> = LazyLock::new(|| {
     let mut table = HashMap::new();
     table.insert(0x80, 0x20AC);
     table.insert(0x82, 0x201A);

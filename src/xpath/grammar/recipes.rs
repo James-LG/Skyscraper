@@ -148,9 +148,9 @@ impl<
         let total_res = find_max(total_res, res3, input.clone());
 
         let res4 = self.4.parse(input.clone());
-        let total_res = find_max(total_res, res4, input.clone());
+        
 
-        total_res
+        find_max(total_res, res4, input.clone())
     }
 }
 
@@ -194,9 +194,9 @@ impl<
         let total_res = find_max(total_res, res7, input.clone());
 
         let res8 = self.8.parse(input.clone());
-        let total_res = find_max(total_res, res8, input.clone());
+        
 
-        total_res
+        find_max(total_res, res8, input.clone())
     }
 }
 

@@ -340,23 +340,6 @@ impl<'tree> XpathExpressionContext<'tree> {
         }
     }
 
-    /// Create a new context that inherits variable bindings from this context,
-    /// with a single item as the context item.
-    pub fn new_single_with_variables(
-        &self,
-        item: XpathItem<'tree>,
-        is_initial_step: bool,
-    ) -> Self {
-        Self {
-            item_tree: self.item_tree,
-            item,
-            position: 1,
-            size: 1,
-            is_initial_step,
-            variables: Rc::clone(&self.variables),
-        }
-    }
-
     /// Create a new context with an additional variable binding.
     /// Inherits all existing variables plus the new one.
     pub fn with_variable(

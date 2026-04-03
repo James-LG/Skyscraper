@@ -2,7 +2,7 @@
 ///
 /// Used internally by the HTML tokenizer and parser to iterate over character
 /// streams while supporting lookahead and backtracking.
-pub struct VecPointerRef<'a, T> {
+pub(crate) struct VecPointerRef<'a, T> {
     values: &'a [T],
     /// The current index position within the slice.
     pub(crate) index: usize,
@@ -10,36 +10,36 @@ pub struct VecPointerRef<'a, T> {
 
 impl<'a, T> VecPointerRef<'a, T> {
     /// Create a new pointer starting at position 0.
-    pub fn new(values: &[T]) -> VecPointerRef<T> {
+    pub(crate) fn new(values: &[T]) -> VecPointerRef<'_, T> {
         VecPointerRef { values, index: 0 }
     }
 
     /// Returns a reference to the element at the current index, or `None` if past the end.
-    pub fn current(&self) -> Option<&T> {
+    pub(crate) fn current(&self) -> Option<&T> {
         self.get(self.index)
     }
 
     /// Returns the element at the current index and advances by one.
-    pub fn next(&mut self) -> Option<&T> {
+    pub(crate) fn next(&mut self) -> Option<&T> {
         self.next_add(1)
     }
 
     /// Returns the element at the current index and advances by `i` positions.
-    pub fn next_add(&mut self, i: usize) -> Option<&T> {
+    pub(crate) fn next_add(&mut self, i: usize) -> Option<&T> {
         let index = self.index;
         self.index = self.index.saturating_add(i);
         self.get(index)
     }
 
     /// Moves the index back by one and returns the element at the new position.
-    pub fn prev(&mut self) -> Option<&T> {
+    pub(crate) fn prev(&mut self) -> Option<&T> {
         self.prev_sub(1)
     }
 
     /// Moves the index back by `i` positions and returns the element at the new position.
     ///
     /// Returns `None` if `i` is greater than the current index (would underflow).
-    pub fn prev_sub(&mut self, i: usize) -> Option<&T> {
+    pub(crate) fn prev_sub(&mut self, i: usize) -> Option<&T> {
         if i > self.index {
             return None;
         } else {
@@ -49,30 +49,15 @@ impl<'a, T> VecPointerRef<'a, T> {
     }
 
     /// Returns a reference to the element `i` positions ahead without advancing.
-    pub fn peek_add(&self, i: usize) -> Option<&T> {
+    pub(crate) fn peek_add(&self, i: usize) -> Option<&T> {
         self.index.checked_add(i).and_then(|idx| self.get(idx))
-    }
-
-    /// Returns references to the current element and the next `i - 1` elements without advancing.
-    ///
-    /// Stops early if the end of the slice is reached.
-    pub fn peek_current_and_multiple(&self, i: usize) -> Vec<&T> {
-        let mut result = Vec::new();
-        for j in 0..i {
-            if let Some(value) = self.peek_add(j) {
-                result.push(value);
-            } else {
-                break;
-            }
-        }
-        result
     }
 
     /// Advance while `pred` returns true, returning a slice of all consumed elements.
     ///
     /// After this call, `current()` points to the first element that did not
     /// satisfy the predicate (or past the end).
-    pub fn consume_while(&mut self, pred: impl Fn(&T) -> bool) -> &'a [T] {
+    pub(crate) fn consume_while(&mut self, pred: impl Fn(&T) -> bool) -> &'a [T] {
         let start = self.index;
         while self.index < self.values.len() && pred(&self.values[self.index]) {
             self.index += 1;
