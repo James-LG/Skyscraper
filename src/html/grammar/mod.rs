@@ -542,6 +542,15 @@ impl HtmlParser {
 
         self.root_node = Some(document_node_id);
 
+        // WHATWG 13.2.3.5: Normalize \r\n to \n and standalone \r to \n
+        // before tokenization.
+        let normalized;
+        let text = if text.contains('\r') {
+            normalized = text.replace("\r\n", "\n").replace('\r', "\n");
+            normalized.as_str()
+        } else {
+            text
+        };
         let chars: Vec<char> = text.chars().collect();
         let input_stream = VecPointerRef::new(&chars);
         let mut tokenizer = tokenizer::Tokenizer::new(input_stream, self);

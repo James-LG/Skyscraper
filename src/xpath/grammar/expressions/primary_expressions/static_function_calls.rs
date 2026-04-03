@@ -3186,6 +3186,18 @@ fn func_numeric_unary<'tree>(
                 double_op(d.0)
             )))
         ]),
+        XpathItem::AnyAtomicType(AnyAtomicType::String(s)) => {
+            // Per XPath 3.1, untyped atomic values should be cast to xs:double.
+            let n = s.trim().parse::<f64>().map_err(|_| {
+                ExpressionApplyError::new(format!(
+                    "err:FORG0001 Cannot cast '{}' to xs:double",
+                    s
+                ))
+            })?;
+            Ok(xpath_item_set![XpathItem::AnyAtomicType(
+                AnyAtomicType::Double(ordered_float::OrderedFloat(double_op(n)))
+            )])
+        }
         other => Err(ExpressionApplyError::new(format!(
             "numeric function requires a numeric argument, got {:?}",
             other

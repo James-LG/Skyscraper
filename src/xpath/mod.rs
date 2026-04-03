@@ -201,9 +201,15 @@ pub struct ExpressionParseError {
 ///    .expect("xpath is invalid");
 /// ```
 pub fn parse(input: &str) -> Result<Xpath, ExpressionParseError> {
-    xpath(input).map(|x| x.1).map_err(|e| ExpressionParseError {
+    let (remaining, parsed) = xpath(input).map_err(|e| ExpressionParseError {
         msg: format!("{}", e),
-    })
+    })?;
+    if !remaining.trim().is_empty() {
+        return Err(ExpressionParseError {
+            msg: format!("unexpected trailing input: {:?}", remaining),
+        });
+    }
+    Ok(parsed)
 }
 
 /// Error that occurs when applying an [Xpath] expression to an [XpathItemTree].

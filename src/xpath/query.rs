@@ -88,12 +88,6 @@ pub enum ParseApplyError {
     #[error("Failed to apply xpath: {0}")]
     ApplyError(#[from] ExpressionApplyError),
 
-    /// An assumption made by the function was incorrect.
-    ///
-    /// This probably means the xpath expression does not return the expected type of item.
-    /// Try modifying the xpath expression, or using a different function.
-    #[error("Assumption error: {0}")]
-    AssumptionError(String),
 }
 
 /// Find items in an [XpathItemTree] using an xpath expression.

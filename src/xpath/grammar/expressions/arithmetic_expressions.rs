@@ -330,7 +330,7 @@ impl MultiplicativeExpr {
                             }
                             {
                                 let result = (a / b).trunc();
-                                if result > i64::MAX as f64 || result < i64::MIN as f64 {
+                                if result >= i64::MAX as f64 || result < i64::MIN as f64 {
                                     return Err(ExpressionApplyError {
                                         msg: String::from(
                                             "err:FOAR0002 Integer overflow in integer division",
@@ -465,9 +465,16 @@ impl UnaryExpr {
             == 1;
 
         if !negate {
-            // Even number of minus signs (or all plus) — validate numeric, return as-is.
-            let _ = to_f64(&val)?;
-            return Ok(xpath_item_set![XpathItem::AnyAtomicType(val)]);
+            // Even number of minus signs (or all plus) — cast to numeric.
+            // Per XPath 3.1, unary + must produce a numeric result (xs:double for untyped).
+            let n = to_f64(&val)?;
+            let numeric_val = match val {
+                AnyAtomicType::Integer(_) | AnyAtomicType::Float(_) | AnyAtomicType::Double(_) => {
+                    val
+                }
+                _ => AnyAtomicType::Double(OrderedFloat(n)),
+            };
+            return Ok(xpath_item_set![XpathItem::AnyAtomicType(numeric_val)]);
         }
 
         // Negate the value.

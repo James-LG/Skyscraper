@@ -73,7 +73,6 @@ impl DocumentBuilder {
         self.funcs.push(Box::new(move |arena, _parent_id| {
             f(ElementBuilder::new(
                 tag_name.clone(),
-                None,
                 arena,
             ))
             .build()
@@ -182,7 +181,6 @@ impl<'arena> ElementBuilder<'arena> {
     /// Create a new element builder with the given tag name.
     pub fn new(
         tag_name: String,
-        _parent_id: Option<NodeId>,
         arena: &'arena mut Arena<XpathItemTreeNode>,
     ) -> Self {
         Self {
@@ -204,7 +202,6 @@ impl<'arena> ElementBuilder<'arena> {
         self.funcs.push(Box::new(move |arena, _parent_id| {
             f(ElementBuilder::new(
                 tag_name.clone(),
-                None,
                 arena,
             ))
             .build()

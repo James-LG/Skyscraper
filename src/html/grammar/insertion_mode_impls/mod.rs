@@ -1238,8 +1238,10 @@ impl HtmlParser {
                         "unexpected character token in table",
                     )))?;
                     self.foster_parenting = true;
-                    self.using_the_rules_for(HtmlToken::Character(c), InsertionMode::InBody)?;
+                    let result =
+                        self.using_the_rules_for(HtmlToken::Character(c), InsertionMode::InBody);
                     self.foster_parenting = false;
+                    result?;
                 }
             }
             // Batched characters in table: fall back to per-character processing
@@ -1366,11 +1368,12 @@ impl HtmlParser {
                         "unexpected input in table (not hidden)",
                     )))?;
                     self.foster_parenting = true;
-                    self.using_the_rules_for(
+                    let result = self.using_the_rules_for(
                         HtmlToken::TagToken(TagTokenType::StartTag(token)),
                         InsertionMode::InBody,
-                    )?;
+                    );
                     self.foster_parenting = false;
+                    result?;
                 } else {
                     // Parse error.
                     self.handle_error(HtmlParserError::MinorError(String::from(
@@ -1408,8 +1411,9 @@ impl HtmlParser {
                     "unexpected token in table, foster parenting",
                 )))?;
                 self.foster_parenting = true;
-                self.using_the_rules_for(token, InsertionMode::InBody)?;
+                let result = self.using_the_rules_for(token, InsertionMode::InBody);
                 self.foster_parenting = false;
+                result?;
             }
         }
 
@@ -1476,8 +1480,10 @@ impl HtmlParser {
                     )))?;
                     for pending_token in pending_tokens {
                         self.foster_parenting = true;
-                        self.using_the_rules_for(pending_token, InsertionMode::InBody)?;
+                        let result =
+                            self.using_the_rules_for(pending_token, InsertionMode::InBody);
                         self.foster_parenting = false;
+                        result?;
                     }
                 } else {
                     // Otherwise, insert the characters given by the pending table character

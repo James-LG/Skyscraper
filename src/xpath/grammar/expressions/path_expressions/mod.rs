@@ -137,7 +137,7 @@ fn initial_slash_expansion(unexpanded_expr: &Option<RelativePathExpr>) -> Relati
     let items = match unexpanded_expr {
         Some(x) => {
             let mut items = vec![StepPair(PathSeparator::Slash, x.expr.clone())];
-            items.extend(x.items.iter().map(|x| x.clone()));
+            items.extend(x.items.iter().cloned());
             items
         }
         None => vec![],
@@ -156,7 +156,7 @@ fn relative_slash_expansion(unexpanded_expr: &Option<RelativePathExpr>) -> Relat
     let items = match unexpanded_expr {
         Some(x) => {
             let mut items = vec![StepPair(PathSeparator::Slash, x.expr.clone())];
-            items.extend(x.items.iter().map(|x| x.clone()));
+            items.extend(x.items.iter().cloned());
             items
         }
         None => vec![],
@@ -354,7 +354,7 @@ fn initial_double_slash_expansion(unexpanded_expr: &RelativePathExpr) -> Relativ
     if let Some(node_test) = try_extract_child_node_test(&unexpanded_expr.expr) {
         let descendant_step = make_descendant_step(node_test);
         let mut items = vec![StepPair(PathSeparator::Slash, descendant_step)];
-        items.extend(unexpanded_expr.items.iter().map(|x| x.clone()));
+        items.extend(unexpanded_expr.items.iter().cloned());
         return RelativePathExpr {
             expr: first_step,
             items,
@@ -368,7 +368,7 @@ fn initial_double_slash_expansion(unexpanded_expr: &RelativePathExpr) -> Relativ
         PathSeparator::Slash,
         unexpanded_expr.expr.clone(),
     ));
-    items.extend(unexpanded_expr.items.iter().map(|x| x.clone()));
+    items.extend(unexpanded_expr.items.iter().cloned());
 
     RelativePathExpr {
         expr: first_step,
@@ -384,7 +384,7 @@ fn relative_double_slash_expansion(unexpanded_expr: &RelativePathExpr) -> Relati
     if let Some(node_test) = try_extract_child_node_test(&unexpanded_expr.expr) {
         let descendant_step = make_descendant_step(node_test);
         let mut items = vec![StepPair(PathSeparator::Slash, descendant_step)];
-        items.extend(unexpanded_expr.items.iter().map(|x| x.clone()));
+        items.extend(unexpanded_expr.items.iter().cloned());
         return RelativePathExpr {
             expr: first_step,
             items,
@@ -395,7 +395,7 @@ fn relative_double_slash_expansion(unexpanded_expr: &RelativePathExpr) -> Relati
         PathSeparator::DoubleSlash,
         unexpanded_expr.expr.clone(),
     )];
-    items.extend(unexpanded_expr.items.iter().map(|x| x.clone()));
+    items.extend(unexpanded_expr.items.iter().cloned());
 
     RelativePathExpr {
         expr: first_step,
