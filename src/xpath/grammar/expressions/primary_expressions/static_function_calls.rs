@@ -1916,8 +1916,25 @@ fn dispatch_by_local_name<'tree>(
             } else {
                 (None, lexical)
             };
-            // TODO: validate that prefix and local_name are valid NCNames per spec
-            // (could reuse xml_names::nc_name parser).
+            // Validate that prefix and local_name are valid NCNames per spec.
+            if let Some(ref p) = prefix {
+                if crate::xpath::grammar::xml_names::nc_name(p)
+                    .map_or(true, |(rest, _)| !rest.is_empty())
+                {
+                    return Err(ExpressionApplyError::new(format!(
+                        "err:FOCA0002 fn:QName: prefix '{}' is not a valid NCName",
+                        p
+                    )));
+                }
+            }
+            if crate::xpath::grammar::xml_names::nc_name(&local_name)
+                .map_or(true, |(rest, _)| !rest.is_empty())
+            {
+                return Err(ExpressionApplyError::new(format!(
+                    "err:FOCA0002 fn:QName: local name '{}' is not a valid NCName",
+                    local_name
+                )));
+            }
 
             // Per spec: if prefix is present, namespace URI must not be empty.
             if prefix.is_some() && namespace_uri.is_empty() {

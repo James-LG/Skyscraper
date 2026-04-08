@@ -426,7 +426,8 @@ impl HtmlParser {
                     .pop()
                     .ok_or(HtmlParseError::new("open elements is empty"))?;
 
-                // TODO: some encoding stuff
+                // Encoding detection from <meta> charset/http-equiv is not applicable:
+                // Skyscraper operates on already-decoded &str input, not raw bytes.
 
                 // acknowledge the self closing tag
                 return Ok(Acknowledgement::yes());
@@ -449,7 +450,8 @@ impl HtmlParser {
             HtmlToken::TagToken(TagTokenType::StartTag(token)) if token.tag_name == "script" => {
                 let _node = self.insert_an_html_element(token)?;
 
-                // TODO: lots of script and template stuff
+                // Script preparation, execution, and template handling are intentionally
+                // not implemented — Skyscraper is a non-scripting parser.
 
                 self.original_insertion_mode = Some(self.insertion_mode);
                 self.insertion_mode = InsertionMode::Text;

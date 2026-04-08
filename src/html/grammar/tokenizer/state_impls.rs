@@ -933,7 +933,8 @@ impl<'a> Tokenizer<'a> {
                 self.state = TokenizerState::AttributeName;
             }
             None => {
-                // TODO: Does reconsuming an EOF work?
+                // Per WHATWG spec, EOF in "before attribute name" reconsumesin "after attribute name",
+                // which then emits an eof-in-tag parse error followed by an end-of-file token.
                 self.reconsume_in_state(TokenizerState::AfterAttributeName)?;
             }
             Some(_) => {
