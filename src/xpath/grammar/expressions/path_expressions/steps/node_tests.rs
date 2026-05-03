@@ -7,18 +7,17 @@ use nom::{
 };
 
 use crate::{
+    html::grammar::HTML_NAMESPACE,
     xpath::{
         grammar::{
-            data_model::XpathItem,
             recipes::Res,
             terminal_symbols::braced_uri_literal,
-            types::{eq_name, kind_test, EQName, KindTest},
+            types::{self, eq_name, kind_test, EQName, KindTest},
             xml_names::{nc_name, QName},
-            XpathItemTreeNode,
+            XpathItemTree, XpathItemTreeNode,
         },
-        ExpressionApplyError, XpathExpressionContext,
+        ExpressionApplyError,
     },
-    xpath_item_set,
 };
 
 use super::axes::{forward_axis::ForwardAxis, reverse_axis::ReverseAxis};
@@ -53,23 +52,18 @@ impl Display for NodeTest {
 }
 
 impl NodeTest {
-    pub(crate) fn eval<'tree>(
+    /// Test whether a node matches this node test directly, without creating
+    /// an `XpathExpressionContext`. This avoids per-node allocation overhead
+    /// in axis evaluation loops.
+    pub(crate) fn matches_node<'tree>(
         &self,
         axis: BiDirectionalAxis,
-        context: &XpathExpressionContext<'tree>,
-    ) -> Result<Option<&'tree XpathItemTreeNode>, ExpressionApplyError> {
+        node: &'tree XpathItemTreeNode,
+        item_tree: &'tree XpathItemTree,
+    ) -> Result<bool, ExpressionApplyError> {
         match self {
-            NodeTest::KindTest(test) => {
-                let filtered_nodes = test.filter(&xpath_item_set![context.item.clone()])?;
-
-                if !filtered_nodes.is_empty() {
-                    let node: &'tree XpathItemTreeNode = filtered_nodes.into_iter().next().unwrap();
-                    Ok(Some(node))
-                } else {
-                    Ok(None)
-                }
-            }
-            NodeTest::NameTest(test) => test.eval(axis, context),
+            NodeTest::KindTest(test) => test.matches_node(node, item_tree),
+            NodeTest::NameTest(test) => test.matches_node(axis, node),
         }
     }
 }
@@ -85,7 +79,12 @@ fn name_test(input: &str) -> Res<&str, NameTest> {
         wildcard(input).map(|(next_input, res)| (next_input, NameTest::Wildcard(res)))
     }
 
-    context("name_test", alt((eq_name_map, wildcard_map)))(input)
+    // Try wildcard first: `NCName:*`, `*:NCName`, `Q{URI}*`, and `*` are
+    // never valid EQNames, so there is no ambiguity. If we try eq_name first,
+    // nom greedily parses `svg:*` as the unprefixed name "svg" (leaving ":*"),
+    // because `QName::PrefixedName` fails (`*` is not a valid NCName for the
+    // local part) and `QName::UnprefixedName` succeeds on just the prefix.
+    context("name_test", alt((wildcard_map, eq_name_map)))(input)
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -103,58 +102,69 @@ impl Display for NameTest {
     }
 }
 
+#[derive(Clone, Copy)]
 pub(crate) enum BiDirectionalAxis {
     ForwardAxis(ForwardAxis),
-    ReverseAxis(ReverseAxis),
+    ReverseAxis(#[allow(dead_code)] ReverseAxis),
 }
 
 impl NameTest {
-    pub(crate) fn eval<'tree>(
+    /// Test whether a node matches this name test directly, without requiring
+    /// a full `XpathExpressionContext`.
+    pub(crate) fn matches_node(
         &self,
         axis: BiDirectionalAxis,
-        context: &XpathExpressionContext<'tree>,
-    ) -> Result<Option<&'tree XpathItemTreeNode>, ExpressionApplyError> {
-        let node = if let XpathItem::Node(node) = &context.item {
-            node
-        } else {
-            todo!("NameTest::eval non-node");
-        };
-
+        node: &XpathItemTreeNode,
+    ) -> Result<bool, ExpressionApplyError> {
         let is_match = match self {
             NameTest::Name(expected_name) => {
-                // Get the name of the node, if available for the node type.
-                let node_name = match node {
-                    XpathItemTreeNode::DocumentNode(_) => todo!(),
-                    XpathItemTreeNode::ElementNode(e) => Some(&e.name),
-                    XpathItemTreeNode::PINode(_) => todo!(),
-                    XpathItemTreeNode::CommentNode(_) => todo!(),
-                    XpathItemTreeNode::TextNode(_) => None, // Text nodes do not have a name.
-                    XpathItemTreeNode::AttributeNode(a) => Some(&a.name),
+                let is_principal_node_kind = match axis {
+                    BiDirectionalAxis::ForwardAxis(ForwardAxis::Attribute) => {
+                        matches!(node, XpathItemTreeNode::AttributeNode(_))
+                    }
+                    _ => {
+                        matches!(node, XpathItemTreeNode::ElementNode(_))
+                    }
                 };
 
-                match node_name {
-                    Some(node_name) => match expected_name {
-                        EQName::QName(qname) => match qname {
-                            QName::PrefixedName(_) => todo!("NameTest::is_match PrefixedName"),
-                            QName::UnprefixedName(unprefixed_name) => unprefixed_name == node_name,
-                        },
-                        EQName::UriQualifiedName(_) => todo!("NameTest::is_match UriQualifiedName"),
-                    },
+                if !is_principal_node_kind {
+                    false
+                } else {
+                    let (node_name, node_ns): (Option<&str>, Option<&str>) = match node {
+                        XpathItemTreeNode::ElementNode(e) => {
+                            (Some(&e.name), e.namespace.as_deref())
+                        }
+                        XpathItemTreeNode::AttributeNode(a) => (Some(&a.name), a.namespace.as_deref()),
+                        _ => (None, None),
+                    };
 
-                    // Name tests need a name to match.
-                    // If the node does not have a name, it cannot match.
-                    None => false,
+                    match node_name {
+                        Some(node_name) => match expected_name {
+                            EQName::QName(qname) => match qname {
+                                QName::PrefixedName(p) => {
+                                    let target_ns = resolve_prefix(&p.prefix)?;
+                                    let effective_ns = node_ns.unwrap_or(HTML_NAMESPACE);
+                                    p.local_part == node_name && effective_ns == target_ns
+                                }
+                                QName::UnprefixedName(unprefixed_name) => {
+                                    unprefixed_name == node_name
+                                }
+                            },
+                            EQName::UriQualifiedName(uqn) => {
+                                uqn.name == node_name
+                                    && node_ns.is_some_and(|ns| ns == uqn.uri)
+                            }
+                        },
+                        None => false,
+                    }
                 }
             }
-            NameTest::Wildcard(wildcard) => wildcard.is_match(axis, node),
+            NameTest::Wildcard(wildcard) => wildcard.is_match(axis, node)?,
         };
 
-        if is_match {
-            Ok(Some(*node))
-        } else {
-            Ok(None)
-        }
+        Ok(is_match)
     }
+
 }
 
 fn wildcard(input: &str) -> Res<&str, Wildcard> {
@@ -210,12 +220,17 @@ impl Display for Wildcard {
     }
 }
 
+/// Delegates to the shared `types::resolve_prefix` function.
+fn resolve_prefix(prefix: &str) -> Result<&'static str, ExpressionApplyError> {
+    types::resolve_prefix(prefix)
+}
+
 impl Wildcard {
-    pub(crate) fn is_match<'tree>(
+    pub(crate) fn is_match(
         &self,
         axis: BiDirectionalAxis,
-        node: &'tree XpathItemTreeNode,
-    ) -> bool {
+        node: &XpathItemTreeNode,
+    ) -> Result<bool, ExpressionApplyError> {
         // Wildcards only match context items that are the axis' principal node kind.
         // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#dt-principal-node-kind
         let is_principal_node_kind = match axis {
@@ -230,14 +245,39 @@ impl Wildcard {
         };
 
         if !is_principal_node_kind {
-            return false;
+            return Ok(false);
         }
 
+        // Get node name and namespace for matching.
+        // HTML elements have namespace `None` (implicitly HTML_NAMESPACE).
+        let (node_name, node_ns): (Option<&str>, Option<&str>) = match node {
+            XpathItemTreeNode::ElementNode(e) => {
+                (Some(e.name.as_str()), e.namespace.as_deref())
+            }
+            XpathItemTreeNode::AttributeNode(a) => (Some(a.name.as_str()), a.namespace.as_deref()),
+            _ => (None, None),
+        };
+
         match self {
-            Wildcard::Simple => true,
-            Wildcard::PrefixedName(_) => todo!("Wildcard::is_match PrefixedName"),
-            Wildcard::SuffixedName(_) => todo!("Wildcard::is_match SuffixedName"),
-            Wildcard::BracedUri(_) => todo!("Wildcard::is_match BracedUri"),
+            Wildcard::Simple => Ok(true),
+            Wildcard::PrefixedName(local) => {
+                // `*:local` — matches any namespace, local name must match.
+                Ok(node_name.is_some_and(|n| n == local))
+            }
+            Wildcard::SuffixedName(prefix) => {
+                // `prefix:*` — matches any local name in the namespace bound
+                // to the prefix. Resolve the prefix via well-known bindings;
+                // raises XPST0081 if the prefix is unknown.
+                let target_ns = resolve_prefix(prefix)?;
+                // HTML elements store namespace as None (implicitly HTML_NAMESPACE).
+                let effective_ns = node_ns.unwrap_or(HTML_NAMESPACE);
+                Ok(effective_ns == target_ns)
+            }
+            Wildcard::BracedUri(uri) => {
+                // `Q{uri}*` — matches any local name in the specified namespace.
+                let effective_ns = node_ns.unwrap_or(HTML_NAMESPACE);
+                Ok(effective_ns == uri.as_str())
+            }
         }
     }
 }

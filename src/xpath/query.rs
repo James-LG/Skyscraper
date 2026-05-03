@@ -15,47 +15,41 @@ use super::{
 
 impl Xpath {
     /// Find attributes in an [XpathItemTree] using an xpath expression.
+    ///
+    /// Non-attribute items in the result are silently filtered out.
     pub fn find_attributes<'tree>(
         &self,
         tree: &'tree XpathItemTree,
     ) -> Result<Vec<&'tree AttributeNode>, ExpressionApplyError> {
         let items = self.apply(tree)?;
 
-        let mut attributes: Vec<&AttributeNode> = Vec::new();
-        for item in items {
-            let attribute = item
-                .as_node()
-                .and_then(|node| node.as_attribute_node())
-                .map_err(|e| ExpressionApplyError::new(e.to_string()))?;
-
-            attributes.push(attribute);
-        }
-
-        Ok(attributes)
+        Ok(items
+            .iter()
+            .filter_map(|item| item.as_node().ok())
+            .filter_map(|node| node.as_attribute_node().ok())
+            .collect())
     }
 
     /// Find elements in an [XpathItemTree] using an xpath expression.
+    ///
+    /// Non-element items in the result are silently filtered out.
     pub fn find_elements<'tree>(
         &self,
         tree: &'tree XpathItemTree,
     ) -> Result<Vec<&'tree ElementNode>, ExpressionApplyError> {
         let items = self.apply(tree)?;
 
-        let mut elements: Vec<&ElementNode> = Vec::new();
-        for item in items {
-            let element = item
-                .as_node()
-                .and_then(|node| node.as_element_node())
-                .map_err(|e| ExpressionApplyError::new(e.to_string()))?;
-
-            elements.push(element);
-        }
-
-        Ok(elements)
+        Ok(items
+            .iter()
+            .filter_map(|item| item.as_node().ok())
+            .filter_map(|node| node.as_element_node().ok())
+            .collect())
     }
 
     /// Find elements from an [XpathItem] in an [XpathItemTree] using an xpath expression.
     /// The expression will be evaluated relative to the given item.
+    ///
+    /// Non-element items in the result are silently filtered out.
     pub fn find_elements_from_item<'tree>(
         &self,
         tree: &'tree XpathItemTree,
@@ -63,17 +57,11 @@ impl Xpath {
     ) -> Result<Vec<&'tree ElementNode>, ExpressionApplyError> {
         let items = self.apply_to_item(tree, item)?;
 
-        let mut elements: Vec<&'tree ElementNode> = Vec::new();
-        for item in items {
-            let element = item
-                .as_node()
-                .and_then(|node| node.as_element_node())
-                .map_err(|e| ExpressionApplyError::new(e.to_string()))?;
-
-            elements.push(element);
-        }
-
-        Ok(elements)
+        Ok(items
+            .iter()
+            .filter_map(|item| item.as_node().ok())
+            .filter_map(|node| node.as_element_node().ok())
+            .collect())
     }
 
     /// Find elements from an [ElementNode] in an [XpathItemTree] using an xpath expression.
@@ -100,12 +88,6 @@ pub enum ParseApplyError {
     #[error("Failed to apply xpath: {0}")]
     ApplyError(#[from] ExpressionApplyError),
 
-    /// An assumption made by the function was incorrect.
-    ///
-    /// This probably means the xpath expression does not return the expected type of item.
-    /// Try modifying the xpath expression, or using a different function.
-    #[error("Assumption error: {0}")]
-    AssumptionError(String),
 }
 
 /// Find items in an [XpathItemTree] using an xpath expression.
@@ -118,10 +100,9 @@ pub enum ParseApplyError {
 ///
 /// ```rust
 /// use skyscraper::html;
-/// use skyscraper::xpath::{XpathItemTree, query::find, grammar::data_model::ElementNode};
+/// use skyscraper::xpath::{query::find, grammar::data_model::ElementNode};
 ///
-/// let html = html::parse("<html><body><div>Example 1</div><div>Example 2</div></body></html>").unwrap();
-/// let tree = XpathItemTree::from(&html);
+/// let tree = html::parse("<html><body><div>Example 1</div><div>Example 2</div></body></html>").unwrap();
 ///
 /// let items = find(&tree, "//div").unwrap();
 ///
@@ -149,10 +130,9 @@ pub fn find<'tree>(
 ///
 /// ```rust
 /// use skyscraper::html;
-/// use skyscraper::xpath::{XpathItemTree, query::find_attributes, grammar::data_model::AttributeNode};
+/// use skyscraper::xpath::{query::find_attributes, grammar::data_model::AttributeNode};
 ///
-/// let html = html::parse("<html><body><div id=\"example\">Example 1</div></body></html>").unwrap();
-/// let tree = XpathItemTree::from(&html);
+/// let tree = html::parse("<html><body><div id=\"example\">Example 1</div></body></html>").unwrap();
 ///
 /// let attributes = find_attributes(&tree, "//div/@id").unwrap();
 ///
@@ -180,10 +160,9 @@ pub fn find_attributes<'tree>(
 ///
 /// ```rust
 /// use skyscraper::html;
-/// use skyscraper::xpath::{XpathItemTree, query::find_elements, grammar::data_model::ElementNode};
+/// use skyscraper::xpath::{query::find_elements, grammar::data_model::ElementNode};
 ///
-/// let html = html::parse("<html><body><div id=\"example\">Example 1</div></body></html>").unwrap();
-/// let tree = XpathItemTree::from(&html);
+/// let tree = html::parse("<html><body><div id=\"example\">Example 1</div></body></html>").unwrap();
 ///
 /// let elements = find_elements(&tree, "//div").unwrap();
 ///
@@ -210,7 +189,7 @@ mod tests {
     fn find_attributes_should_find_attribute() {
         // arrange
         let html = r#"<html><body><div id="example">Example 1</div></body></html>"#;
-        let tree = XpathItemTree::from(&html::parse(html).unwrap());
+        let tree = html::parse(html).unwrap();
 
         // act
         let attributes = find_attributes(&tree, "//div/@id").unwrap();
@@ -226,7 +205,7 @@ mod tests {
     fn find_elements_should_find_element() {
         // arrange
         let html = r#"<html><body><div id="example">Example 1</div></body></html>"#;
-        let tree = XpathItemTree::from(&html::parse(html).unwrap());
+        let tree = html::parse(html).unwrap();
 
         // act
         let elements = find_elements(&tree, "//div").unwrap();
@@ -241,7 +220,7 @@ mod tests {
     fn find_elements_from_item_should_find_element() {
         // arrange
         let html = r#"<html><body><div id="example">Example 1</div></body></html>"#;
-        let tree = XpathItemTree::from(&html::parse(html).unwrap());
+        let tree = html::parse(html).unwrap();
 
         let items = find(&tree, "//body").unwrap();
 
@@ -262,7 +241,7 @@ mod tests {
     fn find_elements_from_element_should_find_element() {
         // arrange
         let html = r#"<html><body><div id="example">Example 1</div></body></html>"#;
-        let tree = XpathItemTree::from(&html::parse(html).unwrap());
+        let tree = html::parse(html).unwrap();
 
         let first_elements = find_elements(&tree, "//body").unwrap();
 

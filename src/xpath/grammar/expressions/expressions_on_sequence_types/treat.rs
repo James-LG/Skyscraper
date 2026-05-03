@@ -70,9 +70,13 @@ impl TreatExpr {
             Some(treat_type) => treat_type,
         };
 
-        if !treat_type.is_match(&result)? {
+        if !treat_type.is_match(&result, context.item_tree)? {
             return Err(ExpressionApplyError {
-                msg: format!("err:XPDY0050 Cannot treat as {}", treat_type.to_string()),
+                msg: format!(
+                    "err:XPDY0050 Cannot treat {:?} as {}",
+                    result,
+                    treat_type
+                ),
             });
         }
 

@@ -87,7 +87,15 @@ impl Argument {
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         match &self {
             Argument::ExprSingle(expr_single) => expr_single.eval(context),
-            Argument::ArgumentPlaceHolder => todo!("Argument::ArgumentPlaceHolder eval"),
+            Argument::ArgumentPlaceHolder => {
+                // Argument placeholders (`?`) are used for partial function
+                // application. They should not be evaluated directly — the
+                // caller (FunctionCall::eval) should detect placeholders and
+                // construct a new function item instead.
+                Err(ExpressionApplyError::new(
+                    "argument placeholder '?' cannot be evaluated outside partial function application".to_string(),
+                ))
+            }
         }
     }
 }

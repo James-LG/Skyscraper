@@ -12,7 +12,7 @@
 //! # use std::error::Error;
 //! #
 //! use skyscraper::html;
-//! use skyscraper::xpath::{self, XpathItemTree};
+//! use skyscraper::xpath;
 //!
 //! # fn main() -> Result<(), Box<dyn Error>> {
 //! let text = r##"
@@ -24,8 +24,7 @@
 //! </html>"##;
 //!
 //! // Parse the HTML text
-//! let document = html::parse(text)?;
-//! let xpath_item_tree = XpathItemTree::from(&document);
+//! let xpath_item_tree = html::parse(text)?;
 //!
 //! let xpath = xpath::parse("//a/@href")?;
 //!
@@ -48,13 +47,13 @@
 //! # }
 //! ```
 //!
-//! # Example: get links programatically
+//! # Example: get links programmatically
 //!
 //! ```rust
 //! # use std::error::Error;
 //! #
 //! use skyscraper::html;
-//! use skyscraper::xpath::{self, XpathItemTree};
+//! use skyscraper::xpath;
 //!
 //! # fn main() -> Result<(), Box<dyn Error>> {
 //! let text = r##"
@@ -66,8 +65,7 @@
 //! </html>"##;
 //!
 //! // Parse the HTML text
-//! let document = html::parse(text)?;
-//! let xpath_item_tree = XpathItemTree::from(&document);
+//! let xpath_item_tree = html::parse(text)?;
 //!
 //! let xpath = xpath::parse("//a")?;
 //!
@@ -95,7 +93,7 @@
 //! # use std::error::Error;
 //! #
 //! use skyscraper::html;
-//! use skyscraper::xpath::{self, XpathItemTree};
+//! use skyscraper::xpath;
 //!
 //! # fn main() -> Result<(), Box<dyn Error>> {
 //! let text = r##"
@@ -107,8 +105,7 @@
 //! </html>"##;
 //!
 //! // Parse the HTML text
-//! let document = html::parse(text)?;
-//! let xpath_item_tree = XpathItemTree::from(&document);
+//! let xpath_item_tree = html::parse(text)?;
 //!
 //! let xpath = xpath::parse("//div/text()")?;
 //!
@@ -131,13 +128,13 @@
 //! # }
 //! ```
 //!
-//! # Example: get text programatically
+//! # Example: get text programmatically
 //!
 //! ```rust
 //! # use std::error::Error;
 //! #
 //! use skyscraper::html;
-//! use skyscraper::xpath::{self, XpathItemTree};
+//! use skyscraper::xpath;
 //!
 //! # fn main() -> Result<(), Box<dyn Error>> {
 //! let text = r##"
@@ -149,8 +146,7 @@
 //! </html>"##;
 //!
 //! // Parse the HTML text
-//! let document = html::parse(text)?;
-//! let xpath_item_tree = XpathItemTree::from(&document);
+//! let xpath_item_tree = html::parse(text)?;
 //!
 //! let xpath = xpath::parse("//div")?;
 //!
@@ -171,6 +167,8 @@
 //! # Ok(())
 //! # }
 //! ```
+
+use std::rc::Rc;
 
 use thiserror::Error;
 
@@ -203,9 +201,15 @@ pub struct ExpressionParseError {
 ///    .expect("xpath is invalid");
 /// ```
 pub fn parse(input: &str) -> Result<Xpath, ExpressionParseError> {
-    xpath(input).map(|x| x.1).map_err(|e| ExpressionParseError {
+    let (remaining, parsed) = xpath(input).map_err(|e| ExpressionParseError {
         msg: format!("{}", e),
-    })
+    })?;
+    if !remaining.trim().is_empty() {
+        return Err(ExpressionParseError {
+            msg: format!("unexpected trailing input: {:?}", remaining),
+        });
+    }
+    Ok(parsed)
 }
 
 /// Error that occurs when applying an [Xpath] expression to an [XpathItemTree].
@@ -221,49 +225,161 @@ impl ExpressionApplyError {
     }
 }
 
+/// A scope-chain node for variable bindings.
+///
+/// Each node holds a small set of bindings and an optional parent pointer.
+/// Lookup walks the chain (O(depth), typically <10).
+#[derive(Debug)]
+pub(crate) struct VariableScope<'tree> {
+    bindings: Vec<(String, XpathItemSet<'tree>)>,
+    parent: Option<Rc<VariableScope<'tree>>>,
+}
+
+impl<'tree> VariableScope<'tree> {
+    fn empty() -> Self {
+        Self {
+            bindings: Vec::new(),
+            parent: None,
+        }
+    }
+
+    fn get(&self, name: &str) -> Option<&XpathItemSet<'tree>> {
+        for (k, v) in self.bindings.iter().rev() {
+            if k == name {
+                return Some(v);
+            }
+        }
+        if let Some(parent) = &self.parent {
+            parent.get(name)
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug)]
 pub(crate) struct XpathExpressionContext<'tree> {
     item_tree: &'tree XpathItemTree,
     item: XpathItem<'tree>,
     position: usize,
 
-    // size is part of the XPath expression context spec, and will be used eventually
-    #[allow(unused)]
     size: usize,
 
-    /// `true` if this expression is being applied to the root item tree;
-    /// `false` if this expression is being applied to a specific item in the tree.
+    /// `true` if this is the initial step of a path expression evaluation;
+    /// `false` for subsequent steps within a relative path.
     ///
-    /// This should not be modified for the entire evaluation cycle of an expression.
-    is_root_level: bool,
+    /// This determines how leading `/` and `//` are expanded.
+    is_initial_step: bool,
+
+    /// Variable bindings in scope (e.g. from `for` or `let` expressions).
+    /// Uses a scope-chain so that adding a variable is O(1) instead of O(n).
+    variables: Rc<VariableScope<'tree>>,
 }
 
 impl<'tree> XpathExpressionContext<'tree> {
-    pub fn new(
-        item_tree: &'tree XpathItemTree,
-        items: &XpathItemSet<'tree>,
-        position: usize,
-        is_root_level: bool,
-    ) -> Self {
-        Self {
-            item_tree,
-            item: items[position - 1].clone(), // Position is 1-based
-            position: position,
-            size: items.len(),
-            is_root_level,
-        }
-    }
-
     pub fn new_single(
         item_tree: &'tree XpathItemTree,
         item: XpathItem<'tree>,
-        is_root_level: bool,
+        is_initial_step: bool,
     ) -> Self {
         Self {
             item_tree,
             item,
             position: 1,
             size: 1,
-            is_root_level,
+            is_initial_step,
+            variables: Rc::new(VariableScope::empty()),
+        }
+    }
+
+    /// Create a new context that inherits variable bindings from this context,
+    /// with a new item and position derived from an item set.
+    pub fn new_with_variables(
+        &self,
+        items: &XpathItemSet<'tree>,
+        position: usize,
+        is_initial_step: bool,
+    ) -> Self {
+        debug_assert!(position > 0, "XPath position is 1-based, got 0");
+        debug_assert!(
+            position <= items.len(),
+            "position {} exceeds items length {}",
+            position,
+            items.len()
+        );
+        Self {
+            item_tree: self.item_tree,
+            item: items[position - 1].clone(),
+            position,
+            size: items.len(),
+            is_initial_step,
+            variables: Rc::clone(&self.variables),
+        }
+    }
+
+    /// Create a new context that inherits variable bindings from this context,
+    /// with a directly specified item, position, and size.
+    ///
+    /// This avoids the need to create an intermediate `XpathItemSet` when the
+    /// item and positional information are already known (e.g., during grouped
+    /// descendant predicate evaluation).
+    pub fn new_with_item_and_size(
+        &self,
+        item: XpathItem<'tree>,
+        position: usize,
+        size: usize,
+        is_initial_step: bool,
+    ) -> Self {
+        Self {
+            item_tree: self.item_tree,
+            item,
+            position,
+            size,
+            is_initial_step,
+            variables: Rc::clone(&self.variables),
+        }
+    }
+
+    /// Create a new context with an additional variable binding.
+    /// Inherits all existing variables plus the new one.
+    pub fn with_variable(
+        &self,
+        name: String,
+        value: XpathItemSet<'tree>,
+    ) -> Self {
+        Self {
+            item_tree: self.item_tree,
+            item: self.item.clone(),
+            position: self.position,
+            size: self.size,
+            is_initial_step: self.is_initial_step,
+            variables: Rc::new(VariableScope {
+                bindings: vec![(name, value)],
+                parent: Some(Rc::clone(&self.variables)),
+            }),
+        }
+    }
+
+    /// Look up a variable binding by name.
+    pub fn get_variable(&self, name: &str) -> Option<&XpathItemSet<'tree>> {
+        self.variables.get(name)
+    }
+
+    /// Create a new context with multiple additional variable bindings.
+    pub fn with_variables_iter(
+        &self,
+        bindings: impl IntoIterator<Item = (String, XpathItemSet<'tree>)>,
+    ) -> Self {
+        Self {
+            item_tree: self.item_tree,
+            item: self.item.clone(),
+            position: self.position,
+            size: self.size,
+            is_initial_step: self.is_initial_step,
+            variables: Rc::new(VariableScope {
+                bindings: bindings.into_iter().collect(),
+                parent: Some(Rc::clone(&self.variables)),
+            }),
         }
     }
 }

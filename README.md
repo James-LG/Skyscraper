@@ -7,9 +7,7 @@
 
 Rust library to scrape HTML documents with XPath expressions.
 
-> This library is major-version 0 because there are still `todo!` calls for many xpath features.
->If you encounter one that you feel should be prioritized, open an issue on [GitHub](https://github.com/James-LG/Skyscraper/issues).
->
+> This library is major-version 0 as the API is still evolving.
 > See the [Supported XPath Features](#supported-xpath-features) section for details.
 
 ## HTML Parsing
@@ -50,6 +48,10 @@ let parent_of_child1: DocumentNode = children[1].parent(&document).expect("paren
 assert_eq!(parent_node, parent_of_child0);
 assert_eq!(parent_node, parent_of_child1);
 ```
+
+### WHATWG Compliance Note
+
+Skyscraper's HTML parser follows the [WHATWG parsing specification](https://html.spec.whatwg.org/multipage/parsing.html). One notable consequence is **implicit `<tbody>` insertion**: when `<tr>`, `<td>`, or `<th>` elements appear as direct children of `<table>`, the parser automatically wraps them in a `<tbody>` element (per [WHATWG §13.2.6.4.9](https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intable)). This matches browser behavior but differs from parsers like Python's lxml, which does not insert `<tbody>`. As a result, XPath expressions like `//table/*` or `//table//*` may return different results than lxml for the same input HTML. To avoid this discrepancy, use explicit `<tbody>` tags in your HTML or account for the implicit element in your XPath expressions.
 
 ## XPath Expressions
 
@@ -106,20 +108,24 @@ Below is a non-exhaustive list of all the features that are currently supported.
 1. Predicates:
     1. Attributes: `//div[@class='hi']`
     1. Indexing: `//div[1]`
-1. Functions:
-    1. `fn:root()`
-    1. `contains(haystack, needle)`
-1. Forward axes:
-    1. Child: `child::*`
-    1. Descendant: `descendant::*`
-    1. Attribute: `attribute::*`
-    1. DescendentOrSelf: `descendant-or-self::*`
-    1. (more coming soon)
-1. Reverse axes:
-    1. Parent:  `parent::*`
-    1. (more coming soon)
-1. Treat expressions: `/html treat as node()`
+    1. Arbitrary expressions: `//div[contains(@class, 'hi')]`
+1. Forward axes: `child::`, `descendant::`, `attribute::`, `self::`, `descendant-or-self::`, `following-sibling::`, `following::`, `namespace::`
+1. Reverse axes: `parent::`, `ancestor::`, `preceding-sibling::`, `preceding::`, `ancestor-or-self::`
+1. Operators:
+    1. Logical: `and`, `or`
+    1. Comparison: `=`, `!=`, `<`, `>`, `<=`, `>=`, `eq`, `ne`, `lt`, `gt`, `le`, `ge`
+    1. Arithmetic: `+`, `-`, `*`, `div`, `idiv`, `mod`
+    1. String concatenation: `||`
+    1. Sequence: `union`/`|`, `intersect`, `except`, `to`
+    1. Simple map: `!`
+    1. Arrow: `=>`
+    1. Node comparison: `is`, `<<`, `>>`
+1. Expressions: `if`/`then`/`else`, `for`, `let`, `some`/`every` (quantified)
+1. Type expressions: `instance of`, `cast as`, `castable as`, `treat as`
+1. Functions (100+): string (`contains`, `starts-with`, `ends-with`, `substring`, `concat`, `normalize-space`, `upper-case`, `lower-case`, `translate`, `matches`, `replace`, `tokenize`, ...), numeric (`round`, `floor`, `ceiling`, `abs`, `sum`, `avg`, `min`, `max`, ...), boolean (`not`, `true`, `false`, `boolean`), sequence (`count`, `empty`, `exists`, `reverse`, `sort`, `distinct-values`, `head`, `tail`, `subsequence`, ...), node (`name`, `local-name`, `root`, `path`, `has-children`, `data`, ...), higher-order (`for-each`, `filter`, `fold-left`, `fold-right`, ...), and more
+1. Maps and arrays construction and access
 
-This should cover most XPath use-cases.
 If your use case requires an unimplemented feature,
 please open an issue on [GitHub](https://github.com/James-LG/Skyscraper/issues).
+
+See [`docs/features-backlog.md`](docs/features-backlog.md) for a detailed list of spec gaps, known limitations, and design decisions.

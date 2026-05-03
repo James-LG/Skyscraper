@@ -1,7 +1,8 @@
 use std::fmt::Display;
 
-use indexmap::IndexSet;
 use nom::{branch::alt, error::context};
+
+use indextree::NodeId;
 
 use crate::xpath::{
     grammar::{
@@ -14,7 +15,6 @@ use crate::xpath::{
         whitespace_recipes::ws,
         XpathItemTreeNode,
     },
-    xpath_item_set::XpathItemSet,
     ExpressionApplyError, XpathExpressionContext,
 };
 
@@ -61,7 +61,7 @@ impl ForwardStep {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XpathExpressionContext<'tree>,
-    ) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
+    ) -> Result<Vec<&'tree XpathItemTreeNode>, ExpressionApplyError> {
         match self {
             ForwardStep::Full(axis, node_test) => eval_forward_axis(context, *axis, node_test),
             ForwardStep::Abbreviated(step) => {
@@ -78,116 +78,187 @@ impl ForwardStep {
     }
 }
 
+/// Evaluate a forward axis with fused node-test filtering.
+///
+/// Instead of collecting all axis nodes into an intermediate set and then
+/// filtering, each axis function applies the node test during traversal,
+/// returning only matching nodes in a `Vec` (no hashing overhead).
 fn eval_forward_axis<'tree>(
     context: &XpathExpressionContext<'tree>,
     axis: ForwardAxis,
     node_test: &NodeTest,
-) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
-    let axis_nodes = match axis {
-        ForwardAxis::Child => eval_forward_axis_child(context),
-        ForwardAxis::Descendant => eval_forward_axis_descendant(context),
-        ForwardAxis::Attribute => eval_forward_axis_attribute(context),
-        ForwardAxis::SelfAxis => todo!("eval_forward_axis ForwardAxis::SelfAxis"),
-        ForwardAxis::DescendantOrSelf => eval_forward_axis_self_or_descendant(context),
-        ForwardAxis::FollowingSibling => todo!("eval_forward_axis ForwardAxis::FollowingSibling"),
-        ForwardAxis::Following => todo!("eval_forward_axis ForwardAxis::Following"),
-        ForwardAxis::Namespace => todo!("eval_forward_axis ForwardAxis::Namespace"),
-    }?;
-
-    let items: XpathItemSet<'tree> = axis_nodes.into_iter().map(XpathItem::Node).collect();
-    let mut nodes = IndexSet::new();
-
-    for (i, _item) in items.iter().enumerate() {
-        let node_test_context =
-            XpathExpressionContext::new(context.item_tree, &items, i + 1, context.is_root_level);
-
-        if let Some(result) =
-            node_test.eval(BiDirectionalAxis::ForwardAxis(axis), &node_test_context)?
-        {
-            nodes.insert(result);
-        }
-    }
-
-    Ok(nodes)
-}
-
-/// Direct children of the context nodes.
-fn eval_forward_axis_child<'tree>(
-    context: &XpathExpressionContext<'tree>,
-) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
-    let mut nodes: IndexSet<&'tree XpathItemTreeNode> = IndexSet::new();
-
-    // Only tree nodes have children
-    if let XpathItem::Node(node) = &context.item {
-        for child in node.children(context.item_tree) {
-            nodes.insert(child);
-        }
-    }
-
-    Ok(nodes)
-}
-
-/// All descendants of the context nodes.
-fn eval_forward_axis_descendant<'tree>(
-    context: &XpathExpressionContext<'tree>,
-) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
-    let mut nodes: IndexSet<&'tree XpathItemTreeNode> = IndexSet::new();
-
-    // Only tree nodes have children.
-    if let XpathItem::Node(node) = &context.item {
-        for child in node.children(context.item_tree) {
-            // Add the child.
-            nodes.insert(child);
-
-            // Add the child's descendants.
-            let child_eval_context = XpathExpressionContext::new_single(
-                context.item_tree,
-                child.into(),
-                context.is_root_level,
-            );
-            let child_descendants = eval_forward_axis_descendant(&child_eval_context)?;
-            nodes.extend(child_descendants);
-        }
-    }
-
-    Ok(nodes)
-}
-
-/// All descendants of the context nodes including the context nodes.
-fn eval_forward_axis_self_or_descendant<'tree>(
-    context: &XpathExpressionContext<'tree>,
-) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
-    let mut nodes = IndexSet::new();
-
-    if let XpathItem::Node(node) = &context.item {
-        nodes.insert(*node);
-    } else {
-        return Err(ExpressionApplyError {
-            msg: String::from("err:XPTY0020 context item for axis step is not a node"),
-        });
-    }
-
-    nodes.extend(eval_forward_axis_descendant(context)?);
-
-    Ok(nodes)
-}
-
-// All attributes of the context nodes.
-fn eval_forward_axis_attribute<'tree>(
-    context: &XpathExpressionContext<'tree>,
-) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
-    let mut attributes: IndexSet<&'tree XpathItemTreeNode> = IndexSet::new();
-
-    // Only elements have attributes.
-    if let XpathItem::Node(XpathItemTreeNode::ElementNode(element)) = context.item {
-        for child in element.children(context.item_tree) {
-            if let XpathItemTreeNode::AttributeNode(_attribute) = &child {
-                attributes.insert(child);
+) -> Result<Vec<&'tree XpathItemTreeNode>, ExpressionApplyError> {
+    let bi_axis = BiDirectionalAxis::ForwardAxis(axis);
+    match axis {
+        ForwardAxis::Child => {
+            let mut nodes = Vec::new();
+            if let XpathItem::Node(node) = &context.item {
+                for child in node.children(context.item_tree) {
+                    if node_test.matches_node(bi_axis, child, context.item_tree)? {
+                        nodes.push(child);
+                    }
+                }
+            } else {
+                return Err(ExpressionApplyError {
+                    msg: String::from(
+                        "err:XPTY0020 context item for axis step is not a node",
+                    ),
+                });
             }
+            Ok(nodes)
         }
+        ForwardAxis::Descendant => {
+            let mut nodes = Vec::new();
+            if let XpathItem::Node(node) = &context.item {
+                let node_id = node_or_root_id(node, context);
+                for desc_id in node_id.descendants(&context.item_tree.arena).skip(1) {
+                    let desc_node = context.item_tree.get(desc_id);
+                    if node_test.matches_node(bi_axis, desc_node, context.item_tree)? {
+                        nodes.push(desc_node);
+                    }
+                }
+            } else {
+                return Err(ExpressionApplyError {
+                    msg: String::from(
+                        "err:XPTY0020 context item for axis step is not a node",
+                    ),
+                });
+            }
+            Ok(nodes)
+        }
+        ForwardAxis::DescendantOrSelf => {
+            let mut nodes = Vec::new();
+            if let XpathItem::Node(node) = &context.item {
+                let node_id = node_or_root_id(node, context);
+                for desc_id in node_id.descendants(&context.item_tree.arena) {
+                    let desc_node = context.item_tree.get(desc_id);
+                    if node_test.matches_node(bi_axis, desc_node, context.item_tree)? {
+                        nodes.push(desc_node);
+                    }
+                }
+            } else {
+                return Err(ExpressionApplyError {
+                    msg: String::from(
+                        "err:XPTY0020 context item for axis step is not a node",
+                    ),
+                });
+            }
+            Ok(nodes)
+        }
+        ForwardAxis::SelfAxis => {
+            let mut nodes = Vec::new();
+            if let XpathItem::Node(node) = &context.item {
+                if node_test.matches_node(bi_axis, node, context.item_tree)? {
+                    nodes.push(*node);
+                }
+            } else {
+                return Err(ExpressionApplyError {
+                    msg: String::from(
+                        "err:XPTY0020 context item for axis step is not a node",
+                    ),
+                });
+            }
+            Ok(nodes)
+        }
+        ForwardAxis::Attribute => {
+            let mut nodes = Vec::new();
+            if let XpathItem::Node(XpathItemTreeNode::ElementNode(element)) = context.item {
+                for child in element.children(context.item_tree) {
+                    if let XpathItemTreeNode::AttributeNode(_) = &child {
+                        if node_test.matches_node(bi_axis, child, context.item_tree)? {
+                            nodes.push(child);
+                        }
+                    }
+                }
+            } else if !matches!(context.item, XpathItem::Node(_)) {
+                return Err(ExpressionApplyError {
+                    msg: String::from(
+                        "err:XPTY0020 context item for axis step is not a node",
+                    ),
+                });
+            }
+            Ok(nodes)
+        }
+        ForwardAxis::FollowingSibling => {
+            let mut nodes = Vec::new();
+            if let XpathItem::Node(node) = &context.item {
+                if let Some(node_id) = node.node_id() {
+                    let mut next =
+                        context.item_tree.arena.get(node_id).and_then(|n| n.next_sibling());
+                    while let Some(sibling_id) = next {
+                        let sibling = context.item_tree.get(sibling_id);
+                        if node_test.matches_node(bi_axis, sibling, context.item_tree)? {
+                            nodes.push(sibling);
+                        }
+                        next = context
+                            .item_tree
+                            .arena
+                            .get(sibling_id)
+                            .and_then(|n| n.next_sibling());
+                    }
+                }
+            } else {
+                return Err(ExpressionApplyError {
+                    msg: String::from(
+                        "err:XPTY0020 context item for axis step is not a node",
+                    ),
+                });
+            }
+            Ok(nodes)
+        }
+        ForwardAxis::Following => {
+            let mut nodes = Vec::new();
+            if let XpathItem::Node(node) = &context.item {
+                if let Some(node_id) = node.node_id() {
+                    let mut current = Some(node_id);
+                    while let Some(cur_id) = current {
+                        let mut next =
+                            context.item_tree.arena.get(cur_id).and_then(|n| n.next_sibling());
+                        while let Some(sibling_id) = next {
+                            for desc_id in
+                                sibling_id.descendants(&context.item_tree.arena)
+                            {
+                                let desc_node = context.item_tree.get(desc_id);
+                                if node_test.matches_node(
+                                    bi_axis, desc_node, context.item_tree,
+                                )? {
+                                    nodes.push(desc_node);
+                                }
+                            }
+                            next = context
+                                .item_tree
+                                .arena
+                                .get(sibling_id)
+                                .and_then(|n| n.next_sibling());
+                        }
+                        current =
+                            context.item_tree.arena.get(cur_id).and_then(|n| n.parent());
+                    }
+                }
+                // Sort in document order (ascending by node_id).
+                nodes.sort_by_key(|n| n.node_id());
+            } else {
+                return Err(ExpressionApplyError {
+                    msg: String::from(
+                        "err:XPTY0020 context item for axis step is not a node",
+                    ),
+                });
+            }
+            Ok(nodes)
+        }
+        ForwardAxis::Namespace => Err(ExpressionApplyError {
+            msg: String::from("namespace:: axis is not supported for HTML documents"),
+        }),
     }
+}
 
-    Ok(attributes)
+/// Get the [`NodeId`] for a tree node, falling back to the tree root for `DocumentNode`
+/// (which doesn't store its own id).
+fn node_or_root_id(node: &XpathItemTreeNode, context: &XpathExpressionContext<'_>) -> NodeId {
+    match node.node_id() {
+        Some(id) => id,
+        None => context.item_tree.root_node, // DocumentNode
+    }
 }
 
 #[cfg(test)]

@@ -7,7 +7,7 @@ use nom::{branch::alt, character::complete::char, error::context};
 use crate::{
     xpath::{
         grammar::{
-            data_model::XpathItem,
+            data_model::{Function, OwnedXpathValue, XpathItem},
             expressions::{
                 maps_and_arrays::{
                     arrays::array_constructor, lookup_operator::unary_lookup::unary_lookup,
@@ -17,7 +17,8 @@ use crate::{
                     inline_function_expressions::inline_function_expr, literals::literal,
                     named_function_references::named_function_ref,
                     parenthesized_expressions::parenthesized_expr,
-                    static_function_calls::function_call, variable_references::var_ref,
+                    static_function_calls::{func_data, function_call},
+                    variable_references::var_ref,
                 },
             },
             recipes::{max, Res},
@@ -144,17 +145,132 @@ impl PrimaryExpr {
             PrimaryExpr::Literal(literal) => {
                 Ok(xpath_item_set![XpathItem::AnyAtomicType(literal.value())])
             }
-            PrimaryExpr::VarRef(_) => todo!("PrimaryExpr::VarRef eval"),
+            PrimaryExpr::VarRef(var_ref) => {
+                let name = var_ref.name().to_string();
+                match context.get_variable(&name) {
+                    Some(value) => Ok(value.clone()),
+                    None => Err(ExpressionApplyError::new(format!(
+                        "Undefined variable: ${}",
+                        name
+                    ))),
+                }
+            }
             PrimaryExpr::ParenthesizedExpr(expr) => expr.eval(context),
             PrimaryExpr::ContextItemExpr => {
                 // Context item expression is '.', which means select the current context item.
                 Ok(xpath_item_set![context.item.clone()])
             }
             PrimaryExpr::FunctionCall(expr) => expr.eval(context),
-            PrimaryExpr::FunctionItemExpr(_) => todo!("PrimaryExpr::FunctionItemExpr eval"),
-            PrimaryExpr::MapConstructor(_) => todo!("PrimaryExpr::MapConstructor eval"),
-            PrimaryExpr::ArrayConstructor(_) => todo!("PrimaryExpr::ArrayConstructor eval"),
-            PrimaryExpr::UnaryLookup(_) => todo!("PrimaryExpr::UnaryLookup eval"),
+            PrimaryExpr::FunctionItemExpr(expr) => match expr {
+                FunctionItemExpr::NamedFunctionRef(named_ref) => {
+                    Ok(xpath_item_set![XpathItem::Function(Function::Named {
+                        name: named_ref.name.to_string(),
+                        arity: named_ref.number,
+                    })])
+                }
+                FunctionItemExpr::InlineFunctionExpr(inline) => {
+                    let params = if let Some(param_list) = &inline.param_list {
+                        param_list
+                            .params()
+                            .iter()
+                            .map(|p| p.name.to_string())
+                            .collect()
+                    } else {
+                        Vec::new()
+                    };
+                    let body_expr = inline.body.expr().cloned();
+                    let body_source = body_expr
+                        .as_ref()
+                        .map(|e| e.to_string())
+                        .unwrap_or_default();
+                    Ok(xpath_item_set![XpathItem::Function(Function::Inline {
+                        params,
+                        body_source,
+                        body: body_expr.map(Box::new),
+                    })])
+                }
+            },
+            PrimaryExpr::MapConstructor(mc) => {
+                let mut entries = indexmap::IndexMap::new();
+                for entry in &mc.entries {
+                    // Evaluate the key — must produce a single atomic value.
+                    let key_set = entry.key.eval(context)?;
+                    let key_atoms = func_data(&key_set, context.item_tree)?;
+                    if key_atoms.len() != 1 {
+                        return Err(ExpressionApplyError::new(format!(
+                            "Map key must be a single atomic value, got {} values",
+                            key_atoms.len()
+                        )));
+                    }
+                    let key = key_atoms.into_iter().next().unwrap();
+                    // XPath 3.1 requires err:XQDY0137 for duplicate keys.
+                    if entries.contains_key(&key) {
+                        return Err(ExpressionApplyError::new(format!(
+                            "Duplicate key in map constructor: {}",
+                            key
+                        )));
+                    }
+                    // Evaluate the value — preserve item types without atomization.
+                    let value_set = entry.value.eval(context)?;
+                    let value_items: Vec<OwnedXpathValue> = value_set
+                        .iter()
+                        .map(|item| OwnedXpathValue::from_xpath_item(item, context.item_tree))
+                        .collect();
+                    entries.insert(key, value_items);
+                }
+                Ok(xpath_item_set![XpathItem::Function(Function::Map {
+                    entries
+                })])
+            }
+            PrimaryExpr::ArrayConstructor(ac) => {
+                let members = match ac {
+                    ArrayConstructor::SquareArrayConstructor(sq) => {
+                        // Each ExprSingle produces one member (a sequence).
+                        let mut members = Vec::new();
+                        for entry in &sq.entries {
+                            let value_set = entry.eval(context)?;
+                            let items: Vec<OwnedXpathValue> = value_set
+                                .iter()
+                                .map(|item| OwnedXpathValue::from_xpath_item(item, context.item_tree))
+                                .collect();
+                            members.push(items);
+                        }
+                        members
+                    }
+                    ArrayConstructor::CurlyArrayConstructor(cu) => {
+                        // The enclosed expression produces a sequence; each item
+                        // becomes one member (a singleton sequence).
+                        if let Some(expr) = cu.enclosed_expr().expr() {
+                            let value_set = expr.eval(context)?;
+                            value_set
+                                .iter()
+                                .map(|item| vec![OwnedXpathValue::from_xpath_item(item, context.item_tree)])
+                                .collect()
+                        } else {
+                            Vec::new()
+                        }
+                    }
+                };
+                Ok(xpath_item_set![XpathItem::Function(Function::Array {
+                    members
+                })])
+            }
+            PrimaryExpr::UnaryLookup(ul) => {
+                // Unary lookup ?key is equivalent to .?key — it applies
+                // the key specifier to the context item.
+                let func = match &context.item {
+                    XpathItem::Function(f) => f,
+                    other => {
+                        return Err(ExpressionApplyError::new(format!(
+                            "Unary lookup requires context item to be a map or array, got {:?}",
+                            other
+                        )));
+                    }
+                };
+                super::maps_and_arrays::lookup_operator::apply_key_specifier(
+                    func, &ul.0, context,
+                )
+            }
         }
     }
 }
@@ -185,7 +301,10 @@ pub enum FunctionItemExpr {
 }
 
 impl Display for FunctionItemExpr {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!("fmt FunctionItemExpr")
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FunctionItemExpr::NamedFunctionRef(x) => write!(f, "{}", x),
+            FunctionItemExpr::InlineFunctionExpr(x) => write!(f, "{}", x),
+        }
     }
 }

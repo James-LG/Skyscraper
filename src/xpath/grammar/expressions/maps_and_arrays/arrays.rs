@@ -43,8 +43,11 @@ pub enum ArrayConstructor {
 }
 
 impl Display for ArrayConstructor {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!("fmt ArrayConstructor")
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ArrayConstructor::SquareArrayConstructor(x) => write!(f, "{}", x),
+            ArrayConstructor::CurlyArrayConstructor(x) => write!(f, "{}", x),
+        }
     }
 }
 
@@ -95,6 +98,13 @@ fn curly_array_constructor(input: &str) -> Res<&str, CurlyArrayConstructor> {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct CurlyArrayConstructor(EnclosedExpr);
+
+impl CurlyArrayConstructor {
+    /// Get the enclosed expression.
+    pub fn enclosed_expr(&self) -> &EnclosedExpr {
+        &self.0
+    }
+}
 
 impl Display for CurlyArrayConstructor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

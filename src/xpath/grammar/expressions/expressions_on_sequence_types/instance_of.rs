@@ -4,14 +4,18 @@ use std::fmt::Display;
 
 use nom::{bytes::complete::tag, combinator::opt, error::context};
 
-use crate::xpath::{
-    grammar::{
-        recipes::Res,
-        types::sequence_type::{sequence_type, SequenceType},
-        whitespace_recipes::sep,
+use crate::{
+    xpath::{
+        grammar::{
+            data_model::{AnyAtomicType, XpathItem},
+            recipes::Res,
+            types::sequence_type::{sequence_type, SequenceType},
+            whitespace_recipes::sep,
+        },
+        xpath_item_set::XpathItemSet,
+        ExpressionApplyError, XpathExpressionContext,
     },
-    xpath_item_set::XpathItemSet,
-    ExpressionApplyError, XpathExpressionContext,
+    xpath_item_set,
 };
 
 use super::treat::{treat_expr, TreatExpr};
@@ -63,13 +67,17 @@ impl InstanceofExpr {
         // Evaluate the first expression.
         let result = self.expr.eval(context)?;
 
-        // If there's only one parameter, return it's eval.
-        if self.instanceof_type.is_none() {
-            return Ok(result);
-        }
+        // If there's no `instance of` clause, return the base expression's eval.
+        let seq_type = match &self.instanceof_type {
+            Some(t) => t,
+            None => return Ok(result),
+        };
 
-        // Otherwise, do the operation.
-        todo!("InstanceofExpr::eval instanceof operator")
+        // Check if the result matches the sequence type.
+        let matches = seq_type.is_match(&result, context.item_tree)?;
+        Ok(xpath_item_set![XpathItem::AnyAtomicType(
+            AnyAtomicType::Boolean(matches)
+        )])
     }
 }
 

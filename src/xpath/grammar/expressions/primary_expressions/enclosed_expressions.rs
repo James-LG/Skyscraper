@@ -17,6 +17,13 @@ pub fn enclosed_expr(input: &str) -> Res<&str, EnclosedExpr> {
 #[derive(PartialEq, Debug, Clone)]
 pub struct EnclosedExpr(Option<Expr>);
 
+impl EnclosedExpr {
+    /// Get the inner expression, if any.
+    pub fn expr(&self) -> Option<&Expr> {
+        self.0.as_ref()
+    }
+}
+
 impl std::fmt::Display for EnclosedExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(expr) = &self.0 {

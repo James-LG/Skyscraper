@@ -1,6 +1,5 @@
 use std::fmt::Display;
 
-use indexmap::IndexSet;
 use nom::{branch::alt, bytes::complete::tag, error::context};
 
 use crate::xpath::{
@@ -14,7 +13,6 @@ use crate::xpath::{
         whitespace_recipes::ws,
         XpathItemTreeNode,
     },
-    xpath_item_set::XpathItemSet,
     ExpressionApplyError, XpathExpressionContext,
 };
 
@@ -60,7 +58,7 @@ impl ReverseStep {
     pub(crate) fn eval<'tree>(
         &self,
         context: &XpathExpressionContext<'tree>,
-    ) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
+    ) -> Result<Vec<&'tree XpathItemTreeNode>, ExpressionApplyError> {
         match self {
             ReverseStep::Full(axis, node_test) => eval_reverse_axis(context, *axis, node_test),
             ReverseStep::Abbreviated => {
@@ -75,51 +73,162 @@ impl ReverseStep {
     }
 }
 
+/// Evaluate a reverse axis with fused node-test filtering.
 fn eval_reverse_axis<'tree>(
     context: &XpathExpressionContext<'tree>,
     axis: ReverseAxis,
     node_test: &NodeTest,
-) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
-    let axis_nodes: IndexSet<&'tree XpathItemTreeNode> = match axis {
-        ReverseAxis::Parent => eval_reverse_axis_parent(context),
-        ReverseAxis::Ancestor => todo!("eval_reverse_axis ReverseAxis::Ancestor"),
-        ReverseAxis::PrecedingSibling => todo!("eval_reverse_axis ReverseAxis::PrecedingSibling"),
-        ReverseAxis::Preceding => todo!("eval_reverse_axis ReverseAxis::Preceding"),
-        ReverseAxis::AncestorOrSelf => todo!("eval_reverse_axis ReverseAxis::AncestorOrSelf"),
-    }?;
-
-    let items: XpathItemSet<'tree> = axis_nodes.into_iter().map(XpathItem::Node).collect();
-    let mut nodes = IndexSet::new();
-
-    for (i, _node) in items.iter().enumerate() {
-        let node_test_context =
-            XpathExpressionContext::new(context.item_tree, &items, i + 1, context.is_root_level);
-
-        if let Some(result) =
-            node_test.eval(BiDirectionalAxis::ReverseAxis(axis), &node_test_context)?
-        {
-            nodes.insert(result);
+) -> Result<Vec<&'tree XpathItemTreeNode>, ExpressionApplyError> {
+    let bi_axis = BiDirectionalAxis::ReverseAxis(axis);
+    match axis {
+        ReverseAxis::Parent => {
+            let mut nodes = Vec::new();
+            if let XpathItem::Node(node) = &context.item {
+                if let Some(parent) = &node.parent(context.item_tree) {
+                    if node_test.matches_node(bi_axis, parent, context.item_tree)? {
+                        nodes.push(*parent);
+                    }
+                }
+            } else {
+                return Err(ExpressionApplyError {
+                    msg: String::from(
+                        "err:XPTY0020 context item for axis step is not a node",
+                    ),
+                });
+            }
+            Ok(nodes)
+        }
+        ReverseAxis::Ancestor => {
+            let mut nodes = Vec::new();
+            if let XpathItem::Node(node) = &context.item {
+                if let Some(node_id) = node.node_id() {
+                    let mut current =
+                        context.item_tree.arena.get(node_id).and_then(|n| n.parent());
+                    while let Some(ancestor_id) = current {
+                        let ancestor = context.item_tree.get(ancestor_id);
+                        if node_test.matches_node(bi_axis, ancestor, context.item_tree)? {
+                            nodes.push(ancestor);
+                        }
+                        current = context
+                            .item_tree
+                            .arena
+                            .get(ancestor_id)
+                            .and_then(|n| n.parent());
+                    }
+                }
+            } else {
+                return Err(ExpressionApplyError {
+                    msg: String::from(
+                        "err:XPTY0020 context item for axis step is not a node",
+                    ),
+                });
+            }
+            Ok(nodes)
+        }
+        ReverseAxis::AncestorOrSelf => {
+            let mut nodes = Vec::new();
+            if let XpathItem::Node(node) = &context.item {
+                if node_test.matches_node(bi_axis, node, context.item_tree)? {
+                    nodes.push(*node);
+                }
+                if let Some(node_id) = node.node_id() {
+                    let mut current =
+                        context.item_tree.arena.get(node_id).and_then(|n| n.parent());
+                    while let Some(ancestor_id) = current {
+                        let ancestor = context.item_tree.get(ancestor_id);
+                        if node_test.matches_node(bi_axis, ancestor, context.item_tree)? {
+                            nodes.push(ancestor);
+                        }
+                        current = context
+                            .item_tree
+                            .arena
+                            .get(ancestor_id)
+                            .and_then(|n| n.parent());
+                    }
+                }
+            } else {
+                return Err(ExpressionApplyError {
+                    msg: String::from(
+                        "err:XPTY0020 context item for axis step is not a node",
+                    ),
+                });
+            }
+            Ok(nodes)
+        }
+        ReverseAxis::PrecedingSibling => {
+            let mut nodes = Vec::new();
+            if let XpathItem::Node(node) = &context.item {
+                if let Some(node_id) = node.node_id() {
+                    let mut prev = context
+                        .item_tree
+                        .arena
+                        .get(node_id)
+                        .and_then(|n| n.previous_sibling());
+                    while let Some(sibling_id) = prev {
+                        let sibling = context.item_tree.get(sibling_id);
+                        if node_test.matches_node(bi_axis, sibling, context.item_tree)? {
+                            nodes.push(sibling);
+                        }
+                        prev = context
+                            .item_tree
+                            .arena
+                            .get(sibling_id)
+                            .and_then(|n| n.previous_sibling());
+                    }
+                }
+            } else {
+                return Err(ExpressionApplyError {
+                    msg: String::from(
+                        "err:XPTY0020 context item for axis step is not a node",
+                    ),
+                });
+            }
+            Ok(nodes)
+        }
+        ReverseAxis::Preceding => {
+            let mut nodes = Vec::new();
+            if let XpathItem::Node(node) = &context.item {
+                if let Some(node_id) = node.node_id() {
+                    let mut current = Some(node_id);
+                    while let Some(cur_id) = current {
+                        let mut prev = context
+                            .item_tree
+                            .arena
+                            .get(cur_id)
+                            .and_then(|n| n.previous_sibling());
+                        while let Some(sibling_id) = prev {
+                            for desc_id in
+                                sibling_id.descendants(&context.item_tree.arena)
+                            {
+                                let desc_node = context.item_tree.get(desc_id);
+                                if node_test.matches_node(
+                                    bi_axis, desc_node, context.item_tree,
+                                )? {
+                                    nodes.push(desc_node);
+                                }
+                            }
+                            prev = context
+                                .item_tree
+                                .arena
+                                .get(sibling_id)
+                                .and_then(|n| n.previous_sibling());
+                        }
+                        current =
+                            context.item_tree.arena.get(cur_id).and_then(|n| n.parent());
+                    }
+                }
+                // Sort in reverse document order (descending by node_id).
+                nodes.sort_by_key(|b| std::cmp::Reverse(b.node_id()));
+            } else {
+                return Err(ExpressionApplyError {
+                    msg: String::from(
+                        "err:XPTY0020 context item for axis step is not a node",
+                    ),
+                });
+            }
+            Ok(nodes)
         }
     }
-
-    Ok(nodes)
-}
-
-/// Direct parent of the context node.
-fn eval_reverse_axis_parent<'tree>(
-    context: &XpathExpressionContext<'tree>,
-) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
-    let mut nodes: IndexSet<&'tree XpathItemTreeNode> = IndexSet::new();
-
-    // Only tree items have parents
-    // TODO: Technically an attribute's parent is an element, but there is no link to that ATM.
-    if let XpathItem::Node(node) = &context.item {
-        if let Some(parent) = &node.parent(context.item_tree) {
-            nodes.insert(*parent);
-        }
-    }
-
-    Ok(nodes)
 }
 
 #[cfg(test)]

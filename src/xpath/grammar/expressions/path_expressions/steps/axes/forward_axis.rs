@@ -43,7 +43,7 @@ pub fn forward_axis(input: &str) -> Res<&str, ForwardAxis> {
     }
 
     fn following(input: &str) -> Res<&str, ForwardAxis> {
-        ws((tag("descendant-or-self"), tag("::")))(input)
+        ws((tag("following"), tag("::")))(input)
             .map(|(next_input, _res)| (next_input, ForwardAxis::Following))
     }
 
@@ -55,13 +55,13 @@ pub fn forward_axis(input: &str) -> Res<&str, ForwardAxis> {
     context(
         "forward_axis",
         alt((
-            child,
-            descendant,
-            attribute,
-            self_axis,
             descendant_or_self,
+            descendant,
             following_sibling,
             following,
+            child,
+            attribute,
+            self_axis,
             namespace,
         )),
     )(input)

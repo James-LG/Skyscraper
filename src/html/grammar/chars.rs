@@ -1,0 +1,10 @@
+pub const NULL: char = '\u{0000}';
+pub const CHARACTER_TABULATION: char = '\u{0009}';
+pub const LINE_FEED: char = '\u{000A}';
+pub const FORM_FEED: char = '\u{000C}';
+pub const CARRIAGE_RETURN: char = '\u{000D}';
+pub const SPACE: char = '\u{0020}';
+pub const REPLACEMENT_CHARACTER: char = '\u{FFFD}';
+pub const LATIN_SMALL_LETTER_X: char = '\u{0078}';
+pub const LATIN_CAPITAL_LETTER_X: char = '\u{0058}';
+pub const WHITESPACE_CHARS: [char; 5] = [CHARACTER_TABULATION, LINE_FEED, FORM_FEED, CARRIAGE_RETURN, SPACE];

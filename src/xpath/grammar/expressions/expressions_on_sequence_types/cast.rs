@@ -7,15 +7,25 @@ use nom::{
     sequence::tuple,
 };
 
-use crate::xpath::{
-    grammar::{
-        expressions::arrow_operator::{arrow_expr, ArrowExpr},
-        recipes::Res,
-        types::{simple_type_name, SimpleTypeName},
-        whitespace_recipes::sep,
+use ordered_float::OrderedFloat;
+
+use crate::{
+    xpath::{
+        grammar::{
+            data_model::{AnyAtomicType, XpathItem},
+            expressions::{
+                arrow_operator::{arrow_expr, ArrowExpr},
+                primary_expressions::static_function_calls::func_data,
+            },
+            recipes::Res,
+            types::{simple_type_name, EQName, SimpleTypeName},
+            whitespace_recipes::sep,
+            xml_names::QName,
+        },
+        xpath_item_set::XpathItemSet,
+        ExpressionApplyError, XpathExpressionContext,
     },
-    xpath_item_set::XpathItemSet,
-    ExpressionApplyError, XpathExpressionContext,
+    xpath_item_set,
 };
 
 pub fn cast_expr(input: &str) -> Res<&str, CastExpr> {
@@ -56,13 +66,192 @@ impl CastExpr {
         // Evaluate the first expression.
         let result = self.expr.eval(context)?;
 
-        // If there's only one parameter, return it's eval.
-        if self.cast.is_none() {
+        // If there's no `cast as` clause, return the base expression's eval.
+        let single_type = match &self.cast {
+            Some(t) => t,
+            None => return Ok(result),
+        };
+
+        // If `?` is present and the sequence is empty, return empty.
+        if single_type.has_question_mark && result.is_empty() {
             return Ok(result);
         }
 
-        // Otherwise, do the operation.
-        todo!("CastExpr::eval operator")
+        // Atomize the result to get a single atomic value.
+        let atomized = func_data(&result, context.item_tree)?;
+        if atomized.len() != 1 {
+            return Err(ExpressionApplyError {
+                msg: format!(
+                    "cast as: expected single atomic value, got {}",
+                    atomized.len()
+                ),
+            });
+        }
+
+        let source = &atomized[0];
+        let target_name = Self::resolve_type_name(&single_type.type_name)?;
+        let casted = Self::cast_atomic(source, &target_name)?;
+
+        Ok(xpath_item_set![XpathItem::AnyAtomicType(casted)])
+    }
+
+    pub(crate) fn resolve_type_name(type_name: &SimpleTypeName) -> Result<String, ExpressionApplyError> {
+        match &type_name.0 .0 {
+            EQName::QName(qname) => match qname {
+                QName::UnprefixedName(name) => Ok(name.clone()),
+                QName::PrefixedName(prefixed) => {
+                    if prefixed.prefix == "xs" {
+                        Ok(prefixed.local_part.clone())
+                    } else {
+                        Err(ExpressionApplyError {
+                            msg: format!("cast as: unsupported type prefix '{}'", prefixed.prefix),
+                        })
+                    }
+                }
+            },
+            EQName::UriQualifiedName(uqn) => {
+                if uqn.uri == "http://www.w3.org/2001/XMLSchema" {
+                    Ok(uqn.name.clone())
+                } else {
+                    Err(ExpressionApplyError {
+                        msg: format!(
+                            "cast as: unsupported type namespace '{}'",
+                            uqn.uri
+                        ),
+                    })
+                }
+            }
+        }
+    }
+
+    pub(crate) fn cast_atomic(
+        source: &AnyAtomicType,
+        target_type: &str,
+    ) -> Result<AnyAtomicType, ExpressionApplyError> {
+        match target_type {
+            "string" => Ok(AnyAtomicType::String(source.to_string())),
+            "integer" => match source {
+                AnyAtomicType::Integer(_) => Ok(source.clone()),
+                AnyAtomicType::String(s) => s.trim().parse::<i64>().map(AnyAtomicType::Integer).map_err(|_| {
+                    ExpressionApplyError {
+                        msg: format!("cast as integer: cannot cast string '{}'", s),
+                    }
+                }),
+                AnyAtomicType::Float(f) => {
+                    if f.0.is_nan() || f.0.is_infinite() {
+                        return Err(ExpressionApplyError {
+                            msg: format!("err:FOCA0002 Cannot cast {} to xs:integer", f.0),
+                        });
+                    }
+                    let truncated = f.0.trunc() as f64;
+                    if truncated > i64::MAX as f64 || truncated < i64::MIN as f64 {
+                        return Err(ExpressionApplyError {
+                            msg: format!("err:FOAR0002 Value {} out of range for xs:integer", f.0),
+                        });
+                    }
+                    Ok(AnyAtomicType::Integer(f.0 as i64))
+                }
+                AnyAtomicType::Double(d) => {
+                    if d.0.is_nan() || d.0.is_infinite() {
+                        return Err(ExpressionApplyError {
+                            msg: format!("err:FOCA0002 Cannot cast {} to xs:integer", d.0),
+                        });
+                    }
+                    let truncated = d.0.trunc();
+                    if truncated > i64::MAX as f64 || truncated < i64::MIN as f64 {
+                        return Err(ExpressionApplyError {
+                            msg: format!("err:FOAR0002 Value {} out of range for xs:integer", d.0),
+                        });
+                    }
+                    Ok(AnyAtomicType::Integer(d.0 as i64))
+                }
+                AnyAtomicType::Boolean(b) => Ok(AnyAtomicType::Integer(if *b { 1 } else { 0 })),
+                AnyAtomicType::QName { .. } => Err(ExpressionApplyError {
+                    msg: "err:XPTY0004 Cannot cast xs:QName to xs:integer".to_string(),
+                }),
+            },
+            "double" => match source {
+                AnyAtomicType::Double(_) => Ok(source.clone()),
+                AnyAtomicType::Integer(n) => Ok(AnyAtomicType::Double(OrderedFloat(*n as f64))),
+                AnyAtomicType::Float(f) => Ok(AnyAtomicType::Double(OrderedFloat(f.0 as f64))),
+                AnyAtomicType::String(s) => {
+                    let trimmed = s.trim();
+                    let v = match trimmed {
+                        "INF" => f64::INFINITY,
+                        "-INF" => f64::NEG_INFINITY,
+                        "NaN" => f64::NAN,
+                        _ => trimmed.parse::<f64>().map_err(|_| {
+                            ExpressionApplyError {
+                                msg: format!("cast as double: cannot cast string '{}'", s),
+                            }
+                        })?,
+                    };
+                    Ok(AnyAtomicType::Double(OrderedFloat(v)))
+                }
+                AnyAtomicType::Boolean(b) => Ok(AnyAtomicType::Double(OrderedFloat(if *b { 1.0 } else { 0.0 }))),
+                AnyAtomicType::QName { .. } => Err(ExpressionApplyError {
+                    msg: "err:XPTY0004 Cannot cast xs:QName to xs:double".to_string(),
+                }),
+            },
+            "float" => match source {
+                AnyAtomicType::Float(_) => Ok(source.clone()),
+                AnyAtomicType::Integer(n) => Ok(AnyAtomicType::Float(OrderedFloat(*n as f32))),
+                AnyAtomicType::Double(d) => Ok(AnyAtomicType::Float(OrderedFloat(d.0 as f32))),
+                AnyAtomicType::String(s) => {
+                    let trimmed = s.trim();
+                    let v = match trimmed {
+                        "INF" => f32::INFINITY,
+                        "-INF" => f32::NEG_INFINITY,
+                        "NaN" => f32::NAN,
+                        _ => trimmed.parse::<f32>().map_err(|_| {
+                            ExpressionApplyError {
+                                msg: format!("cast as float: cannot cast string '{}'", s),
+                            }
+                        })?,
+                    };
+                    Ok(AnyAtomicType::Float(OrderedFloat(v)))
+                }
+                AnyAtomicType::Boolean(b) => Ok(AnyAtomicType::Float(OrderedFloat(if *b { 1.0 } else { 0.0 }))),
+                AnyAtomicType::QName { .. } => Err(ExpressionApplyError {
+                    msg: "err:XPTY0004 Cannot cast xs:QName to xs:float".to_string(),
+                }),
+            },
+            "boolean" => match source {
+                AnyAtomicType::Boolean(_) => Ok(source.clone()),
+                AnyAtomicType::Integer(n) => Ok(AnyAtomicType::Boolean(*n != 0)),
+                AnyAtomicType::String(s) => match s.trim() {
+                    "true" | "1" => Ok(AnyAtomicType::Boolean(true)),
+                    "false" | "0" => Ok(AnyAtomicType::Boolean(false)),
+                    _ => Err(ExpressionApplyError {
+                        msg: format!("cast as boolean: cannot cast string '{}'", s),
+                    }),
+                },
+                AnyAtomicType::Float(f) => Ok(AnyAtomicType::Boolean(!f.0.is_nan() && f.0 != 0.0)),
+                AnyAtomicType::Double(d) => Ok(AnyAtomicType::Boolean(!d.0.is_nan() && d.0 != 0.0)),
+                AnyAtomicType::QName { .. } => Err(ExpressionApplyError {
+                    msg: "err:XPTY0004 Cannot cast xs:QName to xs:boolean".to_string(),
+                }),
+            },
+            "QName" => match source {
+                AnyAtomicType::QName { .. } => Ok(source.clone()),
+                _ => Err(ExpressionApplyError {
+                    msg: format!(
+                        "err:XPTY0004 Cannot cast {} to xs:QName (use fn:QName() instead)",
+                        match source {
+                            AnyAtomicType::String(_) => "xs:string",
+                            AnyAtomicType::Integer(_) => "xs:integer",
+                            AnyAtomicType::Float(_) => "xs:float",
+                            AnyAtomicType::Double(_) => "xs:double",
+                            AnyAtomicType::Boolean(_) => "xs:boolean",
+                            AnyAtomicType::QName { .. } => "xs:QName",
+                        }
+                    ),
+                }),
+            },
+            _ => Err(ExpressionApplyError {
+                msg: format!("cast as: unsupported target type '{}'", target_type),
+            }),
+        }
     }
 }
 

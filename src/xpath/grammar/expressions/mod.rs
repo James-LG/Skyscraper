@@ -81,7 +81,7 @@ impl Xpath {
     ///
     /// ```rust
     /// use skyscraper::html;
-    /// use skyscraper::xpath::{self, XpathItemTree, grammar::{XpathItemTreeNode, data_model::XpathItem}};
+    /// use skyscraper::xpath;
     /// use std::error::Error;
     ///
     /// fn main() -> Result<(), Box<dyn Error>> {
@@ -92,16 +92,15 @@ impl Xpath {
     ///         </body>
     ///     </html>"##;
     ///
-    ///     let document = html::parse(html_text)?;
-    ///     let xpath_item_tree = XpathItemTree::from(&document);
+    ///     let xpath_item_tree = html::parse(html_text)?;
     ///     let xpath = xpath::parse("//div")?;
-    ///    
+    ///
     ///     let items = xpath.apply(&xpath_item_tree)?;
-    ///    
+    ///
     ///     assert_eq!(items.len(), 1);
-    ///    
+    ///
     ///     let mut items = items.into_iter();
-    ///    
+    ///
     ///     let item = items
     ///         .next()
     ///         .unwrap();
@@ -120,8 +119,7 @@ impl Xpath {
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         let context =
             XpathExpressionContext::new_single(item_tree, XpathItem::Node(item_tree.root()), true);
-        let mut item_set = self.eval(&context)?;
-        item_set.sort();
+        let item_set = self.eval(&context)?;
         Ok(item_set)
     }
 
@@ -141,7 +139,7 @@ impl Xpath {
     ///
     /// ```rust
     /// use skyscraper::html::{self, trim_internal_whitespace};
-    /// use skyscraper::xpath::{self, XpathItemTree, grammar::{data_model::{XpathItem}}};
+    /// use skyscraper::xpath;
     /// use std::error::Error;
     ///
     /// fn main() -> Result<(), Box<dyn Error>> {
@@ -153,8 +151,7 @@ impl Xpath {
     ///         </body>
     ///     </html>"##;
     ///
-    ///     let document = html::parse(html_text)?;
-    ///     let xpath_item_tree = XpathItemTree::from(&document);
+    ///     let xpath_item_tree = html::parse(html_text)?;
     ///     let xpath = xpath::parse(r#"//div[@id="2"]"#)?;
     ///    
     ///     let items = xpath.apply(&xpath_item_tree)?;
@@ -201,7 +198,7 @@ impl Xpath {
     ///
     /// ```rust
     /// use skyscraper::html::{self, trim_internal_whitespace};
-    /// use skyscraper::xpath::{self, XpathItemTree, grammar::{XpathItemTreeNode, data_model::{XpathItem}}};
+    /// use skyscraper::xpath;
     /// use std::error::Error;
     ///
     /// fn main() -> Result<(), Box<dyn Error>> {
@@ -213,8 +210,7 @@ impl Xpath {
     ///         </body>
     ///     </html>"##;
     ///
-    ///     let document = html::parse(html_text)?;
-    ///     let xpath_item_tree = XpathItemTree::from(&document);
+    ///     let xpath_item_tree = html::parse(html_text)?;
     ///     let xpath = xpath::parse(r#"//div[@id="2"]"#)?;
     ///    
     ///     let items = xpath.find_elements(&xpath_item_tree)?;
@@ -303,7 +299,7 @@ impl Expr {
             Ok(())
         }
 
-        // If there's only one parameter, return it's eval.
+        // If there's only one parameter, return its eval.
         if self.items.is_empty() {
             return self.expr.eval(context);
         }
@@ -387,10 +383,10 @@ impl ExprSingle {
         context: &XpathExpressionContext<'tree>,
     ) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
         match self {
-            ExprSingle::ForExpr(_) => todo!("ExprSingle::ForExpr"),
-            ExprSingle::LetExpr(_) => todo!("ExprSingle::LetExpr"),
-            ExprSingle::QuantifiedExpr(_) => todo!("ExprSingle::QuantifiedExpr"),
-            ExprSingle::IfExpr(_) => todo!("ExprSingle::IfExpr"),
+            ExprSingle::ForExpr(e) => e.eval(context),
+            ExprSingle::LetExpr(e) => e.eval(context),
+            ExprSingle::QuantifiedExpr(e) => e.eval(context),
+            ExprSingle::IfExpr(e) => e.eval(context),
             ExprSingle::OrExpr(e) => e.eval(context),
         }
     }

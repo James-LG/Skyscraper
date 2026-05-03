@@ -8,12 +8,18 @@ use nom::{
 
 use crate::xpath::{
     grammar::{
-        recipes::Res, types::common::attribute_name, whitespace_recipes::ws, XpathItemTreeNode,
+        recipes::Res, types::common::attribute_name, whitespace_recipes::ws, xml_names::QName,
+        XpathItemTreeNode,
     },
     ExpressionApplyError,
 };
 
-use super::common::{type_name, AttributeName, TypeName};
+use super::resolve_prefix;
+
+use super::{
+    common::{type_name, AttributeName, TypeName},
+    EQName,
+};
 
 pub fn attribute_test(input: &str) -> Res<&str, AttributeTest> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-AttributeTest
@@ -25,13 +31,13 @@ pub fn attribute_test(input: &str) -> Res<&str, AttributeTest> {
             char('('),
             opt(ws((
                 attrib_name_or_wildcard,
-                opt(ws((char(','), type_name, opt(char('?'))))),
+                opt(ws((char(','), type_name))),
             ))),
             char(')'),
         )),
     )(input)
     .map(|(next_input, res)| {
-        let res = res.2.map(|tup| (tup.0, tup.1.map(|tup2| tup2.1)));
+        let res = res.2.map(|tup| (tup.0, tup.1.map(|tup2| tup2.1 )));
         let element_test = AttributeTest {
             pair: res.map(|tup| AttributeTestPair {
                 name_or_wildcard: tup.0,
@@ -58,9 +64,9 @@ impl Display for AttributeTest {
 }
 
 impl AttributeTest {
-    pub(crate) fn is_match<'tree>(
+    pub(crate) fn is_match(
         &self,
-        node: &'tree XpathItemTreeNode,
+        node: &XpathItemTreeNode,
     ) -> Result<bool, ExpressionApplyError> {
         match &self.pair {
             Some(pair) => pair.is_match(node),
@@ -93,14 +99,15 @@ impl Display for AttributeTestPair {
 }
 
 impl AttributeTestPair {
-    pub(crate) fn is_match<'tree>(
+    pub(crate) fn is_match(
         &self,
-        node: &'tree XpathItemTreeNode,
+        node: &XpathItemTreeNode,
     ) -> Result<bool, ExpressionApplyError> {
         let is_match = self.name_or_wildcard.is_match(node)?;
 
-        if let Some(_type_name) = &self.type_name {
-            todo!("AttributeTestPair::eval type_name")
+        if self.type_name.is_some() {
+            // Type names require a schema-aware processor. In HTML context,
+            // ignore the type constraint — if the name matches, it matches.
         }
 
         Ok(is_match)
@@ -141,15 +148,36 @@ impl Display for AttribNameOrWildcard {
 }
 
 impl AttribNameOrWildcard {
-    pub(crate) fn is_match<'tree>(
+    pub(crate) fn is_match(
         &self,
-        _node: &'tree XpathItemTreeNode,
+        node: &XpathItemTreeNode,
     ) -> Result<bool, ExpressionApplyError> {
         match self {
-            AttribNameOrWildcard::AttributeName(_) => {
-                todo!("AttribNameOrWildcard::eval attribute_name")
+            AttribNameOrWildcard::AttributeName(attr_name) => {
+                if let XpathItemTreeNode::AttributeNode(attr) = node {
+                    let matches = match &attr_name.0 {
+                        EQName::QName(qname) => match qname {
+                            QName::PrefixedName(p) => {
+                                let target_ns = resolve_prefix(&p.prefix)?;
+                                let ns_matches =
+                                    attr.namespace.as_deref() == Some(target_ns);
+                                p.local_part == attr.name && ns_matches
+                            }
+                            QName::UnprefixedName(name) => name == &attr.name,
+                        },
+                        EQName::UriQualifiedName(uqn) => {
+                            uqn.name == attr.name
+                                && attr.namespace.as_deref().is_some_and(|ns| ns == uqn.uri)
+                        }
+                    };
+                    Ok(matches)
+                } else {
+                    Ok(false)
+                }
             }
-            AttribNameOrWildcard::Wildcard => Ok(true),
+            AttribNameOrWildcard::Wildcard => {
+                Ok(matches!(node, XpathItemTreeNode::AttributeNode(_)))
+            }
         }
     }
 }

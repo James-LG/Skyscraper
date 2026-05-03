@@ -35,11 +35,11 @@ pub fn reverse_axis(input: &str) -> Res<&str, ReverseAxis> {
     context(
         "reverse_axis",
         alt((
-            parent_map,
+            ancestor_or_self_map,
             ancestor_map,
             preceding_sibling_map,
             preceding_map,
-            ancestor_or_self_map,
+            parent_map,
         )),
     )(input)
 }

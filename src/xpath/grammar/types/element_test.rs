@@ -2,9 +2,24 @@
 
 use std::fmt::Display;
 
-use crate::xpath::grammar::{recipes::Res, types::common::element_name, whitespace_recipes::ws};
+use indexmap::IndexSet;
 
-use super::common::{type_name, ElementName, TypeName};
+use crate::{
+    html::grammar::HTML_NAMESPACE,
+    xpath::{
+        grammar::{
+            data_model::XpathItem, recipes::Res, types::common::element_name,
+            whitespace_recipes::ws, xml_names::QName, XpathItemTreeNode,
+        },
+        xpath_item_set::XpathItemSet,
+        ExpressionApplyError,
+    },
+};
+
+use super::{
+    common::{type_name, ElementName, TypeName},
+    EQName,
+};
 
 use nom::{
     branch::alt, bytes::complete::tag, character::complete::char, combinator::opt, error::context,
@@ -39,6 +54,67 @@ pub fn element_test(input: &str) -> Res<&str, ElementTest> {
 #[derive(PartialEq, Debug, Clone)]
 pub struct ElementTest {
     pub item: Option<ElementTestItem>,
+}
+
+impl ElementTest {
+    pub(crate) fn filter<'tree>(
+        &self,
+        item_set: &XpathItemSet<'tree>,
+    ) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
+        let mut filtered_nodes = IndexSet::new();
+
+        for item in item_set {
+            if let XpathItem::Node(node) = item {
+                if let XpathItemTreeNode::ElementNode(element) = node {
+                    let matches = match &self.item {
+                        // element() with no arguments matches any element node.
+                        None => true,
+                        Some(item) => {
+                            let name_matches = match &item.element_name_or_wildcard {
+                                ElementNameOrWildcard::Wildcard => true,
+                                ElementNameOrWildcard::ElementName(name) => {
+                                    match_element_name(
+                                        &name.0,
+                                        &element.name,
+                                        element.namespace.as_deref(),
+                                    )?
+                                }
+                            };
+                            // Type names are ignored in a non-schema-aware processor.
+                            name_matches
+                        }
+                    };
+
+                    if matches {
+                        filtered_nodes.insert(*node);
+                    }
+                }
+            }
+        }
+
+        Ok(filtered_nodes)
+    }
+}
+
+/// Match an element name from an EQName against a node's local name and namespace.
+pub(crate) fn match_element_name(
+    expected: &EQName,
+    node_name: &str,
+    node_ns: Option<&str>,
+) -> Result<bool, ExpressionApplyError> {
+    match expected {
+        EQName::QName(qname) => match qname {
+            QName::PrefixedName(p) => {
+                let target_ns = super::resolve_prefix(&p.prefix)?;
+                let effective_ns = node_ns.unwrap_or(HTML_NAMESPACE);
+                Ok(p.local_part == node_name && effective_ns == target_ns)
+            }
+            QName::UnprefixedName(name) => Ok(name == node_name),
+        },
+        EQName::UriQualifiedName(uqn) => {
+            Ok(uqn.name == node_name && node_ns.is_some_and(|ns| ns == uqn.uri))
+        }
+    }
 }
 
 impl Display for ElementTest {

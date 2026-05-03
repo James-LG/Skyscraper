@@ -7,17 +7,49 @@ use nom::{
     multi::many0, sequence::tuple,
 };
 
+use std::sync::LazyLock;
+
+use crate::xpath::grammar::data_model::XpathItem;
+use crate::xpath::grammar::types::KindTest;
 use crate::xpath::grammar::whitespace_recipes::ws;
+use crate::xpath::grammar::XpathItemTreeNode;
 use crate::xpath::xpath_item_set::XpathItemSet;
 use crate::xpath::{
     grammar::{expressions::path_expressions::steps::step_expr::step_expr, recipes::Res},
     ExpressionApplyError, XpathExpressionContext,
 };
 
-use self::steps::step_expr::StepExpr;
+use self::steps::{
+    axes::forward_axis::ForwardAxis,
+    axis_step::{AxisStep, AxisStepType},
+    forward_step::ForwardStep,
+    node_tests::{BiDirectionalAxis, NodeTest},
+    step_expr::StepExpr,
+};
 
 pub mod abbreviated_syntax;
 pub mod steps;
+
+/// Lazily-parsed `(fn:root(self::node()) treat as document-node())` step expression.
+static ROOT_STEP: LazyLock<StepExpr> = LazyLock::new(|| {
+    step_expr("(fn:root(self::node()) treat as document-node())")
+        .expect("ROOT_STEP parse failed")
+        .1
+});
+
+/// Lazily-parsed `descendant-or-self::node()` step expression.
+static DESC_OR_SELF_STEP: LazyLock<StepExpr> = LazyLock::new(|| {
+    step_expr("descendant-or-self::node()")
+        .expect("DESC_OR_SELF_STEP parse failed")
+        .1
+});
+
+/// Lazily-parsed `.` (context item) step expression.
+static DOT_STEP: LazyLock<StepExpr> = LazyLock::new(|| {
+    step_expr(".")
+        .expect("DOT_STEP parse failed")
+        .1
+});
 
 pub fn path_expr(input: &str) -> Res<&str, PathExpr> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#doc-xpath31-PathExpr
@@ -75,7 +107,7 @@ impl PathExpr {
         // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-path-expressions
         match self {
             PathExpr::LeadingSlash(expr) => {
-                let expanded_expr = if context.is_root_level {
+                let expanded_expr = if context.is_initial_step {
                     initial_slash_expansion(expr)
                 } else {
                     relative_slash_expansion(expr)
@@ -84,7 +116,7 @@ impl PathExpr {
                 expanded_expr.eval(context)
             }
             PathExpr::LeadingDoubleSlash(expr) => {
-                let expanded_expr = if context.is_root_level {
+                let expanded_expr = if context.is_initial_step {
                     initial_double_slash_expansion(expr)
                 } else {
                     relative_double_slash_expansion(expr)
@@ -100,14 +132,12 @@ impl PathExpr {
 fn initial_slash_expansion(unexpanded_expr: &Option<RelativePathExpr>) -> RelativePathExpr {
     // A leading slash is expanded to `(fn:root(self::node()) treat as document-node())/<unexpanded_expr>`
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-path-expressions
-    let first_step = step_expr("(fn:root(self::node()) treat as document-node())")
-        .expect("initial slash expansion step 1 failed")
-        .1;
+    let first_step = ROOT_STEP.clone();
 
     let items = match unexpanded_expr {
         Some(x) => {
             let mut items = vec![StepPair(PathSeparator::Slash, x.expr.clone())];
-            items.extend(x.items.iter().map(|x| x.clone()));
+            items.extend(x.items.iter().cloned());
             items
         }
         None => vec![],
@@ -121,14 +151,12 @@ fn initial_slash_expansion(unexpanded_expr: &Option<RelativePathExpr>) -> Relati
 
 fn relative_slash_expansion(unexpanded_expr: &Option<RelativePathExpr>) -> RelativePathExpr {
     // A leading slash in a relative expression is expanded to `./<unexpanded_expr>`
-    let first_step = step_expr(".")
-        .expect("relative slash expansion step 1 failed")
-        .1;
+    let first_step = DOT_STEP.clone();
 
     let items = match unexpanded_expr {
         Some(x) => {
             let mut items = vec![StepPair(PathSeparator::Slash, x.expr.clone())];
-            items.extend(x.items.iter().map(|x| x.clone()));
+            items.extend(x.items.iter().cloned());
             items
         }
         None => vec![],
@@ -140,20 +168,207 @@ fn relative_slash_expansion(unexpanded_expr: &Option<RelativePathExpr>) -> Relat
     }
 }
 
+/// Try to extract a child-axis node test from a step expression, for `//X` fusion.
+/// Returns `Some(node_test)` if the step is a predicate-free child axis step.
+fn try_extract_child_node_test(step: &StepExpr) -> Option<&NodeTest> {
+    if let StepExpr::AxisStep(axis_step) = step {
+        if !axis_step.predicates.is_empty() {
+            return None;
+        }
+        match &axis_step.step_type {
+            AxisStepType::ForwardStep(ForwardStep::Full(ForwardAxis::Child, node_test)) => {
+                Some(node_test)
+            }
+            AxisStepType::ForwardStep(ForwardStep::Abbreviated(abbrev)) if !abbrev.has_at => {
+                Some(&abbrev.node_test)
+            }
+            _ => None,
+        }
+    } else {
+        None
+    }
+}
+
+/// Build a `descendant::node_test` step expression from a node test.
+fn make_descendant_step(node_test: &NodeTest) -> StepExpr {
+    StepExpr::AxisStep(AxisStep {
+        step_type: AxisStepType::ForwardStep(ForwardStep::Full(
+            ForwardAxis::Descendant,
+            node_test.clone(),
+        )),
+        predicates: vec![],
+    })
+}
+
+/// Check if a step expression is `descendant-or-self::node()` (no predicates).
+fn is_desc_or_self_any_kind(step: &StepExpr) -> bool {
+    if let StepExpr::AxisStep(axis_step) = step {
+        axis_step.predicates.is_empty()
+            && matches!(
+                &axis_step.step_type,
+                AxisStepType::ForwardStep(ForwardStep::Full(
+                    ForwardAxis::DescendantOrSelf,
+                    NodeTest::KindTest(KindTest::AnyKindTest)
+                ))
+            )
+    } else {
+        false
+    }
+}
+
+/// Try to extract the node test and predicates from a child-axis step with predicates.
+/// Returns `Some((node_test, axis_step))` for `child::X[pred]` or abbreviated `X[pred]`.
+fn try_extract_child_with_predicates(step: &StepExpr) -> Option<(&NodeTest, &AxisStep)> {
+    if let StepExpr::AxisStep(axis_step) = step {
+        if axis_step.predicates.is_empty() {
+            return None;
+        }
+        let node_test = match &axis_step.step_type {
+            AxisStepType::ForwardStep(ForwardStep::Full(ForwardAxis::Child, nt)) => Some(nt),
+            AxisStepType::ForwardStep(ForwardStep::Abbreviated(abbrev)) if !abbrev.has_at => {
+                Some(&abbrev.node_test)
+            }
+            _ => None,
+        };
+        node_test.map(|nt| (nt, axis_step))
+    } else {
+        None
+    }
+}
+
+/// Optimized evaluation of `descendant-or-self::node()/child::X[predicates]`.
+///
+/// Instead of evaluating `child::X[pred]` for each of ~N descendant-or-self nodes
+/// (O(N) axis evaluations), this walks descendants once and groups matching nodes
+/// by parent, then evaluates predicates per group. This preserves positional
+/// semantics (e.g. `[1]` means first child of each parent).
+fn eval_grouped_descendant_predicate<'tree>(
+    context: &XpathExpressionContext<'tree>,
+    node_test: &NodeTest,
+    axis_step: &AxisStep,
+) -> Result<XpathItemSet<'tree>, ExpressionApplyError> {
+    let context_node = match &context.item {
+        XpathItem::Node(node) => node,
+        _ => return Ok(XpathItemSet::new()),
+    };
+
+    let node_id = match context_node.node_id() {
+        Some(id) => id,
+        None => context.item_tree.root_node, // DocumentNode
+    };
+
+    let bi_axis = BiDirectionalAxis::ForwardAxis(ForwardAxis::Child);
+
+    // Walk all descendants, filter by node test, group by parent.
+    // Use a Vec of (parent_id, Vec<node>) to preserve insertion order.
+    let mut group_order: Vec<Option<indextree::NodeId>> = Vec::new();
+    let mut groups: std::collections::HashMap<
+        Option<indextree::NodeId>,
+        Vec<&'tree XpathItemTreeNode>,
+    > = std::collections::HashMap::new();
+
+    for desc_id in node_id.descendants(&context.item_tree.arena).skip(1) {
+        let desc_node = context.item_tree.get(desc_id);
+        if node_test.matches_node(bi_axis, desc_node, context.item_tree)? {
+            let parent_id = context
+                .item_tree
+                .arena
+                .get(desc_id)
+                .and_then(|n| n.parent());
+            let group = groups.entry(parent_id).or_insert_with(|| {
+                group_order.push(parent_id);
+                Vec::new()
+            });
+            group.push(desc_node);
+        }
+    }
+
+    // Pre-check for constant integer position predicates (e.g., [1], [2]).
+    // If ALL predicates are constant positions, we can skip full predicate
+    // evaluation entirely and just pick items by position from each group.
+    let constant_positions: Option<Vec<i64>> = axis_step
+        .predicates
+        .iter()
+        .map(|p| p.try_constant_position())
+        .collect();
+
+    let mut result = XpathItemSet::new();
+
+    if let Some(positions) = constant_positions {
+        // Fast path: all predicates are constant integer positions.
+        // Apply them sequentially — each narrows the set for the next.
+        for parent_id in &group_order {
+            let mut current: Vec<&'tree XpathItemTreeNode> = groups[parent_id].clone();
+            for &pos in &positions {
+                if pos >= 1 && (pos as usize) <= current.len() {
+                    current = vec![current[pos as usize - 1]];
+                } else {
+                    current.clear();
+                    break;
+                }
+            }
+            for node in current {
+                result.insert(XpathItem::Node(node));
+            }
+        }
+    } else {
+        // General path: evaluate predicates using the expression evaluator.
+        // Avoid creating XpathItemSet per group — use direct context creation.
+        for parent_id in &group_order {
+            let siblings = &groups[parent_id];
+            let group_size = siblings.len();
+
+            for (i, &node) in siblings.iter().enumerate() {
+                let pred_context = context.new_with_item_and_size(
+                    XpathItem::Node(node),
+                    i + 1,
+                    group_size,
+                    context.is_initial_step,
+                );
+                let mut is_match = true;
+                for predicate in axis_step.predicates.iter() {
+                    if !predicate.is_match(&pred_context)? {
+                        is_match = false;
+                        break;
+                    }
+                }
+                if is_match {
+                    result.insert(XpathItem::Node(node));
+                }
+            }
+        }
+    }
+
+    result.sort_by_document_order();
+    result.dedup();
+    Ok(result)
+}
+
 fn initial_double_slash_expansion(unexpanded_expr: &RelativePathExpr) -> RelativePathExpr {
     // A leading double slash is expanded to `(fn:root(self::node()) treat as document-node())/descendant-or-self::node()/<unexpanded_expr>`
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-path-expressions
-    let first_step = step_expr("(fn:root(self::node()) treat as document-node())")
-        .expect("double slash expansion step 1 failed")
-        .1;
+    let first_step = ROOT_STEP.clone();
 
-    let second_step = step_expr("descendant-or-self::node()")
-        .expect("double slash expansion step 2 failed")
-        .1;
+    // Optimization: //X (no predicates) is equivalent to root/descendant::X
+    // This avoids the O(N) nested loop of descendant-or-self::node()/child::X.
+    if let Some(node_test) = try_extract_child_node_test(&unexpanded_expr.expr) {
+        let descendant_step = make_descendant_step(node_test);
+        let mut items = vec![StepPair(PathSeparator::Slash, descendant_step)];
+        items.extend(unexpanded_expr.items.iter().cloned());
+        return RelativePathExpr {
+            expr: first_step,
+            items,
+        };
+    }
+
+    let second_step = DESC_OR_SELF_STEP.clone();
 
     let mut items = vec![StepPair(PathSeparator::Slash, second_step)];
-    items.push(StepPair(PathSeparator::Slash, unexpanded_expr.expr.clone()));
-    items.extend(unexpanded_expr.items.iter().map(|x| x.clone()));
+    items.push(StepPair(
+        PathSeparator::Slash,
+        unexpanded_expr.expr.clone(),
+    ));
+    items.extend(unexpanded_expr.items.iter().cloned());
 
     RelativePathExpr {
         expr: first_step,
@@ -163,15 +378,24 @@ fn initial_double_slash_expansion(unexpanded_expr: &RelativePathExpr) -> Relativ
 
 fn relative_double_slash_expansion(unexpanded_expr: &RelativePathExpr) -> RelativePathExpr {
     // A leading double slash in a relative expression is expanded to `.//<unexpanded_expr>`
-    let first_step = step_expr(".")
-        .expect("relative double slash expansion step 1 failed")
-        .1;
+    let first_step = DOT_STEP.clone();
+
+    // Optimization: .//<X> (no predicates) → ./descendant::<X>
+    if let Some(node_test) = try_extract_child_node_test(&unexpanded_expr.expr) {
+        let descendant_step = make_descendant_step(node_test);
+        let mut items = vec![StepPair(PathSeparator::Slash, descendant_step)];
+        items.extend(unexpanded_expr.items.iter().cloned());
+        return RelativePathExpr {
+            expr: first_step,
+            items,
+        };
+    }
 
     let mut items = vec![StepPair(
         PathSeparator::DoubleSlash,
         unexpanded_expr.expr.clone(),
     )];
-    items.extend(unexpanded_expr.items.iter().map(|x| x.clone()));
+    items.extend(unexpanded_expr.items.iter().cloned());
 
     RelativePathExpr {
         expr: first_step,
@@ -242,6 +466,44 @@ impl RelativePathExpr {
                 return Ok(result);
             }
 
+            // Terminal step optimization: when only one step remains,
+            // return its result directly without creating per-item contexts.
+            if steps.len() == 1 {
+                return steps[0].eval(context);
+            }
+
+            // Grouped descendant optimization: detect
+            //   desc-or-self::node() / child::X[predicates]
+            // and replace with a single descendant traversal grouped by parent.
+            if steps.len() >= 2
+                && matches!(steps[0].0, PathSeparator::Slash)
+                && matches!(steps[1].0, PathSeparator::Slash)
+                && is_desc_or_self_any_kind(&steps[0].1)
+            {
+                if let Some((node_test, axis_step)) =
+                    try_extract_child_with_predicates(&steps[1].1)
+                {
+                    let matched =
+                        eval_grouped_descendant_predicate(context, node_test, axis_step)?;
+
+                    // If there are remaining steps, continue evaluating them.
+                    if steps.len() > 2 {
+                        let mut items = XpathItemSet::new();
+                        for (i, _item) in matched.iter().enumerate() {
+                            let inner_context = context.new_with_variables(
+                                &matched,
+                                i + 1,
+                                context.is_initial_step,
+                            );
+                            let inner_result = eval_steps(&inner_context, &steps[2..])?;
+                            items.extend(inner_result);
+                        }
+                        return Ok(items);
+                    }
+                    return Ok(matched);
+                }
+            }
+
             // Otherwise, evaluate the first step.
             let mut items = XpathItemSet::new();
             let this_result = steps[0].eval(context)?;
@@ -251,11 +513,10 @@ impl RelativePathExpr {
             // so that the final result is only the result of the last step.
             for (i, _item) in this_result.iter().enumerate() {
                 // Create a context for the inner steps using an item from the current result.
-                let inner_context = XpathExpressionContext::new(
-                    context.item_tree,
+                let inner_context = context.new_with_variables(
                     &this_result,
                     i + 1,
-                    context.is_root_level,
+                    context.is_initial_step,
                 );
 
                 // Recursively evaluate the rest of the steps for this item.
@@ -277,15 +538,19 @@ impl RelativePathExpr {
         // Otherwise, for each item in the result of the expression, evaluate the steps.
         let mut items = XpathItemSet::new();
         for (i, _item) in e1_result.iter().enumerate() {
-            let en_context = XpathExpressionContext::new(
-                context.item_tree,
+            let en_context = context.new_with_variables(
                 &e1_result,
                 i + 1,
-                context.is_root_level,
+                context.is_initial_step,
             );
             let result = eval_steps(&en_context, &self.items)?;
             items.extend(result);
         }
+
+        // Path expressions must return results in document order.
+        // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#id-path-expressions
+        items.sort_by_document_order();
+        items.dedup();
 
         Ok(items)
     }
@@ -297,9 +562,16 @@ impl RelativePathExpr {
 ///
 /// `expr` - The step _after_ the double slash.
 fn double_slash_expansion(expr: &StepExpr) -> RelativePathExpr {
-    let expanded_double_slash = step_expr("descendant-or-self::node()")
-        .expect("double slash expansion step 1 failed")
-        .1;
+    // Optimization: A//X (no predicates) → A/descendant::X
+    if let Some(node_test) = try_extract_child_node_test(expr) {
+        let descendant_step = make_descendant_step(node_test);
+        return RelativePathExpr {
+            expr: descendant_step,
+            items: vec![],
+        };
+    }
+
+    let expanded_double_slash = DESC_OR_SELF_STEP.clone();
 
     let items = vec![StepPair(PathSeparator::Slash, expr.clone())];
 
@@ -327,8 +599,18 @@ impl StepPair {
         let result: XpathItemSet<'_> = match self.0 {
             PathSeparator::Slash => self.1.eval(context)?,
             PathSeparator::DoubleSlash => {
-                let expanded_e2 = double_slash_expansion(&self.1);
-                expanded_e2.eval(context)?
+                // Grouped descendant optimization for A//X[pred]:
+                // Instead of expanding to desc-or-self::node()/child::X[pred] and
+                // evaluating child::X[pred] for each of ~N nodes, walk descendants
+                // once and group by parent.
+                if let Some((node_test, axis_step)) =
+                    try_extract_child_with_predicates(&self.1)
+                {
+                    eval_grouped_descendant_predicate(context, node_test, axis_step)?
+                } else {
+                    let expanded_e2 = double_slash_expansion(&self.1);
+                    expanded_e2.eval(context)?
+                }
             }
         };
 
@@ -404,8 +686,9 @@ mod tests {
         let expr = initial_double_slash_expansion(&given_expr);
 
         // assert
+        // Optimized: //hi → root/descendant::hi (fused from desc-or-self::node()/child::hi)
         let expected_expr_text =
-            r#"(fn:root(self::node()) treat as document-node())/descendant-or-self::node()/hi"#;
+            r#"(fn:root(self::node()) treat as document-node())/descendant::hi"#;
 
         assert_eq!(expr.to_string(), expected_expr_text);
     }
@@ -447,7 +730,8 @@ mod tests {
         let expr = double_slash_expansion(&given_expr);
 
         // assert
-        let expected_expr_text = r#"descendant-or-self::node()/hello"#;
+        // Optimized: A//hello → A/descendant::hello (fused from desc-or-self::node()/child::hello)
+        let expected_expr_text = r#"descendant::hello"#;
 
         assert_eq!(expr.to_string(), expected_expr_text);
     }

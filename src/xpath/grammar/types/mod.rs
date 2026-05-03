@@ -8,14 +8,17 @@ use nom::{
     sequence::tuple,
 };
 
-use crate::xpath::{
-    grammar::{
-        terminal_symbols::{string_literal, uri_qualified_name},
-        whitespace_recipes::ws,
-        xml_names::qname,
+use crate::{
+    html::grammar::{HTML_NAMESPACE, MATHML_NAMESPACE, SVG_NAMESPACE, XLINK_NAMESPACE, XML_NAMESPACE},
+    xpath::{
+        grammar::{
+            terminal_symbols::{string_literal, uri_qualified_name},
+            whitespace_recipes::ws,
+            xml_names::qname,
+        },
+        xpath_item_set::XpathItemSet,
+        ExpressionApplyError,
     },
-    xpath_item_set::XpathItemSet,
-    ExpressionApplyError,
 };
 
 use self::{
@@ -30,7 +33,7 @@ use super::{
     recipes::Res,
     terminal_symbols::UriQualifiedName,
     xml_names::{nc_name, QName},
-    XpathItemTreeNode,
+    XpathItemTree, XpathItemTreeNode,
 };
 
 pub mod array_test;
@@ -41,6 +44,23 @@ pub mod function_test;
 pub mod map_test;
 pub mod schema_element_test;
 pub mod sequence_type;
+
+/// Resolve a namespace prefix to a namespace URI using well-known bindings.
+///
+/// Supports `html`, `svg`, and `mathml` prefixes per WHATWG HTML spec.
+/// Returns `Err` with `XPST0081` for unrecognized prefixes per XPath 3.1 §3.1.1.
+pub(crate) fn resolve_prefix(prefix: &str) -> Result<&'static str, ExpressionApplyError> {
+    match prefix {
+        "html" => Ok(HTML_NAMESPACE),
+        "svg" => Ok(SVG_NAMESPACE),
+        "mathml" => Ok(MATHML_NAMESPACE),
+        "xml" => Ok(XML_NAMESPACE),
+        "xlink" => Ok(XLINK_NAMESPACE),
+        _ => Err(ExpressionApplyError::new(format!(
+            "err:XPST0081 Namespace prefix `{prefix}` is not bound to a namespace URI"
+        ))),
+    }
+}
 
 pub fn kind_test(input: &str) -> Res<&str, KindTest> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-KindTest
@@ -136,17 +156,18 @@ impl KindTest {
     pub(crate) fn filter<'tree>(
         &self,
         item_set: &XpathItemSet<'tree>,
+        item_tree: &'tree XpathItemTree,
     ) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
         match self {
             KindTest::AnyKindTest => {
                 // AnyKindTest is `node()`.
-                // Select all node types.
+                // Select all XPath 3.1 node types.
+                // Exclude DoctypeNode (not a valid XPath 3.1 node type).
                 let filtered_nodes = item_set.iter().filter_map(|item| {
                     if let XpathItem::Node(node) = item {
-                        if let XpathItemTreeNode::AttributeNode(_) = node {
-                            None
-                        } else {
-                            Some(*node)
+                        match node {
+                            XpathItemTreeNode::DoctypeNode(_) => None,
+                            _ => Some(*node),
                         }
                     } else {
                         None
@@ -160,7 +181,7 @@ impl KindTest {
                 // Select all text nodes.
                 let filtered_nodes = item_set.iter().filter_map(|item| {
                     if let XpathItem::Node(node) = item {
-                        if matches!(node, XpathItemTreeNode::TextNode(_),) {
+                        if node.is_text_node() {
                             return Some(*node);
                         }
                     }
@@ -170,10 +191,24 @@ impl KindTest {
 
                 Ok(filtered_nodes.collect())
             }
-            KindTest::CommentTest => todo!("KindTest::CommentTest::is_match"),
-            KindTest::NamespaceNodeTest => todo!("KindTest::NamespaceNodeTest::is_match"),
-            KindTest::DocumentTest(x) => x.filter(item_set),
-            KindTest::ElementTest(_) => todo!("KindTest::ElementTest::is_match"),
+            KindTest::CommentTest => {
+                let filtered_nodes = item_set.iter().filter_map(|item| {
+                    if let XpathItem::Node(node) = item {
+                        if matches!(node, XpathItemTreeNode::CommentNode(_)) {
+                            return Some(*node);
+                        }
+                    }
+                    None
+                });
+                Ok(filtered_nodes.collect())
+            }
+            KindTest::NamespaceNodeTest => {
+                // HTML documents do not have namespace nodes.
+                // Always return empty.
+                Ok(IndexSet::new())
+            }
+            KindTest::DocumentTest(x) => x.filter(item_set, item_tree),
+            KindTest::ElementTest(x) => x.filter(item_set),
             KindTest::AttributeTest(x) => {
                 let mut filtered_nodes = IndexSet::new();
 
@@ -187,9 +222,101 @@ impl KindTest {
 
                 Ok(filtered_nodes)
             }
-            KindTest::SchemaElementTest(_) => todo!("KindTest::SchemaElementTest::is_match"),
-            KindTest::SchemaAttributeTest(_) => todo!("KindTest::SchemaAttributeTest::is_match"),
-            KindTest::PITest(_) => todo!("KindTest::PITest::is_match"),
+            KindTest::SchemaElementTest(_) => {
+                // Schema-aware tests require a schema. HTML has no schema.
+                // Per XPath 3.1, schema-element() tests against schema declarations
+                // which are not available in a non-schema-aware processor.
+                Ok(IndexSet::new())
+            }
+            KindTest::SchemaAttributeTest(_) => {
+                // Schema-aware tests require a schema. HTML has no schema.
+                Ok(IndexSet::new())
+            }
+            KindTest::PITest(x) => x.filter(item_set),
+        }
+    }
+}
+
+impl KindTest {
+    /// Test whether a single node matches this kind test, without requiring
+    /// a full `XpathItemSet` or `XpathExpressionContext`.
+    pub(crate) fn matches_node<'tree>(
+        &self,
+        node: &'tree XpathItemTreeNode,
+        item_tree: &'tree XpathItemTree,
+    ) -> Result<bool, ExpressionApplyError> {
+        match self {
+            KindTest::AnyKindTest => Ok(!matches!(
+                node,
+                XpathItemTreeNode::DoctypeNode(_)
+            )),
+            KindTest::TextTest => Ok(node.is_text_node()),
+            KindTest::CommentTest => Ok(matches!(node, XpathItemTreeNode::CommentNode(_))),
+            KindTest::NamespaceNodeTest => Ok(false),
+            KindTest::DocumentTest(x) => {
+                if !matches!(node, XpathItemTreeNode::DocumentNode(_)) {
+                    return Ok(false);
+                }
+                match &x.value {
+                    None => Ok(true),
+                    Some(doc_test_value) => {
+                        let children = node.children(item_tree);
+                        let element_children: Vec<_> = children
+                            .into_iter()
+                            .filter(|c| matches!(c, XpathItemTreeNode::ElementNode(_)))
+                            .collect();
+                        if element_children.len() != 1 {
+                            return Ok(false);
+                        }
+                        let child_set: XpathItemSet<'tree> = element_children
+                            .into_iter()
+                            .map(XpathItem::Node)
+                            .collect();
+                        match doc_test_value {
+                            DocumentTestValue::ElementTest(et) => {
+                                Ok(!et.filter(&child_set)?.is_empty())
+                            }
+                            DocumentTestValue::SchemaElementTest(_) => Ok(false),
+                        }
+                    }
+                }
+            }
+            KindTest::ElementTest(x) => {
+                if let XpathItemTreeNode::ElementNode(element) = node {
+                    let matches = match &x.item {
+                        None => true,
+                        Some(item) => {
+                            match &item.element_name_or_wildcard {
+                                element_test::ElementNameOrWildcard::Wildcard => true,
+                                element_test::ElementNameOrWildcard::ElementName(name) => {
+                                    element_test::match_element_name(
+                                        &name.0,
+                                        &element.name,
+                                        element.namespace.as_deref(),
+                                    )?
+                                }
+                            }
+                        }
+                    };
+                    Ok(matches)
+                } else {
+                    Ok(false)
+                }
+            }
+            KindTest::AttributeTest(x) => x.is_match(node),
+            KindTest::SchemaElementTest(_) => Ok(false),
+            KindTest::SchemaAttributeTest(_) => Ok(false),
+            KindTest::PITest(x) => {
+                if let XpathItemTreeNode::PINode(pi) = node {
+                    match &x.val {
+                        None => Ok(true),
+                        Some(PITestValue::NCName(name)) => Ok(pi.target == *name),
+                        Some(PITestValue::StringLiteral(name)) => Ok(pi.target == *name),
+                    }
+                } else {
+                    Ok(false)
+                }
+            }
         }
     }
 }
@@ -255,6 +382,7 @@ impl DocumentTest {
     pub(crate) fn filter<'tree>(
         &self,
         item_set: &XpathItemSet<'tree>,
+        item_tree: &'tree XpathItemTree,
     ) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
         match &self.value {
             // document-node() matches any document node.
@@ -263,7 +391,7 @@ impl DocumentTest {
 
                 for item in item_set {
                     if let XpathItem::Node(node) = item {
-                        if matches!(node, XpathItemTreeNode::DocumentNode(_),) {
+                        if matches!(node, XpathItemTreeNode::DocumentNode(_)) {
                             filtered_nodes.insert(*node);
                         }
                     }
@@ -271,10 +399,53 @@ impl DocumentTest {
 
                 Ok(filtered_nodes)
             }
-            // document-node( E ) matches any document node that contains exactly one element node,
-            // optionally accompanied by one or more comment and processing instruction nodes,
-            // if E is an ElementTest or SchemaElementTest that matches the element node.
-            Some(_) => todo!("DocumentTest::is_match value"),
+            // document-node(E) matches a document node that has exactly one
+            // element child and that child matches the element/schema-element test.
+            Some(doc_test_value) => {
+                let mut filtered_nodes = IndexSet::new();
+
+                for item in item_set {
+                    if let XpathItem::Node(node) = item {
+                        if let XpathItemTreeNode::DocumentNode(_) = node {
+                            // Get the children of the document node.
+                            let children = node.children(item_tree);
+
+                            // Count element children.
+                            let element_children: Vec<&'tree XpathItemTreeNode> = children
+                                .into_iter()
+                                .filter(|c| matches!(c, XpathItemTreeNode::ElementNode(_)))
+                                .collect();
+
+                            // Must have exactly one element child.
+                            if element_children.len() != 1 {
+                                continue;
+                            }
+
+                            // Check if the element child matches the test.
+                            let child_set: XpathItemSet<'tree> = element_children
+                                .into_iter()
+                                .map(XpathItem::Node)
+                                .collect();
+
+                            let matches = match doc_test_value {
+                                DocumentTestValue::ElementTest(et) => {
+                                    !et.filter(&child_set)?.is_empty()
+                                }
+                                DocumentTestValue::SchemaElementTest(_) => {
+                                    // Schema tests always return empty in HTML.
+                                    false
+                                }
+                            };
+
+                            if matches {
+                                filtered_nodes.insert(*node);
+                            }
+                        }
+                    }
+                }
+
+                Ok(filtered_nodes)
+            }
         }
     }
 }
@@ -313,8 +484,8 @@ pub fn schema_attribute_test(input: &str) -> Res<&str, SchemaAttributeTest> {
 pub struct SchemaAttributeTest(pub AttributeDeclaration);
 
 impl Display for SchemaAttributeTest {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!("fmt SchemaAttributeTest")
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "schema-attribute({})", self.0 .0)
     }
 }
 
@@ -357,9 +528,44 @@ pub struct PITest {
     pub val: Option<PITestValue>,
 }
 
+impl PITest {
+    pub(crate) fn filter<'tree>(
+        &self,
+        item_set: &XpathItemSet<'tree>,
+    ) -> Result<IndexSet<&'tree XpathItemTreeNode>, ExpressionApplyError> {
+        let mut filtered_nodes = IndexSet::new();
+
+        for item in item_set {
+            if let XpathItem::Node(node) = item {
+                if let XpathItemTreeNode::PINode(pi) = node {
+                    let matches = match &self.val {
+                        // processing-instruction() matches all PI nodes.
+                        None => true,
+                        // processing-instruction(name) matches PIs whose target equals name.
+                        Some(PITestValue::NCName(name)) => pi.target == *name,
+                        Some(PITestValue::StringLiteral(name)) => pi.target == *name,
+                    };
+                    if matches {
+                        filtered_nodes.insert(*node);
+                    }
+                }
+            }
+        }
+
+        Ok(filtered_nodes)
+    }
+}
+
 impl Display for PITest {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!("fmt PITest")
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "processing-instruction(")?;
+        if let Some(val) = &self.val {
+            match val {
+                PITestValue::NCName(name) => write!(f, "{}", name)?,
+                PITestValue::StringLiteral(s) => write!(f, "\"{}\"", s)?,
+            }
+        }
+        write!(f, ")")
     }
 }
 
@@ -371,6 +577,19 @@ pub enum PITestValue {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct AtomicOrUnionType(EQName);
+
+impl AtomicOrUnionType {
+    /// Extract the local type name for matching against known XPath built-in types.
+    pub(crate) fn local_name(&self) -> Option<&str> {
+        match &self.0 {
+            EQName::QName(qname) => match qname {
+                QName::PrefixedName(p) => Some(&p.local_part),
+                QName::UnprefixedName(name) => Some(name),
+            },
+            EQName::UriQualifiedName(uqn) => Some(&uqn.name),
+        }
+    }
+}
 
 impl Display for AtomicOrUnionType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -385,7 +604,7 @@ pub fn simple_type_name(input: &str) -> Res<&str, SimpleTypeName> {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct SimpleTypeName(TypeName);
+pub struct SimpleTypeName(pub TypeName);
 
 impl Display for SimpleTypeName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

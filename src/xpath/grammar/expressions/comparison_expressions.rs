@@ -7,10 +7,13 @@ use nom::{
     error::context, sequence::tuple,
 };
 
+use ordered_float::OrderedFloat;
+
 use crate::{
     xpath::{
         grammar::{
             data_model::{AnyAtomicType, XpathItem},
+            XpathItemTreeNode,
             expressions::string_concat_expressions::string_concat_expr,
             recipes::Res,
             terminal_symbols::symbol_separator,
@@ -101,29 +104,76 @@ impl ComparisonExpr {
         let second_result = comparison.1.eval(context)?;
 
         // Atomize both results.
-        let atomized1 = func_data(&result, &context.item_tree);
-        let atomized2 = func_data(&second_result, &context.item_tree);
-
-        // Do some type checking first.
-
-        // If the either atomized set is an empty sequence,
-        // the result of the value comparison is an empty sequence.
-        if atomized1.is_empty() || atomized2.is_empty() {
-            return Ok(XpathItemSet::new());
-        }
-
-        // If the either atomized set is a sequence of length greater than one,
-        // a type error is raised.
-        if atomized1.len() > 1 || atomized2.len() > 1 {
-            return Err(ExpressionApplyError {
-                msg: String::from("err:XPTY0004 The first operand of a value comparison is a sequence of length greater than one")
-            });
-        }
+        let atomized1 = func_data(&result, context.item_tree)?;
+        let atomized2 = func_data(&second_result, context.item_tree)?;
 
         let bool_value = match comparison.0 {
-            ComparisonType::ValueComp(_) => todo!("ComparisonType::ValueComp"),
-            ComparisonType::GeneralComp(comp) => comp.is_match(&atomized1[0], &atomized2[0]),
-            ComparisonType::NodeComp(_) => todo!("ComparisonType::NodeComp"),
+            ComparisonType::GeneralComp(comp) => {
+                // XPath 3.1 §3.7.2: General comparisons are existentially quantified.
+                // The result is true if any pair (a, b) from atomized1 x atomized2
+                // satisfies the corresponding value comparison.
+                if atomized1.is_empty() || atomized2.is_empty() {
+                    false
+                } else {
+                    let mut found = false;
+                    for a in atomized1.iter() {
+                        for b in atomized2.iter() {
+                            if comp.is_match(a, b) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if found {
+                            break;
+                        }
+                    }
+                    found
+                }
+            }
+            ComparisonType::ValueComp(comp) => {
+                // XPath 3.1 §3.7.1: Value comparisons require singleton operands.
+                if atomized1.is_empty() || atomized2.is_empty() {
+                    return Ok(XpathItemSet::new());
+                }
+                if atomized1.len() > 1 || atomized2.len() > 1 {
+                    return Err(ExpressionApplyError {
+                        msg: String::from("err:XPTY0004 The first operand of a value comparison is a sequence of length greater than one")
+                    });
+                }
+                comp.is_match(&atomized1[0], &atomized2[0])
+            }
+            ComparisonType::NodeComp(comp) => {
+                // Node comparisons require both operands to be single nodes.
+                if result.is_empty() || second_result.is_empty() {
+                    return Ok(XpathItemSet::new());
+                }
+                if result.len() > 1 || second_result.len() > 1 {
+                    return Err(ExpressionApplyError {
+                        msg: String::from("err:XPTY0004 Node comparison requires singleton node operands"),
+                    });
+                }
+                let node1 = match &result[0] {
+                    XpathItem::Node(n) => n,
+                    _ => {
+                        return Err(ExpressionApplyError {
+                            msg: String::from(
+                                "err:XPTY0004 Node comparison requires node operands",
+                            ),
+                        })
+                    }
+                };
+                let node2 = match &second_result[0] {
+                    XpathItem::Node(n) => n,
+                    _ => {
+                        return Err(ExpressionApplyError {
+                            msg: String::from(
+                                "err:XPTY0004 Node comparison requires node operands",
+                            ),
+                        })
+                    }
+                };
+                comp.is_match(node1, node2)
+            }
         };
 
         Ok(xpath_item_set![XpathItem::AnyAtomicType(
@@ -226,6 +276,20 @@ impl Display for ValueComp {
     }
 }
 
+impl ValueComp {
+    pub(crate) fn is_match(&self, first: &AnyAtomicType, second: &AnyAtomicType) -> bool {
+        let (eq, lt, gt) = match self {
+            ValueComp::Equal => (true, false, false),
+            ValueComp::NotEqual => (false, true, true),
+            ValueComp::LessThan => (false, true, false),
+            ValueComp::LessThanEqualTo => (true, true, false),
+            ValueComp::GreaterThan => (false, false, true),
+            ValueComp::GreaterThanEqualTo => (true, false, true),
+        };
+        compare_atomic(first, second, eq, lt, gt)
+    }
+}
+
 fn general_comp(input: &str) -> Res<&str, GeneralComp> {
     // https://www.w3.org/TR/2017/REC-xpath-31-20170321/#prod-xpath31-GeneralComp
 
@@ -259,15 +323,18 @@ fn general_comp(input: &str) -> Res<&str, GeneralComp> {
             .map(|(next_input, _res)| (next_input, GeneralComp::GreaterThanEqualTo))
     }
 
+    // Multi-character operators must be tried before their single-character
+    // prefixes (e.g. "<=" before "<") so the shorter match doesn't greedily
+    // consume part of the longer token.
     context(
         "general_comp",
         alt((
-            equal,
             not_equal,
-            less_than,
             less_than_equal_to,
-            greater_than,
             greater_than_equal_to,
+            equal,
+            less_than,
+            greater_than,
         )),
     )(input)
 }
@@ -296,15 +363,165 @@ impl Display for GeneralComp {
 }
 
 impl GeneralComp {
-    pub(crate) fn is_match<'tree>(&self, first: &AnyAtomicType, second: &AnyAtomicType) -> bool {
-        match self {
-            GeneralComp::Equal => first == second,
-            GeneralComp::NotEqual => first != second,
-            GeneralComp::LessThan => first < second,
-            GeneralComp::LessThanEqualTo => first <= second,
-            GeneralComp::GreaterThan => first > second,
-            GeneralComp::GreaterThanEqualTo => first >= second,
+    pub(crate) fn is_match(&self, first: &AnyAtomicType, second: &AnyAtomicType) -> bool {
+        let (eq, lt, gt) = match self {
+            GeneralComp::Equal => (true, false, false),
+            GeneralComp::NotEqual => (false, true, true),
+            GeneralComp::LessThan => (false, true, false),
+            GeneralComp::LessThanEqualTo => (true, true, false),
+            GeneralComp::GreaterThan => (false, false, true),
+            GeneralComp::GreaterThanEqualTo => (true, false, true),
+        };
+        compare_atomic(first, second, eq, lt, gt)
+    }
+}
+
+/// Compare two atomic values, applying type coercion when needed.
+///
+/// The `eq`, `lt`, `gt` flags indicate which orderings are accepted — e.g.
+/// `(true, true, false)` means "less-than-or-equal".  Coercion is applied
+/// first via [`coerce_for_comparison`]; then `partial_cmp` (or `PartialEq`
+/// for pure equality/inequality) determines the result.  Returns `false`
+/// for incompatible types that cannot be ordered.
+fn compare_atomic(
+    first: &AnyAtomicType,
+    second: &AnyAtomicType,
+    eq: bool,
+    lt: bool,
+    gt: bool,
+) -> bool {
+    // Ordering comparisons (<, >, <=, >=) cast string operands to double per
+    // XPath 3.1 §3.7.  Equality (=) and inequality (!=) compare strings as strings.
+    let is_ordering = (lt || gt) && !(lt && gt && !eq);
+
+    let (a, b);
+    let (lhs, rhs) = if let Some(coerced) = coerce_for_comparison(first, second, is_ordering) {
+        a = coerced.0;
+        b = coerced.1;
+        (&a, &b)
+    } else {
+        (first, second)
+    };
+
+    // Per IEEE 754 / XPath spec: any comparison involving NaN returns false,
+    // except `ne` (not-equal) which returns true. OrderedFloat violates this
+    // by making NaN == NaN, so we must guard explicitly.
+    let either_nan = matches!(
+        lhs,
+        AnyAtomicType::Float(f) if f.is_nan()
+    ) || matches!(
+        lhs,
+        AnyAtomicType::Double(d) if d.is_nan()
+    ) || matches!(
+        rhs,
+        AnyAtomicType::Float(f) if f.is_nan()
+    ) || matches!(
+        rhs,
+        AnyAtomicType::Double(d) if d.is_nan()
+    );
+
+    if either_nan {
+        // `ne` is encoded as (!eq, lt, gt); for NaN ne anything, result is true.
+        // All other comparisons involving NaN return false.
+        return !eq && lt && gt;
+    }
+
+    // Pure equality / inequality can use PartialEq directly, which works
+    // across all variant combinations (different variants → not equal).
+    if eq && !lt && !gt {
+        return lhs == rhs;
+    }
+    if !eq && lt && gt {
+        return lhs != rhs;
+    }
+
+    // Ordering comparisons use partial_cmp. Returns false for incompatible
+    // types (partial_cmp returns None).
+    match lhs.partial_cmp(rhs) {
+        Some(std::cmp::Ordering::Equal) => eq,
+        Some(std::cmp::Ordering::Less) => lt,
+        Some(std::cmp::Ordering::Greater) => gt,
+        None => false,
+    }
+}
+
+/// Coerce a pair of atomic values for comparison per XPath 3.1 §3.7.
+///
+/// - String (xs:untypedAtomic) vs numeric → cast string to xs:double, promote
+///   numeric operand to xs:double.
+/// - Mixed numeric types (e.g. Integer vs Double) → promote both to xs:double.
+/// - Otherwise, return `None` (no coercion needed, compare directly).
+fn coerce_for_comparison(
+    first: &AnyAtomicType,
+    second: &AnyAtomicType,
+    _is_ordering: bool,
+) -> Option<(AnyAtomicType, AnyAtomicType)> {
+    fn is_numeric(v: &AnyAtomicType) -> bool {
+        matches!(
+            v,
+            AnyAtomicType::Integer(_) | AnyAtomicType::Float(_) | AnyAtomicType::Double(_)
+        )
+    }
+
+    fn to_double(v: &AnyAtomicType) -> AnyAtomicType {
+        match v {
+            AnyAtomicType::Integer(i) => {
+                AnyAtomicType::Double(OrderedFloat(*i as f64))
+            }
+            AnyAtomicType::Float(f) => {
+                AnyAtomicType::Double(OrderedFloat(f.0 as f64))
+            }
+            AnyAtomicType::Double(_) => v.clone(),
+            _ => AnyAtomicType::Double(OrderedFloat(f64::NAN)),
         }
+    }
+
+    // Per XPath 3.1, general comparisons cast untypedAtomic to the type of the
+    // other operand. A failed cast to xs:double produces NaN (matching fn:number
+    // semantics for implicit casts), unlike explicit xs:double() which raises
+    // FORG0001. This is intentionally different from the arithmetic error path.
+    fn string_to_double(s: &str) -> AnyAtomicType {
+        let d = s.trim().parse::<f64>().unwrap_or(f64::NAN);
+        AnyAtomicType::Double(OrderedFloat(d))
+    }
+
+    fn to_boolean(v: &AnyAtomicType) -> AnyAtomicType {
+        let b = match v {
+            AnyAtomicType::Boolean(b) => *b,
+            AnyAtomicType::Integer(n) => *n != 0,
+            AnyAtomicType::Float(f) => !f.is_nan() && f.0 != 0.0,
+            AnyAtomicType::Double(d) => !d.is_nan() && d.0 != 0.0,
+            AnyAtomicType::String(s) => !s.is_empty(),
+            AnyAtomicType::QName { .. } => true,
+        };
+        AnyAtomicType::Boolean(b)
+    }
+
+    match (first, second) {
+        // Boolean coercion: when one operand is Boolean, cast the other to Boolean.
+        (AnyAtomicType::Boolean(_), other) if !matches!(other, AnyAtomicType::Boolean(_)) => {
+            Some((first.clone(), to_boolean(other)))
+        }
+        (other, AnyAtomicType::Boolean(_)) if !matches!(other, AnyAtomicType::Boolean(_)) => {
+            Some((to_boolean(other), second.clone()))
+        }
+        // String (untyped) vs numeric: cast string to double, promote numeric to double.
+        (AnyAtomicType::String(s), other) if is_numeric(other) => {
+            Some((string_to_double(s), to_double(other)))
+        }
+        (other, AnyAtomicType::String(s)) if is_numeric(other) => {
+            Some((to_double(other), string_to_double(s)))
+        }
+        // Mixed numeric types: promote both to double.
+        (a, b)
+            if is_numeric(a)
+                && is_numeric(b)
+                && std::mem::discriminant(a) != std::mem::discriminant(b) =>
+        {
+            Some((to_double(a), to_double(b)))
+        }
+        // Same type or non-numeric: no coercion needed.
+        _ => None,
     }
 }
 
@@ -342,6 +559,24 @@ impl Display for NodeComp {
             NodeComp::Is => write!(f, " is "),
             NodeComp::Precedes => write!(f, "<<"),
             NodeComp::Follows => write!(f, ">>"),
+        }
+    }
+}
+
+impl NodeComp {
+    pub(crate) fn is_match(
+        &self,
+        first: &XpathItemTreeNode,
+        second: &XpathItemTreeNode,
+    ) -> bool {
+        match (first.node_id(), second.node_id()) {
+            (Some(id1), Some(id2)) => match self {
+                NodeComp::Is => id1 == id2,
+                NodeComp::Precedes => id1 < id2,
+                NodeComp::Follows => id1 > id2,
+            },
+            // If either operand has no node_id, the comparison is false.
+            _ => false,
         }
     }
 }

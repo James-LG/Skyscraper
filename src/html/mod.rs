@@ -2,8 +2,8 @@
 //!
 //! # Example: parse HTML text into a document
 //! ```rust
-//! use skyscraper::html::{self, parse::ParseError};
-//! # fn main() -> Result<(), ParseError> {
+//! use skyscraper::html::{self, grammar::HtmlParseError};
+//! # fn main() -> Result<(), HtmlParseError> {
 //! let html_text = r##"
 //! <html>
 //!     <body>
@@ -11,13 +11,15 @@
 //!     </body>
 //! </html>"##;
 //!
-//! let document = html::parse(html_text)?;
+//! let tree = html::parse(html_text)?;
 //! # Ok(())
 //! # }
 //! ```
 
-pub mod parse;
-mod tokenizer;
+// HtmlDocument and DocumentNode are deprecated but still used internally.
+#![allow(deprecated)]
+
+pub mod grammar;
 
 use std::{
     collections::HashMap,
@@ -26,18 +28,18 @@ use std::{
 
 use enum_extract_macro::EnumExtract;
 use indextree::{Arena, NodeId};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use regex::{Captures, Regex};
 
-pub use crate::html::parse::parse;
+pub use crate::html::grammar::parse;
+pub use crate::html::grammar::parse_fragment;
+pub use crate::html::grammar::QuirksMode;
 
 /// List of HTML tags that do not have end tags and cannot have any content.
-static VOID_TAGS: Lazy<Vec<&'static str>> = Lazy::new(|| {
-    vec![
-        "meta", "link", "img", "input", "br", "hr", "col", "area", "base", "embed", "keygen",
-        "param", "source", "track", "wbr",
-    ]
-});
+static VOID_TAGS: &[&str] = &[
+    "meta", "link", "img", "input", "br", "hr", "col", "area", "base", "embed", "keygen",
+    "param", "source", "track", "wbr",
+];
 
 type TagAttributes = HashMap<String, String>;
 
@@ -80,27 +82,28 @@ impl HtmlTag {
         recurse: bool,
     ) -> Option<String> {
         let mut o_text: Option<String> = None;
-        let children = doc_node.children(document);
+        let mut stack: Vec<DocumentNode> = doc_node.children(document).collect();
+        stack.reverse(); // process in order by popping from end
 
-        // Iterate through this tag's children
-        for child in children {
+        while let Some(child) = stack.pop() {
             let child_node = document.get_html_node(&child);
             if let Some(child_node) = child_node {
                 match child_node {
                     HtmlNode::Text(text) => {
-                        // If the child is a text, simply append its text.
                         o_text = Some(HtmlTag::append_text(o_text, text.value.to_string()));
                     }
                     HtmlNode::Tag(_) => {
-                        // If the child is a tag, only append its text if recurse=true was passed,
-                        // otherwise skip this node.
                         if recurse {
-                            let o_child_text = child_node.internal_get_text(&child, document, true);
-                            if let Some(child_text) = o_child_text {
-                                o_text = Some(HtmlTag::append_text(o_text, child_text));
+                            // Push children onto the stack in reverse order
+                            let grandchildren: Vec<DocumentNode> = child.children(document).collect();
+                            for gc in grandchildren.into_iter().rev() {
+                                stack.push(gc);
                             }
                         }
                     }
+                    HtmlNode::Comment(_)
+                    | HtmlNode::ProcessingInstruction(_)
+                    | HtmlNode::Doctype(_) => {}
                 }
             }
         }
@@ -140,11 +143,64 @@ pub struct HtmlText {
 
 impl HtmlText {
     /// Creates a new [HtmlText] from the given string.
-    pub fn from_str(value: &str) -> HtmlText {
+    pub fn new(value: &str) -> HtmlText {
         let text = unescape_characters(value);
+        let only_whitespace = text.trim().is_empty();
         HtmlText {
-            value: text.to_string(),
-            only_whitespace: text.trim().is_empty(),
+            value: text,
+            only_whitespace,
+        }
+    }
+}
+
+/// An HTML comment node (`<!-- ... -->`).
+#[derive(PartialEq, Clone, Debug)]
+pub struct HtmlComment {
+    /// The content of the comment (without the `<!--` and `-->` delimiters).
+    pub value: String,
+}
+
+impl HtmlComment {
+    /// Creates a new [HtmlComment] with the given content.
+    pub fn new(value: String) -> HtmlComment {
+        HtmlComment { value }
+    }
+}
+
+/// An HTML processing instruction (`<?target data?>`).
+#[derive(PartialEq, Clone, Debug)]
+pub struct HtmlProcessingInstruction {
+    /// The target of the processing instruction.
+    pub target: String,
+    /// The data of the processing instruction.
+    pub data: String,
+}
+
+impl HtmlProcessingInstruction {
+    /// Creates a new [HtmlProcessingInstruction] with the given target and data.
+    pub fn new(target: String, data: String) -> HtmlProcessingInstruction {
+        HtmlProcessingInstruction { target, data }
+    }
+}
+
+/// An HTML document type declaration (`<!DOCTYPE ...>`).
+#[derive(PartialEq, Clone, Debug)]
+pub struct HtmlDoctype {
+    /// The name of the document type (e.g. "html").
+    pub name: String,
+    /// The public identifier, if present.
+    pub public_id: Option<String>,
+    /// The system identifier, if present.
+    pub system_id: Option<String>,
+}
+
+impl HtmlDoctype {
+    /// Creates a new [HtmlDoctype] with the given name and optional identifiers.
+    pub fn new(name: String, public_id: Option<String>, system_id: Option<String>) -> HtmlDoctype {
+        HtmlDoctype {
+            name,
+            public_id,
+            system_id,
         }
     }
 }
@@ -157,20 +213,34 @@ impl HtmlText {
 /// - `&quot;` becomes `"`
 /// - `&#39;` becomes `'`
 pub fn unescape_characters(text: &str) -> String {
-    let re = Regex::new(r"&#(\d+);").unwrap();
-    let text = re.replace_all(text, |caps: &Captures| {
-        if let Some(num) = caps.get(1) {
-            if let Ok(num) = num.as_str().parse::<u32>() {
-                return char::from_u32(num).unwrap().to_string();
-            }
-        }
-        return String::new();
-    });
+    static NUMERIC_CHAR_REF_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"&#(?:x([0-9a-fA-F]+)|(\d+));").unwrap());
 
-    text.replace("&amp;", "&")
-        .replace("&lt;", "<")
+    // First: resolve numeric character references on the raw input,
+    // before any named entity replacement, to avoid double-unescaping
+    // (e.g. "&amp;#60;" should become "&#60;", not "<").
+    let text = NUMERIC_CHAR_REF_RE
+        .replace_all(text, |caps: &Captures| {
+            // Group 1: hex digits (&#xHH;), Group 2: decimal digits (&#DD;)
+            if let Some(hex) = caps.get(1) {
+                if let Ok(num) = u32::from_str_radix(hex.as_str(), 16) {
+                    return char::from_u32(num).unwrap_or('\u{FFFD}').to_string();
+                }
+            } else if let Some(dec) = caps.get(2) {
+                if let Ok(num) = dec.as_str().parse::<u32>() {
+                    return char::from_u32(num).unwrap_or('\u{FFFD}').to_string();
+                }
+            }
+            "\u{FFFD}".to_string()
+        })
+        .into_owned();
+
+    // Then: named entities. &amp; must be replaced last to avoid
+    // double-unescaping (e.g. "&amp;lt;" → "&lt;", not "<").
+    text.replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&quot;", r#"""#)
+        .replace("&amp;", "&")
 }
 
 /// Escapes commonly escaped characters in HTML text.
@@ -214,7 +284,8 @@ pub fn trim_internal_whitespace(text: &str) -> String {
     result.trim_end().to_string()
 }
 
-/// An HTML node can be either a tag or raw text.
+/// An HTML node can be either a tag, raw text, a comment, a processing instruction, or a
+/// document type declaration.
 #[derive(Clone, Debug, EnumExtract)]
 pub enum HtmlNode {
     /// An HTML tag.
@@ -234,6 +305,12 @@ pub enum HtmlNode {
     /// Where the inner contents of `div` would be: `Text("Hello ")`, `Tag(span)`, `Text("!")`.
     ///
     Text(HtmlText),
+    /// A comment node (`<!-- ... -->`).
+    Comment(HtmlComment),
+    /// A processing instruction node (`<?target data?>`).
+    ProcessingInstruction(HtmlProcessingInstruction),
+    /// A document type declaration (`<!DOCTYPE ...>`).
+    Doctype(HtmlDoctype),
 }
 
 impl HtmlNode {
@@ -266,15 +343,19 @@ impl HtmlNode {
                 }
             }
             HtmlNode::Text(text) => Some(text.value.to_string()),
+            // Comments, PIs, and doctypes do not contribute visible text.
+            HtmlNode::Comment(_) | HtmlNode::ProcessingInstruction(_) | HtmlNode::Doctype(_) => {
+                None
+            }
         }
     }
 
     /// Gets attributes.
-    /// If Node is a `Text` return None
+    /// If Node is not a `Tag` return None
     pub fn get_attributes(&self) -> Option<&TagAttributes> {
         match self {
             HtmlNode::Tag(tag) => Some(&tag.attributes),
-            &HtmlNode::Text(_) => None,
+            _ => None,
         }
     }
 }
@@ -282,6 +363,10 @@ impl HtmlNode {
 /// HTML document tree represented by an indextree arena and a root node.
 ///
 /// Documents must have a single root node to be valid.
+#[deprecated(
+    since = "0.8.0",
+    note = "Use `XpathItemTree` directly via `html::parse()` and `XpathItemTree::from(&doc)` instead"
+)]
 #[derive(Clone)]
 pub struct HtmlDocument {
     pub(crate) arena: Arena<HtmlNode>,
@@ -305,9 +390,7 @@ impl HtmlDocument {
     /// This ignores all text nodes that are solely whitespace.
     /// It does not trim whitespace on nodes that contain both whitespace and non-whitespace.
     pub fn to_formatted_string(&self, format_type: DocumentFormatType) -> String {
-        let text =
-            display_node(0, self, &self.root_node, format_type).expect("failed to display node");
-        format!("{}", text)
+        display_node(0, self, &self.root_node, format_type).expect("failed to display node")
     }
 
     /// Get an iterator over all nodes in this document.
@@ -338,86 +421,133 @@ pub enum DocumentFormatType {
 }
 
 fn display_node(
-    indent: u8,
+    start_indent: usize,
     doc: &HtmlDocument,
-    doc_node: &DocumentNode,
+    start_node: &DocumentNode,
     format_type: DocumentFormatType,
 ) -> Result<String, fmt::Error> {
-    fn display_indent(indent: u8, str: &mut String) -> fmt::Result {
+    fn display_indent(indent: usize, str: &mut String) -> fmt::Result {
         for _ in 0..indent {
             write!(str, "    ")?;
         }
         Ok(())
     }
 
-    let mut str = String::new();
+    enum Phase {
+        Enter(DocumentNode, usize),
+        Exit(String, usize), // tag_name, indent
+    }
 
-    let html_node = doc.get_html_node(doc_node).unwrap();
+    let mut result = String::new();
+    let mut stack: Vec<Phase> = vec![Phase::Enter(*start_node, start_indent)];
 
-    match html_node {
-        HtmlNode::Tag(tag) => {
-            // display begin tag
+    while let Some(phase) = stack.pop() {
+        match phase {
+            Phase::Enter(doc_node, indent) => {
+                let html_node = doc.get_html_node(&doc_node).ok_or(fmt::Error)?;
 
-            if matches!(format_type, DocumentFormatType::Indented) {
-                display_indent(indent, &mut str)?;
-            }
-            write!(&mut str, "<{}", tag.name)?;
-            for attribute in &tag.attributes {
-                write!(&mut str, r#" {}="{}""#, attribute.0, attribute.1)?;
-            }
-            write!(&mut str, ">")?;
-            if matches!(format_type, DocumentFormatType::Indented) {
-                write!(&mut str, "\n")?;
-            }
+                match html_node {
+                    HtmlNode::Tag(tag) => {
+                        if matches!(format_type, DocumentFormatType::Indented) {
+                            display_indent(indent, &mut result)?;
+                        }
+                        write!(&mut result, "<{}", tag.name)?;
+                        let mut sorted_attrs: Vec<_> = tag.attributes.iter().collect();
+                        sorted_attrs.sort_by(|a, b| a.0.cmp(b.0));
+                        for attribute in sorted_attrs {
+                            write!(&mut result, r#" {}="{}""#, attribute.0, attribute.1)?;
+                        }
+                        write!(&mut result, ">")?;
+                        if matches!(format_type, DocumentFormatType::Indented) {
+                            writeln!(&mut result)?;
+                        }
 
-            // self-closing tags cannot have content or an end tag
-            if !VOID_TAGS.contains(&tag.name.as_str()) {
-                // recursively display all children
-                let children = doc_node.children(doc);
-                for child in children {
-                    write!(
-                        &mut str,
-                        "{}",
-                        display_node(indent + 1, doc, &child, format_type)?
-                    )?;
-                }
+                        if !VOID_TAGS.contains(&tag.name.as_str()) {
+                            // Push the exit phase first (will be processed after children).
+                            stack.push(Phase::Exit(tag.name.clone(), indent));
 
-                // display end tag
-                if matches!(format_type, DocumentFormatType::Indented) {
-                    display_indent(indent, &mut str)?;
-                }
-                write!(&mut str, "</{}>", tag.name)?;
-                if matches!(format_type, DocumentFormatType::Indented) {
-                    write!(&mut str, "\n")?;
-                }
-            }
-        }
-        HtmlNode::Text(text) => {
-            let output_text = escape_characters(text.value.as_str());
-            match format_type {
-                DocumentFormatType::Standard => {
-                    write!(&mut str, "{}", output_text)?;
-                }
-                DocumentFormatType::IgnoreWhitespace => {
-                    // If ignoring whitespace texts, only display if this text is not solely whitespace.
-                    if !text.only_whitespace {
-                        write!(&mut str, "{}", output_text)?;
+                            // Push children in reverse order so they are processed in order.
+                            let children: Vec<DocumentNode> = doc_node.children(doc).collect();
+                            for child in children.into_iter().rev() {
+                                stack.push(Phase::Enter(child, indent + 1));
+                            }
+                        }
+                    }
+                    HtmlNode::Text(text) => {
+                        let output_text = escape_characters(text.value.as_str());
+                        match format_type {
+                            DocumentFormatType::Standard => {
+                                write!(&mut result, "{}", output_text)?;
+                            }
+                            DocumentFormatType::IgnoreWhitespace => {
+                                if !text.only_whitespace {
+                                    write!(&mut result, "{}", output_text)?;
+                                }
+                            }
+                            DocumentFormatType::Indented => {
+                                if !text.only_whitespace {
+                                    display_indent(indent, &mut result)?;
+                                    writeln!(&mut result, "{}", output_text.trim())?;
+                                }
+                            }
+                        }
+                    }
+                    HtmlNode::Comment(comment) => {
+                        if matches!(format_type, DocumentFormatType::Indented) {
+                            display_indent(indent, &mut result)?;
+                        }
+                        let sanitized = comment.value.replace("--", "- -");
+                        write!(&mut result, "<!--{}-->", sanitized)?;
+                        if matches!(format_type, DocumentFormatType::Indented) {
+                            writeln!(&mut result)?;
+                        }
+                    }
+                    HtmlNode::ProcessingInstruction(pi) => {
+                        if matches!(format_type, DocumentFormatType::Indented) {
+                            display_indent(indent, &mut result)?;
+                        }
+                        if pi.data.is_empty() {
+                            write!(&mut result, "<?{}?>", pi.target)?;
+                        } else {
+                            write!(&mut result, "<?{} {}?>", pi.target, pi.data)?;
+                        }
+                        if matches!(format_type, DocumentFormatType::Indented) {
+                            writeln!(&mut result)?;
+                        }
+                    }
+                    HtmlNode::Doctype(doctype) => {
+                        if matches!(format_type, DocumentFormatType::Indented) {
+                            display_indent(indent, &mut result)?;
+                        }
+                        write!(&mut result, "<!DOCTYPE {}", doctype.name)?;
+                        if let Some(ref public_id) = doctype.public_id {
+                            write!(&mut result, r#" PUBLIC "{}""#, public_id)?;
+                            if let Some(ref system_id) = doctype.system_id {
+                                write!(&mut result, r#" "{}""#, system_id)?;
+                            }
+                        } else if let Some(ref system_id) = doctype.system_id {
+                            write!(&mut result, r#" SYSTEM "{}""#, system_id)?;
+                        }
+                        write!(&mut result, ">")?;
+                        if matches!(format_type, DocumentFormatType::Indented) {
+                            writeln!(&mut result)?;
+                        }
                     }
                 }
-                DocumentFormatType::Indented => {
-                    // If indenting, only display if this text is not solely whitespace.
-                    if !text.only_whitespace {
-                        display_indent(indent, &mut str)?;
-
-                        // Trim the text incase there's leading or trailing whitespace.
-                        writeln!(&mut str, "{}", output_text.trim())?;
-                    }
+            }
+            Phase::Exit(tag_name, indent) => {
+                if matches!(format_type, DocumentFormatType::Indented) {
+                    display_indent(indent, &mut result)?;
+                }
+                write!(&mut result, "</{}>", tag_name)?;
+                if matches!(format_type, DocumentFormatType::Indented) {
+                    writeln!(&mut result)?;
                 }
             }
         }
     }
 
-    Ok(str)
+    Ok(result)
 }
 
 /// A key representing a single [HtmlNode] contained in a [HtmlDocument].
@@ -426,51 +556,59 @@ fn display_node(
 ///
 /// Implements [Copy] so that it can be easily passed around, unlike its associated [HtmlNode].
 ///
-/// # Example: get associated [HtmlNode]
+/// # Example: get the root element
 ///
 /// ```rust
-/// # use skyscraper::html::{self, DocumentNode, HtmlNode, parse::ParseError};
-/// # fn main() -> Result<(), ParseError> {
-/// // Parse the HTML text into a document
-/// let text = r#"<div/>"#;
-/// let document = html::parse(text)?;
+/// # use std::error::Error;
+/// # fn main() -> Result<(), Box<dyn Error>> {
+/// use skyscraper::html;
+/// use skyscraper::xpath;
 ///
-/// // Get the root document node's associated HTML node
-/// let doc_node: DocumentNode = document.root_node;
-/// let html_node = document.get_html_node(&doc_node).expect("root node must be in document");
+/// // Parse the HTML text into a tree
+/// let text = r#"<div></div>"#;
+/// let tree = html::parse(text)?;
 ///
-/// // Check we got the right node
-/// match html_node {
-///     HtmlNode::Tag(tag) => assert_eq!(String::from("div"), tag.name),
-///     HtmlNode::Text(_) => panic!("expected tag, got text instead")
-/// }
+/// // Use XPath to find elements
+/// let xpath = xpath::parse("//div")?;
+/// let items = xpath.apply(&tree)?;
+/// assert_eq!(items.len(), 1);
+///
+/// let element = items[0].extract_as_node().extract_as_element_node();
+/// assert_eq!(element.name, "div");
 /// # Ok(())
 /// # }
 /// ```
 ///
-/// # Example: get children and parents
+/// # Example: get children
 ///
 /// ```rust
-/// # use skyscraper::html::{self, DocumentNode, HtmlNode, parse::ParseError};
-/// # fn main() -> Result<(), ParseError> {
-/// // Parse the HTML text into a document
-/// let text = r#"<parent><child/><child/></parent>"#;
-/// let document = html::parse(text)?;
+/// # use std::error::Error;
+/// # fn main() -> Result<(), Box<dyn Error>> {
+/// use skyscraper::html;
+/// use skyscraper::xpath;
 ///
-/// // Get the children of the root node
-/// let parent_node: DocumentNode = document.root_node;
-/// let children: Vec<DocumentNode> = parent_node.children(&document).collect();
-/// assert_eq!(2, children.len());
+/// // Parse the HTML text into a tree
+/// let text = r#"<ul><li></li><li></li></ul>"#;
+/// let tree = html::parse(text)?;
 ///
-/// // Get the parent of both child nodes
-/// let parent_of_child0: DocumentNode = children[0].parent(&document).expect("parent of child 0 missing");
-/// let parent_of_child1: DocumentNode = children[1].parent(&document).expect("parent of child 1 missing");
+/// // Find the ul element and its li children
+/// let xpath = xpath::parse("//ul")?;
+/// let items = xpath.apply(&tree)?;
+/// assert_eq!(items.len(), 1);
 ///
-/// assert_eq!(parent_node, parent_of_child0);
-/// assert_eq!(parent_node, parent_of_child1);
+/// let ul = items[0].extract_as_node().extract_as_element_node();
+/// let children: Vec<_> = ul.children(&tree).collect();
+/// let element_children: Vec<_> = children.iter()
+///     .filter_map(|c| c.as_element_node().ok())
+///     .collect();
+/// assert_eq!(2, element_children.len());
 /// # Ok(())
 /// # }
 /// ```
+#[deprecated(
+    since = "0.8.0",
+    note = "Use `XpathItemTree` directly via `html::parse()` and `XpathItemTree::from(&doc)` instead"
+)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug, Hash)]
 pub struct DocumentNode {
     id: NodeId,
@@ -489,19 +627,25 @@ impl DocumentNode {
     /// # Example: get the text of a node
     ///
     /// ```rust
-    /// use skyscraper::html::{self, parse::ParseError};
-    /// # fn main() -> Result<(), ParseError> {
-    /// // Parse the text into a document.
+    /// # use std::error::Error;
+    /// # fn main() -> Result<(), Box<dyn Error>> {
+    /// use skyscraper::html;
+    /// use skyscraper::xpath;
+    ///
+    /// // Parse the text into a tree.
     /// let text = r##"<parent>foo<child>bar</child>baz</parent>"##;
-    /// let document = html::parse(text)?;
+    /// let tree = html::parse(text)?;
     ///
-    /// // Get all text of the root node.
-    /// let doc_node = document.root_node;
-    /// let text = doc_node.get_all_text(&document).expect("text missing");
+    /// // Get the text content of the parent element using XPath.
+    /// let xp = xpath::parse("//parent")?;
+    /// let items = xp.apply(&tree)?;
+    /// let element = items[0].extract_as_node().extract_as_element_node();
+    /// let text_content = element.text_content(&tree);
     ///
-    /// assert_eq!("foo bar baz", text);
+    /// assert_eq!("foobarbaz", text_content);
     /// # Ok(())
     /// # }
+    /// ```
     pub fn get_all_text(&self, document: &HtmlDocument) -> Option<String> {
         match document.get_html_node(self) {
             Some(html_node) => html_node.get_all_text(self, document),
@@ -516,19 +660,25 @@ impl DocumentNode {
     /// # Example: get the text of a node
     ///
     /// ```rust
-    /// use skyscraper::html::{self, parse::ParseError};
-    /// # fn main() -> Result<(), ParseError> {
-    /// // Parse the text into a document.
+    /// # use std::error::Error;
+    /// # fn main() -> Result<(), Box<dyn Error>> {
+    /// use skyscraper::html;
+    /// use skyscraper::xpath;
+    ///
+    /// // Parse the text into a tree.
     /// let html_text = r##"<parent>foo<child>bar</child>baz</parent>"##;
-    /// let document = html::parse(html_text)?;
+    /// let tree = html::parse(html_text)?;
     ///
-    /// // Get all text of the root node.
-    /// let doc_node = document.root_node;
-    /// let text = doc_node.get_text(&document).expect("text missing");
+    /// // Get the direct text of the parent element using XPath.
+    /// let xp = xpath::parse("//parent")?;
+    /// let items = xp.apply(&tree)?;
+    /// let element = items[0].extract_as_node().extract_as_element_node();
+    /// let text = element.text(&tree).unwrap();
     ///
-    /// assert_eq!("foo baz", text);
+    /// assert_eq!("foo", text);
     /// # Ok(())
     /// # }
+    /// ```
     pub fn get_text(&self, document: &HtmlDocument) -> Option<String> {
         match document.get_html_node(self) {
             Some(html_node) => html_node.get_text(self, document),
@@ -541,19 +691,25 @@ impl DocumentNode {
     /// If Node is a `Text` return None
     ///
     /// ```rust
-    /// use skyscraper::html::{self, parse::ParseError};
-    /// # fn main() -> Result<(), ParseError> {
-    /// // Parse the text into a document.
+    /// # use std::error::Error;
+    /// # fn main() -> Result<(), Box<dyn Error>> {
+    /// use skyscraper::html;
+    /// use skyscraper::xpath;
+    ///
+    /// // Parse the text into a tree.
     /// let html_text = r##"<div attr1="attr1_value"></div>"##;
-    /// let document = html::parse(html_text)?;
+    /// let tree = html::parse(html_text)?;
     ///
-    /// // Get root node.
-    /// let doc_node = document.root_node;
-    /// let attributes = doc_node.get_attributes(&document).expect("No attributes");
+    /// // Get the attribute using XPath.
+    /// let xp = xpath::parse("//div")?;
+    /// let items = xp.apply(&tree)?;
+    /// let element = items[0].extract_as_node().extract_as_element_node();
+    /// let attr = element.get_attribute(&tree, "attr1").unwrap();
     ///
-    /// assert_eq!("attr1_value", attributes["attr1"]);
+    /// assert_eq!("attr1_value", attr);
     /// # Ok(())
     /// # }
+    /// ```
     pub fn get_attributes<'a>(&'a self, document: &'a HtmlDocument) -> Option<&'a TagAttributes> {
         match document.get_html_node(self) {
             Some(html_node) => html_node.get_attributes(),
@@ -588,7 +744,7 @@ mod tests {
     fn html_node_get_text_should_work_on_text_node() {
         // arrange
         let mut arena = Arena::new();
-        let text_node = HtmlNode::Text(HtmlText::from_str("hello world"));
+        let text_node = HtmlNode::Text(HtmlText::new("hello world"));
         let text_doc_node = DocumentNode::new(arena.new_node(text_node));
         let document = HtmlDocument::new(arena, text_doc_node);
 
@@ -604,7 +760,7 @@ mod tests {
     fn html_node_get_text_should_work_on_tag_node_with_one_text_child() {
         // arrange
         let mut arena = Arena::new();
-        let text_node = HtmlNode::Text(HtmlText::from_str("hello world"));
+        let text_node = HtmlNode::Text(HtmlText::new("hello world"));
         let text_node_id = arena.new_node(text_node);
 
         let tag_node = HtmlNode::Tag(HtmlTag::new(String::from("tag")));
@@ -626,10 +782,10 @@ mod tests {
     fn html_node_get_text_should_work_on_tag_node_with_two_text_children() {
         // arrange
         let mut arena = Arena::new();
-        let text_node = HtmlNode::Text(HtmlText::from_str("hello"));
+        let text_node = HtmlNode::Text(HtmlText::new("hello"));
         let text_node_id = arena.new_node(text_node);
 
-        let text_node2 = HtmlNode::Text(HtmlText::from_str("world"));
+        let text_node2 = HtmlNode::Text(HtmlText::new("world"));
         let text_node2_id = arena.new_node(text_node2);
 
         let tag_node = HtmlNode::Tag(HtmlTag::new(String::from("tag")));
@@ -652,10 +808,10 @@ mod tests {
     fn html_node_get_text_should_ignore_nested_text() {
         // arrange
         let mut arena = Arena::new();
-        let text_node = HtmlNode::Text(HtmlText::from_str("hello"));
+        let text_node = HtmlNode::Text(HtmlText::new("hello"));
         let text_node_id = arena.new_node(text_node);
 
-        let text_node2 = HtmlNode::Text(HtmlText::from_str("world"));
+        let text_node2 = HtmlNode::Text(HtmlText::new("world"));
         let text_node2_id = arena.new_node(text_node2);
 
         let tag_node = HtmlNode::Tag(HtmlTag::new(String::from("tag")));
@@ -682,10 +838,10 @@ mod tests {
     fn html_node_get_all_text_should_include_nested_text() {
         // arrange
         let mut arena = Arena::new();
-        let text_node = HtmlNode::Text(HtmlText::from_str("hello"));
+        let text_node = HtmlNode::Text(HtmlText::new("hello"));
         let text_node_id = arena.new_node(text_node);
 
-        let text_node2 = HtmlNode::Text(HtmlText::from_str("world"));
+        let text_node2 = HtmlNode::Text(HtmlText::new("world"));
         let text_node2_id = arena.new_node(text_node2);
 
         let tag_node = HtmlNode::Tag(HtmlTag::new(String::from("tag")));
@@ -724,7 +880,7 @@ mod tests {
     #[test]
     fn html_node_get_attributes_for_text() {
         // arrange
-        let node = HtmlNode::Text(HtmlText::from_str("hello world"));
+        let node = HtmlNode::Text(HtmlText::new("hello world"));
 
         // assert
         assert!(node.get_attributes().is_none())
@@ -754,7 +910,7 @@ mod tests {
     fn document_node_get_attributes_for_text() {
         // arrange
         let mut arena = Arena::new();
-        let html_node = HtmlNode::Text(HtmlText::from_str("hello world"));
+        let html_node = HtmlNode::Text(HtmlText::new("hello world"));
         let doc_node = DocumentNode::new(arena.new_node(html_node));
         let html_document = HtmlDocument::new(arena, doc_node);
 
@@ -766,142 +922,4 @@ mod tests {
         assert!(attributes.is_none());
     }
 
-    #[test]
-    fn html_document_display_should_output_same_text() {
-        // arrange
-        let text = indoc!(
-            r#"
-            <html>
-                <a>
-                    the
-                </a>
-                <b>
-                    quick
-                    <c>
-                        brown
-                    </c>
-                    fox
-                </b>
-                jumps
-                over
-                <d>
-                </d>
-                the lazy
-                <f>
-                    dog
-                </f>
-            </html>
-            "#,
-        );
-
-        let document = parse(&text).unwrap();
-
-        // act
-        let html_output = document.to_formatted_string(DocumentFormatType::Indented);
-
-        // assert
-        assert_eq!(html_output, text);
-    }
-
-    #[test]
-    fn html_document_display_should_handle_attributes() {
-        // arrange
-        let text = indoc!(
-            r#"
-            <html @class="foo" @id="bar">
-            </html>"#,
-        );
-
-        let document = parse(&text).unwrap();
-
-        // act
-        let html_output = document.to_string();
-
-        // assert
-        // the order of the attributes is undefined, so it must be deserialized and compared programatically
-        let result_document = parse(&html_output).unwrap();
-
-        let node = result_document
-            .get_html_node(&result_document.root_node)
-            .unwrap()
-            .extract_as_tag();
-
-        assert_eq!("html", node.name);
-        assert_eq!("foo", node.attributes["@class"]);
-        assert_eq!("bar", node.attributes["@id"]);
-    }
-
-    #[test]
-    fn html_document_display_should_expand_self_closing_tags() {
-        // arrange
-        let text = indoc!(
-            r#"
-            <html>
-                <a />
-            </html>
-            "#,
-        );
-
-        let document = parse(&text).unwrap();
-
-        // act
-        let html_output = document.to_formatted_string(DocumentFormatType::Indented);
-
-        // assert
-        let expected_text = indoc!(
-            r#"
-            <html>
-                <a>
-                </a>
-            </html>
-            "#,
-        );
-        assert_eq!(html_output, expected_text);
-    }
-
-    #[test]
-    fn html_document_display_should_handle_void_tags() {
-        // arrange
-        let text = indoc!(
-            r#"
-            <html>
-                <br>
-            </html>
-            "#,
-        );
-
-        let document = parse(&text).unwrap();
-
-        // act
-        let html_output = document.to_formatted_string(DocumentFormatType::Indented);
-
-        // assert
-        assert_eq!(html_output, text);
-    }
-
-    #[test]
-    fn html_document_display_should_escape_text() {
-        // arrange
-        let text = indoc!(
-            r#"
-            <html>
-                &lt;
-            </html>
-            "#,
-        );
-
-        let document = parse(&text).unwrap();
-
-        // act
-        let html_output = document.to_formatted_string(DocumentFormatType::Indented);
-
-        // assert
-        // assert that the text retrieved from the tag was unescaped
-        let root_text = document.root_node.get_text(&document).unwrap();
-        let trimmed = root_text.trim();
-        assert_eq!("<", trimmed);
-
-        // asser that the display output was escaped
-        assert_eq!(html_output, text);
-    }
 }

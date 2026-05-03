@@ -1,15 +1,36 @@
 //! <https://www.w3.org/TR/xpath-datamodel-31/#intro>
 
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 use enum_extract_macro::EnumExtract;
-use indextree::NodeId;
+use indexmap::IndexMap;
+use indextree::{Arena, NodeId};
 use ordered_float::OrderedFloat;
 
-use super::{TextIter, XpathItemTree, XpathItemTreeNode};
+use crate::xpath::ExpressionApplyError;
+
+use super::{
+    expressions::Expr, DisplayFormatting, TextIter, XpathItemTree, XpathItemTreeNode,
+    VOID_ELEMENTS,
+};
+
+/// Escape characters in an attribute value for HTML serialization.
+fn escape_attribute_value(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+fn escape_text_content(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
 
 /// <https://www.w3.org/TR/xpath-datamodel-31/#dt-item>
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash, EnumExtract)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash, EnumExtract)]
 pub enum XpathItem<'tree> {
     /// A node in the [`XpathItemTree`].
     ///
@@ -36,7 +57,7 @@ impl<'tree> From<&'tree XpathItemTreeNode> for XpathItem<'tree> {
 /// An atomic value.
 ///
 /// <https://www.w3.org/TR/xpath-datamodel-31/#types-hierarchy>
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub enum AnyAtomicType {
     /// A boolean value.
     Boolean(bool),
@@ -52,6 +73,162 @@ pub enum AnyAtomicType {
 
     /// A string value.
     String(String),
+
+    /// A qualified name value.
+    ///
+    /// <https://www.w3.org/TR/xpath-datamodel-31/#qnames>
+    QName {
+        /// The namespace URI, or empty string if no namespace.
+        namespace_uri: String,
+        /// The local part of the name.
+        local_name: String,
+        /// The optional prefix used in the lexical form.
+        prefix: Option<String>,
+    },
+}
+
+impl PartialEq for AnyAtomicType {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (AnyAtomicType::Boolean(a), AnyAtomicType::Boolean(b)) => a == b,
+            (AnyAtomicType::Integer(a), AnyAtomicType::Integer(b)) => a == b,
+            (AnyAtomicType::Float(a), AnyAtomicType::Float(b)) => a == b,
+            (AnyAtomicType::Double(a), AnyAtomicType::Double(b)) => a == b,
+            (AnyAtomicType::String(a), AnyAtomicType::String(b)) => a == b,
+            (
+                AnyAtomicType::QName {
+                    namespace_uri: ns1,
+                    local_name: ln1,
+                    ..
+                },
+                AnyAtomicType::QName {
+                    namespace_uri: ns2,
+                    local_name: ln2,
+                    ..
+                },
+            ) => ns1 == ns2 && ln1 == ln2,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for AnyAtomicType {}
+
+impl std::hash::Hash for AnyAtomicType {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            AnyAtomicType::Boolean(b) => b.hash(state),
+            AnyAtomicType::Integer(i) => i.hash(state),
+            AnyAtomicType::Float(f) => f.hash(state),
+            AnyAtomicType::Double(d) => d.hash(state),
+            AnyAtomicType::String(s) => s.hash(state),
+            AnyAtomicType::QName {
+                namespace_uri,
+                local_name,
+                ..
+            } => {
+                namespace_uri.hash(state);
+                local_name.hash(state);
+            }
+        }
+    }
+}
+
+/// Compare an i64 integer to an f64 double without precision loss.
+///
+/// For integers outside the exact f64 range (|n| > 2^53), direct casting
+/// would silently round, producing incorrect comparisons. This function
+/// handles those cases by comparing via the integer domain.
+fn compare_integer_double(int_val: i64, dbl_val: f64) -> Option<std::cmp::Ordering> {
+    if dbl_val.is_nan() {
+        return None;
+    }
+    if dbl_val.is_infinite() {
+        return if dbl_val > 0.0 {
+            Some(std::cmp::Ordering::Less)
+        } else {
+            Some(std::cmp::Ordering::Greater)
+        };
+    }
+    // If the double has a fractional part, compare truncated value
+    let trunc = dbl_val.trunc();
+    if dbl_val != trunc {
+        // dbl_val has a fractional part — compare int_val to truncated value
+        // e.g., 3 vs 3.5: 3 < 3.5, so 3 < trunc(3.5)=3.0, so we know 3 < 3.5
+        // Actually we need: if int_val == trunc as i64, then compare based on fraction sign
+        if trunc >= i64::MIN as f64 && trunc <= i64::MAX as f64 {
+            let trunc_int = trunc as i64;
+            match int_val.cmp(&trunc_int) {
+                std::cmp::Ordering::Equal => {
+                    // int_val == trunc, so compare 0 vs fractional part
+                    if dbl_val > trunc {
+                        Some(std::cmp::Ordering::Less) // int < dbl
+                    } else {
+                        Some(std::cmp::Ordering::Greater) // int > dbl
+                    }
+                }
+                other => Some(other),
+            }
+        } else {
+            // trunc is outside i64 range, so compare as f64 (safe since both are "big")
+            OrderedFloat(int_val as f64).partial_cmp(&OrderedFloat(dbl_val))
+        }
+    } else {
+        // dbl_val is an integer value — check if it's in exact i64 range
+        if trunc >= i64::MIN as f64 && trunc <= i64::MAX as f64 {
+            let dbl_as_int = trunc as i64;
+            Some(int_val.cmp(&dbl_as_int))
+        } else {
+            // dbl_val is outside i64 range
+            OrderedFloat(int_val as f64).partial_cmp(&OrderedFloat(dbl_val))
+        }
+    }
+}
+
+impl PartialOrd for AnyAtomicType {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match (self, other) {
+            (AnyAtomicType::Boolean(a), AnyAtomicType::Boolean(b)) => a.partial_cmp(b),
+            (AnyAtomicType::Integer(a), AnyAtomicType::Integer(b)) => a.partial_cmp(b),
+            (AnyAtomicType::Float(a), AnyAtomicType::Float(b)) => a.partial_cmp(b),
+            (AnyAtomicType::Double(a), AnyAtomicType::Double(b)) => a.partial_cmp(b),
+            (AnyAtomicType::String(a), AnyAtomicType::String(b)) => a.partial_cmp(b),
+            // Cross-type numeric comparisons: precision-safe promotion.
+            (AnyAtomicType::Integer(a), AnyAtomicType::Double(b)) => {
+                compare_integer_double(*a, b.0)
+            }
+            (AnyAtomicType::Double(a), AnyAtomicType::Integer(b)) => {
+                compare_integer_double(*b, a.0).map(|o| o.reverse())
+            }
+            (AnyAtomicType::Integer(a), AnyAtomicType::Float(b)) => {
+                compare_integer_double(*a, b.0 as f64)
+            }
+            (AnyAtomicType::Float(a), AnyAtomicType::Integer(b)) => {
+                compare_integer_double(*b, a.0 as f64).map(|o| o.reverse())
+            }
+            (AnyAtomicType::Float(a), AnyAtomicType::Double(b)) => {
+                OrderedFloat(a.0 as f64).partial_cmp(b)
+            }
+            (AnyAtomicType::Double(a), AnyAtomicType::Float(b)) => {
+                a.partial_cmp(&OrderedFloat(b.0 as f64))
+            }
+            (
+                AnyAtomicType::QName {
+                    namespace_uri: ns1,
+                    local_name: ln1,
+                    ..
+                },
+                AnyAtomicType::QName {
+                    namespace_uri: ns2,
+                    local_name: ln2,
+                    ..
+                },
+            ) => (ns1, ln1).partial_cmp(&(ns2, ln2)),
+            // Incompatible types are not ordered.
+            _ => None,
+        }
+    }
 }
 
 impl Display for AnyAtomicType {
@@ -62,19 +239,215 @@ impl Display for AnyAtomicType {
             AnyAtomicType::Float(fl) => write!(f, "{}", fl),
             AnyAtomicType::Double(d) => write!(f, "{}", d),
             AnyAtomicType::String(s) => write!(f, "{}", s),
+            AnyAtomicType::QName {
+                prefix: Some(p),
+                local_name,
+                ..
+            } => write!(f, "{}:{}", p, local_name),
+            AnyAtomicType::QName {
+                local_name,
+                ..
+            } => write!(f, "{}", local_name),
+        }
+    }
+}
+
+/// An owned XPath value that can appear as a map value or array member.
+///
+/// Unlike `XpathItem`, this does not borrow from the tree and can represent
+/// atomic values and function items without losing their identity through atomization.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum OwnedXpathValue {
+    /// An atomic value.
+    Atomic(AnyAtomicType),
+    /// A function item.
+    Function(Box<Function>),
+}
+
+impl std::fmt::Display for OwnedXpathValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OwnedXpathValue::Atomic(a) => write!(f, "{}", a),
+            OwnedXpathValue::Function(func) => write!(f, "{}", func),
+        }
+    }
+}
+
+impl OwnedXpathValue {
+    /// Convert an `XpathItem` into an `OwnedXpathValue`.
+    ///
+    /// Node items are converted to their string value (atomized).
+    pub fn from_xpath_item(item: &XpathItem<'_>, tree: &XpathItemTree) -> Self {
+        match item {
+            XpathItem::AnyAtomicType(a) => OwnedXpathValue::Atomic(a.clone()),
+            XpathItem::Function(f) => OwnedXpathValue::Function(Box::new(f.clone())),
+            XpathItem::Node(node) => {
+                let s = node.text_content(tree);
+                OwnedXpathValue::Atomic(AnyAtomicType::String(s))
+            }
+        }
+    }
+
+    /// Convert this value back to an `XpathItem`.
+    pub fn to_xpath_item<'tree>(&self) -> XpathItem<'tree> {
+        match self {
+            OwnedXpathValue::Atomic(a) => XpathItem::AnyAtomicType(a.clone()),
+            OwnedXpathValue::Function(f) => XpathItem::Function((**f).clone()),
         }
     }
 }
 
 /// <https://www.w3.org/TR/xpath-datamodel-31/#dt-function-item>
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash)]
-pub struct Function {
-    // TODO
+#[derive(Debug, Clone)]
+pub enum Function {
+    /// A reference to a named function, e.g. `fn:abs#1`.
+    Named {
+        /// The function name as a string (e.g. "fn:abs").
+        name: String,
+        /// The arity of the function.
+        arity: u32,
+    },
+    /// An inline function expression, e.g. `function($x) { $x + 1 }`.
+    ///
+    /// The body is cached as a parsed AST to avoid re-parsing each call.
+    ///
+    /// Note: inline functions do not currently capture closure variables from the
+    /// definition scope. They evaluate using the caller's variable context.
+    Inline {
+        /// The parameter names.
+        params: Vec<String>,
+        /// The source text of the function body expression (inside the braces).
+        body_source: String,
+        /// Cached parsed body expression. Populated at construction time.
+        body: Option<Box<Expr>>,
+    },
+    /// An XPath 3.1 map, e.g. `map { "x": 1, "y": 2 }`.
+    ///
+    /// Values preserve their item types (atomic, function, etc.) without atomization.
+    /// Uses `IndexMap` for O(1) key lookup while preserving insertion order.
+    Map {
+        /// The map entries as key→value-sequence pairs (insertion-ordered).
+        entries: IndexMap<AnyAtomicType, Vec<OwnedXpathValue>>,
+    },
+    /// An XPath 3.1 array, e.g. `[1, 2, 3]` or `array { 1, 2, 3 }`.
+    ///
+    /// Each member is a sequence of values that preserve their item types.
+    Array {
+        /// The array members, each of which is a sequence of values.
+        members: Vec<Vec<OwnedXpathValue>>,
+    },
+}
+
+impl PartialEq for Function {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                Function::Named { name: n1, arity: a1 },
+                Function::Named { name: n2, arity: a2 },
+            ) => n1 == n2 && a1 == a2,
+            (
+                Function::Inline { params: p1, body_source: b1, .. },
+                Function::Inline { params: p2, body_source: b2, .. },
+            ) => p1 == p2 && b1 == b2,
+            (Function::Map { entries: e1 }, Function::Map { entries: e2 }) => e1 == e2,
+            (Function::Array { members: m1 }, Function::Array { members: m2 }) => m1 == m2,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Function {}
+
+impl std::hash::Hash for Function {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            Function::Named { name, arity } => {
+                name.hash(state);
+                arity.hash(state);
+            }
+            Function::Inline { params, body_source, .. } => {
+                params.hash(state);
+                body_source.hash(state);
+            }
+            Function::Map { entries } => {
+                entries.len().hash(state);
+                for (k, v) in entries {
+                    k.hash(state);
+                    v.hash(state);
+                }
+            }
+            Function::Array { members } => {
+                members.hash(state);
+            }
+        }
+    }
 }
 
 impl Display for Function {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!("Function::fmt")
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Function::Named { name, arity } => write!(f, "{}#{}", name, arity),
+            Function::Inline {
+                params,
+                body_source,
+                ..
+            } => {
+                write!(f, "function(")?;
+                for (i, param) in params.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "${}", param)?;
+                }
+                write!(f, ") {{ {} }}", body_source)
+            }
+            Function::Map { entries } => {
+                write!(f, "map {{")?;
+                for (i, (key, values)) in entries.iter().enumerate() {
+                    if i == 0 {
+                        write!(f, " ")?;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}: ", key)?;
+                    if values.len() == 1 {
+                        write!(f, "{}", values[0])?;
+                    } else {
+                        write!(f, "(")?;
+                        for (j, v) in values.iter().enumerate() {
+                            if j > 0 {
+                                write!(f, ", ")?;
+                            }
+                            write!(f, "{}", v)?;
+                        }
+                        write!(f, ")")?;
+                    }
+                }
+                write!(f, " }}")
+            }
+            Function::Array { members } => {
+                write!(f, "[")?;
+                for (i, member) in members.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    if member.len() == 1 {
+                        write!(f, "{}", member[0])?;
+                    } else {
+                        write!(f, "(")?;
+                        for (j, v) in member.iter().enumerate() {
+                            if j > 0 {
+                                write!(f, ", ")?;
+                            }
+                            write!(f, "{}", v)?;
+                        }
+                        write!(f, ")")?;
+                    }
+                }
+                write!(f, "]")
+            }
+        }
     }
 }
 
@@ -83,6 +456,10 @@ impl Display for Function {
 pub struct XpathDocumentNode {}
 
 impl XpathDocumentNode {
+    pub(crate) fn new() -> Self {
+        Self {}
+    }
+
     /// Get all text contained in this element and its descendants.
     ///
     /// # Arguments
@@ -92,17 +469,16 @@ impl XpathDocumentNode {
     /// # Returns
     ///
     /// A string of all text contained in this document and its descendants.
-    pub fn text_content<'tree>(&self, tree: &'tree XpathItemTree) -> String {
+    pub fn text_content(&self, tree: &XpathItemTree) -> String {
         let strings: Vec<String> = tree
             .root_node
             .children(&tree.arena)
-            .into_iter()
             .map(|x| tree.get(x))
             .map(|x| x.text_content(tree))
             .collect();
 
-        let text = strings.join("");
-        text
+        
+        strings.join("")
     }
 
     /// Text before the first subelement. This is either a string or the value None, if there was no text.
@@ -116,17 +492,11 @@ impl XpathDocumentNode {
     /// # Returns
     ///
     /// A string of all text contained in this document.
-    pub fn text<'tree>(&self, tree: &'tree XpathItemTree) -> Option<String> {
-        let strings: Vec<String> = tree
-            .root_node
+    pub fn text(&self, tree: &XpathItemTree) -> Option<String> {
+        tree.root_node
             .children(&tree.arena)
-            .into_iter()
             .map(|x| tree.get(x))
-            .map(|x| x.text(tree))
-            .filter_map(|x| x.map(|x| x.to_string()))
-            .collect();
-
-        strings.into_iter().next()
+            .find_map(|x| x.text(tree))
     }
 
     /// Get all children of the document.
@@ -144,17 +514,43 @@ impl XpathDocumentNode {
             .map(|x| tree.get(x))
             .collect()
     }
-}
-impl Display for XpathDocumentNode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DocumentNode()")
+
+    /// Render the document's children as an HTML string with the given formatting.
+    pub fn display(
+        &self,
+        tree: &XpathItemTree,
+        formatting: DisplayFormatting,
+    ) -> String {
+        match formatting {
+            DisplayFormatting::Raw => {
+                // Raw mode: include all children (comments, text, elements)
+                let child_strings: Vec<String> = tree
+                    .root_node
+                    .children(&tree.arena)
+                    .map(|x| tree.get(x))
+                    .map(|x| x.display(tree, formatting, 0))
+                    .collect();
+                child_strings.join("")
+            }
+            _ => {
+                let children = self.children(tree);
+
+                let element_strings: Vec<String> = children
+                    .iter()
+                    .filter_map(|x| x.as_element_node().ok())
+                    .map(|x| x.display(tree, formatting, 0))
+                    .collect();
+
+                element_strings.join("\n")
+            }
+        }
     }
 }
 
 /// An element node such as an HTML tag.
 ///
 /// <https://www.w3.org/TR/xpath-datamodel-31/#ElementNode>
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone)]
 pub struct ElementNode {
     /// The ID of the element.
     ///
@@ -164,12 +560,28 @@ pub struct ElementNode {
 
     /// The name of the element.
     pub name: String,
+
+    /// The namespace of the element.
+    pub namespace: Option<String>,
+}
+
+impl std::fmt::Debug for ElementNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // ignore id in debug output
+        f.debug_struct("ElementNode")
+            .field("name", &self.name)
+            .finish()
+    }
 }
 
 impl ElementNode {
     /// Create a new element node.
     pub(crate) fn new(name: String) -> Self {
-        Self { id: None, name }
+        Self {
+            id: None,
+            name,
+            namespace: None,
+        }
     }
 
     /// Set the ID of the element.
@@ -178,8 +590,8 @@ impl ElementNode {
     }
 
     /// Get the ID of the element.
-    pub(crate) fn id(&self) -> NodeId {
-        self.id.unwrap()
+    pub(crate) fn id(&self) -> Result<NodeId, ExpressionApplyError> {
+        self.id.ok_or_else(|| ExpressionApplyError::new("BUG: node ID not set -- was set_id() called?".to_string()))
     }
 
     /// Get all attributes of the element.
@@ -193,6 +605,18 @@ impl ElementNode {
     /// A vector of all attributes of the element.
     pub fn attributes<'tree>(&self, tree: &'tree XpathItemTree) -> Vec<&'tree AttributeNode> {
         self.children(tree)
+            .filter_map(|x| match x {
+                XpathItemTreeNode::AttributeNode(attr) => Some(attr),
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub(crate) fn attributes_arena<'arena>(
+        &self,
+        arena: &'arena Arena<XpathItemTreeNode>,
+    ) -> Vec<&'arena AttributeNode> {
+        self.children_arena(arena)
             .filter_map(|x| match x {
                 XpathItemTreeNode::AttributeNode(attr) => Some(attr),
                 _ => None,
@@ -221,6 +645,7 @@ impl ElementNode {
     }
 
     /// Get all direct child nodes of the given element.
+    /// Note this _does_ include attribute nodes.
     ///
     /// # Arguments
     ///
@@ -232,8 +657,24 @@ impl ElementNode {
     pub fn children<'tree>(
         &self,
         tree: &'tree XpathItemTree,
-    ) -> impl Iterator<Item = &'tree XpathItemTreeNode> {
-        self.id().children(&tree.arena).map(|x| tree.get(x))
+    ) -> Box<dyn Iterator<Item = &'tree XpathItemTreeNode> + 'tree> {
+        match self.id() {
+            Ok(id) => Box::new(id.children(&tree.arena).map(|x| tree.get(x))),
+            Err(_) => Box::new(std::iter::empty()),
+        }
+    }
+
+    pub(crate) fn children_arena<'arena>(
+        &self,
+        arena: &'arena Arena<XpathItemTreeNode>,
+    ) -> Box<dyn Iterator<Item = &'arena XpathItemTreeNode> + 'arena> {
+        match self.id() {
+            Ok(id) => Box::new(
+                id.children(arena)
+                    .map(|x| arena.get(x).expect("node missing from arena").get()),
+            ),
+            Err(_) => Box::new(std::iter::empty()),
+        }
     }
 
     /// Get the parent of the element.
@@ -246,18 +687,18 @@ impl ElementNode {
     ///
     /// The parent of the element if it exists, or `None` if it does not.
     pub fn parent<'tree>(&self, tree: &'tree XpathItemTree) -> Option<&'tree XpathItemTreeNode> {
-        tree.get(self.id()).parent(tree)
+        tree.get(self.id().ok()?).parent(tree)
     }
 
     /// Get an iterator over all text contained in this element and its descendants.
     ///
     /// Includes whitespace text nodes.
     /// Text nodes are split by opening and closing tags contained in the current element.
-    pub fn itertext<'this, 'tree>(&'this self, tree: &'tree XpathItemTree) -> TextIter<'this>
-    where
-        'tree: 'this,
-    {
-        TextIter::new(tree, tree.get(self.id()))
+    pub fn itertext(&self, tree: &XpathItemTree) -> TextIter {
+        match self.id() {
+            Ok(id) => TextIter::new(tree, tree.get(id)),
+            Err(_) => TextIter::empty(),
+        }
     }
 
     /// Get all text contained in this element and its descendants.
@@ -269,11 +710,14 @@ impl ElementNode {
     /// # Returns
     ///
     /// A string of all text contained in this element and its descendants.
-    pub fn text_content<'tree>(&self, tree: &'tree XpathItemTree) -> String {
+    pub fn text_content(&self, tree: &XpathItemTree) -> String {
         self.itertext(tree).collect::<Vec<String>>().join("")
     }
 
     /// Text before the first subelement. This is either a string or the value None, if there was no text.
+    ///
+    /// Only returns text that appears before the first child element, comment, or processing
+    /// instruction node. Attribute nodes are not considered children for this purpose.
     ///
     /// Use [`ElementNode::text_content`] to get all text _including_ text in descendant nodes.
     ///
@@ -283,55 +727,141 @@ impl ElementNode {
     ///
     /// # Returns
     ///
-    /// A string of all text contained in this element.
+    /// The text before the first subelement, or `None` if there is no such text.
     pub fn text(&self, tree: &XpathItemTree) -> Option<String> {
-        let strings: Vec<String> =
-            // Get all children.
-            Self::get_all_text_nodes(tree, self, false)
-            .into_iter()
-            .map(|x| x.content)
-            .collect();
-
-        strings.into_iter().next()
-    }
-
-    fn get_all_text_nodes(
-        tree: &XpathItemTree,
-        node: &ElementNode,
-        recurse: bool,
-    ) -> Vec<TextNode> {
-        node
-            // Get all children of the given node.
-            .children(tree)
-            // Combine all the direct and indirect children into a Vec.
-            .fold(Vec::new(), |mut v, child| {
-                match child {
-                    XpathItemTreeNode::ElementNode(child_element) => {
-                        if recurse {
-                            // If this child is an element node, get all the text nodes in it.
-                            v.extend(Self::get_all_text_nodes(tree, &child_element, recurse));
-                        }
-                    }
-                    XpathItemTreeNode::TextNode(text) => {
-                        // If this child is a text node, push it to the Vec.
-                        v.push(text.clone());
-                    }
-                    _ => {}
+        let mut texts = Vec::new();
+        for child in self.children(tree) {
+            match child {
+                XpathItemTreeNode::TextNode(text) => {
+                    texts.push(text.content.clone());
                 }
-                v
-            })
+                // Attribute nodes are metadata, not positional children.
+                XpathItemTreeNode::AttributeNode(_) => {}
+                // Stop at the first element, comment, PI, or other non-text child.
+                _ => break,
+            }
+        }
+
+        if texts.is_empty() {
+            None
+        } else {
+            Some(texts.join(""))
+        }
     }
 
     /// Get the [XpathItem] representation of the element.
     pub fn to_item<'tree>(&self, tree: &'tree XpathItemTree) -> XpathItem<'tree> {
-        XpathItem::Node(tree.get(self.id()))
+        XpathItem::Node(tree.get(self.id().expect("node ID not set")))
+    }
+
+    /// Render this element as an HTML string with the given formatting and indentation level.
+    pub fn display(
+        &self,
+        tree: &XpathItemTree,
+        formatting: DisplayFormatting,
+        indent: usize,
+    ) -> String {
+        match formatting {
+            DisplayFormatting::Raw => self.display_raw(tree),
+            _ => self.display_pretty(tree, formatting, indent),
+        }
+    }
+
+    fn display_raw(&self, tree: &XpathItemTree) -> String {
+        let attributes = self.attributes(tree);
+
+        let mut display_string = String::new();
+
+        // start tag
+        display_string.push_str(&format!("<{}", self.name));
+        for attr in &attributes {
+            display_string.push_str(&attr.prefix);
+            let escaped_value = escape_attribute_value(&attr.value);
+            let display_name = attr.original_name.as_deref().unwrap_or(&attr.name);
+            display_string.push_str(&format!("{}=\"{}\"", display_name, escaped_value));
+        }
+        display_string.push('>');
+
+        let is_void = VOID_ELEMENTS.contains(&self.name.as_str());
+
+        if !is_void {
+            // children (all types except attributes)
+            let children_without_attributes =
+                self.children(tree).filter(|x| !x.is_attribute_node());
+            for child in children_without_attributes {
+                display_string.push_str(&child.display(tree, DisplayFormatting::Raw, 0));
+            }
+
+            // end tag
+            display_string.push_str(&format!("</{}>", self.name));
+        }
+
+        display_string
+    }
+
+    fn display_pretty(
+        &self,
+        tree: &XpathItemTree,
+        formatting: DisplayFormatting,
+        indent: usize,
+    ) -> String {
+        let displayed_children: Vec<String> = match formatting {
+            DisplayFormatting::Pretty => {
+                let children_without_attributes =
+                    self.children(tree).filter(|x| !x.is_attribute_node());
+                children_without_attributes
+                    .map(|x| x.display(tree, formatting, indent + 1))
+                    .filter(|x| !x.trim().is_empty())
+                    .collect()
+            }
+            DisplayFormatting::NoChildren => Vec::new(),
+            DisplayFormatting::Raw => Vec::new(),
+        };
+
+        let attributes = self.attributes(tree);
+        let displayed_attributes: Vec<String> = attributes.iter().map(|x| x.to_string()).collect();
+
+        // indent the element
+        let indentation = "  ".repeat(indent);
+
+        let mut display_string = String::new();
+
+        // display the start tag
+        if displayed_attributes.is_empty() {
+            display_string.push_str(&format!("{}<{}>", indentation, self.name,));
+        } else {
+            display_string.push_str(&format!(
+                "{}<{} {}>",
+                indentation,
+                self.name,
+                displayed_attributes.join(" "),
+            ));
+        }
+
+        let is_void = VOID_ELEMENTS.contains(&self.name.as_str());
+
+        if !is_void {
+            // display the children
+            if !displayed_children.is_empty() {
+                display_string.push_str(&format!(
+                    "\n{}\n{}",
+                    &displayed_children.join("\n"),
+                    indentation
+                ));
+            }
+
+            // display the end tag
+            display_string.push_str(&format!("</{}>", self.name));
+        }
+
+        display_string
     }
 }
 
 /// An attribute node.
 ///
 /// <https://www.w3.org/TR/xpath-datamodel-31/#AttributeNode>
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Clone, Hash)]
+#[derive(Eq, Clone)]
 pub struct AttributeNode {
     /// The ID of the attribute.
     ///
@@ -344,6 +874,31 @@ pub struct AttributeNode {
 
     /// The value of the attribute.
     pub value: String,
+
+    /// Whitespace prefix before this attribute in the original source.
+    /// Used for round-trip fidelity in Raw display mode.
+    pub prefix: String,
+
+    /// Original attribute name before lowercasing (e.g. "viewBox").
+    /// Used for round-trip fidelity in Raw display mode.
+    pub original_name: Option<String>,
+
+    /// The namespace URI of this attribute, if any.
+    ///
+    /// Set for foreign attributes like `xlink:href` (xlink namespace),
+    /// `xml:lang` (XML namespace), and `xmlns` (xmlns namespace)
+    /// per WHATWG 13.2.6.3.
+    pub namespace: Option<String>,
+}
+
+impl Debug for AttributeNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // ignore id in debug output
+        f.debug_struct("AttributeNode")
+            .field("name", &self.name)
+            .field("value", &self.value)
+            .finish()
+    }
 }
 
 impl AttributeNode {
@@ -353,6 +908,27 @@ impl AttributeNode {
             id: None,
             name,
             value,
+            prefix: String::from(" "),
+            original_name: None,
+            namespace: None,
+        }
+    }
+
+    /// Create a new attribute node with a custom prefix, original name, and namespace.
+    pub(crate) fn with_prefix(
+        name: String,
+        value: String,
+        prefix: String,
+        original_name: Option<String>,
+        namespace: Option<String>,
+    ) -> Self {
+        Self {
+            id: None,
+            name,
+            value,
+            prefix,
+            original_name,
+            namespace,
         }
     }
 
@@ -362,34 +938,182 @@ impl AttributeNode {
     }
 
     /// Get the ID of the attribute.
-    pub(crate) fn id(&self) -> NodeId {
-        self.id.unwrap()
+    pub(crate) fn id(&self) -> Result<NodeId, ExpressionApplyError> {
+        self.id.ok_or_else(|| ExpressionApplyError::new("BUG: node ID not set -- was set_id() called?".to_string()))
+    }
+
+    /// Get the parent of the attribute.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree containing the attribute.
+    ///
+    /// # Returns
+    ///
+    /// The parent of the attribute if it exists, or `None` if it does not.
+    pub fn parent<'tree>(&self, tree: &'tree XpathItemTree) -> Option<&'tree XpathItemTreeNode> {
+        tree.get(self.id().ok()?).parent(tree)
     }
 }
 
 impl Display for AttributeNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}=\"{}\"", self.name, self.value)
+        write!(f, "{}=\"{}\"", self.name, escape_attribute_value(&self.value))
+    }
+}
+
+impl PartialEq for AttributeNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.value == other.value
+    }
+}
+
+impl std::hash::Hash for AttributeNode {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.value.hash(state);
     }
 }
 
 /// <https://www.w3.org/TR/xpath-datamodel-31/#ProcessingInstructionNode>
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash, Clone)]
+#[derive(Eq, Debug, Clone)]
 pub struct PINode {
-    // TODO
+    /// The target of the processing instruction (an NCName).
+    pub target: String,
+
+    /// The string content after the target.
+    pub data: String,
+
+    /// The ID of the processing instruction node.
+    id: Option<NodeId>,
+}
+
+impl PINode {
+    /// Create a new processing instruction node.
+    pub(crate) fn new(target: String, data: String) -> Self {
+        Self {
+            target,
+            data,
+            id: None,
+        }
+    }
+
+    pub(crate) fn create(
+        target: String,
+        data: String,
+        arena: &mut Arena<XpathItemTreeNode>,
+    ) -> NodeId {
+        let node_id = arena.new_node(XpathItemTreeNode::PINode(PINode::new(target, data)));
+
+        arena
+            .get_mut(node_id)
+            .unwrap()
+            .get_mut()
+            .as_pi_node_mut()
+            .unwrap()
+            .set_id(node_id);
+
+        node_id
+    }
+
+    /// Set the ID of the processing instruction node.
+    pub(crate) fn set_id(&mut self, id: NodeId) {
+        self.id = Some(id);
+    }
+
+    /// Get the ID of the processing instruction node.
+    pub(crate) fn id(&self) -> Result<NodeId, ExpressionApplyError> {
+        self.id.ok_or_else(|| ExpressionApplyError::new("BUG: node ID not set -- was set_id() called?".to_string()))
+    }
+}
+
+impl PartialEq for PINode {
+    fn eq(&self, other: &Self) -> bool {
+        self.target == other.target && self.data == other.data
+    }
+}
+
+impl PartialOrd for PINode {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for PINode {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (&self.target, &self.data).cmp(&(&other.target, &other.data))
+    }
+}
+
+impl std::hash::Hash for PINode {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.target.hash(state);
+        self.data.hash(state);
+    }
 }
 
 impl Display for PINode {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!("PINode::fmt")
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.data.is_empty() {
+            write!(f, "<?{}?>", self.target)
+        } else {
+            write!(f, "<?{} {}?>", self.target, self.data)
+        }
     }
 }
 
 /// <https://www.w3.org/TR/xpath-datamodel-31/#CommentNode>
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash, Clone)]
+#[derive(Eq, Debug, Clone)]
 pub struct CommentNode {
     /// The value of the comment.
     pub content: String,
+
+    /// The ID of the comment node.
+    id: Option<NodeId>,
+}
+
+impl CommentNode {
+    /// Create a new comment node.
+    pub(crate) fn new(content: String) -> Self {
+        Self { content, id: None }
+    }
+
+    pub(crate) fn create(content: String, arena: &mut Arena<XpathItemTreeNode>) -> NodeId {
+        let node_id = arena.new_node(XpathItemTreeNode::CommentNode(CommentNode::new(content)));
+
+        arena
+            .get_mut(node_id)
+            .unwrap()
+            .get_mut()
+            .as_comment_node_mut()
+            .unwrap()
+            .set_id(node_id);
+
+        node_id
+    }
+
+    /// Set the ID of the comment node.
+    pub(crate) fn set_id(&mut self, id: NodeId) {
+        self.id = Some(id);
+    }
+
+    /// Get the ID of the comment node.
+    pub(crate) fn id(&self) -> Result<NodeId, ExpressionApplyError> {
+        self.id.ok_or_else(|| ExpressionApplyError::new("BUG: node ID not set -- was set_id() called?".to_string()))
+    }
+
+    /// Get the parent of the comment.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree containing the comment.
+    ///
+    /// # Returns
+    ///
+    /// The parent of the comment if it exists, or `None` if it does not.
+    pub fn parent<'tree>(&self, tree: &'tree XpathItemTree) -> Option<&'tree XpathItemTreeNode> {
+        tree.get(self.id().ok()?).parent(tree)
+    }
 }
 
 impl Display for CommentNode {
@@ -398,8 +1122,149 @@ impl Display for CommentNode {
     }
 }
 
+impl PartialEq for CommentNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.content == other.content
+    }
+}
+
+impl PartialOrd for CommentNode {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for CommentNode {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.content.cmp(&other.content)
+    }
+}
+
+impl std::hash::Hash for CommentNode {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.content.hash(state);
+    }
+}
+
+/// A document type node representing `<!DOCTYPE ...>`.
+///
+/// Note: DOCTYPE is not a valid XPath 3.1 node type. It is kept in the tree
+/// for serialization fidelity but is excluded from `node()` kind tests and
+/// axis traversal results.
+#[derive(Eq, Debug, Clone)]
+pub struct DoctypeNode {
+    /// The name of the document type (e.g. "html").
+    pub name: String,
+
+    /// The public identifier, if present.
+    pub public_id: Option<String>,
+
+    /// The system identifier, if present.
+    pub system_id: Option<String>,
+
+    /// The ID of the doctype node in the arena.
+    id: Option<NodeId>,
+}
+
+impl DoctypeNode {
+    pub(crate) fn new(name: String, public_id: Option<String>, system_id: Option<String>) -> Self {
+        Self {
+            name,
+            public_id,
+            system_id,
+            id: None,
+        }
+    }
+
+    pub(crate) fn create(
+        name: String,
+        public_id: Option<String>,
+        system_id: Option<String>,
+        arena: &mut Arena<XpathItemTreeNode>,
+    ) -> NodeId {
+        let node_id = arena.new_node(XpathItemTreeNode::DoctypeNode(DoctypeNode::new(
+            name, public_id, system_id,
+        )));
+
+        arena
+            .get_mut(node_id)
+            .unwrap()
+            .get_mut()
+            .as_doctype_node_mut()
+            .unwrap()
+            .set_id(node_id);
+
+        node_id
+    }
+
+    /// Set the ID of the doctype node.
+    pub(crate) fn set_id(&mut self, id: NodeId) {
+        self.id = Some(id);
+    }
+
+    /// Get the ID of the doctype node.
+    pub(crate) fn id(&self) -> Result<NodeId, ExpressionApplyError> {
+        self.id.ok_or_else(|| ExpressionApplyError::new("BUG: node ID not set -- was set_id() called?".to_string()))
+    }
+}
+
+impl PartialEq for DoctypeNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.public_id == other.public_id
+            && self.system_id == other.system_id
+    }
+}
+
+impl PartialOrd for DoctypeNode {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for DoctypeNode {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (&self.name, &self.public_id, &self.system_id).cmp(&(
+            &other.name,
+            &other.public_id,
+            &other.system_id,
+        ))
+    }
+}
+
+impl std::hash::Hash for DoctypeNode {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.public_id.hash(state);
+        self.system_id.hash(state);
+    }
+}
+
+impl Display for DoctypeNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match (&self.public_id, &self.system_id) {
+            (Some(public), Some(system)) => {
+                write!(
+                    f,
+                    r#"<!DOCTYPE {} PUBLIC "{}" "{}">"#,
+                    self.name, public, system
+                )
+            }
+            (Some(public), None) => {
+                write!(f, r#"<!DOCTYPE {} PUBLIC "{}">"#, self.name, public)
+            }
+            (None, Some(system)) => {
+                write!(f, r#"<!DOCTYPE {} SYSTEM "{}">"#, self.name, system)
+            }
+            (None, None) => {
+                write!(f, "<!DOCTYPE {}>", self.name)
+            }
+        }
+    }
+}
+
 /// <https://www.w3.org/TR/xpath-datamodel-31/#TextNode>
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash, Clone)]
+#[derive(Eq, Clone)]
 pub struct TextNode {
     /// The ID of the text node.
     ///
@@ -409,19 +1274,21 @@ pub struct TextNode {
 
     /// The value of the text node.
     pub content: String,
+}
 
-    /// Whether the text node contains only whitespace.
-    pub only_whitespace: bool,
+impl Debug for TextNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // ignore id in debug output
+        f.debug_struct("TextNode")
+            .field("content", &self.content)
+            .finish()
+    }
 }
 
 impl TextNode {
     /// Create a new text node.
-    pub(crate) fn new(content: String, only_whitespace: bool) -> Self {
-        Self {
-            id: None,
-            content,
-            only_whitespace,
-        }
+    pub(crate) fn new(content: String) -> Self {
+        Self { id: None, content }
     }
 
     /// Set the ID of the text node.
@@ -430,13 +1297,63 @@ impl TextNode {
     }
 
     /// Get the ID of the text node.
-    pub(crate) fn id(&self) -> NodeId {
-        self.id.unwrap()
+    pub(crate) fn id(&self) -> Result<NodeId, ExpressionApplyError> {
+        self.id.ok_or_else(|| ExpressionApplyError::new("BUG: node ID not set -- was set_id() called?".to_string()))
+    }
+
+    /// Whether the text contains only whitespace.
+    pub fn is_whitespace(&self) -> bool {
+        self.content.trim().is_empty()
+    }
+
+    /// Get the parent of the text.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree containing the text.
+    ///
+    /// # Returns
+    ///
+    /// The parent of the text if it exists, or `None` if it does not.
+    pub fn parent<'tree>(&self, tree: &'tree XpathItemTree) -> Option<&'tree XpathItemTreeNode> {
+        tree.get(self.id().ok()?).parent(tree)
+    }
+
+    /// Render this text node as a string with the given formatting and indentation level.
+    pub fn display(
+        &self,
+        _tree: &XpathItemTree,
+        formatting: DisplayFormatting,
+        indent: usize,
+    ) -> String {
+        match formatting {
+            DisplayFormatting::Raw => escape_text_content(&self.content),
+            DisplayFormatting::NoChildren => {
+                let indentation = "  ".repeat(indent);
+                format!("{}{}", indentation, self.content)
+            }
+            DisplayFormatting::Pretty => {
+                let indentation = "  ".repeat(indent);
+                format!("{}{}", indentation, self.content.trim())
+            }
+        }
+    }
+}
+
+impl PartialEq for TextNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.content == other.content
+    }
+}
+
+impl std::hash::Hash for TextNode {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.content.hash(state);
     }
 }
 
 impl Display for TextNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "\"{}\"", self.content)
+        write!(f, "{}", self.content)
     }
 }
