@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Skyscraper is a Rust library for scraping HTML documents with XPath expressions. It has its own HTML parser (following the WHATWG spec) and XPath parser/evaluator. Published on crates.io as `skyscraper` (v0.7.0-beta.2, MIT license). Many XPath features still have `todo!()` stubs.
+Skyscraper is a Rust library for scraping HTML documents with XPath expressions. It has its own HTML parser (following the WHATWG spec) and XPath parser/evaluator. Published on crates.io as `skyscraper` (v0.7.0, MIT license). Many XPath features still have `todo!()` stubs.
 
 ## Build & Test Commands
 
